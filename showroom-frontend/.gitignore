@@ -1,0 +1,85 @@
+# =============================================================================
+# Frontend Angular 21 + Tailwind v4
+# =============================================================================
+
+# ---- Build output ----
+/dist/
+/tmp/
+/out-tsc/
+/bazel-out/
+/build/
+
+# ---- Node ----
+/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+
+# ---- Angular cache ----
+/.angular/
+!/.angular/.gitkeep
+
+# ---- TypeScript ----
+*.tsbuildinfo
+.tscache/
+
+# ---- Linters / formatters ----
+.eslintcache
+.prettiercache
+.stylelintcache
+
+# ---- Tests / coverage ----
+/coverage/
+/karma-coverage/
+__screenshots__/
+testem.log
+/connect.lock
+/libpeerconnection.log
+/typings/
+
+# ---- IDE / editores ----
+.idea/
+.project
+.classpath
+.c9/
+.settings/
+*.launch
+*.sublime-workspace
+.history/
+
+# ---- VSCode (committeamos solo configs útiles del equipo) ----
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/mcp.json
+
+# ---- Variables de entorno (Angular environments van en src/environments) ----
+.env
+.env.local
+.env.*.local
+
+# ---- Service Worker / PWA generados ----
+ngsw-config.bundle.json
+/safety-worker.js
+/worker-basic.min.js
+
+# ---- Tailwind / PostCSS cache ----
+.postcssrc.local
+.sass-cache/
+
+# ---- Logs ----
+*.log
+logs/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Backups ----
+*.bak
+*.orig

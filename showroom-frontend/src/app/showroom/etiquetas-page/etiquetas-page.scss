@@ -1,0 +1,86 @@
+// Layout y colores se manejan con clases Tailwind directamente en el template.
+// Lo único que queda acá es la hoja de impresión: @page, tamaño en mm de cada
+// etiqueta y el toggle de visibilidad print/screen — cosas que no se expresan
+// con utilities.
+
+.hoja-impresion {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .hoja-impresion {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 0;
+    margin: 0;
+    background: white;
+  }
+
+  // El @page (size + margin) lo inyecta dinámicamente el componente desde
+  // TypeScript según el formato de hoja seleccionado por el operador
+  // (A4 / A5 / Letter / Legal). Ver el constructor de EtiquetasPage.
+
+  .etiqueta {
+    width: var(--ancho-etiqueta, 50mm);
+    height: var(--alto-etiqueta, 30mm);
+    box-sizing: border-box;
+    padding: 1.5mm;
+    display: flex;
+    align-items: center;
+    gap: 1.5mm;
+    page-break-inside: avoid;
+    border: 0.2mm dashed #ccc;
+    overflow: hidden;
+    color: #000;
+    background: #fff;
+
+    .qr {
+      height: 100%;
+      width: auto;
+      max-width: 50%;
+      object-fit: contain;
+    }
+
+    .texto {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 0.4mm;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.1;
+
+      .sku {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 3.2mm;
+        font-weight: 700;
+        letter-spacing: 0.1mm;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .descripcion {
+        font-size: 2.4mm;
+        color: #333;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .precio {
+        font-size: 2.8mm;
+        font-weight: 600;
+        margin-top: 0.4mm;
+      }
+    }
+  }
+}

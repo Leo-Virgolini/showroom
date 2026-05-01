@@ -1,0 +1,411 @@
+<div class="flex flex-col min-h-screen bg-orange-50/30 dark:bg-surface-950">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-3">
+        <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
+          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Pedidos</span>
+          <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
+            Generados desde el showroom
+          </span>
+        </div>
+      </div>
+    </ng-template>
+    <ng-template #end>
+      <p-button
+        icon="pi pi-arrow-left"
+        ariaLabel="Volver al showroom"
+        label="Volver"
+        class="btn-volver"
+        routerLink="/"
+      />
+    </ng-template>
+  </p-toolbar>
+
+  <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
+    <p-card>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Cliente (CUIT o nombre)
+          </label>
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              pInputText
+              type="text"
+              placeholder="Buscar por CUIT o nombre…"
+              [ngModel]="busqueda()"
+              (ngModelChange)="busqueda.set($event)"
+              class="w-full"
+            />
+          </p-iconfield>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Estado
+          </label>
+          <p-select
+            [options]="opcionesEstado"
+            [ngModel]="estado()"
+            (ngModelChange)="estado.set($event)"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Todos"
+            class="w-full"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Desde
+          </label>
+          <p-datepicker
+            [ngModel]="desde()"
+            (ngModelChange)="desde.set($event)"
+            dateFormat="dd/mm/yy"
+            [showIcon]="true"
+            [showButtonBar]="true"
+            placeholder="—"
+            class="w-full"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Hasta
+          </label>
+          <p-datepicker
+            [ngModel]="hasta()"
+            (ngModelChange)="hasta.set($event)"
+            dateFormat="dd/mm/yy"
+            [showIcon]="true"
+            [showButtonBar]="true"
+            placeholder="—"
+            class="w-full"
+          />
+        </div>
+      </div>
+      @if (hayFiltros()) {
+        <div class="flex justify-end mt-3">
+          <p-button
+            icon="pi pi-filter-slash"
+            label="Limpiar filtros"
+            severity="secondary"
+            [outlined]="true"
+            size="small"
+            (onClick)="limpiarFiltros()"
+          />
+        </div>
+      }
+    </p-card>
+
+    <p-card>
+      <p-table
+        [value]="pedidos()"
+        [lazy]="true"
+        [paginator]="true"
+        [totalRecords]="total()"
+        [rows]="pageSize()"
+        [first]="first()"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        [loading]="cargando()"
+        [rowTrackBy]="trackById"
+        [sortField]="sortField()"
+        [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
+        (onLazyLoad)="onLazyLoad($event)"
+        currentPageReportTemplate="Mostrando {first} - {last} de {totalRecords}"
+        [showCurrentPageReport]="true"
+        class="p-datatable-sm"
+      >
+        <ng-template #header>
+          <tr>
+            <th style="width: 3rem"></th>
+            <th style="width: 9rem" pSortableColumn="creadoAt">
+              Fecha <p-sortIcon field="creadoAt" />
+            </th>
+            <th style="width: 7rem" pSortableColumn="estado">
+              Estado <p-sortIcon field="estado" />
+            </th>
+            <th style="width: 9rem" pSortableColumn="apellidoRazonSocial">
+              Cliente <p-sortIcon field="apellidoRazonSocial" />
+            </th>
+            <th style="width: 9rem" pSortableColumn="nroDoc">
+              CUIT <p-sortIcon field="nroDoc" />
+            </th>
+            <th style="width: 8rem" class="text-center" pSortableColumn="idDuxRespuesta">
+              ID DUX <p-sortIcon field="idDuxRespuesta" />
+            </th>
+            <th class="text-center" style="width: 6rem">Items</th>
+            <th class="text-center" style="width: 6rem" pSortableColumn="descuentoPorcentaje">
+              Desc <p-sortIcon field="descuentoPorcentaje" />
+            </th>
+            <th class="text-right" style="width: 11rem" pSortableColumn="totalSinIva">
+              Total <p-sortIcon field="totalSinIva" />
+              <div class="text-[0.65rem] font-normal text-muted-color leading-none">
+                cliente / DUX
+              </div>
+            </th>
+            <th class="text-center" style="width: 8rem">Acciones</th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-p>
+          <tr [class.bg-surface-50]="estaExpandido(p.id)" [class.dark:bg-surface-800]="estaExpandido(p.id)">
+            <td>
+              <p-button
+                [icon]="estaExpandido(p.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+                severity="secondary"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                (onClick)="toggleRow(p)"
+                ariaLabel="Ver detalle"
+              />
+            </td>
+            <td class="text-xs tabular-nums">
+              {{ p.creadoAt | date: 'dd/MM/yy HH:mm' }}
+            </td>
+            <td>
+              <p-tag [severity]="estadoSeverity(p.estado)" [value]="p.estado" />
+            </td>
+            <td class="text-sm truncate max-w-[12rem]" [pTooltip]="p.apellidoRazonSocial ?? ''" tooltipPosition="top">
+              {{ p.apellidoRazonSocial ?? '—' }}
+            </td>
+            <td class="font-mono text-sm">
+              {{ p.nroDoc ?? '—' }}
+            </td>
+            <td class="text-center font-mono text-sm">
+              {{ p.idDuxRespuesta ?? '—' }}
+            </td>
+            <td class="text-center tabular-nums">{{ p.cantidadItems }}</td>
+            <td class="text-center tabular-nums">
+              @if (p.descuentoPorcentaje && p.descuentoPorcentaje > 0) {
+                <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  −{{ p.descuentoPorcentaje }}%
+                </span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-right tabular-nums">
+              <div class="font-semibold text-base">
+                {{ (p.totalSinIva ?? p.total) | currency:'ARS':'symbol':'1.0-0' }}
+              </div>
+              @if (p.totalSinIva != null && p.total != null && p.totalSinIva !== p.total) {
+                <div class="text-[0.7rem] text-muted-color leading-tight">
+                  c/IVA: {{ p.total | currency:'ARS':'symbol':'1.0-0' }}
+                </div>
+              }
+            </td>
+            <td class="text-center">
+              <div class="inline-flex gap-1">
+                <p-button
+                  icon="pi pi-file-excel"
+                  severity="success"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  [loading]="estaDescargandoExcel(p.id)"
+                  (onClick)="descargarExcel(p)"
+                  ariaLabel="Descargar Excel de picking"
+                  pTooltip="Descargar Excel de picking"
+                  tooltipPosition="top"
+                />
+                <p-button
+                  icon="pi pi-file-pdf"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  [loading]="estaDescargandoPdf(p.id)"
+                  (onClick)="descargarPdf(p)"
+                  ariaLabel="Descargar presupuesto PDF"
+                  pTooltip="Descargar presupuesto PDF"
+                  tooltipPosition="top"
+                />
+                <p-button
+                  icon="pi pi-envelope"
+                  severity="info"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  [loading]="estaEnviandoEmail(p.id)"
+                  (onClick)="reenviarEmail(p)"
+                  ariaLabel="Reenviar email de picking"
+                  pTooltip="Reenviar email (XLSX + PDF)"
+                  tooltipPosition="top"
+                />
+              </div>
+            </td>
+          </tr>
+
+          @if (estaExpandido(p.id)) {
+            <tr class="bg-surface-50 dark:bg-surface-900">
+              <td colspan="10" class="p-4">
+                @if (estaCargandoDetalle(p.id)) {
+                  <div class="flex items-center gap-2 text-muted-color">
+                    <p-progressSpinner class="w-6 h-6" strokeWidth="4" />
+                    Cargando detalle…
+                  </div>
+                } @else if (detalle(p.id); as det) {
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Cliente / Envío</h4>
+                      <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-muted-color">Razón social</dt>
+                        <dd>{{ det.apellidoRazonSocial ?? '—' }}</dd>
+                        <dt class="text-muted-color">Doc</dt>
+                        <dd class="font-mono">{{ det.tipoDoc }} {{ det.nroDoc ?? '—' }}</dd>
+                        <dt class="text-muted-color">Teléfono</dt>
+                        <dd>{{ det.telefono ?? '—' }}</dd>
+                        <dt class="text-muted-color">Email</dt>
+                        <dd class="break-all">{{ det.email ?? '—' }}</dd>
+                        <dt class="text-muted-color">Domicilio</dt>
+                        <dd>{{ det.domicilio ?? '—' }}</dd>
+                        <dt class="text-muted-color">Provincia</dt>
+                        <dd>{{ det.provinciaNombre ?? det.codigoProvincia ?? '—' }}</dd>
+                        <dt class="text-muted-color">Localidad</dt>
+                        <dd>{{ det.localidadNombre ?? det.idLocalidad ?? '—' }}</dd>
+                      </dl>
+                    </div>
+
+                    <div>
+                      <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Pedido</h4>
+                      <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-muted-color">Creado</dt>
+                        <dd class="tabular-nums">{{ det.creadoAt | date: 'medium' }}</dd>
+                        <dt class="text-muted-color">Enviado</dt>
+                        <dd class="tabular-nums">{{ det.enviadoAt ? (det.enviadoAt | date: 'medium') : '—' }}</dd>
+                        <dt class="text-muted-color">Estado</dt>
+                        <dd>
+                          <p-tag [severity]="estadoSeverity(det.estado)" [value]="det.estado" />
+                        </dd>
+                        <dt class="text-muted-color">ID DUX</dt>
+                        <dd class="font-mono">{{ det.idDuxRespuesta ?? '—' }}</dd>
+                        <dt class="text-muted-color">Descuento</dt>
+                        <dd>
+                          @if (det.descuentoPorcentaje && det.descuentoPorcentaje > 0) {
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
+                              −{{ det.descuentoPorcentaje }}%
+                            </span>
+                          } @else { — }
+                        </dd>
+                        <dt class="text-muted-color">Cliente paga</dt>
+                        <dd class="tabular-nums font-bold text-base text-primary">
+                          {{ (det.totalSinIva ?? det.total) | currency:'ARS':'symbol':'1.0-0' }}
+                          <span class="text-xs font-normal text-muted-color ml-1">s/IVA</span>
+                        </dd>
+                        @if (det.totalSinIva != null && det.total != null && det.totalSinIva !== det.total) {
+                          <dt class="text-muted-color">+ IVA</dt>
+                          <dd class="tabular-nums">
+                            {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
+                          </dd>
+                          <dt class="text-muted-color">Total DUX</dt>
+                          <dd class="tabular-nums font-semibold">
+                            {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
+                            <span class="text-xs font-normal text-muted-color ml-1">c/IVA</span>
+                          </dd>
+                        }
+                      </dl>
+                    </div>
+                  </div>
+
+                  @if (det.observaciones) {
+                    <div class="mt-5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
+                      <h4 class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300 m-0 mb-1 inline-flex items-center gap-2">
+                        <i class="pi pi-pencil"></i> Observaciones
+                      </h4>
+                      <p class="text-sm text-amber-900 dark:text-amber-200 m-0 whitespace-pre-wrap">{{ det.observaciones }}</p>
+                    </div>
+                  }
+
+                  <div class="mt-5">
+                    <div class="flex items-baseline justify-between mb-2 gap-3 flex-wrap">
+                      <h4 class="text-xs font-semibold uppercase text-muted-color m-0">
+                        Items ({{ det.items.length }})
+                      </h4>
+                      @if (det.totalSinIva != null && det.total != null) {
+                        <div class="flex items-baseline gap-3 text-xs tabular-nums">
+                          <span class="text-primary font-semibold">
+                            Cliente paga (s/IVA): {{ det.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
+                          </span>
+                          <span class="text-muted-color">+ IVA: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}</span>
+                          <span class="text-muted-color">
+                            DUX (c/IVA): {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
+                          </span>
+                        </div>
+                      }
+                    </div>
+                    <p-table [value]="det.items" class="p-datatable-sm">
+                      <ng-template #header>
+                        <tr>
+                          <th style="width: 9rem">SKU</th>
+                          <th>Producto</th>
+                          <th class="text-center" style="width: 5rem">Cant.</th>
+                          <th class="text-right" style="width: 8rem">Precio s/IVA</th>
+                          <th class="text-right" style="width: 8rem">Precio c/IVA</th>
+                          <th class="text-right" style="width: 9rem">Subtotal s/IVA</th>
+                        </tr>
+                      </ng-template>
+                      <ng-template #body let-it>
+                        <tr>
+                          <td class="font-mono text-sm">{{ it.sku }}</td>
+                          <td>{{ it.descripcion ?? '—' }}</td>
+                          <td class="text-center tabular-nums">{{ it.cantidad }}</td>
+                          <td class="text-right tabular-nums text-muted-color">
+                            @if (precioSinIva(it.precioUnitario, it.porcIva); as p) {
+                              {{ p | currency:'ARS':'symbol':'1.0-0' }}
+                            } @else {
+                              —
+                            }
+                          </td>
+                          <td class="text-right tabular-nums">
+                            {{ it.precioUnitario | currency:'ARS':'symbol':'1.0-0' }}
+                          </td>
+                          <td class="text-right tabular-nums font-semibold">
+                            @if (subtotalSinIva(it); as s) {
+                              {{ s | currency:'ARS':'symbol':'1.0-0' }}
+                            } @else {
+                              —
+                            }
+                          </td>
+                        </tr>
+                      </ng-template>
+                    </p-table>
+                  </div>
+
+                  @if (det.respuestaDux) {
+                    <details class="mt-5">
+                      <summary class="text-xs font-semibold uppercase text-muted-color cursor-pointer">
+                        Respuesta cruda de DUX
+                      </summary>
+                      <pre class="mt-2 p-3 rounded bg-surface-100 dark:bg-surface-800 text-xs overflow-auto max-h-64 whitespace-pre-wrap break-all">{{ det.respuestaDux }}</pre>
+                    </details>
+                  }
+                }
+              </td>
+            </tr>
+          }
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="10" class="text-center py-12 text-muted-color">
+              <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
+              @if (hayFiltros()) {
+                Ningún pedido coincide con los filtros.
+              } @else {
+                Todavía no se generó ningún pedido.
+              }
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  </main>
+</div>

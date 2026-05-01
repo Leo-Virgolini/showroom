@@ -1,0 +1,25 @@
+import { Routes } from '@angular/router';
+
+export const routes: Routes = [
+  {
+    path: '',
+    loadComponent: () =>
+      import('./showroom/showroom-page/showroom-page').then((m) => m.ShowroomPage),
+  },
+  {
+    path: 'etiquetas',
+    loadComponent: () =>
+      import('./showroom/etiquetas-page/etiquetas-page').then((m) => m.EtiquetasPage),
+  },
+  {
+    path: 'productos',
+    loadComponent: () =>
+      import('./showroom/productos-page/productos-page').then((m) => m.ProductosPage),
+  },
+  {
+    path: 'pedidos',
+    loadComponent: () =>
+      import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
+  },
+  { path: '**', redirectTo: '' },
+];

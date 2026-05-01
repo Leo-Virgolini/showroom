@@ -1,0 +1,117 @@
+import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Subject } from 'rxjs';
+import { PickingEmailEvent, SyncEvent } from './models';
+
+/**
+ * Estado de conectividad con el backend.
+ *
+ * Detección normal: UN EventSource hacia `/api/showroom/events`.
+ *  - `onopen` → SSE abrió (o reabrió tras un drop) → conectado.
+ *  - `onerror` → SSE cortado. El navegador reintenta solo en background; cuando
+ *    lo logra, dispara `onopen` y volvemos a conectado.
+ *
+ * Fallback: si el EventSource queda en estado CLOSED (puede pasar si el dev
+ * proxy responde 502 mientras el back arranca, o si el back devolvió un
+ * response sin Content-Type SSE), el navegador NO reintenta más — el modal
+ * quedaría pegado. Para cubrir ese caso, mientras `connected === false`,
+ * polleamos `/api/showroom/health` cada 10s. Cuando responde, el interceptor
+ * marca conectado y reabrimos el SSE si quedó cerrado.
+ *
+ * Detección instant: el HTTP interceptor marca desconectado en cuanto un
+ * request HTTP falla con status 0, sin esperar al timeout del SSE.
+ */
+@Injectable({ providedIn: 'root' })
+export class BackendStatusService {
+  readonly connected = signal(true);
+  readonly syncEvents$ = new Subject<SyncEvent>();
+  readonly pickingEmailEvents$ = new Subject<PickingEmailEvent>();
+
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly http = inject(HttpClient);
+  private source: EventSource | null = null;
+  private healthPoll: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    this.iniciarSSE();
+
+    effect(() => {
+      const isConnected = this.connected();
+      if (!isConnected && this.healthPoll == null) {
+        this.healthPoll = setInterval(() => this.pingHealth(), 10_000);
+      } else if (isConnected && this.healthPoll != null) {
+        clearInterval(this.healthPoll);
+        this.healthPoll = null;
+        if (this.source && this.source.readyState === EventSource.CLOSED) {
+          this.cerrarSSE();
+          this.iniciarSSE();
+        }
+      }
+    });
+
+    this.destroyRef.onDestroy(() => {
+      this.cerrarSSE();
+      if (this.healthPoll != null) clearInterval(this.healthPoll);
+    });
+  }
+
+  private pingHealth(): void {
+    this.http.get('/api/showroom/health').subscribe({
+      error: () => {
+        /* el interceptor ya marcó desconectado; seguimos polleando */
+      },
+    });
+  }
+
+  markDisconnected(): void {
+    if (this.connected()) this.connected.set(false);
+  }
+
+  markConnected(): void {
+    if (!this.connected()) this.connected.set(true);
+  }
+
+  private iniciarSSE(): void {
+    if (typeof window === 'undefined') return; // SSR safety
+    if (this.source) return;
+
+    const src = new EventSource('/api/showroom/events');
+    this.source = src;
+
+    src.onopen = () => {
+      // El handshake SSE terminó OK — backend respondiendo.
+      this.markConnected();
+    };
+
+    src.onerror = () => {
+      // El navegador dispara error cuando la conexión se cae. EventSource hace
+      // reconnect automático en background — cuando lo logra, va a disparar
+      // onopen de nuevo y vamos a marcar conectado.
+      // Mientras readyState !== OPEN, lo consideramos desconectado.
+      if (src.readyState !== EventSource.OPEN) {
+        this.markDisconnected();
+      }
+    };
+
+    src.addEventListener('sync', (e: MessageEvent) => {
+      try {
+        this.syncEvents$.next(JSON.parse(e.data) as SyncEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('picking-email', (e: MessageEvent) => {
+      try {
+        this.pickingEmailEvents$.next(JSON.parse(e.data) as PickingEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+  }
+
+  private cerrarSSE(): void {
+    this.source?.close();
+    this.source = null;
+  }
+}

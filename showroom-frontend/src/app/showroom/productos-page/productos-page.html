@@ -1,0 +1,199 @@
+<div class="flex flex-col min-h-screen bg-orange-50/30 dark:bg-surface-950">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-3">
+        <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
+          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Productos</span>
+          <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
+            Catálogo cacheado · solo lectura
+          </span>
+        </div>
+      </div>
+    </ng-template>
+    <ng-template #end>
+      <p-button
+        icon="pi pi-arrow-left"
+        ariaLabel="Volver al showroom"
+        label="Volver"
+        class="btn-volver"
+        routerLink="/"
+      />
+    </ng-template>
+  </p-toolbar>
+
+  <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
+    <p-card>
+      <div class="flex flex-col lg:flex-row gap-4 lg:items-end">
+        <div class="flex-1">
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Buscar
+          </label>
+          <p-iconfield iconPosition="left">
+            <p-inputicon>
+              <i class="pi pi-search"></i>
+            </p-inputicon>
+            <input
+              pInputText
+              type="text"
+              placeholder="SKU, descripción o código de barra…"
+              [ngModel]="busqueda()"
+              (ngModelChange)="busqueda.set($event)"
+              class="w-full"
+            />
+          </p-iconfield>
+        </div>
+
+        <div class="flex flex-wrap gap-4 lg:gap-6">
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <p-toggleSwitch
+              [ngModel]="soloDeshabilitados()"
+              (ngModelChange)="soloDeshabilitados.set($event)"
+            />
+            Solo deshabilitados
+          </label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <p-toggleSwitch
+              [ngModel]="soloSinStock()"
+              (ngModelChange)="soloSinStock.set($event)"
+            />
+            Sin stock
+          </label>
+        </div>
+
+        @if (hayFiltros()) {
+          <p-button
+            icon="pi pi-filter-slash"
+            label="Limpiar"
+            severity="secondary"
+            [outlined]="true"
+            size="small"
+            (onClick)="limpiarFiltros()"
+          />
+        }
+      </div>
+    </p-card>
+
+    <p-card>
+      <p-table
+        [value]="productos()"
+        [lazy]="true"
+        [paginator]="true"
+        [totalRecords]="total()"
+        [rows]="pageSize()"
+        [first]="first()"
+        [rowsPerPageOptions]="[25, 50, 100, 200]"
+        [loading]="cargando()"
+        [rowTrackBy]="trackBySku"
+        [sortField]="sortField()"
+        [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
+        (onLazyLoad)="onLazyLoad($event)"
+        currentPageReportTemplate="Mostrando {first} - {last} de {totalRecords}"
+        [showCurrentPageReport]="true"
+        class="p-datatable-sm"
+        scrollHeight="calc(100vh - 22rem)"
+        [scrollable]="true"
+      >
+        <ng-template #header>
+          <tr>
+            <th style="width: 9rem" pSortableColumn="sku">
+              SKU <p-sortIcon field="sku" />
+            </th>
+            <th pSortableColumn="descripcion">
+              Descripción <p-sortIcon field="descripcion" />
+            </th>
+            <th style="width: 11rem">Código de barra</th>
+            <th class="text-right" style="width: 9rem" pSortableColumn="pvpKtGastroSinIva">
+              PVP s/IVA <p-sortIcon field="pvpKtGastroSinIva" />
+            </th>
+            <th class="text-right" style="width: 9rem" pSortableColumn="pvpKtGastroConIva">
+              PVP c/IVA <p-sortIcon field="pvpKtGastroConIva" />
+            </th>
+            <th class="text-right" style="width: 6rem" pSortableColumn="stockTotal">
+              Stock <p-sortIcon field="stockTotal" />
+            </th>
+            <th class="text-center" style="width: 8rem" pSortableColumn="habilitado">
+              Estado <p-sortIcon field="habilitado" />
+            </th>
+            <th style="width: 11rem" pSortableColumn="sincronizadoAt">
+              Última sync <p-sortIcon field="sincronizadoAt" />
+            </th>
+            <th style="width: 4rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-it>
+          <tr>
+            <td class="font-mono text-sm">{{ it.sku }}</td>
+            <td>{{ it.descripcion ?? '—' }}</td>
+            <td class="font-mono text-xs">
+              @if (it.codigosBarra?.length) {
+                <span [pTooltip]="it.codigosBarra.join(', ')" tooltipPosition="top">
+                  {{ it.codigosBarra[0] }}@if (it.codigosBarra.length > 1) {
+                    <span class="text-muted-color"> +{{ it.codigosBarra.length - 1 }}</span>
+                  }
+                </span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-right tabular-nums">
+              {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
+            </td>
+            <td class="text-right tabular-nums">
+              {{ it.pvpKtGastroConIva | currency:'ARS':'symbol':'1.0-0' }}
+            </td>
+            <td
+              class="text-right tabular-nums font-semibold"
+              [class.text-red-600]="(it.stockTotal ?? 0) <= 0"
+              [class.dark:text-red-400]="(it.stockTotal ?? 0) <= 0"
+            >
+              {{ it.stockTotal ?? 0 }}
+            </td>
+            <td class="text-center">
+              @if (it.habilitado === false) {
+                <p-tag severity="danger" value="Deshabilitado" />
+              } @else {
+                <p-tag severity="success" value="Habilitado" />
+              }
+            </td>
+            <td class="text-xs text-muted-color">
+              @if (it.sincronizadoAt) {
+                {{ it.sincronizadoAt | date:'dd/MM/yyyy HH:mm' }}
+              } @else {
+                —
+              }
+            </td>
+            <td>
+              <p-button
+                icon="pi pi-sync"
+                severity="info"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                [loading]="estaRefrescando(it.sku)"
+                (onClick)="refrescarFila(it.sku)"
+                pTooltip="Refrescar stock y precio desde DUX"
+                tooltipPosition="left"
+              />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="9" class="text-center py-12 text-muted-color">
+              <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
+              @if (hayFiltros()) {
+                Ningún producto coincide con los filtros.
+              } @else {
+                El cache está vacío. Sincronizá el catálogo desde el showroom.
+              }
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  </main>
+</div>

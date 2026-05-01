@@ -1,0 +1,90 @@
+# =============================================================================
+# Backend Spring Boot + Maven
+# =============================================================================
+
+# ---- Build output ----
+target/
+build/
+out/
+!**/src/main/**/build/
+!**/src/test/**/build/
+!**/src/main/**/out/
+!**/src/test/**/out/
+*.class
+*.jar
+*.war
+*.ear
+
+# ---- Maven ----
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# ---- Spring Boot ----
+HELP.md
+spring-shell.log
+# application.properties contiene credenciales reales (DB password + Gmail
+# app password). No va al repo.
+src/main/resources/application.properties
+application-local.properties
+application-*-local.properties
+*.local.properties
+
+# ---- IntelliJ IDEA ----
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ---- Eclipse / STS ----
+.classpath
+.project
+.settings/
+.factorypath
+.springBeans
+.sts4-cache/
+bin/
+
+# ---- VSCode ----
+.vscode/
+
+# ---- Tests / coverage ----
+*.exec
+jacoco.exec
+jacoco-it.exec
+/coverage/
+
+# ---- Logs y dumps ----
+*.log
+logs/
+*.hprof          # heap dumps de JVM
+*.pid            # pid files
+
+# ---- Secrets (CRÍTICO) ----
+# Tokens de DUX, app passwords, keystores — nunca al repo aunque estén dentro
+# de la app. La app lee desde `app.secrets-dir` que apunta fuera del proyecto.
+secrets/
+*.secret
+*.token
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+dux_tokens.json
+
+# ---- Docker ----
+.dockerignore.local
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Backups ----
+*.bak
+*.orig

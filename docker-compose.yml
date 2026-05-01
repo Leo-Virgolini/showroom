@@ -1,0 +1,117 @@
+# =============================================================================
+# Stack de producción del showroom KT GASTRO.
+#
+# Levantar:    docker compose up -d --build
+# Logs:        docker compose logs -f
+# Reiniciar:   docker compose restart backend
+# Bajar:       docker compose down
+#
+# Antes del primer arranque copiar .env.example → .env y ajustar las variables.
+#
+# URLs:
+#  - Frontend (sucursal):  http://<ip-servidor>:8080
+#  - Backend (debug/api):  http://<ip-servidor>:8081/api/showroom/health
+# =============================================================================
+
+name: showroom
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: showroom-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
+      MYSQL_DATABASE: showroom
+      TZ: America/Argentina/Buenos_Aires
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00  # Coincide con hibernate.jdbc.time_zone=UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - showroom-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-showroom}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # Descomentá para conectar con DBeaver/MySQL Workbench desde el host:
+    # ports:
+    #   - "3307:3306"
+
+  backend:
+    build:
+      context: ./showroom-backend
+    image: showroom-backend:latest
+    container_name: showroom-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # ---- BD ----
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/showroom?createDatabaseIfNotExist=true&useSSL=false&characterEncoding=UTF-8&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
+
+      # ---- DUX (datos de empresa, definir en .env) ----
+      APP_SECRETS_DIR: /app/secrets
+      DUX_EMPRESA_ID: ${DUX_EMPRESA_ID}
+      DUX_EMPRESA_ID_SUCURSAL: ${DUX_EMPRESA_ID_SUCURSAL}
+      DUX_EMPRESA_ID_DEPOSITO: ${DUX_EMPRESA_ID_DEPOSITO:-0}
+      DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT: ${DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT:-CONSUMIDOR_FINAL}
+
+      # ---- Imágenes de productos ----
+      SHOWROOM_PRESUPUESTO_IMAGENES_FOLDER: /app/imagenes
+
+      # ---- Email picking (opcional, dejar vacío para deshabilitar) ----
+      SHOWROOM_PICKING_EMAIL_ENABLED: ${SHOWROOM_PICKING_EMAIL_ENABLED:-false}
+      SHOWROOM_PICKING_EMAIL_TO: ${SHOWROOM_PICKING_EMAIL_TO:-}
+      SHOWROOM_PICKING_EMAIL_FROM: ${SHOWROOM_PICKING_EMAIL_FROM:-}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+
+      TZ: America/Argentina/Buenos_Aires
+    volumes:
+      # Tokens DUX — ruta del HOST configurable en .env (ej. el dir del super-master).
+      - "${DUX_SECRETS_PATH}:/app/secrets:ro"
+      # Carpeta con imágenes de productos {sku}.{jpg|png|webp...} — read-only,
+      # el operador la mantiene desde fuera (FTP, sync manual, etc.).
+      - "${SHOWROOM_IMAGENES_PATH}:/app/imagenes:ro"
+    ports:
+      - "8081:8081"
+    networks:
+      - showroom-net
+    healthcheck:
+      # Endpoint propio de la app — no requiere Spring Actuator. curl viene
+      # instalado en el Dockerfile del backend.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/api/showroom/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  frontend:
+    build:
+      context: ./showroom-frontend
+    image: showroom-frontend:latest
+    container_name: showroom-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    networks:
+      - showroom-net
+
+volumes:
+  mysql-data:
+
+networks:
+  showroom-net:
+    driver: bridge

@@ -1,0 +1,22 @@
+// Estilos del componente manejados con clases Tailwind en el template.
+// Este archivo queda solo para overrides puntuales que no se expresan con utilities.
+
+::ng-deep .p-selectbutton.p-selectbutton-sm .p-button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  min-width: 2.4rem;
+}
+
+// Item del carrito que supera el stock disponible — fondo rojo claro y borde
+// para llamar la atención sin necesidad de 5 bindings [class.X] en el template.
+.item-excedido {
+  background-color: var(--p-red-50);
+  border-radius: 0.375rem;
+  margin: 0 -0.75rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.app-dark .item-excedido {
+  background-color: color-mix(in oklab, var(--p-red-950) 40%, transparent);
+}

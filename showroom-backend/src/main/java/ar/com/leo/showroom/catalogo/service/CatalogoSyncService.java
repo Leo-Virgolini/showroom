@@ -1,0 +1,376 @@
+package ar.com.leo.showroom.catalogo.service;
+
+import ar.com.leo.showroom.catalogo.entity.ProductoCache;
+import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
+import ar.com.leo.showroom.dux.model.DuxItem;
+import ar.com.leo.showroom.dux.model.DuxPrecio;
+import ar.com.leo.showroom.dux.model.DuxStock;
+import ar.com.leo.showroom.dux.service.DuxClient;
+import ar.com.leo.showroom.events.SyncEvent;
+import ar.com.leo.showroom.events.SyncEventService;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+
+/**
+ * Sincroniza el cache local con DUX:
+ *  - Full sync periódico (todos los items, precios y stock).
+ *  - Refresh on-demand para SKUs específicos antes de cerrar un pedido.
+ *
+ * Solo lee de DUX, nunca escribe. PVP se extrae del precio cuyo nombre coincide
+ * con la lista configurada (KT GASTRO).
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class CatalogoSyncService {
+
+    private final DuxClient duxClient;
+    private final ProductoCacheRepository repository;
+    private final SyncEventService eventService;
+
+    /**
+     * Self-injection para que las llamadas internas a métodos con {@code @Async}
+     * o {@code @Transactional} pasen por el proxy de Spring. Sin esto, los
+     * métodos internos invocados con {@code this.metodo()} hacen self-invocation
+     * y los aspects no se aplican — el sync explotaba con LazyInitializationException
+     * porque {@code @Transactional} se ignoraba al venir de un async self-invocado.
+     * {@code @Lazy} previene el ciclo de bean al inyectar el propio servicio.
+     */
+    @Autowired
+    @Lazy
+    private CatalogoSyncService self;
+
+    private final AtomicBoolean syncEnCurso = new AtomicBoolean(false);
+    /** Flag de cancelación cooperativa. El loop de DUX lo chequea entre páginas
+     *  y aborta limpiamente si lo encuentra true. Se resetea al final de cada sync. */
+    private final AtomicBoolean cancelarSolicitado = new AtomicBoolean(false);
+    private volatile Instant syncIniciadoAt;
+
+    /**
+     * Al arrancar la app, si el cache está vacío disparamos un sync completo
+     * automáticamente (en background, no bloquea el startup). Si ya hay datos,
+     * dejamos que el cron incremental los mantenga al día.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void syncAlIniciar() {
+        if (!duxClient.isConfigured()) {
+            log.info("Sync inicial salteado: DUX no configurado");
+            return;
+        }
+        long total = repository.count();
+        if (total > 0) {
+            log.info("Cache ya poblado ({} productos) — el cron mantendrá la sincronización", total);
+            return;
+        }
+        log.info("Cache vacío al arrancar — disparando sync inicial en background");
+        self.sincronizarCatalogoCompletoAsync();
+    }
+
+    /** Ejecuta sync periódico según showroom.cache.refresh-cron (default: 6 AM AR todos los días).
+     *  La zona se fija explícitamente para que el cron no dependa de cómo esté configurada
+     *  la TZ del server (UTC en cloud, AR local, etc.). */
+    @Scheduled(cron = "${showroom.cache.refresh-cron}", zone = "America/Argentina/Buenos_Aires")
+    public void syncProgramado() {
+        if (!duxClient.isConfigured()) {
+            log.info("Sync DUX salteado: cliente no configurado");
+            return;
+        }
+        self.sincronizarCatalogoCompleto();
+    }
+
+    /**
+     * Versión async para disparar manualmente desde el controller sin bloquear
+     * la respuesta HTTP — Spring usa su TaskExecutor (gestionado en shutdown)
+     * en lugar de un Thread suelto.
+     */
+    @Async
+    public void sincronizarCatalogoCompletoAsync() {
+        self.sincronizarCatalogoCompleto(false);
+    }
+
+    /** Versión async que permite forzar un sync completo (no incremental). */
+    @Async
+    public void sincronizarCatalogoCompletoAsync(boolean forzarCompleto) {
+        self.sincronizarCatalogoCompleto(forzarCompleto);
+    }
+
+    /**
+     * Sync incremental: si el cache ya tiene datos, pide a DUX solo lo que cambió
+     * desde el último sincronizado (con 1 min de margen por drift de reloj).
+     * Si el cache está vacío, hace el sync completo (~12 min para 5000 items).
+     */
+    public int sincronizarCatalogoCompleto() {
+        return sincronizarCatalogoCompleto(false);
+    }
+
+    /**
+     * Orquestador del sync. La descarga de DUX (~12 min por el rate limit) corre
+     * SIN transacción para no mantener una conexión a la BD ocupada todo ese tiempo
+     * ni inflar la sesión Hibernate con miles de objetos. La persistencia se hace
+     * después en una transacción corta delegada a {@link #persistirItems}.
+     *
+     * @param forzarCompleto si es true, ignora el último sincronizado_at del cache
+     *                       y descarga TODO el catálogo desde DUX (12 min para 5000 items).
+     *                       Útil para resetear el cache si se sospecha que divergió.
+     */
+    public int sincronizarCatalogoCompleto(boolean forzarCompleto) {
+        if (!syncEnCurso.compareAndSet(false, true)) {
+            log.warn("Ya hay un sync en curso");
+            return 0;
+        }
+        cancelarSolicitado.set(false); // reset por las dudas de un cancel viejo
+        Instant inicio = Instant.now();
+        syncIniciadoAt = inicio;
+        eventService.publish("sync", SyncEvent.started(inicio));
+        try {
+            String listaObjetivo = duxClient.getProperties().listaPreciosNombre();
+            Instant desde = forzarCompleto
+                    ? null
+                    : repository.findMaxSincronizadoAt()
+                            .map(t -> t.minus(1, ChronoUnit.MINUTES))
+                            .orElse(null);
+            if (forzarCompleto) {
+                log.info("Sync FORZADO - descargando todo el catálogo desde DUX...");
+            } else if (desde == null) {
+                log.info("Cache vacío - sync completo del catálogo desde DUX...");
+            } else {
+                log.info("Sync incremental desde {}", desde);
+            }
+            // FUERA de transacción — la descarga puede tardar ~12 min y no debe
+            // ocupar conexión BD ni inflar la sesión Hibernate.
+            List<DuxItem> items = duxClient.obtenerTodosLosItems(
+                    desde,
+                    (actual, total) -> eventService.publish("sync", SyncEvent.progress(inicio, actual, total)),
+                    cancelarSolicitado::get);
+            log.info("DUX devolvió {} items", items.size());
+
+            // Persistencia DENTRO de una transacción corta (vía proxy con self-injection).
+            int actualizados = self.persistirItems(items, listaObjetivo);
+
+            if (cancelarSolicitado.get()) {
+                log.info("Sync cancelado por el operador: {} productos guardados parcialmente", actualizados);
+                eventService.publish("sync", SyncEvent.cancelled(inicio, actualizados));
+            } else {
+                log.info("Sync completado: {} productos actualizados", actualizados);
+                eventService.publish("sync", SyncEvent.completed(inicio, actualizados));
+            }
+            return actualizados;
+        } catch (RuntimeException ex) {
+            log.error("Sync falló: {}", ex.getMessage(), ex);
+            eventService.publish("sync", SyncEvent.failed(inicio, ex.getMessage()));
+            throw ex;
+        } finally {
+            syncEnCurso.set(false);
+            cancelarSolicitado.set(false);
+            syncIniciadoAt = null;
+        }
+    }
+
+    /**
+     * Persiste los items descargados de DUX en una transacción corta (~10-30s
+     * típicos, vs. los ~12 min del download). Hibernate batch_size=50 + el
+     * rewriteBatchedStatements del JDBC URL agrupan los inserts/updates en
+     * lotes — para 5000 productos pasa de ~5000 round-trips a ~100.
+     */
+    @Transactional
+    public int persistirItems(List<DuxItem> items, String listaObjetivo) {
+        List<String> skus = items.stream()
+                .map(DuxItem::getCodItem)
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .toList();
+        Map<String, ProductoCache> existentes = repository.findBySkuIn(skus).stream()
+                .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
+
+        Instant ahora = Instant.now();
+        List<ProductoCache> upserts = new java.util.ArrayList<>(skus.size());
+
+        for (DuxItem item : items) {
+            if (item.getCodItem() == null || item.getCodItem().isBlank()) continue;
+            String sku = item.getCodItem().trim();
+
+            ProductoCache pc = existentes.get(sku);
+            if (pc == null) {
+                pc = ProductoCache.builder().sku(sku).build();
+            }
+            aplicarItem(pc, item, listaObjetivo, ahora);
+            upserts.add(pc);
+        }
+
+        repository.saveAll(upserts);
+        return upserts.size();
+    }
+
+    public Optional<Instant> getSyncIniciadoAt() {
+        return Optional.ofNullable(syncIniciadoAt);
+    }
+
+    /**
+     * Refresca on-demand una lista de SKUs (típicamente los del carrito).
+     * Cada SKU = 1 request DUX, así que lleva ~7s por SKU. Devuelve los actualizados.
+     */
+    @Transactional
+    public List<ProductoCache> refrescarSkus(List<String> skus) {
+        if (skus == null || skus.isEmpty()) return List.of();
+        List<String> limpios = skus.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .toList();
+        if (limpios.isEmpty()) return List.of();
+
+        String listaObjetivo = duxClient.getProperties().listaPreciosNombre();
+        Instant ahora = Instant.now();
+        Map<String, ProductoCache> existentes = repository.findBySkuIn(limpios).stream()
+                .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
+        List<ProductoCache> resultado = new java.util.ArrayList<>();
+
+        for (String sku : limpios) {
+            Optional<DuxItem> opt = duxClient.obtenerItemPorSku(sku);
+            if (opt.isEmpty()) {
+                log.warn("Refresh - SKU {} no encontrado en DUX", sku);
+                continue;
+            }
+            ProductoCache pc = existentes.get(sku);
+            if (pc == null) {
+                pc = ProductoCache.builder().sku(sku).build();
+            }
+            aplicarItem(pc, opt.get(), listaObjetivo, ahora);
+            resultado.add(pc);
+        }
+        repository.saveAll(resultado);
+        return resultado;
+    }
+
+    public Map<String, ProductoCache> obtenerPorSkus(List<String> skus) {
+        return repository.findBySkuIn(skus).stream()
+                .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
+    }
+
+    public Optional<ProductoCache> buscarPorSku(String sku) {
+        if (sku == null) return Optional.empty();
+        return repository.findBySku(sku.trim());
+    }
+
+    /**
+     * Busca primero por SKU exacto y, si no encuentra, por código de barras
+     * (EAN-13). Útil para el scan: la pistola puede emitir cualquiera de los dos
+     * y el operador no tiene que distinguirlos.
+     */
+    public Optional<ProductoCache> buscarPorSkuOEan(String codigo) {
+        if (codigo == null) return Optional.empty();
+        String limpio = codigo.trim();
+        if (limpio.isEmpty()) return Optional.empty();
+        return repository.findBySku(limpio)
+                .or(() -> repository.findByCodigoBarra(limpio).stream().findFirst());
+    }
+
+    public boolean isSyncEnCurso() {
+        return syncEnCurso.get();
+    }
+
+    /**
+     * Solicita cancelar el sync en curso. Es cooperativo: el flag se chequea
+     * entre cada página de DUX, así que el cancel toma efecto en hasta ~7s
+     * (lo que tarda la request en vuelo). Los items ya descargados se guardan
+     * (no se pierde el trabajo hecho).
+     */
+    public boolean cancelarSync() {
+        if (!syncEnCurso.get()) return false;
+        cancelarSolicitado.set(true);
+        log.info("Cancelación de sync solicitada");
+        return true;
+    }
+
+    // =====================================================
+    // Helpers
+    // =====================================================
+
+    private void aplicarItem(ProductoCache pc, DuxItem item, String listaObjetivo, Instant ahora) {
+        pc.setDescripcion(truncar(item.getItem(), 200));
+        pc.setPorcIva(parseBigDecimal(item.getPorcIva(), 2));
+        pc.setHabilitado(item.getHabilitado() == null ? null : "S".equalsIgnoreCase(item.getHabilitado().trim()));
+        pc.setPvpKtGastroConIva(extraerPrecio(item, listaObjetivo));
+        pc.setStockTotal(sumarStock(item.getStock()));
+        sincronizarCodigosBarra(pc, item.getCodigosBarra());
+        pc.setSincronizadoAt(ahora);
+    }
+
+    /**
+     * Reescribe el Set de códigos de barra del producto. Limpiamos y volvemos a
+     * agregar (en lugar de hacer setCodigosBarra(nuevoSet)) porque Hibernate
+     * trackea modificaciones a la colección existente para emitir el delta
+     * correcto de inserts/deletes en la tabla lateral.
+     */
+    private void sincronizarCodigosBarra(ProductoCache pc, List<String> codigos) {
+        if (pc.getCodigosBarra() == null) {
+            pc.setCodigosBarra(new HashSet<>());
+        }
+        pc.getCodigosBarra().clear();
+        if (codigos == null) return;
+        for (String c : codigos) {
+            if (c == null) continue;
+            String trimmed = c.trim();
+            if (!trimmed.isEmpty() && trimmed.length() <= 32) {
+                pc.getCodigosBarra().add(trimmed);
+            }
+        }
+    }
+
+    private BigDecimal extraerPrecio(DuxItem item, String listaObjetivo) {
+        if (item.getPrecios() == null) return null;
+        for (DuxPrecio p : item.getPrecios()) {
+            if (p.getNombre() != null && p.getNombre().equalsIgnoreCase(listaObjetivo)) {
+                return parseBigDecimal(p.getPrecio(), 4);
+            }
+        }
+        return null;
+    }
+
+    private Integer sumarStock(List<DuxStock> stocks) {
+        if (stocks == null || stocks.isEmpty()) return 0;
+        int total = 0;
+        for (DuxStock s : stocks) {
+            String d = s.getStockDisponible();
+            if (d == null || d.isBlank()) continue;
+            try {
+                total += Integer.parseInt(d.replace(",", ".").split("\\.")[0]);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return total;
+    }
+
+    private BigDecimal parseBigDecimal(String s, int scale) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            return new BigDecimal(s.replace(",", ".")).setScale(scale, RoundingMode.HALF_UP);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private String truncar(String s, int max) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.length() > max ? t.substring(0, max) : t;
+    }
+}

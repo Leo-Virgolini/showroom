@@ -1,0 +1,48 @@
+# =============================================================================
+# Gitignore raíz del proyecto showroom — cubre lo común a backend + frontend.
+# Ignores específicos de cada subproyecto van en su propio .gitignore.
+# =============================================================================
+
+# ---- Variables de entorno y secrets ----
+# NUNCA committear .env real (contiene paths del host, password DB, app password
+# de Gmail, etc.). El .env.example sí va al repo como template.
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# ---- Docker ----
+# Override local opcional para devs (puertos custom, mounts extra, etc.).
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# ---- IDE / editores ----
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+.history/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ---- Logs y temporales ----
+*.log
+logs/
+tmp/
+.tmp/
+
+# ---- Backups accidentales ----
+*.bak
+*.backup
+*.orig
+
+# ---- Archivo suelto que quedó en la raíz por error de algún npm install ----
+# (pertenece a uno de los subproyectos, no acá)
+/package-lock.json
