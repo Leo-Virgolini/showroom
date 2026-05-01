@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, effect, inject, signal } from '@angular/core';
 import { BackendStatusService } from './backend-status.service';
 import { ShowroomService } from './showroom.service';
 import { Health, SyncEvent } from './models';
@@ -37,6 +37,21 @@ export class SyncStateService {
   constructor() {
     this.cargarHealthInicial();
     this.escucharEventos();
+
+    // Cuando el backend (re)conecta — incluyendo el caso "el frontend cargó
+    // antes de que el backend estuviera listo" o un drop de SSE — re-consultar
+    // /health para captar el estado actual del sync. Sin esto, si el sync
+    // ya empezó cuando conectamos tarde, perdemos el evento STARTED y el
+    // banner nunca aparece.
+    let prev = this.backendStatus.connected();
+    effect(() => {
+      const ahora = this.backendStatus.connected();
+      // Solo en transición false → true (no en cada render con connected=true).
+      if (ahora && !prev) {
+        this.cargarHealthInicial();
+      }
+      prev = ahora;
+    });
   }
 
   private cargarHealthInicial(): void {
@@ -79,7 +94,7 @@ export class SyncStateService {
     } else if (e.estado === 'PROGRESS') {
       this.progresoActual.set(e.items ?? null);
       this.progresoTotal.set(e.total ?? null);
-    } else if (e.estado === 'COMPLETED' || e.estado === 'FAILED') {
+    } else if (e.estado === 'COMPLETED' || e.estado === 'FAILED' || e.estado === 'CANCELLED') {
       this.syncIniciadoAt.set(null);
       this.progresoActual.set(null);
       this.progresoTotal.set(null);
