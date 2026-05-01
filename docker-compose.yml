@@ -17,27 +17,30 @@ name: showroom
 
 services:
   mysql:
-    image: mysql:8.0
+    # Misma versión que el super-master para coherencia entre stacks. LTS hasta
+    # abril 2032. Evitamos `latest` para que el rebuild sea reproducible.
+    image: mysql:8.4
     container_name: showroom-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
       MYSQL_DATABASE: showroom
       TZ: America/Argentina/Buenos_Aires
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --default-time-zone=+00:00  # Coincide con hibernate.jdbc.time_zone=UTC
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --default-time-zone=+00:00
+      --innodb-buffer-pool-size=512M
+      --max-connections=50
     volumes:
       - mysql-data:/var/lib/mysql
     networks:
       - showroom-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-showroom}"]
-      interval: 10s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-showroom}"]
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 20
     # Descomentá para conectar con DBeaver/MySQL Workbench desde el host:
     # ports:
     #   - "3307:3306"
