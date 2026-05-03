@@ -16,6 +16,7 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { IconFieldModule } from 'primeng/iconfield';
+import { ImageModule } from 'primeng/image';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
@@ -40,6 +41,7 @@ import { toastError } from '../toast.utils';
     ButtonModule,
     CardModule,
     IconFieldModule,
+    ImageModule,
     InputIconModule,
     InputTextModule,
     ProgressSpinnerModule,
