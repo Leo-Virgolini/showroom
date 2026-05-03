@@ -194,6 +194,8 @@ export interface PedidoItemDetalle {
   precioUnitario: number | null;
   /** % de IVA aplicado al producto al momento del pedido. */
   porcIva: number | null;
+  /** URL del endpoint local de imagen del producto, o null si no existe el archivo. */
+  imagenUrl: string | null;
 }
 
 export interface PedidoDetalle {

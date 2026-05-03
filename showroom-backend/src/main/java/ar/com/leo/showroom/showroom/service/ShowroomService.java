@@ -248,7 +248,8 @@ public class ShowroomService {
                         it.getDescripcion(),
                         it.getCantidad(),
                         it.getPrecioUnitario(),
-                        it.getPorcIva()))
+                        it.getPorcIva(),
+                        urlImagenLocal(it.getSku())))
                 .toList();
         String provinciaNombre = p.getCodigoProvincia() != null
                 ? provinciaRepository.findByCodIsoIgnoreCase(p.getCodigoProvincia())

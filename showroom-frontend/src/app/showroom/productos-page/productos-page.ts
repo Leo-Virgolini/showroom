@@ -26,6 +26,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProductoListItem } from '../models';
 import { ShowroomService } from '../showroom.service';
+import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
 
 @Component({
@@ -55,6 +56,10 @@ export class ProductosPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly syncState = inject(SyncStateService);
+
+  /** Estado del sync global (toolbar + última sync visible en el badge). */
+  readonly health = this.syncState.health;
 
   readonly busqueda = signal('');
   readonly soloDeshabilitados = signal(false);
@@ -201,4 +206,27 @@ export class ProductosPage {
   }
 
   trackBySku = (_: number, it: ProductoListItem) => it.sku;
+
+  /** Si la URL de la imagen falla (404 / archivo borrado), blanqueamos el campo
+   *  del item para que el template muestre el placeholder en vez del ícono roto. */
+  onImagenError(sku: string): void {
+    this.productos.set(
+      this.productos().map((p) =>
+        p.sku === sku && p.imagenUrl ? { ...p, imagenUrl: null } : p,
+      ),
+    );
+  }
+
+  /** "hace X min/h/días" para el badge de última sync del toolbar. */
+  tiempoRelativo(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 60_000) return 'hace unos segundos';
+    const min = Math.floor(ms / 60_000);
+    if (min < 60) return `hace ${min} min`;
+    const hs = Math.floor(min / 60);
+    if (hs < 24) return `hace ${hs} h`;
+    const d = Math.floor(hs / 24);
+    return `hace ${d} día${d === 1 ? '' : 's'}`;
+  }
 }
