@@ -257,6 +257,15 @@ export class ShowroomPage implements AfterViewInit {
     if (r?.imagenUrl) this.ultimoScan.set({ ...r, imagenUrl: null });
   }
 
+  /** Mismo fallback pero para los thumbnails de los items del carrito. */
+  onImagenErrorCarrito(sku: string): void {
+    this.carrito.set(
+      this.carrito().map((it) =>
+        it.sku === sku && it.imagenUrl ? { ...it, imagenUrl: null } : it,
+      ),
+    );
+  }
+
   /** Formato relativo "hace X min/hora/día" para fechas recientes. */
   tiempoRelativo(iso: string | null | undefined): string {
     if (!iso) return '—';
@@ -286,11 +295,20 @@ export class ShowroomPage implements AfterViewInit {
     return (
       c.nroDoc != null &&
       this.cuitValido(c.nroDoc) &&
-      !!c.codigoProvincia &&
       this.carrito().length > 0 &&
       !this.hayItemsExcedidos()
     );
   });
+
+  /** Valor final de `apellido_razon_social` que recibe DUX: lo tipeado en
+   *  "Nombre y apellido" o, si quedó vacío, el fallback "PEDIDO SHOWROOM". */
+  readonly apellidoRazonSocialFinal = computed(
+    () => this.cliente().nombreCompleto.trim() || APELLIDO_RAZON_SOCIAL,
+  );
+
+  /** Hardcoded en el envío a DUX (línea ~715 de crearPedido). Se expone al
+   *  operador como input deshabilitado para que vea exactamente qué se carga. */
+  readonly categoriaFiscalFinal = 'CONSUMIDOR_FINAL';
 
   /** CUIT/CUIL = 11 dígitos. No validamos el dígito verificador para no rebotar
    * a la operadora si DUX lo acepta igual. */
@@ -432,9 +450,33 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /** Un producto es vendible cuando está habilitado, tiene stock disponible y
+   *  además tiene un precio cargado en la lista KT GASTRO. Si el precio es 0
+   *  o null, lo más probable es que DUX no tenga ese item en la lista — agregarlo
+   *  generaría un pedido fantasma sin total. */
+  productoVendible(r: ScanResult): boolean {
+    if (r.habilitado === false) return false;
+    if (r.stockTotal != null && r.stockTotal <= 0) return false;
+    if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) return false;
+    return true;
+  }
+
   agregarAlCarrito(cantidad: number = 1): void {
     const r = this.ultimoScan();
     if (!r) return;
+    if (!this.productoVendible(r)) {
+      const motivo = r.habilitado === false
+        ? 'el producto está deshabilitado'
+        : (r.stockTotal != null && r.stockTotal <= 0)
+          ? 'no tiene stock disponible'
+          : 'no tiene precio cargado en la lista KT GASTRO';
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No se puede agregar',
+        detail: `${r.sku}: ${motivo}.`,
+      });
+      return;
+    }
     if (cantidad <= 0) cantidad = 1;
 
     const lista = [...this.carrito()];
@@ -661,6 +703,13 @@ export class ShowroomPage implements AfterViewInit {
 
   onFilterLocalidades(event: { filter: string }): void {
     this.localidadesQuery.set(event.filter || '');
+  }
+
+  scrollAlInicio(): void {
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    this.focusInput();
   }
 
   /**

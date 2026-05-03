@@ -3,7 +3,10 @@
   <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
     <ng-template #start>
       <div class="flex items-center gap-3">
-        <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        <a routerLink="/" aria-label="Volver al inicio" pTooltip="Volver al inicio" tooltipPosition="bottom"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        </a>
         <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
           <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Pedidos</span>
           <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">

@@ -22,6 +22,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
+import { TooltipModule } from 'primeng/tooltip';
 import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada } from '../models';
 import { ShowroomService } from '../showroom.service';
@@ -76,6 +77,7 @@ const MARGEN_HOJA_MM = 5;
     TextareaModule,
     ToggleSwitchModule,
     ToolbarModule,
+    TooltipModule,
   ],
   templateUrl: './etiquetas-page.html',
   styleUrl: './etiquetas-page.scss',

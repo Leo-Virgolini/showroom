@@ -33,7 +33,10 @@
   <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
     <ng-template #start>
       <div class="flex items-center gap-3">
-        <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom" (click)="scrollAlInicio()"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        </a>
         <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
           <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Showroom</span>
         </div>
@@ -42,29 +45,21 @@
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
         @if (health()?.ultimaSincronizacionAt; as fecha) {
-        <p-tag
-          severity="secondary"
-          icon="pi pi-clock"
-          [value]="'Última sync: ' + tiempoRelativo(fecha)"
-          [pTooltip]="(fecha | date: 'medium' : undefined : 'es-AR') ?? ''"
-          tooltipPosition="bottom"
-          class="hidden md:inline-flex mr-1" />
+        <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'medium' : undefined : 'es-AR') ?? ''"
+          tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
         }
-        <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja"
-          [disabled]="health()?.syncEnCurso === true" [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()"
-          pTooltip="Descarga el catálogo desde DUX" />
-        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-gris" routerLink="/productos"
-          pTooltip="Ver catálogo cacheado" />
-        <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-verde" routerLink="/pedidos"
-          pTooltip="Ver pedidos generados" />
-        <p-button icon="pi pi-tags" [label]="screenLg() ? 'Etiquetas QR' : ''" ariaLabel="Etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
+        <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
+          [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
+        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-gris" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
+        <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-verde" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
+        <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
       </div>
     </ng-template>
   </p-toolbar>
 
-  <main class="flex-1 grid gap-4 p-3 sm:p-4 lg:p-6 items-start grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px]">
-    <section>
-      <p-card>
+  <main class="flex-1 grid gap-4 p-3 sm:p-4 lg:p-6 grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px] lg:grid-rows-1">
+    <section class="flex flex-col min-h-0">
+      <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex items-center gap-2">
             <i class="pi pi-search text-primary"></i>
@@ -88,23 +83,23 @@
         </div>
 
         @if (cargandoScan()) {
-        <div class="flex flex-col items-center justify-center py-16 px-4 gap-3">
+        <div class="flex flex-col items-center justify-center flex-1 px-4 gap-3">
           <p-progressSpinner class="!w-16 !h-16" strokeWidth="4" />
           <p class="text-muted-color text-sm">Buscando producto…</p>
         </div>
         } @else if (ultimoScan(); as r) {
-        <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-4 flex-1">
           <div
             class="flex justify-between items-start gap-4 flex-wrap p-4 rounded-lg border border-primary-200 dark:border-primary-900 bg-gradient-to-br from-primary-50 via-surface-50 to-surface-50 dark:from-primary-950/40 dark:via-surface-900 dark:to-surface-900 shadow-sm">
             <div class="flex items-start gap-4 flex-1 min-w-0">
               @if (r.imagenUrl) {
               <img [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" loading="lazy"
-                class="w-20 h-20 sm:w-24 sm:h-24 object-contain rounded-md border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 shrink-0"
+                class="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 object-contain rounded-md border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 shrink-0"
                 (error)="onImagenError($event)" />
               } @else {
               <div
-                class="w-20 h-20 sm:w-24 sm:h-24 rounded-md border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
-                <i class="pi pi-image text-2xl text-muted-color opacity-50"></i>
+                class="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-md border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
+                <i class="pi pi-image text-4xl text-muted-color opacity-50"></i>
               </div>
               }
               <div class="min-w-0 flex-1">
@@ -118,21 +113,21 @@
             </div>
             <div class="flex flex-col gap-1 items-end">
               @if (r.habilitado === false) {
-              <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" />
+              <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
+              }
+              @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva
+              <= 0) { <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
               }
               @if (r.stockTotal != null) {
               <p-tag [severity]="stockSeverity(r.stockTotal)" [value]="(r.stockTotal > 0 ? 'Stock: ' + r.stockTotal : 'Sin stock')"
-                [icon]="r.stockTotal > 0 ? 'pi pi-box' : 'pi pi-times-circle'"
-                class="tag-grande" />
+                [icon]="r.stockTotal > 0 ? 'pi pi-box' : 'pi pi-times-circle'" class="tag-grande" />
               }
             </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <!-- PVP normal -->
-            <div
-              class="relative rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4 sm:p-5 shadow-sm flex flex-col gap-1"
-            >
+            <div class="relative rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
               <div class="text-xs font-semibold uppercase tracking-wider text-muted-color">
                 PVP s/IVA
               </div>
@@ -146,12 +141,12 @@
 
             <!-- -5% -->
             <div
-              class="relative rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1"
-            >
+              class="relative rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
               <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
                 −5%
               </div>
-              <span class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs font-semibold tabular-nums">
+              <span
+                class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs font-semibold tabular-nums">
                 A partir de {{ umbral5 | currency:'ARS':'symbol':'1.0-0' }}
               </span>
               <div class="text-3xl sm:text-4xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-1">
@@ -165,12 +160,12 @@
 
             <!-- -10% -->
             <div
-              class="relative rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1"
-            >
+              class="relative rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
               <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">
                 −10%
               </div>
-              <span class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 text-xs font-semibold tabular-nums">
+              <span
+                class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 text-xs font-semibold tabular-nums">
                 A partir de {{ umbral10 | currency:'ARS':'symbol':'1.0-0' }}
               </span>
               <div class="text-3xl sm:text-4xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-1">
@@ -183,18 +178,16 @@
             </div>
           </div>
 
-          <div class="flex gap-3 items-center flex-wrap">
+          <div class="flex gap-3 items-center flex-wrap mt-auto pt-2">
             <label class="text-sm text-muted-color">Cantidad:</label>
             <p-inputNumber [ngModel]="cantidadInput()" (ngModelChange)="cantidadInput.set($event ?? 1)" [showButtons]="true" [min]="1" [max]="maxCantidad(r.stockTotal)"
-              [disabled]="r.habilitado === false || (r.stockTotal != null && r.stockTotal <= 0)"
-              inputStyleClass="w-24 sm:w-32 text-center text-lg" />
-            <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large" (onClick)="agregarAlCarrito(cantidadInput())"
-              [disabled]="r.habilitado === false || (r.stockTotal != null && r.stockTotal <= 0)" />
+              [disabled]="!productoVendible(r)" inputStyleClass="w-24 sm:w-32 text-center text-lg" />
+            <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large" (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
           </div>
 
         </div>
         } @else {
-        <div class="flex flex-col items-center justify-center py-16 px-4 text-center">
+        <div class="flex flex-col items-center justify-center flex-1 px-4 text-center">
           <div class="w-20 h-20 rounded-full bg-primary-50 dark:bg-primary-950 flex items-center justify-center mb-4">
             <i class="pi pi-qrcode text-4xl text-primary"></i>
           </div>
@@ -210,8 +203,8 @@
       </p-card>
     </section>
 
-    <aside>
-      <p-card>
+    <aside class="flex flex-col min-h-0">
+      <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex justify-between items-center w-full gap-2">
             <span class="inline-flex items-center gap-2">
@@ -226,14 +219,14 @@
             <div class="inline-flex items-center gap-1">
               <p-button icon="pi pi-refresh" severity="secondary" [text]="true" [rounded]="true" [loading]="refrescando()" [disabled]="carrito().length === 0"
                 (onClick)="refrescarStockCarrito()" pTooltip="Refrescar stock desde DUX (~7s por item)" tooltipPosition="top" size="small" />
-              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" [disabled]="carrito().length === 0"
-                (onClick)="vaciarCarrito()" pTooltip="Vaciar carrito" tooltipPosition="top" ariaLabel="Vaciar carrito" size="small" />
+              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" [disabled]="carrito().length === 0" (onClick)="vaciarCarrito()" pTooltip="Vaciar carrito"
+                tooltipPosition="top" ariaLabel="Vaciar carrito" size="small" />
             </div>
           </div>
         </ng-template>
 
         @if (carrito().length === 0) {
-        <div class="flex flex-col items-center justify-center text-center py-10 px-4">
+        <div class="flex flex-col items-center justify-center flex-1 text-center px-4">
           <div class="w-16 h-16 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center mb-3">
             <i class="pi pi-shopping-cart text-3xl text-muted-color"></i>
           </div>
@@ -248,14 +241,24 @@
           <p-tag severity="danger" icon="pi pi-exclamation-triangle" value="Hay items sin stock suficiente" />
           }
         </div>
-        <ul class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700">
+        <ul class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700 flex-1 overflow-y-auto min-h-0">
           @for (it of carrito(); track it.sku) {
           <li class="py-3 flex flex-col gap-2" [class.item-excedido]="excedeStock(it)">
             <div class="flex items-start justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <div class="font-mono text-sm font-semibold">{{ it.sku }}</div>
-                <div class="text-xs text-muted-color truncate">
-                  {{ it.descripcion ?? '—' }}
+              <div class="flex items-start gap-2.5 min-w-0 flex-1">
+                @if (it.imagenUrl) {
+                <img [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" loading="lazy"
+                  class="w-12 h-12 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 shrink-0" (error)="onImagenErrorCarrito(it.sku)" />
+                } @else {
+                <div class="w-12 h-12 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
+                  <i class="pi pi-image text-base text-muted-color opacity-50"></i>
+                </div>
+                }
+                <div class="min-w-0 flex-1">
+                  <div class="font-mono text-sm font-semibold">{{ it.sku }}</div>
+                  <div class="text-xs text-muted-color truncate">
+                    {{ it.descripcion ?? '—' }}
+                  </div>
                 </div>
               </div>
               <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" (onClick)="eliminarDelCarrito(it.sku)" pTooltip="Quitar del carrito" tooltipPosition="left" />
@@ -299,13 +302,8 @@
           </div>
 
           @if (descuentoAplicado() > 0) {
-          <div
-            class="flex items-baseline justify-between text-sm"
-            [class.text-amber-600]="descuentoAplicado() === 5"
-            [class.dark:text-amber-400]="descuentoAplicado() === 5"
-            [class.text-emerald-600]="descuentoAplicado() === 10"
-            [class.dark:text-emerald-400]="descuentoAplicado() === 10"
-          >
+          <div class="flex items-baseline justify-between text-sm" [class.text-amber-600]="descuentoAplicado() === 5" [class.dark:text-amber-400]="descuentoAplicado() === 5"
+            [class.text-emerald-600]="descuentoAplicado() === 10" [class.dark:text-emerald-400]="descuentoAplicado() === 10">
             <span class="font-medium inline-flex items-center gap-1.5">
               <i class="pi pi-percentage text-xs"></i>
               Descuento {{ descuentoAplicado() }}%
@@ -374,8 +372,8 @@
   </footer>
 </div>
 
-<p-dialog header="Confirmar pedido a DUX" [(visible)]="mostrarConfirmacion" [modal]="true" [style]="{ width: '95vw', maxWidth: '40rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [closable]="!enviando()" [draggable]="false">
+<p-dialog header="Confirmar pedido a DUX" [(visible)]="mostrarConfirmacion" [modal]="true" [style]="{ width: '90vw', maxWidth: '60rem' }"
+  [breakpoints]="{ '1280px': '85vw', '1024px': '92vw', '640px': '96vw' }" [closable]="!enviando()" [draggable]="false">
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-950 border border-primary-200 dark:border-primary-900">
       <i class="pi pi-shopping-cart text-2xl text-primary"></i>
@@ -389,28 +387,13 @@
       </div>
     </div>
 
-    <div class="text-xs text-muted-color flex items-start gap-2 px-3 py-2 rounded-lg bg-surface-100 dark:bg-surface-800 border border-surface-200 dark:border-surface-700">
-      <i class="pi pi-info-circle mt-0.5"></i>
-      <span>
-        El pedido se carga en DUX como <strong>PEDIDO SHOWROOM</strong> con CUIT del cliente.
-        La operadora luego lo asocia al cliente real desde DUX.
-      </span>
-    </div>
-
     <div class="grid grid-cols-2 gap-3">
       <div class="flex flex-col gap-1 col-span-2">
         <label class="text-sm font-medium text-muted-color">
           CUIT <span class="text-red-500">*</span>
         </label>
-        <p-inputMask
-          mask="99-99999999-9"
-          [unmask]="true"
-          [ngModel]="cuitInputValue()"
-          (ngModelChange)="onCuitChange($event)"
-          placeholder="XX-XXXXXXXX-X"
-          class="w-full"
-          styleClass="w-full"
-        />
+        <p-inputMask mask="99-99999999-9" [unmask]="true" [ngModel]="cuitInputValue()" (ngModelChange)="onCuitChange($event)" placeholder="XX-XXXXXXXX-X" class="w-full"
+          styleClass="w-full" />
         @if (cliente().nroDoc != null && !cuitValido(cliente().nroDoc)) {
         <span class="text-xs text-red-600 dark:text-red-400">El CUIT debe tener 11 dígitos.</span>
         }
@@ -418,15 +401,18 @@
 
       <div class="flex flex-col gap-1 col-span-2">
         <label class="text-sm font-medium text-muted-color">Nombre y apellido</label>
-        <input
-          pInputText
-          type="text"
-          [ngModel]="cliente().nombreCompleto"
-          (ngModelChange)="actualizarCliente('nombreCompleto', $event)"
-          placeholder="Aparece en la carátula del PDF y en DUX"
-          maxlength="100"
-          class="w-full"
-        />
+        <input pInputText type="text" [ngModel]="cliente().nombreCompleto" (ngModelChange)="actualizarCliente('nombreCompleto', $event)"
+          placeholder="Aparece en la carátula del PDF y en DUX" maxlength="100" class="w-full" />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Apellido / razón social en DUX</label>
+        <input pInputText type="text" [value]="apellidoRazonSocialFinal()" [disabled]="true" class="w-full" />
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Categoría fiscal</label>
+        <input pInputText type="text" [value]="categoriaFiscalFinal" [disabled]="true" class="w-full" />
       </div>
 
       <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
@@ -437,70 +423,31 @@
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">
-          Provincia <span class="text-red-500">*</span>
-        </label>
-        <p-select
-          [options]="provinciasOrdenadas()"
-          [ngModel]="cliente().codigoProvincia"
-          (ngModelChange)="cambiarProvincia($event)"
-          (onFilter)="onFilterProvincias($event)"
-          optionLabel="nombre"
-          optionValue="codigo"
-          [filter]="true"
-          filterBy="nombre"
-          placeholder="Seleccionar…"
-          appendTo="body"
-          class="w-full"
-        />
+        <label class="text-sm font-medium text-muted-color">Provincia</label>
+        <p-select [options]="provinciasOrdenadas()" [ngModel]="cliente().codigoProvincia" (ngModelChange)="cambiarProvincia($event)" (onFilter)="onFilterProvincias($event)"
+          optionLabel="nombre" optionValue="codigo" [filter]="true" filterBy="nombre" placeholder="Seleccionar…" appendTo="body" class="w-full" />
       </div>
 
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium text-muted-color">Localidad</label>
         <div class="flex gap-1 items-center">
           <div class="flex-1 min-w-0">
-            <p-select
-              [options]="localidadesOrdenadas()"
-              [ngModel]="cliente().idLocalidad"
-              (ngModelChange)="actualizarCliente('idLocalidad', $event)"
-              (onFilter)="onFilterLocalidades($event)"
-              optionLabel="nombre"
-              optionValue="id"
-              [filter]="true"
-              filterBy="nombre"
-              [showClear]="true"
-              [disabled]="!cliente().codigoProvincia || cargandoLocalidades()"
-              [loading]="cargandoLocalidades()"
-              placeholder="Seleccionar…"
-              appendTo="body"
-              class="w-full"
-            />
+            <p-select [options]="localidadesOrdenadas()" [ngModel]="cliente().idLocalidad" (ngModelChange)="actualizarCliente('idLocalidad', $event)"
+              (onFilter)="onFilterLocalidades($event)" optionLabel="nombre" optionValue="id" [filter]="true" filterBy="nombre" [showClear]="true"
+              [disabled]="!cliente().codigoProvincia || cargandoLocalidades()" [loading]="cargandoLocalidades()" placeholder="Seleccionar…" appendTo="body" [virtualScroll]="true"
+              [virtualScrollItemSize]="44" class="w-full" />
           </div>
           @if (cargandoLocalidades()) {
-            <p-button
-              icon="pi pi-times"
-              severity="secondary"
-              [text]="true"
-              [rounded]="true"
-              size="small"
-              (onClick)="cancelarBusquedaLocalidades()"
-              pTooltip="Cancelar búsqueda"
-              ariaLabel="Cancelar búsqueda de localidades"
-            />
+          <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true" size="small" (onClick)="cancelarBusquedaLocalidades()" pTooltip="Cancelar búsqueda"
+            ariaLabel="Cancelar búsqueda de localidades" />
           }
         </div>
       </div>
 
       <div class="flex flex-col gap-1 col-span-2">
         <label class="text-sm font-medium text-muted-color">Domicilio de entrega</label>
-        <input
-          pInputText
-          type="text"
-          [ngModel]="cliente().domicilio"
-          (ngModelChange)="actualizarCliente('domicilio', $event)"
-          placeholder="Calle y altura donde se entrega el pedido"
-          class="w-full"
-        />
+        <input pInputText type="text" [ngModel]="cliente().domicilio" (ngModelChange)="actualizarCliente('domicilio', $event)" placeholder="Calle y altura donde se entrega el pedido"
+          class="w-full" />
       </div>
 
       <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
@@ -514,14 +461,7 @@
         <label class="text-sm font-medium text-muted-color">Teléfono</label>
         <p-iconfield iconPosition="left">
           <p-inputicon><i class="pi pi-phone"></i></p-inputicon>
-          <input
-            pInputText
-            type="tel"
-            inputmode="tel"
-            [ngModel]="cliente().telefono"
-            (ngModelChange)="actualizarCliente('telefono', $event)"
-            class="w-full"
-          />
+          <input pInputText type="tel" inputmode="tel" [ngModel]="cliente().telefono" (ngModelChange)="actualizarCliente('telefono', $event)" class="w-full" />
         </p-iconfield>
       </div>
 
@@ -529,17 +469,8 @@
         <label class="text-sm font-medium text-muted-color">Email</label>
         <p-iconfield iconPosition="left">
           <p-inputicon><i class="pi pi-envelope"></i></p-inputicon>
-          <p-autoComplete
-            [ngModel]="cliente().email"
-            (ngModelChange)="actualizarCliente('email', $event)"
-            [suggestions]="sugerenciasEmail()"
-            (completeMethod)="onCompletarEmail($event)"
-            [forceSelection]="false"
-            [delay]="0"
-            placeholder="cliente@gmail.com"
-            inputStyleClass="w-full pl-10"
-            class="w-full"
-          />
+          <p-autoComplete [ngModel]="cliente().email" (ngModelChange)="actualizarCliente('email', $event)" [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
+            [forceSelection]="false" [delay]="0" placeholder="cliente@gmail.com" inputStyleClass="w-full pl-10" class="w-full" />
         </p-iconfield>
       </div>
 
@@ -554,15 +485,8 @@
       </div>
 
       <div class="flex flex-col gap-1 col-span-2">
-        <textarea
-          pTextarea
-          rows="2"
-          [ngModel]="cliente().observaciones"
-          (ngModelChange)="actualizarCliente('observaciones', $event)"
-          placeholder="Ej: el cliente pidió que se le avise antes de la entrega…"
-          class="w-full resize-y"
-          maxlength="500"
-        ></textarea>
+        <textarea pTextarea rows="2" [ngModel]="cliente().observaciones" (ngModelChange)="actualizarCliente('observaciones', $event)"
+          placeholder="Ej: el cliente pidió que se le avise antes de la entrega…" class="w-full resize-y" maxlength="500"></textarea>
       </div>
     </div>
   </div>

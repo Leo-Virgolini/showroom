@@ -337,8 +337,9 @@ public class CatalogoSyncService {
 
     private BigDecimal extraerPrecio(DuxItem item, String listaObjetivo) {
         if (item.getPrecios() == null) return null;
+        String objetivo = listaObjetivo == null ? "" : listaObjetivo.trim();
         for (DuxPrecio p : item.getPrecios()) {
-            if (p.getNombre() != null && p.getNombre().equalsIgnoreCase(listaObjetivo)) {
+            if (p.getNombre() != null && p.getNombre().trim().equalsIgnoreCase(objetivo)) {
                 return parseBigDecimal(p.getPrecio(), 4);
             }
         }
@@ -349,11 +350,18 @@ public class CatalogoSyncService {
         if (stocks == null || stocks.isEmpty()) return 0;
         int total = 0;
         for (DuxStock s : stocks) {
+            if (s == null) continue;
             String d = s.getStockDisponible();
             if (d == null || d.isBlank()) continue;
+            String entero = d.trim().replace(",", ".").split("\\.")[0];
             try {
-                total += Integer.parseInt(d.replace(",", ".").split("\\.")[0]);
-            } catch (NumberFormatException ignored) {
+                total += Integer.parseInt(entero);
+            } catch (NumberFormatException e) {
+                // Si DUX cambia el formato (ej. miles con punto, notación
+                // científica), no sumamos nada y avisamos. Sin este log la
+                // diferencia se traga silenciosamente y el operador ve menos
+                // stock del real sin entender por qué.
+                log.warn("Stock con formato inesperado del depósito {}: '{}'", s.getId(), d);
             }
         }
         return total;
@@ -362,8 +370,9 @@ public class CatalogoSyncService {
     private BigDecimal parseBigDecimal(String s, int scale) {
         if (s == null || s.isBlank()) return null;
         try {
-            return new BigDecimal(s.replace(",", ".")).setScale(scale, RoundingMode.HALF_UP);
+            return new BigDecimal(s.trim().replace(",", ".")).setScale(scale, RoundingMode.HALF_UP);
         } catch (NumberFormatException e) {
+            log.warn("Número con formato inesperado de DUX: '{}'", s);
             return null;
         }
     }

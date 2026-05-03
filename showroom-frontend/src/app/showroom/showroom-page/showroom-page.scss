@@ -7,6 +7,35 @@
   min-width: 2.4rem;
 }
 
+// Hace que p-card estire su altura al 100% del padre y propague flex-col por
+// dentro, para que los hijos puedan usar flex-1 / mt-auto y empujar el CTA al
+// pie. Sin esto p-card tiene altura natural y el contenido queda flotando
+// arriba con espacio en blanco abajo en pantallas grandes.
+//
+// En PrimeNG 21 la clase `p-card` se aplica al mismo host que recibe nuestro
+// `stretch-card`, así que NO usamos `> .p-card` (sería el mismo elemento).
+// El primer hijo es directamente `.p-card-body`.
+:host ::ng-deep .stretch-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+
+  > .p-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+
+    > .p-card-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+  }
+}
+
 // Item del carrito que supera el stock disponible — fondo rojo claro y borde
 // para llamar la atención sin necesidad de 5 bindings [class.X] en el template.
 .item-excedido {
