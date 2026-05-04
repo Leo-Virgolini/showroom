@@ -7,6 +7,7 @@ import {
   HostListener,
   ViewChild,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -84,6 +85,25 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
 /** Nombre con el que se carga todo pedido del showroom — la operadora lo
  * sobrescribe en DUX al asociar el CUIT con el cliente real. */
 const APELLIDO_RAZON_SOCIAL = 'PEDIDO SHOWROOM';
+
+/** Key del localStorage donde persistimos el carrito para sobrevivir refrescos
+ *  accidentales de la pestaña. Se limpia al vaciar el carrito o al enviar el
+ *  pedido con éxito (ambos pasan por `vaciarCarrito()`, que setea []). */
+const CARRITO_STORAGE_KEY = 'showroom.carrito';
+
+/** Lee el carrito persistido del localStorage. Vuelve [] si no hay nada,
+ *  si el JSON está corrupto o si estamos en SSR (sin window). */
+function cargarCarritoPersistido(): CarritoItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(CARRITO_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as CarritoItem[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Re-ordena una lista para que los items cuyo nombre empieza con `query` aparezcan
@@ -168,7 +188,7 @@ export class ShowroomPage implements AfterViewInit {
    *  anterior, solo la última respuesta actualiza la UI — así evitamos
    *  que un request lento "pise" al rápido al volver fuera de orden. */
   private scanSeq = 0;
-  readonly carrito = signal<CarritoItem[]>([]);
+  readonly carrito = signal<CarritoItem[]>(cargarCarritoPersistido());
   readonly refrescando = signal(false);
   /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
    *  que es para el carrito completo. */
@@ -378,6 +398,22 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   constructor() {
+    // Persiste el carrito en localStorage en cada cambio. Cuando queda vacío
+    // (vaciarCarrito() o envío exitoso) borra la key. Sobrevive a F5 accidental.
+    effect(() => {
+      const items = this.carrito();
+      if (typeof window === 'undefined') return;
+      try {
+        if (items.length === 0) {
+          window.localStorage.removeItem(CARRITO_STORAGE_KEY);
+        } else {
+          window.localStorage.setItem(CARRITO_STORAGE_KEY, JSON.stringify(items));
+        }
+      } catch (e) {
+        console.warn('[carrito persist] no se pudo guardar:', e);
+      }
+    });
+
     if (typeof window === 'undefined') return;
 
     const mq = window.matchMedia('(min-width: 1024px)');
