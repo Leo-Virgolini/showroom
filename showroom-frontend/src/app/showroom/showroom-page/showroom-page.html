@@ -89,6 +89,7 @@
         </div>
         } @else if (ultimoScan(); as r) {
         <div class="flex flex-col gap-4 flex-1">
+          <!-- ENCABEZADO: imagen (si hay) + título + tags de estado -->
           <div
             class="flex justify-between items-start gap-4 flex-wrap p-4 rounded-lg border border-primary-200 dark:border-primary-900 bg-gradient-to-br from-primary-50 via-surface-50 to-surface-50 dark:from-primary-950/40 dark:via-surface-900 dark:to-surface-900 shadow-sm">
             <div class="flex items-start gap-4 flex-1 min-w-0">
@@ -97,11 +98,6 @@
                 imageClass="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 object-contain rounded-md border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
                 class="shrink-0"
                 (onImageError)="onImagenError($event)" />
-              } @else {
-              <div
-                class="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 rounded-md border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
-                <i class="pi pi-image text-4xl text-muted-color opacity-50"></i>
-              </div>
               }
               <div class="min-w-0 flex-1">
                 <div class="font-mono text-2xl font-bold tracking-wide text-primary truncate">
@@ -116,69 +112,90 @@
               @if (r.habilitado === false) {
               <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
               }
-              @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva
-              <= 0) { <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
+              @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) {
+              <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
               }
-              @if (r.stockTotal != null) {
-              <p-tag [severity]="stockSeverity(r.stockTotal)" [value]="(r.stockTotal > 0 ? 'Stock: ' + r.stockTotal : 'Sin stock')"
-                [icon]="r.stockTotal > 0 ? 'pi pi-box' : 'pi pi-times-circle'" class="tag-grande" />
+              @if (r.stockTotal != null && r.stockTotal > 0) {
+              <p-tag severity="info" [value]="'Stock: ' + r.stockTotal" icon="pi pi-box" class="tag-grande" />
               }
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <!-- PVP normal -->
-            <div class="relative rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
-              <div class="text-xs font-semibold uppercase tracking-wider text-muted-color">
-                PVP s/IVA
+          <!-- BANNER SIN STOCK (full width, imposible de ignorar) -->
+          @if (r.stockTotal != null && r.stockTotal <= 0) {
+          <div class="rounded-lg border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 sm:p-4 flex items-center gap-3">
+            <i class="pi pi-exclamation-triangle text-red-600 dark:text-red-400 text-2xl sm:text-3xl shrink-0"></i>
+            <div class="flex-1 min-w-0">
+              <div class="font-bold text-red-700 dark:text-red-400 text-base sm:text-lg">
+                Sin stock disponible
               </div>
-              <div class="text-3xl sm:text-4xl font-bold tabular-nums text-surface-900 dark:text-surface-0 leading-none mt-1">
-                {{ r.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
-              </div>
-              <div class="text-xs text-muted-color mt-2">
-                Precio de lista
-              </div>
-            </div>
-
-            <!-- -5% -->
-            <div
-              class="relative rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
-              <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
-                −5%
-              </div>
-              <span
-                class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 text-xs font-semibold tabular-nums">
-                A partir de {{ umbral5 | currency:'ARS':'symbol':'1.0-0' }}
-              </span>
-              <div class="text-3xl sm:text-4xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-1">
-                {{ r.pvpKtGastroSinIvaMenos5 | currency:'ARS':'symbol':'1.0-0' }}
-              </div>
-              <div class="text-xs text-amber-700/70 dark:text-amber-300/70 mt-2 inline-flex items-center gap-1">
-                <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                Ahorrás {{ ahorro(r.pvpKtGastroSinIva, 5) | currency:'ARS':'symbol':'1.0-0' }}
-              </div>
-            </div>
-
-            <!-- -10% -->
-            <div
-              class="relative rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 sm:p-5 shadow-sm flex flex-col gap-1">
-              <div class="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">
-                −10%
-              </div>
-              <span
-                class="self-start inline-flex items-center px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-800 dark:text-emerald-200 text-xs font-semibold tabular-nums">
-                A partir de {{ umbral10 | currency:'ARS':'symbol':'1.0-0' }}
-              </span>
-              <div class="text-3xl sm:text-4xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-1">
-                {{ r.pvpKtGastroSinIvaMenos10 | currency:'ARS':'symbol':'1.0-0' }}
-              </div>
-              <div class="text-xs text-emerald-700/70 dark:text-emerald-300/70 mt-2 inline-flex items-center gap-1">
-                <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                Ahorrás {{ ahorro(r.pvpKtGastroSinIva, 10) | currency:'ARS':'symbol':'1.0-0' }}
+              <div class="text-sm text-red-700/80 dark:text-red-300/80">
+                Consultá disponibilidad — el producto no se puede agregar al carrito.
               </div>
             </div>
           </div>
+          }
 
+          <!-- PRECIO PRINCIPAL — el cliente paga sin IVA -->
+          @if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
+          <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm"
+               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+            <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2">
+              Precio
+            </div>
+            <div class="flex items-baseline gap-2 flex-wrap">
+              <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none">$</span>
+              <span class="text-4xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">
+                {{ r.pvpKtGastroSinIva | number:'1.0-0' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- AHORROS POR ESCALA — comprando más bajan el precio unitario -->
+          <div class="flex flex-col gap-2"
+               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+            <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1">
+              Comprá más y ahorrás
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <!-- -5% -->
+              <div class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 flex flex-col gap-1.5">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">−5%</span>
+                  <span class="text-[0.7rem] font-medium text-amber-800 dark:text-amber-300">
+                    Por compras desde {{ umbral5 | currency:'ARS':'symbol':'1.0-0' }}
+                  </span>
+                </div>
+                <div class="text-2xl sm:text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-0.5">
+                  {{ r.pvpKtGastroSinIvaMenos5 | currency:'ARS':'symbol':'1.0-0' }}
+                </div>
+                <div class="text-xs text-amber-700/80 dark:text-amber-300/80 inline-flex items-center gap-1">
+                  <i class="pi pi-arrow-down text-[0.65rem]"></i>
+                  Ahorrás {{ ahorro(r.pvpKtGastroSinIva, 5) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                </div>
+              </div>
+
+              <!-- -10% -->
+              <div class="rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 flex flex-col gap-1.5">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">−10%</span>
+                  <span class="text-[0.7rem] font-medium text-emerald-800 dark:text-emerald-300">
+                    Por compras desde {{ umbral10 | currency:'ARS':'symbol':'1.0-0' }}
+                  </span>
+                </div>
+                <div class="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-0.5">
+                  {{ r.pvpKtGastroSinIvaMenos10 | currency:'ARS':'symbol':'1.0-0' }}
+                </div>
+                <div class="text-xs text-emerald-700/80 dark:text-emerald-300/80 inline-flex items-center gap-1">
+                  <i class="pi pi-arrow-down text-[0.65rem]"></i>
+                  Ahorrás {{ ahorro(r.pvpKtGastroSinIva, 10) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                </div>
+              </div>
+            </div>
+          </div>
+          }
+
+          <!-- AGREGAR AL CARRITO -->
           <div class="flex gap-3 items-center flex-wrap mt-auto pt-2">
             <label class="text-sm text-muted-color">Cantidad:</label>
             <p-inputNumber [ngModel]="cantidadInput()" (ngModelChange)="cantidadInput.set($event ?? 1)" [showButtons]="true" [min]="1" [max]="maxCantidad(r.stockTotal)"
