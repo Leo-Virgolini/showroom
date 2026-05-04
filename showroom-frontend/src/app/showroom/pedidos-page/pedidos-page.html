@@ -243,6 +243,20 @@
                   pTooltip="Reenviar email (XLSX + PDF)"
                   tooltipPosition="top"
                 />
+                @if (puedeAnular(p)) {
+                  <p-button
+                    icon="pi pi-ban"
+                    severity="danger"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    [loading]="estaAnulando(p.id)"
+                    (onClick)="pedirAnular(p)"
+                    ariaLabel="Anular pedido"
+                    pTooltip="Anular pedido"
+                    tooltipPosition="top"
+                  />
+                }
               </div>
             </td>
           </tr>
@@ -324,6 +338,30 @@
                         <i class="pi pi-pencil"></i> Observaciones
                       </h4>
                       <p class="text-sm text-amber-900 dark:text-amber-200 m-0 whitespace-pre-wrap">{{ det.observaciones }}</p>
+                    </div>
+                  }
+
+                  @if (det.estado === 'ANULADO') {
+                    <div class="mt-5 p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900">
+                      <h4 class="text-xs font-semibold uppercase text-red-800 dark:text-red-300 m-0 mb-1 inline-flex items-center gap-2">
+                        <i class="pi pi-ban"></i> Pedido anulado
+                      </h4>
+                      <div class="text-sm text-red-900 dark:text-red-200">
+                        <span class="font-semibold">Anulado el:</span>
+                        {{ det.anuladoAt ? (det.anuladoAt | date: 'medium') : '—' }}
+                      </div>
+                      @if (det.motivoAnulacion) {
+                        <div class="text-sm text-red-900 dark:text-red-200 mt-1">
+                          <span class="font-semibold">Motivo:</span>
+                          <span class="whitespace-pre-wrap">{{ det.motivoAnulacion }}</span>
+                        </div>
+                      }
+                      @if (det.idDuxRespuesta) {
+                        <div class="text-xs text-red-800 dark:text-red-300 mt-2 italic">
+                          Este pedido había sido cargado en DUX (ID {{ det.idDuxRespuesta }}).
+                          La anulación es solo local — cancelar el comprobante también desde DUX.
+                        </div>
+                      }
                     </div>
                   }
 
@@ -422,4 +460,76 @@
       </p-table>
     </p-card>
   </main>
+
+  <p-dialog
+    [visible]="pedidoAAnular() !== null"
+    (visibleChange)="$event ? null : cancelarAnulacion()"
+    [modal]="true"
+    [closable]="!estaAnulando(pedidoAAnular()?.id ?? -1)"
+    [closeOnEscape]="!estaAnulando(pedidoAAnular()?.id ?? -1)"
+    header="Anular pedido"
+    [style]="{ width: '32rem', maxWidth: '95vw' }"
+  >
+    @if (pedidoAAnular(); as p) {
+      <div class="flex flex-col gap-3 text-sm">
+        <div>
+          ¿Anular el pedido
+          <span class="font-mono font-semibold">#{{ p.id }}</span>
+          de
+          <span class="font-semibold">{{ p.apellidoRazonSocial ?? '—' }}</span>?
+        </div>
+
+        @if (p.estado === 'ENVIADO' && p.idDuxRespuesta) {
+          <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-900 text-amber-900 dark:text-amber-200">
+            <div class="font-semibold flex items-center gap-2">
+              <i class="pi pi-exclamation-triangle"></i>
+              Este pedido ya está cargado en DUX (ID {{ p.idDuxRespuesta }}).
+            </div>
+            <div class="mt-1 text-xs">
+              La anulación se aplica solo del lado del showroom. La API de DUX no
+              permite cancelar comprobantes — hay que hacerlo manualmente desde
+              la UI de DUX.
+            </div>
+          </div>
+        }
+
+        <div>
+          <label for="motivoAnulacion" class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Motivo (opcional)
+          </label>
+          <textarea
+            pTextarea
+            id="motivoAnulacion"
+            [ngModel]="motivoAnulacion()"
+            (ngModelChange)="motivoAnulacion.set($event)"
+            rows="3"
+            maxlength="500"
+            placeholder="Ej.: cliente canceló, error de carga, stock insuficiente…"
+            class="w-full"
+            [disabled]="estaAnulando(p.id)"
+          ></textarea>
+          <div class="text-[0.7rem] text-muted-color text-right">
+            {{ motivoAnulacion().length }}/500
+          </div>
+        </div>
+      </div>
+    }
+
+    <ng-template #footer>
+      <p-button
+        label="Cancelar"
+        severity="secondary"
+        [text]="true"
+        [disabled]="estaAnulando(pedidoAAnular()?.id ?? -1)"
+        (onClick)="cancelarAnulacion()"
+      />
+      <p-button
+        label="Anular pedido"
+        icon="pi pi-ban"
+        severity="danger"
+        [loading]="estaAnulando(pedidoAAnular()?.id ?? -1)"
+        (onClick)="confirmarAnulacion()"
+      />
+    </ng-template>
+  </p-dialog>
 </div>

@@ -6,6 +6,7 @@ import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.service.DuxClient;
@@ -263,6 +264,8 @@ public class ShowroomService {
                 p.getId(),
                 p.getCreadoAt(),
                 p.getEnviadoAt(),
+                p.getAnuladoAt(),
+                p.getMotivoAnulacion(),
                 p.getEstado(),
                 p.getIdDuxRespuesta(),
                 p.getRespuestaDux(),
@@ -282,6 +285,42 @@ public class ShowroomService {
                 p.getObservaciones(),
                 items
         );
+    }
+
+    /**
+     * Anula un pedido marcándolo como {@link EstadoPedido#ANULADO}, registrando
+     * timestamp y motivo opcional. Idempotente sobre el mismo pedido: si ya está
+     * anulado, devuelve {@link ConflictException}.
+     *
+     * <p><b>Importante:</b> esto NO cancela el comprobante en DUX. La API de DUX
+     * no expone una operación de anulación, así que cuando un pedido fue aceptado
+     * por DUX (estado previo {@code ENVIADO}) la anulación queda solo del lado
+     * local — la operadora tiene que cancelar el comprobante manualmente desde
+     * la UI de DUX. El frontend muestra esa advertencia en el diálogo de
+     * confirmación.
+     *
+     * @param motivo texto libre opcional (máx 500 chars). Null/blank → no se persiste.
+     */
+    @Transactional
+    public PedidoDetailDTO anularPedido(Long id, String motivo) {
+        PedidoShowroom p = pedidoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
+        if (p.getEstado() == EstadoPedido.ANULADO) {
+            throw new ConflictException("El pedido ya está anulado");
+        }
+        p.setEstado(EstadoPedido.ANULADO);
+        p.setAnuladoAt(Instant.now());
+        if (motivo != null && !motivo.isBlank()) {
+            String trimmed = motivo.trim();
+            // length=500 en la columna; truncamos defensivamente para evitar SQLException.
+            p.setMotivoAnulacion(trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed);
+        } else {
+            p.setMotivoAnulacion(null);
+        }
+        pedidoRepository.save(p);
+        log.info("Pedido id={} anulado. estadoPrevio implícito en idDuxRespuesta={}, motivo='{}'",
+                id, p.getIdDuxRespuesta(), p.getMotivoAnulacion());
+        return obtenerPedido(id);
     }
 
     /** Resuelve el nombre de localidad a partir del id (String en el pedido).
@@ -304,6 +343,7 @@ public class ShowroomService {
                 p.getId(),
                 p.getCreadoAt(),
                 p.getEnviadoAt(),
+                p.getAnuladoAt(),
                 p.getEstado(),
                 p.getIdDuxRespuesta(),
                 p.getNroDoc(),

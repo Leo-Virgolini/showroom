@@ -13,6 +13,7 @@ import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.PickingExcelGenerator;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
+import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
@@ -218,6 +219,22 @@ public class ShowroomController {
                         "attachment; filename=\"" + pdfGenerator.nombreArchivo(pedido) + "\"")
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
                 .body(body);
+    }
+
+    /**
+     * Anula un pedido (acción manual del operador). Marca estado=ANULADO,
+     * registra timestamp y motivo opcional. NO cancela en DUX — la API de DUX
+     * no expone esa operación; si el pedido ya estaba CARGADO_EN_DUX hay que
+     * cancelarlo manualmente desde la UI de DUX.
+     *
+     * Devuelve el detalle del pedido ya con estado ANULADO. 409 si ya estaba.
+     */
+    @PostMapping("/pedidos/{id}/anular")
+    public PedidoDetailDTO anularPedido(
+            @PathVariable Long id,
+            @RequestBody(required = false) @Valid AnularPedidoRequestDTO body) {
+        String motivo = body != null ? body.motivo() : null;
+        return service.anularPedido(id, motivo);
     }
 
     /**

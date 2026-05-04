@@ -33,6 +33,15 @@ public class PedidoShowroom {
     @Column(name = "enviado_at")
     private Instant enviadoAt;
 
+    /** Cuándo se anuló el pedido (acción manual desde la pantalla de pedidos).
+     *  Null mientras esté en cualquier otro estado. */
+    @Column(name = "anulado_at")
+    private Instant anuladoAt;
+
+    /** Motivo libre que el operador puede tipear al anular. Opcional. */
+    @Column(name = "motivo_anulacion", length = 500)
+    private String motivoAnulacion;
+
     @Column(name = "id_dux_respuesta", length = 100)
     private String idDuxRespuesta;
 

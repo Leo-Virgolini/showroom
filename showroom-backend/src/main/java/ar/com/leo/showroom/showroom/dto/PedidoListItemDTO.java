@@ -13,6 +13,8 @@ public record PedidoListItemDTO(
         Long id,
         Instant creadoAt,
         Instant enviadoAt,
+        /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
+        Instant anuladoAt,
         EstadoPedido estado,
         String idDuxRespuesta,
         Long nroDoc,

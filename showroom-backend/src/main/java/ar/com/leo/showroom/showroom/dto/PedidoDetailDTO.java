@@ -10,6 +10,10 @@ public record PedidoDetailDTO(
         Long id,
         Instant creadoAt,
         Instant enviadoAt,
+        /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
+        Instant anuladoAt,
+        /** Motivo libre que el operador tipeó al anular. Null/blank si no se especificó. */
+        String motivoAnulacion,
         EstadoPedido estado,
         String idDuxRespuesta,
         String respuestaDux,

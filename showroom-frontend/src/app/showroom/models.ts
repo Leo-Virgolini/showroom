@@ -167,12 +167,14 @@ export interface Localidad {
   codigoProvincia: string;
 }
 
-export type EstadoPedido = 'PENDIENTE' | 'ENVIADO' | 'ERROR';
+export type EstadoPedido = 'PENDIENTE' | 'ENVIADO' | 'ERROR' | 'ANULADO';
 
 export interface PedidoListItem {
   id: number;
   creadoAt: string;
   enviadoAt: string | null;
+  /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
+  anuladoAt: string | null;
   estado: EstadoPedido;
   idDuxRespuesta: string | null;
   nroDoc: number | null;
@@ -208,6 +210,10 @@ export interface PedidoDetalle {
   id: number;
   creadoAt: string;
   enviadoAt: string | null;
+  /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
+  anuladoAt: string | null;
+  /** Motivo libre que el operador tipeó al anular. Null/blank si no se especificó. */
+  motivoAnulacion: string | null;
   estado: EstadoPedido;
   idDuxRespuesta: string | null;
   respuestaDux: string | null;

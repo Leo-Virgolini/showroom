@@ -119,6 +119,14 @@ export class ShowroomService {
     );
   }
 
+  /** Anula un pedido. El backend marca estado=ANULADO, registra timestamp y
+   *  motivo opcional. Devuelve el detalle ya actualizado. NO toca DUX —
+   *  si el pedido había sido cargado allí, hay que cancelarlo manualmente. */
+  anularPedido(id: number, motivo?: string | null): Observable<PedidoDetalle> {
+    const body = motivo && motivo.trim() ? { motivo: motivo.trim() } : {};
+    return this.http.post<PedidoDetalle>(`${this.base}/pedidos/${id}/anular`, body);
+  }
+
   // El stream SSE de /events lo maneja BackendStatusService — su Subject
   // `syncEvents$` se consume desde SyncStateService. Antes este método
   // creaba su propio EventSource, lo que abría una segunda conexión.

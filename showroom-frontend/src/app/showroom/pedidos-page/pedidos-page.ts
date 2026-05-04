@@ -17,6 +17,7 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
+import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { ImageModule } from 'primeng/image';
 import { InputIconModule } from 'primeng/inputicon';
@@ -25,6 +26,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
+import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
@@ -46,6 +48,7 @@ import { toastError } from '../toast.utils';
     ButtonModule,
     CardModule,
     DatePickerModule,
+    DialogModule,
     IconFieldModule,
     ImageModule,
     InputIconModule,
@@ -54,6 +57,7 @@ import { toastError } from '../toast.utils';
     SelectModule,
     TableModule,
     TagModule,
+    TextareaModule,
     ToolbarModule,
     TooltipModule,
   ],
@@ -87,6 +91,14 @@ export class PedidosPage {
   readonly descargandoExcel = signal<Set<number>>(new Set());
   readonly descargandoPdf = signal<Set<number>>(new Set());
   readonly enviandoEmail = signal<Set<number>>(new Set());
+  readonly anulandoPedido = signal<Set<number>>(new Set());
+
+  /** Pedido que el operador eligió anular — null cuando el dialog está cerrado.
+   *  Guardamos la fila completa (no solo el id) para mostrar contexto en el
+   *  dialog (cliente, total, si está cargado en DUX, etc.). */
+  readonly pedidoAAnular = signal<PedidoListItem | null>(null);
+  /** Texto del textarea de motivo dentro del dialog de anulación. */
+  readonly motivoAnulacion = signal('');
 
   /** Filas expandidas (row expansion del p-table). */
   readonly expanded = signal<Record<number, boolean>>({});
@@ -96,6 +108,7 @@ export class PedidosPage {
     { label: 'CARGADO EN DUX', value: 'ENVIADO' },
     { label: 'PENDIENTE', value: 'PENDIENTE' },
     { label: 'ERROR', value: 'ERROR' },
+    { label: 'ANULADO', value: 'ANULADO' },
   ];
 
   readonly hayFiltros = computed(
@@ -234,9 +247,10 @@ export class PedidosPage {
     });
   }
 
-  estadoSeverity(e: EstadoPedido): 'success' | 'warn' | 'danger' {
+  estadoSeverity(e: EstadoPedido): 'success' | 'warn' | 'danger' | 'secondary' {
     if (e === 'ENVIADO') return 'success';
     if (e === 'PENDIENTE') return 'warn';
+    if (e === 'ANULADO') return 'secondary';
     return 'danger';
   }
 
@@ -282,6 +296,65 @@ export class PedidosPage {
 
   estaEnviandoEmail(id: number): boolean {
     return this.enviandoEmail().has(id);
+  }
+
+  estaAnulando(id: number): boolean {
+    return this.anulandoPedido().has(id);
+  }
+
+  /** Un pedido se puede anular salvo que ya esté en estado ANULADO. */
+  puedeAnular(p: PedidoListItem): boolean {
+    return p.estado !== 'ANULADO';
+  }
+
+  /** Abre el diálogo de confirmación de anulación. El operador puede tipear
+   *  un motivo opcional. Si el pedido ya estaba CARGADO EN DUX, el dialog
+   *  se encarga de mostrar el aviso de cancelación manual. */
+  pedirAnular(p: PedidoListItem): void {
+    if (!this.puedeAnular(p)) return;
+    this.motivoAnulacion.set('');
+    this.pedidoAAnular.set(p);
+  }
+
+  cancelarAnulacion(): void {
+    this.pedidoAAnular.set(null);
+    this.motivoAnulacion.set('');
+  }
+
+  confirmarAnulacion(): void {
+    const p = this.pedidoAAnular();
+    if (!p) return;
+    if (this.estaAnulando(p.id)) return;
+    this.marcarDescarga(this.anulandoPedido, p.id, true);
+    const motivo = this.motivoAnulacion().trim() || null;
+    this.api.anularPedido(p.id, motivo).subscribe({
+      next: (det) => {
+        this.marcarDescarga(this.anulandoPedido, p.id, false);
+        // Reflejar el nuevo estado en la lista sin recargar todo el listado.
+        this.pedidos.set(
+          this.pedidos().map((x) =>
+            x.id === p.id
+              ? { ...x, estado: det.estado, anuladoAt: det.anuladoAt }
+              : x,
+          ),
+        );
+        // Refrescar el cache de detalle así si la fila estaba expandida muestra
+        // el motivo y el timestamp de anulación.
+        this.detalles.set({ ...this.detalles(), [p.id]: det });
+        this.pedidoAAnular.set(null);
+        this.motivoAnulacion.set('');
+        this.toast.add({
+          severity: 'success',
+          summary: 'Pedido anulado',
+          detail: `Pedido #${p.id} marcado como ANULADO.`,
+          life: 3500,
+        });
+      },
+      error: (err) => {
+        this.marcarDescarga(this.anulandoPedido, p.id, false);
+        toastError(this.toast, 'Anular', err, 'No se pudo anular el pedido');
+      },
+    });
   }
 
   reenviarEmail(p: PedidoListItem): void {
