@@ -426,12 +426,16 @@
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Apellido / razón social en DUX</label>
+        <label class="text-sm font-medium text-muted-color">
+          Apellido / razón social en DUX <span class="text-red-500">*</span>
+        </label>
         <input pInputText type="text" [value]="apellidoRazonSocialFinal()" [disabled]="true" class="w-full" />
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Categoría fiscal</label>
+        <label class="text-sm font-medium text-muted-color">
+          Categoría fiscal <span class="text-red-500">*</span>
+        </label>
         <input pInputText type="text" [value]="categoriaFiscalFinal" [disabled]="true" class="w-full" />
       </div>
 
