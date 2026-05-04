@@ -174,7 +174,7 @@
               {{ p.creadoAt | date: 'dd/MM/yy HH:mm' }}
             </td>
             <td>
-              <p-tag [severity]="estadoSeverity(p.estado)" [value]="p.estado" />
+              <p-tag [severity]="estadoSeverity(p.estado)" [value]="estadoLabel(p.estado)" />
             </td>
             <td class="text-sm truncate max-w-[12rem]" [pTooltip]="p.apellidoRazonSocial ?? ''" tooltipPosition="top">
               {{ p.apellidoRazonSocial ?? '—' }}
@@ -282,11 +282,11 @@
                       <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
                         <dt class="text-muted-color">Creado</dt>
                         <dd class="tabular-nums">{{ det.creadoAt | date: 'medium' }}</dd>
-                        <dt class="text-muted-color">Enviado</dt>
+                        <dt class="text-muted-color">Cargado en DUX</dt>
                         <dd class="tabular-nums">{{ det.enviadoAt ? (det.enviadoAt | date: 'medium') : '—' }}</dd>
                         <dt class="text-muted-color">Estado</dt>
                         <dd>
-                          <p-tag [severity]="estadoSeverity(det.estado)" [value]="det.estado" />
+                          <p-tag [severity]="estadoSeverity(det.estado)" [value]="estadoLabel(det.estado)" />
                         </dd>
                         <dt class="text-muted-color">ID DUX</dt>
                         <dd class="font-mono">{{ det.idDuxRespuesta ?? '—' }}</dd>

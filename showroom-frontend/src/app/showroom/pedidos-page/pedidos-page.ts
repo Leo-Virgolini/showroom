@@ -93,7 +93,7 @@ export class PedidosPage {
 
   readonly opcionesEstado: { label: string; value: EstadoPedido | null }[] = [
     { label: 'Todos', value: null },
-    { label: 'ENVIADO', value: 'ENVIADO' },
+    { label: 'CARGADO EN DUX', value: 'ENVIADO' },
     { label: 'PENDIENTE', value: 'PENDIENTE' },
     { label: 'ERROR', value: 'ERROR' },
   ];
@@ -238,6 +238,15 @@ export class PedidosPage {
     if (e === 'ENVIADO') return 'success';
     if (e === 'PENDIENTE') return 'warn';
     return 'danger';
+  }
+
+  /** Etiqueta amigable para el estado del pedido. "ENVIADO" se muestra como
+   *  "CARGADO EN DUX" para evitar confundirlo con "despachado al cliente"
+   *  (físicamente). El enum del backend se mantiene como ENVIADO para no
+   *  romper compatibilidad con datos viejos. */
+  estadoLabel(e: EstadoPedido): string {
+    if (e === 'ENVIADO') return 'CARGADO EN DUX';
+    return e;
   }
 
   /** Saca el IVA del precio. Devuelve null si no hay IVA almacenado (pedidos viejos). */

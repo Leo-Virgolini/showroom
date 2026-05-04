@@ -35,6 +35,13 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
     @Query("select max(p.sincronizadoAt) from ProductoCache p")
     Optional<Instant> findMaxSincronizadoAt();
 
+    /**
+     * Busca por SKU, descripción o código de barras (contains).
+     * Ordena por relevancia: matches que EMPIEZAN con la query van antes
+     * que los que solo CONTIENEN. SKU > descripción dentro de cada grupo.
+     * Si la query es vacía/null, todos quedan en el grupo 0 y el orden
+     * efectivo es por SKU asc.
+     */
     @Query("""
             select distinct p from ProductoCache p
             left join p.codigosBarra c
@@ -42,17 +49,28 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
                    or lower(p.sku) like lower(concat('%', :q, '%'))
                    or lower(p.descripcion) like lower(concat('%', :q, '%'))
                    or c like concat('%', :q, '%'))
-            order by p.sku asc
+            order by
+              case
+                when :q is null or :q = '' then 0
+                when lower(p.sku) like lower(concat(:q, '%')) then 0
+                when lower(p.descripcion) like lower(concat(:q, '%')) then 1
+                else 2
+              end,
+              p.sku asc
             """)
     Page<ProductoCache> buscar(@Param("q") String q, Pageable pageable);
 
     /**
      * Variante con filtros usada por la pantalla de listado de productos.
-     * `q` matchea contra SKU, descripción o cualquiera de los códigos de barra.
+     * `q` matchea contra SKU, descripción o cualquiera de los códigos de barra
+     * (contains, case-insensitive).
      * `soloDeshabilitados=true` deja solo `habilitado=false` (NULL no entra).
      * `soloSinStock=true` deja stock null o 0.
-     * El orden lo provee el {@link Pageable} (Spring concatena el ORDER BY) — la
-     * tabla puede ordenar por cualquier columna whitelisted en el service.
+     *
+     * Orden por relevancia (startsWith antes que contains) seguido del
+     * {@link Pageable} sort (que viene de la columna que clickea el operador
+     * en la tabla). Si la query está vacía, la relevancia colapsa al grupo 0
+     * y solo aplica el sort de la columna.
      */
     @Query("""
             select distinct p from ProductoCache p
@@ -63,6 +81,13 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
                    or c like concat('%', :q, '%'))
               and (:soloDeshabilitados = false or p.habilitado = false)
               and (:soloSinStock = false or p.stockTotal is null or p.stockTotal = 0)
+            order by
+              case
+                when :q is null or :q = '' then 0
+                when lower(p.sku) like lower(concat(:q, '%')) then 0
+                when lower(p.descripcion) like lower(concat(:q, '%')) then 1
+                else 2
+              end
             """)
     Page<ProductoCache> buscarConFiltros(
             @Param("q") String q,

@@ -33,7 +33,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { CarritoItem, Localidad, Provincia, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, Localidad, Provincia, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -146,8 +146,33 @@ export class ShowroomPage implements AfterViewInit {
   readonly cantidadInput = signal(1);
   readonly ultimoScan = signal<ScanResult | null>(null);
   readonly cargandoScan = signal(false);
+  /** Resultados de búsqueda por descripción cuando no hay match exacto por
+   *  SKU/EAN. Se muestra como lista clickable; al elegir uno se carga el
+   *  producto via `seleccionarResultado(sku)`. */
+  readonly resultadosBusqueda = signal<CatalogoItem[]>([]);
+  /** Total de matches en el backend — puede ser mayor que la lista visible
+   *  si todavía no se cargaron todas las páginas. */
+  readonly totalResultadosBusqueda = signal(0);
+  /** Última query usada para la búsqueda — necesaria para pedir más páginas. */
+  private readonly busquedaQuery = signal('');
+  /** Última página cargada (0-indexed). */
+  private readonly paginaResultados = signal(0);
+  /** Loading state del botón "Cargar más" (separado de cargandoScan). */
+  readonly cargandoMasResultados = signal(false);
+
+  /** Tamaño de cada página de resultados. */
+  private readonly BUSQUEDA_PAGE_SIZE = 50;
+
+  /** Secuencia incremental para descartar respuestas obsoletas. Si el
+   *  operador dispara un scan/búsqueda nuevo antes de que termine el
+   *  anterior, solo la última respuesta actualiza la UI — así evitamos
+   *  que un request lento "pise" al rápido al volver fuera de orden. */
+  private scanSeq = 0;
   readonly carrito = signal<CarritoItem[]>([]);
   readonly refrescando = signal(false);
+  /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
+   *  que es para el carrito completo. */
+  readonly refrescandoScan = signal(false);
   readonly enviando = signal(false);
 
   readonly mostrarConfirmacion = signal(false);
@@ -159,6 +184,24 @@ export class ShowroomPage implements AfterViewInit {
 
   readonly mostrarSyncDialog = signal(false);
   readonly forzarSyncCompleto = signal(false);
+
+  /** Si está activo, al apretar "Enviar a DUX" refrescamos stock+precio
+   *  contra DUX como última validación antes de crear el pedido. Default
+   *  true (seguro). El operador puede desactivarlo si confía en el cache
+   *  (ej: acaba de refrescar manualmente). */
+  readonly verificarStockAlEnviar = signal(true);
+
+  /** Items del carrito que quedaron con stock insuficiente al re-validar
+   *  contra DUX antes de enviar el pedido. Se muestran en un diálogo
+   *  modal — no en un toast — para que el operador tenga tiempo de leer
+   *  la lista completa y decidir qué ajustar. */
+  readonly excedidosStock = signal<{
+    sku: string;
+    descripcion: string | null;
+    cantidadPedida: number;
+    stockDisponible: number;
+  }[]>([]);
+  readonly mostrarDialogExcedidos = signal(false);
 
   /** Estado de DUX/sync — fuente de verdad central, propagada vía SSE. */
   readonly health = this.syncState.health;
@@ -423,31 +466,170 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /**
+   * Submit del input principal. Si la entrada parece un código (solo dígitos),
+   * intenta match exacto por SKU/EAN — `/scan` también hace fallback a DUX
+   * on-demand (~7s) si el código no está en cache, lo que es deseable para
+   * un SKU recién creado en DUX. Si no encuentra exacto, fallback a búsqueda
+   * por descripción.
+   *
+   * Si la entrada es texto descriptivo ("olive", "sarten", "20 cm"), va
+   * directo a búsqueda por descripción contra `/catalogo` — evita la espera
+   * de 7s del rate limit DUX para consultas que sabemos que no son códigos.
+   */
   onSubmitScan(): void {
-    const sku = this.skuInput().trim();
-    if (!sku) return;
+    const query = this.skuInput().trim();
+    if (!query) return;
     this.skuInput.set('');
-    this.cargandoScan.set(true);
+    this.resultadosBusqueda.set([]);
 
+    // Cada nuevo scan/búsqueda recibe un número de secuencia. Si llega la
+    // respuesta de uno anterior (más lento), la descartamos.
+    const seq = ++this.scanSeq;
+
+    // Heurística: solo dígitos → es un SKU/EAN, vale la pena probar exact match.
+    // Cualquier otra cosa (letras, espacios, símbolos) → es texto descriptivo,
+    // saltamos a la búsqueda directamente.
+    const esCodigo = /^\d+$/.test(query);
+
+    if (esCodigo) {
+      this.cargandoScan.set(true);
+      this.api.scan(query).subscribe({
+        next: (r) => {
+          if (seq !== this.scanSeq) return;
+          this.cargandoScan.set(false);
+          this.ultimoScan.set(r);
+          this.cantidadInput.set(1);
+          this.focusInput();
+          if (r.habilitado === false) {
+            this.toast.add({
+              severity: 'warn',
+              summary: 'Producto deshabilitado',
+              detail: r.sku,
+            });
+          }
+        },
+        error: (err) => {
+          if (seq !== this.scanSeq) return;
+          // 404 = código no encontrado en cache ni en DUX → fallback a búsqueda
+          // (por si era un SKU parcial o si está indexado por barcode contains).
+          if (err?.status === 404) {
+            this.cargandoScan.set(true);
+            this.buscarPorDescripcion(query);
+          } else {
+            this.cargandoScan.set(false);
+            this.ultimoScan.set(null);
+            this.focusInput();
+            toastError(this.toast, 'Scan', err, 'Error al consultar SKU');
+          }
+        },
+      });
+    } else {
+      this.cargandoScan.set(true);
+      this.buscarPorDescripcion(query);
+    }
+  }
+
+  /** Búsqueda por descripción/SKU/EAN contra el catálogo cacheado. Se dispara
+   *  como fallback cuando el scan exacto no encuentra el código, o directamente
+   *  cuando la query es texto descriptivo. Carga la primera página; el operador
+   *  puede traer más con `cargarMasResultados()`. */
+  private buscarPorDescripcion(query: string): void {
+    const seq = ++this.scanSeq;
+    this.busquedaQuery.set(query);
+    this.paginaResultados.set(0);
+    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE).subscribe({
+      next: (page) => {
+        if (seq !== this.scanSeq) return;
+        this.cargandoScan.set(false);
+        if (page.items.length === 0) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Sin resultados',
+            detail: `No encontré nada que coincida con "${query}".`,
+          });
+          this.ultimoScan.set(null);
+          this.resultadosBusqueda.set([]);
+          this.totalResultadosBusqueda.set(0);
+        } else if (page.items.length === 1 && page.total === 1) {
+          // Único resultado en TODO el catálogo (no solo en la primera página)
+          // — lo cargamos directo, ahorrando un click.
+          this.totalResultadosBusqueda.set(1);
+          this.seleccionarResultado(page.items[0].sku);
+          return;
+        } else {
+          this.resultadosBusqueda.set(page.items);
+          this.totalResultadosBusqueda.set(page.total);
+          this.ultimoScan.set(null);
+        }
+        this.focusInput();
+      },
+      error: (err) => {
+        if (seq !== this.scanSeq) return;
+        this.cargandoScan.set(false);
+        this.focusInput();
+        toastError(this.toast, 'Búsqueda', err, 'No se pudo buscar');
+      },
+    });
+  }
+
+  /** Carga la siguiente página de resultados de búsqueda y la appendea a la
+   *  lista visible. No-op si ya están todos cargados o si hay otra carga en
+   *  curso (evita doble click). */
+  cargarMasResultados(): void {
+    if (this.cargandoMasResultados()) return;
+    if (this.resultadosBusqueda().length >= this.totalResultadosBusqueda()) return;
+    this.cargandoMasResultados.set(true);
+    // No incrementamos scanSeq — solo capturamos. Si entre que pedimos la
+    // página y vuelve, el operador hizo una búsqueda nueva, descartamos.
+    const seq = this.scanSeq;
+    const nextPage = this.paginaResultados() + 1;
+    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE).subscribe({
+      next: (page) => {
+        if (seq !== this.scanSeq) return;
+        this.cargandoMasResultados.set(false);
+        this.paginaResultados.set(nextPage);
+        this.resultadosBusqueda.set([...this.resultadosBusqueda(), ...page.items]);
+        // Devolvemos foco al input para que la pistola/teclado siga "tipeando"
+        // ahí sin que el operador tenga que clickear.
+        this.focusInput();
+      },
+      error: (err) => {
+        if (seq !== this.scanSeq) return;
+        this.cargandoMasResultados.set(false);
+        this.focusInput();
+        toastError(this.toast, 'Búsqueda', err, 'No se pudieron cargar más resultados');
+      },
+    });
+  }
+
+  /** Cierra la lista de resultados de búsqueda y vuelve a enfocar el input.
+   *  Lo usa el botón "✕" del header de resultados. */
+  cerrarResultadosBusqueda(): void {
+    this.resultadosBusqueda.set([]);
+    this.focusInput();
+  }
+
+  /** Cuando el operador click un item de la lista de resultados, lo cargamos
+   *  como si lo hubiera scaneado — pasa por `/scan/{sku}` para obtener todos
+   *  los datos completos (precios escalonados, imagen, etc.). */
+  seleccionarResultado(sku: string): void {
+    this.resultadosBusqueda.set([]);
+    this.cargandoScan.set(true);
+    const seq = ++this.scanSeq;
     this.api.scan(sku).subscribe({
       next: (r) => {
+        if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
         this.ultimoScan.set(r);
         this.cantidadInput.set(1);
         this.focusInput();
-        if (r.habilitado === false) {
-          this.toast.add({
-            severity: 'warn',
-            summary: 'Producto deshabilitado',
-            detail: r.sku,
-          });
-        }
       },
       error: (err) => {
+        if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
-        this.ultimoScan.set(null);
         this.focusInput();
-        toastError(this.toast, 'Scan', err, 'Error al consultar SKU');
+        toastError(this.toast, 'Cargar producto', err, 'No se pudo cargar el producto');
       },
     });
   }
@@ -545,6 +727,39 @@ export class ShowroomPage implements AfterViewInit {
     this.carrito.set([]);
     this.ultimoScan.set(null);
     this.focusInput();
+  }
+
+  /** Refresh on-demand del producto que el operador acaba de scanear.
+   *  Útil cuando el cliente pide un producto cuya última sincronización es vieja
+   *  y queremos confirmar stock/precio actuales sin tener que re-scanear. */
+  refrescarScan(): void {
+    const r = this.ultimoScan();
+    if (!r) return;
+    this.refrescandoScan.set(true);
+    const seq = ++this.scanSeq;
+    this.api.refreshStock([r.sku]).subscribe({
+      next: (resultados) => {
+        if (seq !== this.scanSeq) return;
+        this.refrescandoScan.set(false);
+        const fresh = resultados[0];
+        if (fresh) {
+          this.ultimoScan.set(fresh);
+          this.toast.add({
+            severity: 'success',
+            summary: 'Producto actualizado',
+            detail: `${fresh.sku} — stock: ${fresh.stockTotal ?? 0}`,
+            life: 2500,
+          });
+        }
+        this.focusInput();
+      },
+      error: (err) => {
+        if (seq !== this.scanSeq) return;
+        this.refrescandoScan.set(false);
+        this.focusInput();
+        toastError(this.toast, 'Refrescar', err, 'No se pudo refrescar');
+      },
+    });
   }
 
   refrescarStockCarrito(): void {
@@ -731,6 +946,17 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /**
+   * Click en "Enviar a DUX" del diálogo de confirmación.
+   *
+   * Flujo:
+   *  1. Validaciones básicas (stock, datos del cliente).
+   *  2. Si `verificarStockAlEnviar()` está activo, refresca stock+precio
+   *     contra DUX. Si encuentra excedidos cierra el diálogo y avisa al
+   *     operador (los datos del cliente se preservan en el signal).
+   *     Si solo cambió el precio, avisa y sigue con los nuevos valores.
+   *  3. Manda el pedido a DUX.
+   */
   confirmarEnvio(): void {
     if (this.hayItemsExcedidos()) {
       this.toast.add({
@@ -748,9 +974,89 @@ export class ShowroomPage implements AfterViewInit {
       });
       return;
     }
+
+    if (!this.verificarStockAlEnviar()) {
+      this.enviarPedido();
+      return;
+    }
+
+    // Refresh contra DUX antes de enviar — última validación.
+    // El backend persiste lo que trae de DUX (cache local actualizado para
+    // futuros scans), pero acá solo aplicamos al carrito el `stockTotal`
+    // y `sincronizadoAt` de cada item: mantenemos los precios que vio el
+    // cliente al armar el pedido (si DUX cambió un precio, no se lo trasladamos
+    // — el cliente paga lo que vio).
+    const skus = this.carrito().map((it) => it.sku);
+    this.refrescando.set(true);
+    this.api.refreshStock(skus).subscribe({
+      next: (resultados) => {
+        this.refrescando.set(false);
+        const map = new Map(resultados.map((r) => [r.sku, r]));
+        const excedidos: {
+          sku: string;
+          descripcion: string | null;
+          cantidadPedida: number;
+          stockDisponible: number;
+        }[] = [];
+        this.carrito.set(
+          this.carrito().map((it) => {
+            const fresh = map.get(it.sku);
+            if (!fresh) return it;
+            const stock = fresh.stockTotal;
+            if (stock != null && stock >= 0 && it.cantidad > stock) {
+              excedidos.push({
+                sku: it.sku,
+                descripcion: it.descripcion,
+                cantidadPedida: it.cantidad,
+                stockDisponible: stock,
+              });
+            }
+            return {
+              ...it,
+              stockTotal: fresh.stockTotal,
+              stockStale: fresh.stockStale,
+              sincronizadoAt: fresh.sincronizadoAt,
+            };
+          }),
+        );
+
+        if (excedidos.length > 0) {
+          // Stock cambió y ya no alcanza — cerramos el diálogo de confirmación
+          // y abrimos uno dedicado con la lista detallada (SKU, descripción,
+          // cantidad pedida vs stock disponible). El diálogo se cierra solo
+          // manualmente para que el operador pueda leer tranquilo. Los datos
+          // del cliente persisten en `this.cliente` — al re-abrir el diálogo
+          // de pedido, el formulario sigue lleno.
+          this.mostrarConfirmacion.set(false);
+          this.excedidosStock.set(excedidos);
+          this.mostrarDialogExcedidos.set(true);
+          return;
+        }
+
+        // Stock OK (sin importar si cambió el precio en DUX) → enviar.
+        this.enviarPedido();
+      },
+      error: (err) => {
+        this.refrescando.set(false);
+        // Si DUX no responde, mandamos el pedido igual con los datos del cache.
+        // DUX validará al recibirlo — si rechaza, mostramos el error.
+        this.toast.add({
+          severity: 'warn',
+          summary: 'No se pudo verificar stock',
+          detail: 'Enviando el pedido igual; DUX validará al recibirlo.',
+          life: 4000,
+        });
+        console.warn('[confirmarEnvio] refresh failed:', err);
+        this.enviarPedido();
+      },
+    });
+  }
+
+  /** Manda el pedido a DUX con los datos actuales del carrito y del cliente.
+   *  Asume que las validaciones (stock, datos requeridos) ya fueron OK. */
+  private enviarPedido(): void {
     const c = this.cliente();
     this.enviando.set(true);
-
     this.api
       .crearPedido({
         // Si el operador completa "Nombre y apellido", lo mandamos como razón social
