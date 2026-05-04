@@ -1,7 +1,9 @@
 package ar.com.leo.showroom.catalogo.service;
 
 import ar.com.leo.showroom.catalogo.entity.ProductoCache;
+import ar.com.leo.showroom.catalogo.entity.SyncMetadata;
 import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
+import ar.com.leo.showroom.catalogo.repository.SyncMetadataRepository;
 import ar.com.leo.showroom.dux.model.DuxItem;
 import ar.com.leo.showroom.dux.model.DuxPrecio;
 import ar.com.leo.showroom.dux.model.DuxStock;
@@ -45,6 +47,7 @@ public class CatalogoSyncService {
 
     private final DuxClient duxClient;
     private final ProductoCacheRepository repository;
+    private final SyncMetadataRepository syncMetadataRepository;
     private final SyncEventService eventService;
 
     /**
@@ -171,6 +174,9 @@ public class CatalogoSyncService {
                 eventService.publish("sync", SyncEvent.cancelled(inicio, actualizados));
             } else {
                 log.info("Sync completado: {} productos actualizados", actualizados);
+                // Solo persistimos el timestamp cuando la sync global termina OK.
+                // Cancelaciones y fallos no cuentan como "última sync exitosa".
+                self.marcarUltimaSyncGlobal(Instant.now());
                 eventService.publish("sync", SyncEvent.completed(inicio, actualizados));
             }
             return actualizados;
@@ -376,5 +382,34 @@ public class CatalogoSyncService {
         if (s == null) return null;
         String t = s.trim();
         return t.length() > max ? t.substring(0, max) : t;
+    }
+
+    /**
+     * Upsert del único row de {@link SyncMetadata}. Llamado solo cuando la sync
+     * global terminó OK (no para cancelaciones ni fallos). Va en su propia
+     * transacción corta para no atar el commit al resto del flujo de sync.
+     */
+    @Transactional
+    public void marcarUltimaSyncGlobal(Instant cuando) {
+        SyncMetadata meta = syncMetadataRepository.findById(SyncMetadata.SINGLETON_ID)
+                .orElseGet(() -> SyncMetadata.builder()
+                        .id(SyncMetadata.SINGLETON_ID)
+                        .build());
+        meta.setUltimaSyncGlobalAt(cuando);
+        syncMetadataRepository.save(meta);
+    }
+
+    /**
+     * Devuelve cuándo terminó la última sync global exitosa. Si la tabla está
+     * vacía (deploy inicial sobre BD existente, o nunca se completó una sync),
+     * cae en {@link ProductoCacheRepository#findMaxSincronizadoAt()} como
+     * fallback para que el banner del frontend muestre algo razonable hasta
+     * que ocurra el primer sync con esta lógica nueva.
+     */
+    public Optional<Instant> getUltimaSyncGlobalAt() {
+        Optional<Instant> persistido = syncMetadataRepository.findById(SyncMetadata.SINGLETON_ID)
+                .map(SyncMetadata::getUltimaSyncGlobalAt);
+        if (persistido.isPresent()) return persistido;
+        return repository.findMaxSincronizadoAt();
     }
 }
