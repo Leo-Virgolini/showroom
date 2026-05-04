@@ -117,7 +117,13 @@ export interface CatalogoPage {
 }
 
 export interface EtiquetaSeleccionada extends CatalogoItem {
+  /** Identificador único interno — necesario porque ahora puede haber varias
+   *  entradas con el mismo SKU pero distintos `numeroOrden` (flujo Excel). */
+  uid: string;
   copias: number;
+  /** Número de orden/pedido del cliente — se imprime en la etiqueta. Presente
+   *  solo cuando la entrada vino del flujo de importación de Excel. */
+  numeroOrden: string | null;
 }
 
 export interface ProductoListItem {

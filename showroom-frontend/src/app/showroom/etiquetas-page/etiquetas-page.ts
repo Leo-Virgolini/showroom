@@ -13,9 +13,9 @@ import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
@@ -23,6 +23,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
+import Papa from 'papaparse';
 import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada } from '../models';
 import { ShowroomService } from '../showroom.service';
@@ -32,12 +33,18 @@ interface EtiquetaImprimible {
   sku: string;
   descripcion: string | null;
   precio: number | null;
+  numeroOrden: string | null;
   qrDataUrl: string;
 }
 
-/** Formatos de hoja soportados, con dimensiones en mm y el valor que va al
- *  CSS `@page size` para que la impresora aplique el tamaño correcto. */
-type FormatoHoja = 'A4' | 'A5' | 'Letter' | 'Legal';
+/** Formatos soportados:
+ *  - A4/A5/Letter/Legal: hojas con grilla de etiquetas; queda margen y borde de corte.
+ *  - Termica: una etiqueta por página, página = tamaño de la etiqueta, sin márgenes.
+ *    Útil para impresoras térmicas tipo Zebra/Brother/Dymo que tienen un rollo
+ *    continuo y avanzan al siguiente label entre páginas. */
+type FormatoHoja = 'A4' | 'A5' | 'Letter' | 'Legal' | 'Termica';
+/** Subset de formatos que son hojas con grilla (excluye térmica). */
+type FormatoSheet = Exclude<FormatoHoja, 'Termica'>;
 
 interface DimensionHoja {
   ancho: number;
@@ -48,14 +55,14 @@ interface DimensionHoja {
   label: string;
 }
 
-const HOJAS: Record<FormatoHoja, DimensionHoja> = {
+const HOJAS: Record<FormatoSheet, DimensionHoja> = {
   A4:     { ancho: 210,   alto: 297,   cssSize: 'A4',     label: 'A4 (210 × 297 mm)' },
   A5:     { ancho: 148,   alto: 210,   cssSize: 'A5',     label: 'A5 (148 × 210 mm)' },
   Letter: { ancho: 215.9, alto: 279.4, cssSize: 'letter', label: 'Carta (216 × 279 mm)' },
   Legal:  { ancho: 215.9, alto: 355.6, cssSize: 'legal',  label: 'Oficio (216 × 356 mm)' },
 };
 
-/** Margen mínimo de impresión (debe coincidir con el `@page margin` del SCSS). */
+/** Margen mínimo de impresión para formatos hoja (no aplica a térmica). */
 const MARGEN_HOJA_MM = 5;
 
 @Component({
@@ -68,9 +75,9 @@ const MARGEN_HOJA_MM = 5;
     RouterLink,
     ButtonModule,
     CardModule,
+    DialogModule,
     InputNumberModule,
     InputTextModule,
-    ProgressSpinnerModule,
     SelectModule,
     TableModule,
     TagModule,
@@ -94,30 +101,55 @@ export class EtiquetasPage {
 
   readonly anchoMm = signal(50);
   readonly altoMm = signal(30);
-  readonly mostrarPrecio = signal(true);
-  readonly mostrarDescripcion = signal(true);
+  readonly mostrarSku = signal(true);
+  readonly mostrarNumeroOrden = signal(true);
+  readonly mostrarPrecio = signal(false);
+  readonly mostrarDescripcion = signal(false);
+
+  /** Estado de la importación del CSV — para deshabilitar el input mientras parseamos. */
+  readonly importandoCsv = signal(false);
+
+  /** SKUs del CSV que no matchearon contra el cache — se muestran en un diálogo
+   *  dedicado para que el operador pueda revisarlos y/o copiarlos. */
+  readonly skusNoEncontrados = signal<string[]>([]);
+  readonly mostrarDialogNoEncontrados = signal(false);
 
   /** Formato de hoja seleccionado — afecta tanto el cálculo de etiquetas/hoja
-   *  como el `@page size` que se inyecta para imprimir. */
-  readonly formatoHoja = signal<FormatoHoja>('A4');
+   *  como el `@page size` que se inyecta para imprimir. Default a "Termica"
+   *  porque el cliente imprime en impresora térmica (1 etiqueta por página). */
+  readonly formatoHoja = signal<FormatoHoja>('Termica');
 
-  /** Opciones para el p-select del formato. */
-  readonly opcionesHoja = (Object.keys(HOJAS) as FormatoHoja[]).map((k) => ({
-    value: k,
-    label: HOJAS[k].label,
-  }));
+  /** Opciones para el p-select del formato — agregamos manualmente la térmica
+   *  porque no está en HOJAS (sus dimensiones dependen del Ancho/Alto). */
+  readonly opcionesHoja = [
+    ...(Object.keys(HOJAS) as FormatoSheet[]).map((k) => ({
+      value: k as FormatoHoja,
+      label: HOJAS[k].label,
+    })),
+    { value: 'Termica' as FormatoHoja, label: 'Impresora térmica (1 etiqueta/página)' },
+  ];
 
-  /** Tamaño usable de la hoja actual (descontando márgenes). */
+  /** True cuando la salida es a impresora térmica (cada label = 1 página). */
+  readonly esTermica = computed(() => this.formatoHoja() === 'Termica');
+
+  /** Tamaño usable de la hoja actual (descontando márgenes).
+   *  En modo térmica, la "hoja" es la etiqueta misma — sin márgenes. */
   readonly hojaUsable = computed(() => {
-    const h = HOJAS[this.formatoHoja()];
+    if (this.esTermica()) {
+      return { ancho: this.anchoMm(), alto: this.altoMm() };
+    }
+    const h = HOJAS[this.formatoHoja() as FormatoSheet];
     return {
       ancho: h.ancho - MARGEN_HOJA_MM * 2,
       alto: h.alto - MARGEN_HOJA_MM * 2,
     };
   });
 
-  /** Cuántas etiquetas entran en una hoja con el formato y tamaños actuales. */
+  /** Cuántas etiquetas entran en una hoja. En térmica siempre 1×1. */
   readonly distribucionHoja = computed(() => {
+    if (this.esTermica()) {
+      return { columnas: 1, filas: 1, total: 1 };
+    }
     const a = this.anchoMm();
     const h = this.altoMm();
     const u = this.hojaUsable();
@@ -129,7 +161,7 @@ export class EtiquetasPage {
     return { columnas, filas, total: columnas * filas };
   });
 
-  /** Cantidad de hojas que se van a imprimir según la cantidad seleccionada. */
+  /** Cantidad de páginas (en térmica = cantidad de etiquetas). */
   readonly hojasNecesarias = computed(() => {
     const porHoja = this.distribucionHoja().total;
     if (porHoja <= 0) return 0;
@@ -146,12 +178,25 @@ export class EtiquetasPage {
     document.head.appendChild(styleEl);
 
     effect(() => {
-      const cssSize = HOJAS[this.formatoHoja()].cssSize;
-      styleEl.textContent = `
-        @media print {
-          @page { size: ${cssSize}; margin: ${MARGEN_HOJA_MM}mm; }
-        }
-      `;
+      const formato = this.formatoHoja();
+      if (formato === 'Termica') {
+        // Cada etiqueta es su propia página; la página = tamaño de la etiqueta.
+        // Sin márgenes (la impresora térmica avanza por feed, no por hoja).
+        const w = this.anchoMm();
+        const h = this.altoMm();
+        styleEl.textContent = `
+          @media print {
+            @page { size: ${w}mm ${h}mm; margin: 0; }
+          }
+        `;
+      } else {
+        const cssSize = HOJAS[formato as FormatoSheet].cssSize;
+        styleEl.textContent = `
+          @media print {
+            @page { size: ${cssSize}; margin: ${MARGEN_HOJA_MM}mm; }
+          }
+        `;
+      }
     });
 
     this.destroyRef.onDestroy(() => styleEl.remove());
@@ -193,36 +238,214 @@ export class EtiquetasPage {
     });
   }
 
+  /** Genera un id corto y único para cada entrada — necesario porque ahora puede
+   *  haber varias entradas con el mismo SKU pero distinto número de orden. */
+  private nuevoUid(): string {
+    return Math.random().toString(36).slice(2, 11);
+  }
+
+  /**
+   * Add manual desde el buscador o importación de SKUs sueltos: si ya hay una
+   * entrada con el mismo SKU y SIN número de orden (otra entrada manual),
+   * incrementamos `copias`. Las entradas con `numeroOrden` no se mergean nunca
+   * (cada orden del Excel es una etiqueta distinta).
+   */
   agregar(item: CatalogoItem, copias = 1): void {
     const lista = [...this.seleccionadas()];
-    const idx = lista.findIndex((it) => it.sku === item.sku);
+    const idx = lista.findIndex((it) => it.sku === item.sku && !it.numeroOrden);
     if (idx >= 0) {
       lista[idx] = { ...lista[idx], copias: lista[idx].copias + copias };
     } else {
-      lista.push({ ...item, copias });
+      lista.push({ ...item, copias, uid: this.nuevoUid(), numeroOrden: null });
     }
     this.seleccionadas.set(lista);
   }
 
-  cambiarCopias(sku: string, copias: number): void {
+  /** Add desde Excel — siempre crea una entrada nueva con número de orden,
+   *  aunque ya exista otra entrada con el mismo SKU. */
+  private agregarConOrden(item: CatalogoItem, numeroOrden: string, copias = 1): void {
+    this.seleccionadas.set([
+      ...this.seleccionadas(),
+      { ...item, copias, uid: this.nuevoUid(), numeroOrden },
+    ]);
+  }
+
+  cambiarCopias(uid: string, copias: number): void {
     if (copias <= 0) {
-      this.quitar(sku);
+      this.quitar(uid);
       return;
     }
     this.seleccionadas.set(
       this.seleccionadas().map((it) =>
-        it.sku === sku ? { ...it, copias } : it,
+        it.uid === uid ? { ...it, copias } : it,
       ),
     );
   }
 
-  quitar(sku: string): void {
-    this.seleccionadas.set(this.seleccionadas().filter((it) => it.sku !== sku));
+  quitar(uid: string): void {
+    this.seleccionadas.set(this.seleccionadas().filter((it) => it.uid !== uid));
   }
 
   vaciar(): void {
     this.seleccionadas.set([]);
     this.etiquetasImprimibles.set([]);
+  }
+
+  /**
+   * Importa un CSV del cliente con dos columnas: número de orden y SKU.
+   * PapaParse auto-detecta el separador (`,` típico inglés / `;` típico Excel
+   * en español) y maneja campos con comillas. Detecta el header por palabras
+   * clave; si no matchea, asume columna A=orden y B=SKU sin saltar fila.
+   * Cada fila genera una etiqueta — no se hace merge entre filas con el mismo
+   * SKU porque cada orden es una etiqueta distinta.
+   */
+  async importarCsv(file: File): Promise<void> {
+    if (!file) return;
+    this.importandoCsv.set(true);
+
+    // Si llegamos a disparar el HTTP, el subscribe se encarga de apagar el spinner.
+    // Si rebotamos antes (CSV vacío, sin filas válidas o exception), lo apagamos
+    // en el `finally`. Esta variable evita el doble apagado y el spinner colgado.
+    let httpDisparado = false;
+    try {
+      const texto = await file.text();
+      const parsed = Papa.parse<string[]>(texto, {
+        skipEmptyLines: 'greedy',
+        // header: false → devuelve arrays; auto-detecta `,` / `;` / `\t`.
+      });
+
+      const rows: string[][] = parsed.data ?? [];
+      if (rows.length === 0) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'CSV vacío',
+          detail: 'El archivo no tiene filas.',
+        });
+        return;
+      }
+
+      // Detectar header en la primera fila por palabras clave.
+      const cabecera = rows[0].map((c) => String(c ?? '').toLowerCase().trim());
+      let colOrden = 0;
+      let colSku = 1;
+      let dataStart = 0;
+      const idxOrden = cabecera.findIndex((c) => /(orden|pedido|nro|n[°º]|order)/i.test(c));
+      const idxSku = cabecera.findIndex((c) => /(sku|c[oó]d|art[ií]c)/i.test(c));
+      if (idxOrden >= 0 && idxSku >= 0) {
+        colOrden = idxOrden;
+        colSku = idxSku;
+        dataStart = 1;
+      } else if (idxOrden >= 0 || idxSku >= 0) {
+        // Hay header pero no detectamos las dos columnas — saltamos la primera fila igual.
+        dataStart = 1;
+      }
+
+      const filas: { orden: string; sku: string }[] = [];
+      for (let i = dataStart; i < rows.length; i++) {
+        const fila = rows[i] ?? [];
+        const orden = String(fila[colOrden] ?? '').trim();
+        const sku = String(fila[colSku] ?? '').trim();
+        if (sku) filas.push({ orden, sku });
+      }
+
+      if (filas.length === 0) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'CSV sin filas válidas',
+          detail: 'No se encontraron SKUs. Esperaba columnas: número de orden y SKU.',
+        });
+        return;
+      }
+
+      // Resolvemos los SKUs únicos contra el catálogo en una sola llamada.
+      const skusUnicos = [...new Set(filas.map((f) => f.sku))];
+      httpDisparado = true;
+      this.api.lookupBulk(skusUnicos).subscribe({
+        next: (encontrados) => {
+          const map = new Map(encontrados.map((it) => [it.sku, it]));
+          const noEncontrados = new Set<string>();
+          let agregados = 0;
+          for (const { orden, sku } of filas) {
+            const it = map.get(sku);
+            if (it) {
+              this.agregarConOrden(it, orden);
+              agregados++;
+            } else {
+              noEncontrados.add(sku);
+            }
+          }
+          // Toast resumen — la lista completa de los no encontrados va en el diálogo.
+          this.toast.add({
+            severity: agregados > 0 ? 'success' : 'warn',
+            summary: 'Importar CSV',
+            detail:
+              `${agregados} etiqueta${agregados === 1 ? '' : 's'} agregada${agregados === 1 ? '' : 's'}.` +
+              (noEncontrados.size > 0
+                ? ` ${noEncontrados.size} SKU${noEncontrados.size === 1 ? '' : 's'} sin coincidencia.`
+                : ''),
+            life: 4000,
+          });
+          // Si hubo SKUs no encontrados, abrimos el diálogo con la lista completa.
+          if (noEncontrados.size > 0) {
+            this.skusNoEncontrados.set([...noEncontrados].sort());
+            this.mostrarDialogNoEncontrados.set(true);
+          } else {
+            this.skusNoEncontrados.set([]);
+            this.mostrarDialogNoEncontrados.set(false);
+          }
+          this.importandoCsv.set(false);
+        },
+        error: (err) => {
+          this.importandoCsv.set(false);
+          toastError(this.toast, 'Importar CSV', err, 'No se pudo consultar el catálogo');
+        },
+      });
+    } catch (e) {
+      const err = e as Error;
+      this.toast.add({
+        severity: 'error',
+        summary: 'Importar CSV',
+        detail: err.message ?? 'No se pudo leer el archivo',
+      });
+    } finally {
+      // Si nunca llegamos al HTTP, apagamos el spinner acá. Si lo disparamos,
+      // el subscribe ya se encargó (o lo va a hacer cuando llegue la respuesta).
+      if (!httpDisparado) {
+        this.importandoCsv.set(false);
+      }
+    }
+  }
+
+  /** Copia la lista de SKUs no encontrados al portapapeles (uno por línea),
+   *  para que el operador pueda pegarla en un mail al cliente o en un ticket. */
+  async copiarSkusNoEncontrados(): Promise<void> {
+    const lista = this.skusNoEncontrados().join('\n');
+    try {
+      await navigator.clipboard.writeText(lista);
+      this.toast.add({
+        severity: 'success',
+        summary: 'Copiado',
+        detail: `${this.skusNoEncontrados().length} SKU${this.skusNoEncontrados().length === 1 ? '' : 's'} en el portapapeles.`,
+        life: 2500,
+      });
+    } catch {
+      this.toast.add({
+        severity: 'error',
+        summary: 'No se pudo copiar',
+        detail: 'El navegador bloqueó el acceso al portapapeles.',
+      });
+    }
+  }
+
+  /** Handler del <input type="file"> — disparamos el parseo y reseteamos el input
+   *  para que se pueda volver a importar el mismo archivo si hace falta. */
+  onArchivoCsv(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) {
+      this.importarCsv(file);
+    }
+    input.value = '';
   }
 
   importarPegado(): void {
@@ -276,25 +499,17 @@ export class EtiquetasPage {
             sku: it.sku,
             descripcion: it.descripcion,
             precio: it.pvpKtGastroSinIva,
+            numeroOrden: it.numeroOrden,
             qrDataUrl: dataUrls[idx],
           });
         }
       });
       this.etiquetasImprimibles.set(expandidas);
-      // Toast informativo del formato seleccionado — Chrome/Edge respetan el
-      // `@page size` que inyectamos y lo pre-seleccionan en el dropdown del
-      // diálogo de impresión, pero el operador siempre puede cambiarlo manual.
-      // Recordarle qué formato eligió evita que imprima 36 etiquetas en una
-      // hoja A5 cuando el browser cae a "scale to fit" porque el tamaño del
-      // diálogo no coincide con el del CSS.
-      this.toast.add({
-        severity: 'info',
-        summary: 'Imprimiendo',
-        detail: `Formato ${this.formatoHoja()} · ${this.distribucionHoja().total} etiquetas/hoja. ` +
-                `Verificá que en el diálogo de impresión también esté seleccionado "${this.formatoHoja()}".`,
-        life: 6000,
-      });
       // Esperamos un frame para que Angular pinte la grilla antes de window.print().
+      // No mostramos un toast acá — `window.print()` no avisa si el usuario imprimió
+      // o canceló, y un toast "Imprimiendo" después de un cancel queda raro. La
+      // advertencia sobre el tamaño de página vive permanentemente en el info card
+      // del panel (ver `esTermica()` en el template).
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       window.print();
     } catch (e) {
@@ -323,4 +538,5 @@ export class EtiquetasPage {
   }
 
   trackBySku = (_: number, it: { sku: string }) => it.sku;
+  trackByUid = (_: number, it: { uid: string }) => it.uid;
 }

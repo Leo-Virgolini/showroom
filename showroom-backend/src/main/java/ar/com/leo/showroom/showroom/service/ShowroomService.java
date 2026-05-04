@@ -72,12 +72,12 @@ public class ShowroomService {
     private int stockStaleMinutes;
 
     /**
-     * Lookup en cache local por SKU o EAN-13. La pistola del showroom puede emitir
-     * cualquiera de los dos y aquí los resolvemos con un solo flow:
-     *  1. Busca por SKU exacto en cache.
+     * Lookup en cache local por SKU o código de barras:
+     *  1. Busca el SKU en cache.
      *  2. Si no, busca por código de barras (EAN-13) en cache.
-     *  3. Si tampoco, asume que el código es un SKU y lo pide a DUX on-demand
-     *     (DUX no expone búsqueda por EAN, así que esto solo funciona si era SKU).
+     *  3. Si tampoco, asume que era un SKU y lo pide a DUX on-demand.
+     *     (DUX no expone búsqueda por EAN, así que el on-demand solo
+     *     resuelve si el código que mandaron era un SKU.)
      */
     public ScanResultDTO scan(String codigo) {
         if (codigo == null || codigo.isBlank()) {

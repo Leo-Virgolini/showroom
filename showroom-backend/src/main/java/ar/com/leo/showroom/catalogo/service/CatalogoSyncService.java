@@ -265,15 +265,10 @@ public class CatalogoSyncService {
                 .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
     }
 
-    public Optional<ProductoCache> buscarPorSku(String sku) {
-        if (sku == null) return Optional.empty();
-        return repository.findBySku(sku.trim());
-    }
-
     /**
-     * Busca primero por SKU exacto y, si no encuentra, por código de barras
-     * (EAN-13). Útil para el scan: la pistola puede emitir cualquiera de los dos
-     * y el operador no tiene que distinguirlos.
+     * Busca por SKU exacto y, si no encuentra, por código de barras (EAN).
+     * El scan del showroom acepta ambos: el operador puede tipear el SKU o
+     * escanear el código de barras impreso en el producto/etiqueta.
      */
     public Optional<ProductoCache> buscarPorSkuOEan(String codigo) {
         if (codigo == null) return Optional.empty();
