@@ -15,7 +15,6 @@ public record PedidoDetailDTO(
         /** Motivo libre que el operador tipeó al anular. Null/blank si no se especificó. */
         String motivoAnulacion,
         EstadoPedido estado,
-        String idDuxRespuesta,
         String respuestaDux,
         Long nroDoc,
         String tipoDoc,

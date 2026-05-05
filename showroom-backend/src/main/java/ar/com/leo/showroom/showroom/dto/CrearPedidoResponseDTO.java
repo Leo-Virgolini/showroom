@@ -6,7 +6,6 @@ import java.time.Instant;
 
 public record CrearPedidoResponseDTO(
         Long pedidoLocalId,
-        String idDuxRespuesta,
         EstadoPedido estado,
         Instant enviadoAt,
         String mensaje

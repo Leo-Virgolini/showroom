@@ -198,7 +198,6 @@ public class ShowroomService {
             "estado", "estado",
             "nroDoc", "nroDoc",
             "apellidoRazonSocial", "apellidoRazonSocial",
-            "idDuxRespuesta", "idDuxRespuesta",
             "descuentoPorcentaje", "descuentoPorcentaje",
             "totalSinIva", "totalSinIva",
             "total", "total"
@@ -267,7 +266,6 @@ public class ShowroomService {
                 p.getAnuladoAt(),
                 p.getMotivoAnulacion(),
                 p.getEstado(),
-                p.getIdDuxRespuesta(),
                 p.getRespuestaDux(),
                 p.getNroDoc(),
                 p.getTipoDoc(),
@@ -318,8 +316,7 @@ public class ShowroomService {
             p.setMotivoAnulacion(null);
         }
         pedidoRepository.save(p);
-        log.info("Pedido id={} anulado. estadoPrevio implícito en idDuxRespuesta={}, motivo='{}'",
-                id, p.getIdDuxRespuesta(), p.getMotivoAnulacion());
+        log.info("Pedido id={} anulado. motivo='{}'", id, p.getMotivoAnulacion());
         return obtenerPedido(id);
     }
 
@@ -345,7 +342,6 @@ public class ShowroomService {
                 p.getEnviadoAt(),
                 p.getAnuladoAt(),
                 p.getEstado(),
-                p.getIdDuxRespuesta(),
                 p.getNroDoc(),
                 p.getApellidoRazonSocial(),
                 p.getTotal(),
@@ -460,15 +456,13 @@ public class ShowroomService {
             log.info("DUX POST /pedido/nuevopedido — pedidoId={} respuesta {} bytes",
                     pedido.getId(), respuesta == null ? 0 : respuesta.length());
             pedido.setRespuestaDux(respuesta);
-            String idExtraido = extraerId(respuesta);
-            pedido.setIdDuxRespuesta(idExtraido);
 
             // DUX devuelve siempre 200 OK, incluso para errores de validación. El
             // único discriminador es el `message` del body: "Pedido ingresado con exito"
-            // → éxito; cualquier otro mensaje → error. Si en algún caso devuelve un ID,
-            // también vale como éxito.
+            // → éxito; cualquier otro mensaje → error. La respuesta no incluye el
+            // id del comprobante creado, así que no hay forma de linkearlo aquí.
             String mensajeDux = extraerMensajeRespuesta(respuesta);
-            boolean exito = idExtraido != null || mensajeIndicaExito(mensajeDux);
+            boolean exito = mensajeIndicaExito(mensajeDux);
 
             if (exito) {
                 pedido.setEnviadoAt(Instant.now());
@@ -489,7 +483,6 @@ public class ShowroomService {
 
                 return new CrearPedidoResponseDTO(
                         pedido.getId(),
-                        idExtraido,
                         pedido.getEstado(),
                         pedido.getEnviadoAt(),
                         mensajeDux != null ? mensajeDux : "Pedido enviado a DUX correctamente"
@@ -506,12 +499,11 @@ public class ShowroomService {
             pedidoRepository.save(pedido);
             return new CrearPedidoResponseDTO(
                     pedido.getId(),
-                    null,
                     EstadoPedido.ERROR,
                     null,
                     mensajeDux != null
                             ? "DUX rechazó el pedido: " + mensajeDux
-                            : "DUX respondió pero sin éxito ni ID — revisar respuesta cruda en /pedidos"
+                            : "DUX respondió sin éxito — revisar respuesta cruda en /pedidos"
             );
         } catch (Exception e) {
             log.error("Error enviando pedido a DUX: {}", e.getMessage(), e);
@@ -520,7 +512,6 @@ public class ShowroomService {
             pedidoRepository.save(pedido);
             return new CrearPedidoResponseDTO(
                     pedido.getId(),
-                    null,
                     EstadoPedido.ERROR,
                     null,
                     "Pedido guardado localmente pero falló envío a DUX: " + e.getMessage()
@@ -645,18 +636,6 @@ public class ShowroomService {
         root.put("productos", productos);
 
         return objectMapper.writeValueAsString(root);
-    }
-
-    private String extraerId(String respuesta) {
-        if (respuesta == null) return null;
-        try {
-            var node = objectMapper.readTree(respuesta);
-            if (node.has("id")) return node.get("id").asText();
-            if (node.has("id_pedido")) return node.get("id_pedido").asText();
-            if (node.has("nro_pedido")) return node.get("nro_pedido").asText();
-        } catch (Exception ignored) {
-        }
-        return null;
     }
 
     /** Texto del campo `message`/`mensaje`/`error` de la respuesta DUX, sin asumir si es éxito o error. */

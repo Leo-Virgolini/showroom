@@ -140,9 +140,6 @@
             <th style="width: 9rem" pSortableColumn="nroDoc">
               CUIT <p-sortIcon field="nroDoc" />
             </th>
-            <th style="width: 8rem" class="text-center" pSortableColumn="idDuxRespuesta">
-              ID DUX <p-sortIcon field="idDuxRespuesta" />
-            </th>
             <th class="text-center" style="width: 6rem">Items</th>
             <th class="text-center" style="width: 6rem" pSortableColumn="descuentoPorcentaje">
               Desc <p-sortIcon field="descuentoPorcentaje" />
@@ -181,9 +178,6 @@
             </td>
             <td class="font-mono text-sm">
               {{ p.nroDoc ?? '—' }}
-            </td>
-            <td class="text-center font-mono text-sm">
-              {{ p.idDuxRespuesta ?? '—' }}
             </td>
             <td class="text-center tabular-nums">{{ p.cantidadItems }}</td>
             <td class="text-center tabular-nums">
@@ -302,8 +296,6 @@
                         <dd>
                           <p-tag [severity]="estadoSeverity(det.estado)" [value]="estadoLabel(det.estado)" />
                         </dd>
-                        <dt class="text-muted-color">ID DUX</dt>
-                        <dd class="font-mono">{{ det.idDuxRespuesta ?? '—' }}</dd>
                         <dt class="text-muted-color">Descuento</dt>
                         <dd>
                           @if (det.descuentoPorcentaje && det.descuentoPorcentaje > 0) {
@@ -356,10 +348,10 @@
                           <span class="whitespace-pre-wrap">{{ det.motivoAnulacion }}</span>
                         </div>
                       }
-                      @if (det.idDuxRespuesta) {
+                      @if (det.enviadoAt) {
                         <div class="text-xs text-red-800 dark:text-red-300 mt-2 italic">
-                          Este pedido había sido cargado en DUX (ID {{ det.idDuxRespuesta }}).
-                          La anulación es solo local — cancelar el comprobante también desde DUX.
+                          Este pedido había sido cargado en DUX. La anulación es solo
+                          local — cancelar el comprobante también desde DUX.
                         </div>
                       }
                     </div>
@@ -472,26 +464,33 @@
   >
     @if (pedidoAAnular(); as p) {
       <div class="flex flex-col gap-3 text-sm">
+        @if (p.estado === 'ENVIADO') {
+          <div class="p-4 rounded-lg bg-red-50 dark:bg-red-950/40 border-2 border-red-400 dark:border-red-800 text-red-900 dark:text-red-200">
+            <div class="font-bold text-base flex items-center gap-2">
+              <i class="pi pi-exclamation-triangle text-lg"></i>
+              Esto NO anula el pedido en DUX
+            </div>
+            <div class="mt-2 leading-relaxed">
+              El pedido ya fue aceptado por DUX. Esta acción solo lo marca como
+              anulado en el sistema del showroom —
+              <strong>la API de DUX no permite cancelar comprobantes</strong>.
+              Tenés que abrir DUX y anular el comprobante manualmente desde su UI.
+            </div>
+          </div>
+        } @else {
+          <div class="p-3 rounded-lg bg-surface-100 dark:bg-surface-800 border border-surface-300 dark:border-surface-700 text-muted-color text-xs">
+            <i class="pi pi-info-circle"></i>
+            Este pedido no llegó a cargarse en DUX, así que solo se marca como anulado
+            localmente — no hay nada que hacer del lado de DUX.
+          </div>
+        }
+
         <div>
           ¿Anular el pedido
           <span class="font-mono font-semibold">#{{ p.id }}</span>
           de
           <span class="font-semibold">{{ p.apellidoRazonSocial ?? '—' }}</span>?
         </div>
-
-        @if (p.estado === 'ENVIADO' && p.idDuxRespuesta) {
-          <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-900 text-amber-900 dark:text-amber-200">
-            <div class="font-semibold flex items-center gap-2">
-              <i class="pi pi-exclamation-triangle"></i>
-              Este pedido ya está cargado en DUX (ID {{ p.idDuxRespuesta }}).
-            </div>
-            <div class="mt-1 text-xs">
-              La anulación se aplica solo del lado del showroom. La API de DUX no
-              permite cancelar comprobantes — hay que hacerlo manualmente desde
-              la UI de DUX.
-            </div>
-          </div>
-        }
 
         <div>
           <label for="motivoAnulacion" class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">

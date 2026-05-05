@@ -16,7 +16,6 @@ public record PedidoListItemDTO(
         /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
         Instant anuladoAt,
         EstadoPedido estado,
-        String idDuxRespuesta,
         Long nroDoc,
         /** Nombre/razón social del cliente para mostrar en el listado y permitir buscarlo. */
         String apellidoRazonSocial,

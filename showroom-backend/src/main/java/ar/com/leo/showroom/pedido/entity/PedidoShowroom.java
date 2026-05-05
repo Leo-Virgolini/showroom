@@ -16,8 +16,7 @@ import java.util.List;
 @Table(name = "pedido_showroom", indexes = {
         @Index(name = "idx_pedido_showroom_nro_doc", columnList = "nro_doc"),
         @Index(name = "idx_pedido_showroom_creado_at", columnList = "creado_at"),
-        @Index(name = "idx_pedido_showroom_estado", columnList = "estado"),
-        @Index(name = "idx_pedido_showroom_id_dux_respuesta", columnList = "id_dux_respuesta")
+        @Index(name = "idx_pedido_showroom_estado", columnList = "estado")
 })
 @Data
 @NoArgsConstructor
@@ -43,9 +42,6 @@ public class PedidoShowroom {
     /** Motivo libre que el operador puede tipear al anular. Opcional. */
     @Column(name = "motivo_anulacion", length = 500)
     private String motivoAnulacion;
-
-    @Column(name = "id_dux_respuesta", length = 100)
-    private String idDuxRespuesta;
 
     @Column(name = "respuesta_dux", columnDefinition = "TEXT")
     private String respuestaDux;

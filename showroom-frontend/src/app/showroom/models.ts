@@ -53,7 +53,6 @@ export interface CrearPedidoRequest {
 
 export interface CrearPedidoResponse {
   pedidoLocalId: number;
-  idDuxRespuesta: string | null;
   estado: 'ENVIADO' | 'PENDIENTE' | 'ERROR';
   enviadoAt: string | null;
   mensaje: string;
@@ -176,7 +175,6 @@ export interface PedidoListItem {
   /** Cuándo se anuló (si aplica). Null si el pedido no fue anulado. */
   anuladoAt: string | null;
   estado: EstadoPedido;
-  idDuxRespuesta: string | null;
   nroDoc: number | null;
   apellidoRazonSocial: string | null;
   /** Total CON IVA — lo que va a DUX en el comprobante. */
@@ -215,7 +213,6 @@ export interface PedidoDetalle {
   /** Motivo libre que el operador tipeó al anular. Null/blank si no se especificó. */
   motivoAnulacion: string | null;
   estado: EstadoPedido;
-  idDuxRespuesta: string | null;
   respuestaDux: string | null;
   nroDoc: number | null;
   tipoDoc: string | null;
