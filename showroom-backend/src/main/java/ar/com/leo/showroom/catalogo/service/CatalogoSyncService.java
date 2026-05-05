@@ -245,9 +245,14 @@ public class CatalogoSyncService {
 
     /**
      * Refresca on-demand una lista de SKUs (típicamente los del carrito).
-     * Cada SKU = 1 request DUX, así que lleva ~7s por SKU. Devuelve los actualizados.
+     * Cada SKU = 1 request DUX, así que lleva ~7s por SKU.
+     *
+     * <p>SIN @Transactional acá: la descarga puede tardar ~70s para un carrito
+     * de 10 items y mantener una conexión JDBC + locks abiertos durante todo
+     * ese tiempo es desperdicio. La persistencia se hace en una transacción
+     * corta dedicada via {@link #persistirRefresh}, mismo patrón que
+     * {@link #sincronizarCatalogoCompleto}.
      */
-    @Transactional
     public List<ProductoCache> refrescarSkus(List<String> skus) {
         if (skus == null || skus.isEmpty()) return List.of();
         List<String> limpios = skus.stream()
@@ -257,22 +262,39 @@ public class CatalogoSyncService {
         if (limpios.isEmpty()) return List.of();
 
         String listaObjetivo = duxClient.getProperties().listaPreciosNombre();
-        Instant ahora = Instant.now();
-        Map<String, ProductoCache> existentes = repository.findBySkuIn(limpios).stream()
-                .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
-        List<ProductoCache> resultado = new java.util.ArrayList<>();
-
+        // Descarga FUERA de transacción — esto es lo lento (~7s por SKU).
+        List<DuxItem> items = new java.util.ArrayList<>(limpios.size());
         for (String sku : limpios) {
             Optional<DuxItem> opt = duxClient.obtenerItemPorSku(sku);
             if (opt.isEmpty()) {
                 log.warn("Refresh - SKU {} no encontrado en DUX", sku);
                 continue;
             }
+            items.add(opt.get());
+        }
+        if (items.isEmpty()) return List.of();
+        // Persistencia DENTRO de una transacción corta (vía proxy con self-injection).
+        return self.persistirRefresh(items, listaObjetivo);
+    }
+
+    @Transactional
+    public List<ProductoCache> persistirRefresh(List<DuxItem> items, String listaObjetivo) {
+        List<String> skus = items.stream()
+                .map(DuxItem::getCodItem)
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .toList();
+        Map<String, ProductoCache> existentes = repository.findBySkuIn(skus).stream()
+                .collect(Collectors.toMap(ProductoCache::getSku, p -> p));
+        Instant ahora = Instant.now();
+        List<ProductoCache> resultado = new java.util.ArrayList<>(items.size());
+        for (DuxItem item : items) {
+            String sku = item.getCodItem().trim();
             ProductoCache pc = existentes.get(sku);
             if (pc == null) {
                 pc = ProductoCache.builder().sku(sku).build();
             }
-            aplicarItem(pc, opt.get(), listaObjetivo, ahora);
+            aplicarItem(pc, item, listaObjetivo, ahora);
             resultado.add(pc);
         }
         repository.saveAll(resultado);

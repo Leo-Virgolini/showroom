@@ -34,7 +34,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { CarritoItem, CatalogoItem, Localidad, Provincia, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, Localidad, Provincia, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -371,9 +371,10 @@ export class ShowroomPage implements AfterViewInit {
     () => this.cliente().nombreCompleto.trim() || APELLIDO_RAZON_SOCIAL,
   );
 
-  /** Hardcoded en el envío a DUX (línea ~715 de crearPedido). Se expone al
-   *  operador como input deshabilitado para que vea exactamente qué se carga. */
-  readonly categoriaFiscalFinal = 'CONSUMIDOR_FINAL';
+  /** Hardcoded en el envío a DUX. Se expone al operador como input deshabilitado
+   *  para que vea exactamente qué se carga, y se referencia desde el payload de
+   *  `crearPedido` para no duplicar el literal. */
+  readonly categoriaFiscalFinal: CategoriaFiscal = 'CONSUMIDOR_FINAL';
 
   /** CUIT/CUIL = 11 dígitos. No validamos el dígito verificador para no rebotar
    * a la operadora si DUX lo acepta igual. */
@@ -1099,7 +1100,7 @@ export class ShowroomPage implements AfterViewInit {
         // (queda en DUX y en el PDF/XLSX). Si lo deja vacío, fallback al placeholder
         // que la operadora puede asociar con el cliente real después.
         apellidoRazonSocial: c.nombreCompleto.trim() || APELLIDO_RAZON_SOCIAL,
-        categoriaFiscal: 'CONSUMIDOR_FINAL',
+        categoriaFiscal: this.categoriaFiscalFinal,
         tipoDoc: 'CUIT',
         nroDoc: c.nroDoc ?? undefined,
         telefono: c.telefono.trim() || undefined,

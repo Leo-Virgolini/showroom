@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -15,7 +16,8 @@ import java.util.List;
 @Table(name = "pedido_showroom", indexes = {
         @Index(name = "idx_pedido_showroom_nro_doc", columnList = "nro_doc"),
         @Index(name = "idx_pedido_showroom_creado_at", columnList = "creado_at"),
-        @Index(name = "idx_pedido_showroom_estado", columnList = "estado")
+        @Index(name = "idx_pedido_showroom_estado", columnList = "estado"),
+        @Index(name = "idx_pedido_showroom_id_dux_respuesta", columnList = "id_dux_respuesta")
 })
 @Data
 @NoArgsConstructor
@@ -93,7 +95,14 @@ public class PedidoShowroom {
     @Column(name = "id_localidad", length = 20)
     private String idLocalidad;
 
+    /**
+     * BatchSize=50 evita el N+1 al listar pedidos paginados: cuando el primer
+     * pedido toca su collection (típicamente para `getItems().size()`), Hibernate
+     * emite UN solo query `where pedido_id in (?, ?, ...)` que carga las items
+     * de hasta 50 pedidos a la vez. Con page size=50 → 2 queries totales en vez de 51.
+     */
     @OneToMany(mappedBy = "pedido", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
     @Builder.Default
     private List<PedidoShowroomItem> items = new ArrayList<>();
 }

@@ -372,11 +372,10 @@ public class ShowroomController {
         // Solo presente si hay un sync corriendo — el frontend lo usa para mostrar
         // "Sincronizando desde HH:mm" cuando un cliente se conecta tarde.
         catalogoSync.getSyncIniciadoAt().ifPresent(t -> body.put("syncIniciadoAt", t));
-        // Cuándo terminó la última sync global exitosa. Distinto de
-        // MAX(producto_cache.sincronizado_at), que se rejuvenece cada vez que el
-        // operador refresca un producto individual via /scan o /refresh-stock.
-        // Cae en ese MAX como fallback si la tabla sync_metadata está vacía
-        // (primer deploy, o todavía no corrió un sync con esta lógica nueva).
+        // Cuándo terminó la última sync global exitosa (sync_metadata.ultima_sync_global_at).
+        // Si nunca corrió una sync exitosa, queda ausente y el frontend oculta el banner.
+        // No usamos MAX(producto_cache.sincronizado_at) porque se contamina con
+        // refreshes individuales y con items persistidos por syncs cancelados.
         catalogoSync.getUltimaSyncGlobalAt()
                 .ifPresent(t -> body.put("ultimaSincronizacionAt", t));
         return body;

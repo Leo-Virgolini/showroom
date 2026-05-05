@@ -450,9 +450,15 @@ public class ShowroomService {
 
         try {
             String body = construirPayloadDux(request);
-            log.info("DUX POST /pedido/nuevopedido — payload: {}", body);
+            // No logueamos el payload entero: contiene PII del cliente (CUIT,
+            // email, telefono, domicilio, observaciones) y los logs van a archivo
+            // persistente (./logs/, rotacion ~500MB). Para diagnostico, el payload
+            // serializado vive en `pedido_showroom.respuesta_dux` (consultable por id).
+            log.info("DUX POST /pedido/nuevopedido — pedidoId={}, items={}, total={}",
+                    pedido.getId(), pedido.getItems().size(), pedido.getTotal());
             String respuesta = duxClient.crearPedido(body);
-            log.info("DUX POST /pedido/nuevopedido — respuesta: {}", respuesta);
+            log.info("DUX POST /pedido/nuevopedido — pedidoId={} respuesta {} bytes",
+                    pedido.getId(), respuesta == null ? 0 : respuesta.length());
             pedido.setRespuestaDux(respuesta);
             String idExtraido = extraerId(respuesta);
             pedido.setIdDuxRespuesta(idExtraido);
@@ -491,9 +497,11 @@ public class ShowroomService {
             }
 
             // 200 OK con un mensaje que NO indica éxito: DUX rechazó el pedido.
-            // Logueamos el payload entero para diagnóstico.
-            log.warn("DUX rechazó el pedido. message={}. Payload enviado: {}. Respuesta: {}",
-                    mensajeDux, body, respuesta);
+            // No logueamos payload ni respuesta cruda (contienen PII). Ambos quedan
+            // persistidos: payload reconstruible desde pedido_showroom + items,
+            // respuesta cruda en pedido_showroom.respuesta_dux para diagnóstico.
+            log.warn("DUX rechazó el pedido — pedidoId={}, message={}",
+                    pedido.getId(), mensajeDux);
             pedido.setEstado(EstadoPedido.ERROR);
             pedidoRepository.save(pedido);
             return new CrearPedidoResponseDTO(

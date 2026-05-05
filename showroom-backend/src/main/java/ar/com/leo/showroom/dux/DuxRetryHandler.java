@@ -70,7 +70,12 @@ public class DuxRetryHandler {
     }
 
     public String postJson(String uri, String token, String jsonBody) {
-        return executeWithRetries("POST", null, () -> restClient.post()
+        return postJson(uri, token, jsonBody, null);
+    }
+
+    /** Variante con cancelación cooperativa — ver {@link #get(String, String, Class, BooleanSupplier)}. */
+    public String postJson(String uri, String token, String jsonBody, BooleanSupplier isCancelled) {
+        return executeWithRetries("POST", isCancelled, () -> restClient.post()
                 .uri(uri)
                 .header("authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -97,7 +102,7 @@ public class DuxRetryHandler {
                     if (++rateLimitRetries > MAX_RETRIES_RATE_LIMIT) throw e;
                     long w = calcular429(e.getResponseHeaders(), rateLimitRetries);
                     log.warn("DUX 429 en {} - retry en {}s ({}/{})", op, w / 1000, rateLimitRetries, MAX_RETRIES_RATE_LIMIT);
-                    notificarSiCorresponde(rateLimitRetries, w);
+                    notificarSiCorresponde(rateLimitRetries, w, op);
                     sleepCancellable(w, isCancelled);
                     continue;
                 }
@@ -167,10 +172,10 @@ public class DuxRetryHandler {
         return Math.min(expo + jitter, MAX_WAIT_MS);
     }
 
-    private void notificarSiCorresponde(int intento, long esperandoMs) {
+    private void notificarSiCorresponde(int intento, long esperandoMs, String op) {
         if (onRateLimited != null && intento >= RATE_LIMIT_NOTIFY_THRESHOLD) {
             try {
-                onRateLimited.onRateLimit(intento, esperandoMs);
+                onRateLimited.onRateLimit(intento, esperandoMs, op);
             } catch (Exception ex) {
                 log.warn("Error notificando rate limit: {}", ex.getMessage());
             }
@@ -198,6 +203,12 @@ public class DuxRetryHandler {
 
     @FunctionalInterface
     public interface RateLimitListener {
-        void onRateLimit(int intentosConsecutivos, long esperandoMs);
+        /**
+         * @param op {@code "GET"} o {@code "POST"} — permite al listener decidir
+         *           si propagar el evento al SSE. Solo el sync de catálogo (GETs
+         *           paginados) debería disparar el banner global; un POST de pedido
+         *           con 429 es ruido para los demás operadores.
+         */
+        void onRateLimit(int intentosConsecutivos, long esperandoMs, String op);
     }
 }

@@ -79,9 +79,12 @@ public class DuxClient {
 
     /**
      * Callback que se dispara cuando 429 se acumula varios reintentos consecutivos.
-     * Publicamos un SSE para que el banner global avise a todos los usuarios.
+     * Publicamos un SSE solo para GETs (sync de catálogo) — un POST con 429 es
+     * un pedido individual del operador y mostrar "rate limit en sync" a los demás
+     * usuarios sería confuso (el banner es global).
      */
-    private void onRateLimit(int intento, long esperandoMs) {
+    private void onRateLimit(int intento, long esperandoMs, String op) {
+        if (!"GET".equals(op)) return;
         eventService.publish("sync", SyncEvent.rateLimited(Instant.now(), esperandoMs, intento));
     }
 
@@ -233,7 +236,11 @@ public class DuxClient {
             }
             vacios = 0;
             all.addAll(parsed.getResults());
-            log.info("DUX sync - {}/{}", all.size(), total);
+            // Progreso página a página en DEBUG: para 5000 items son ~100 líneas
+            // por sync, ruidoso en logs persistentes. El banner SSE ya muestra el
+            // progreso a los operadores; el resumen final ("DUX devolvió N items")
+            // queda en INFO en CatalogoSyncService.
+            log.debug("DUX sync - {}/{}", all.size(), total);
             if (onProgreso != null) {
                 int totalReportado = total == Integer.MAX_VALUE ? all.size() : total;
                 try {
@@ -347,7 +354,8 @@ public class DuxClient {
                         throw ex;
                     }
                 }
-                log.info("DUX localidades idProvincia={} - {}/{}", idProvincia, all.size(), total);
+                // Progreso paginado en DEBUG por las mismas razones que el sync de items.
+                log.debug("DUX localidades idProvincia={} - {}/{}", idProvincia, all.size(), total);
                 offset += limit;
                 if (all.size() >= total) break;
             } catch (RuntimeException e) {
