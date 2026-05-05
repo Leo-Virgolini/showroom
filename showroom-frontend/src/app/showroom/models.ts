@@ -71,7 +71,7 @@ export interface Health {
   totalProductos?: number;
   /** Solo presente si hay un sync corriendo. */
   syncIniciadoAt?: string;
-  /** MAX(sincronizado_at) del cache — cuándo se actualizó algo por última vez. */
+  /** Fin de la última sync global exitosa (no incluye refreshes individuales). */
   ultimaSincronizacionAt?: string;
 }
 

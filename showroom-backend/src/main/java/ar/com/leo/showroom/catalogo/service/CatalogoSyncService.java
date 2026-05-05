@@ -146,9 +146,15 @@ public class CatalogoSyncService {
         eventService.publish("sync", SyncEvent.started(inicio));
         try {
             String listaObjetivo = duxClient.getProperties().listaPreciosNombre();
+            // Usamos ultimaSyncGlobalAt (de sync_metadata) en vez de
+            // MAX(producto_cache.sincronizado_at): el MAX se rejuvenece con
+            // refreshes individuales (/scan, /refresh-stock), lo que haría que
+            // el incremental se saltee cambios sobre productos no refrescados.
+            // getUltimaSyncGlobalAt() ya cae en el MAX si sync_metadata está
+            // vacío (deploy inicial sobre BD existente).
             Instant desde = forzarCompleto
                     ? null
-                    : repository.findMaxSincronizadoAt()
+                    : getUltimaSyncGlobalAt()
                             .map(t -> t.minus(1, ChronoUnit.MINUTES))
                             .orElse(null);
             if (forzarCompleto) {

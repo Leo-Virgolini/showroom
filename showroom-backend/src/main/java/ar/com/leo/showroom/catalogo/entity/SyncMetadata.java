@@ -13,11 +13,14 @@ import java.time.Instant;
  * metadata global del sync de catálogo — específicamente, cuándo terminó la
  * última sync global exitosa.
  *
- * <p>Antes el banner "última sincronización" mostraba {@code MAX(sincronizado_at)}
- * de {@link ProductoCache}, lo cual incluye refreshes individuales (ej. cuando
- * el operador toca "refrescar" en un producto en {@code /scan}). Eso hacía que
- * el timestamp pareciera fresco aunque la sync global haya sido hace días.
- * Esta tabla aísla el "última sync GLOBAL".
+ * <p>Antes se usaba {@code MAX(sincronizado_at)} de {@link ProductoCache}, pero
+ * ese MAX se rejuvenece con refreshes individuales (ej. {@code /scan} o
+ * {@code /refresh-stock}). Eso causaba dos problemas: (1) el banner del
+ * frontend parecía fresco aunque la sync global fuera de hace días; (2) el
+ * cursor del sync incremental se adelantaba y se salteaba cambios sobre
+ * productos no refrescados manualmente. Esta tabla aísla el "última sync
+ * GLOBAL" y se usa como fuente de verdad tanto para el banner como para el
+ * cursor del incremental.
  */
 @Entity
 @Table(name = "sync_metadata")
