@@ -75,13 +75,20 @@ public class CatalogoSyncService {
      */
     @EventListener(ApplicationReadyEvent.class)
     public void syncAlIniciar() {
+        long total = repository.count();
+        Optional<Instant> ultima = getUltimaSyncGlobalAt();
+        log.info("=== Backend showroom listo ===");
+        log.info("  DUX configurado: {}", duxClient.isConfigured());
+        log.info("  Productos en cache: {}", total);
+        log.info("  Última sync global: {}", ultima.map(Instant::toString).orElse("nunca"));
+        log.info("  Lista de precios objetivo: {}", duxClient.getProperties().listaPreciosNombre());
+
         if (!duxClient.isConfigured()) {
             log.info("Sync inicial salteado: DUX no configurado");
             return;
         }
-        long total = repository.count();
         if (total > 0) {
-            log.info("Cache ya poblado ({} productos) — el cron mantendrá la sincronización", total);
+            log.info("Cache ya poblado — el cron mantendrá la sincronización");
             return;
         }
         log.info("Cache vacío al arrancar — disparando sync inicial en background");

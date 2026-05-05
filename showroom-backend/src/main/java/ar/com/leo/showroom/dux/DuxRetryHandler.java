@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.dux;
 
+import ar.com.leo.showroom.common.exception.SyncCancelledException;
 import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -9,7 +10,9 @@ import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -49,7 +52,17 @@ public class DuxRetryHandler {
     }
 
     public <T> T get(String uri, String token, Class<T> responseType) {
-        return executeWithRetries("GET", () -> restClient.get()
+        return get(uri, token, responseType, null);
+    }
+
+    /**
+     * Variante con cancelación cooperativa: si {@code isCancelled} retorna true
+     * en cualquier punto del flow (esperar rate limit, esperar entre reintentos),
+     * lanza {@link SyncCancelledException}. Sin esto, un 429 puede mantener al
+     * thread bloqueado hasta ~17 min en backoff y 10 reintentos sin atender el cancel.
+     */
+    public <T> T get(String uri, String token, Class<T> responseType, BooleanSupplier isCancelled) {
+        return executeWithRetries("GET", isCancelled, () -> restClient.get()
                 .uri(uri)
                 .header("authorization", token)
                 .retrieve()
@@ -57,7 +70,7 @@ public class DuxRetryHandler {
     }
 
     public String postJson(String uri, String token, String jsonBody) {
-        return executeWithRetries("POST", () -> restClient.post()
+        return executeWithRetries("POST", null, () -> restClient.post()
                 .uri(uri)
                 .header("authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -66,12 +79,13 @@ public class DuxRetryHandler {
                 .body(String.class));
     }
 
-    private <T> T executeWithRetries(String op, Supplier<T> call) {
+    private <T> T executeWithRetries(String op, BooleanSupplier isCancelled, Supplier<T> call) {
         int normalRetries = 0;
         int rateLimitRetries = 0;
         while (true) {
+            checkCancelled(isCancelled);
             try {
-                rateLimiter.acquire();
+                acquireRateLimit(isCancelled);
                 return call.get();
             } catch (HttpClientErrorException e) {
                 int status = e.getStatusCode().value();
@@ -84,19 +98,60 @@ public class DuxRetryHandler {
                     long w = calcular429(e.getResponseHeaders(), rateLimitRetries);
                     log.warn("DUX 429 en {} - retry en {}s ({}/{})", op, w / 1000, rateLimitRetries, MAX_RETRIES_RATE_LIMIT);
                     notificarSiCorresponde(rateLimitRetries, w);
-                    sleep(w);
+                    sleepCancellable(w, isCancelled);
                     continue;
                 }
                 if (status == 409 || status == 423) {
                     if (++normalRetries >= MAX_RETRIES) throw e;
-                    sleep(CONFLICT_BASE_WAIT_MS + ThreadLocalRandom.current().nextInt(500, 1500));
+                    sleepCancellable(CONFLICT_BASE_WAIT_MS + ThreadLocalRandom.current().nextInt(500, 1500), isCancelled);
                     continue;
                 }
                 throw e;
             } catch (HttpServerErrorException | ResourceAccessException e) {
                 if (++normalRetries >= MAX_RETRIES) throw e;
-                sleep(baseWaitMs * (long) Math.pow(2, normalRetries - 1));
+                sleepCancellable(baseWaitMs * (long) Math.pow(2, normalRetries - 1), isCancelled);
             }
+        }
+    }
+
+    private void checkCancelled(BooleanSupplier isCancelled) {
+        if (isCancelled != null && isCancelled.getAsBoolean()) {
+            throw new SyncCancelledException();
+        }
+    }
+
+    /**
+     * Adquiere un permit del rate limiter chequeando cancelación periódicamente.
+     * Sin supplier, comportamiento original (bloqueo total). Con supplier,
+     * intenta obtener el permit con timeout de 500ms y revisa el flag entre
+     * intentos — la cancelación se hace efectiva en hasta 500ms.
+     */
+    private void acquireRateLimit(BooleanSupplier isCancelled) {
+        if (isCancelled == null) {
+            rateLimiter.acquire();
+            return;
+        }
+        while (!rateLimiter.tryAcquire(500, TimeUnit.MILLISECONDS)) {
+            checkCancelled(isCancelled);
+        }
+    }
+
+    /**
+     * Sleep partido en chunks de 500ms con check de cancelación entre cada uno.
+     * Sin supplier, llama al sleep tradicional. Esto evita que un wait de 5 min
+     * post-429 ignore el cancel — la cancelación toma efecto en hasta 500ms.
+     */
+    private void sleepCancellable(long ms, BooleanSupplier isCancelled) {
+        if (isCancelled == null) {
+            sleep(ms);
+            return;
+        }
+        long deadline = System.currentTimeMillis() + ms;
+        while (true) {
+            checkCancelled(isCancelled);
+            long remaining = deadline - System.currentTimeMillis();
+            if (remaining <= 0) return;
+            sleep(Math.min(remaining, 500));
         }
     }
 

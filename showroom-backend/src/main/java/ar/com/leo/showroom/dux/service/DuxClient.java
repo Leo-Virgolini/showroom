@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.dux.service;
 
 import ar.com.leo.showroom.common.exception.ServiceNotConfiguredException;
+import ar.com.leo.showroom.common.exception.SyncCancelledException;
 import ar.com.leo.showroom.dux.DuxRetryHandler;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.model.DuxItem;
@@ -198,10 +199,18 @@ public class DuxClient {
                 log.info("DUX sync cancelado por el operador en offset={} ({} items traídos)", offset, all.size());
                 break;
             }
-            String response = retryHandler.get(
-                    "/items?offset=" + offset + "&limit=" + limit
-                            + "&idListaPrecio=" + idLista + fechaParam,
-                    tokens.token, String.class);
+            String response;
+            try {
+                // Pasamos el supplier al retry handler — sin esto, un 429 puede
+                // mantener al thread hasta ~17 min en backoff sin atender el cancel.
+                response = retryHandler.get(
+                        "/items?offset=" + offset + "&limit=" + limit
+                                + "&idListaPrecio=" + idLista + fechaParam,
+                        tokens.token, String.class, esCancelado);
+            } catch (SyncCancelledException e) {
+                log.info("DUX sync cancelado durante request en offset={} ({} items traídos)", offset, all.size());
+                break;
+            }
             if (response == null) break;
 
             DuxResponse parsed;

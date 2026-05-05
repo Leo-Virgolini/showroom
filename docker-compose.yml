@@ -74,6 +74,11 @@ services:
       # ---- Imágenes de productos ----
       SHOWROOM_PRESUPUESTO_IMAGENES_FOLDER: /app/imagenes
 
+      # ---- Logging a archivo ----
+      # Spring Boot escribe acá con rotación (configurada en application.properties).
+      # La carpeta /app/logs está montada en ./logs del host → leíble sin docker exec.
+      LOG_FILE_PATH: /app/logs/showroom-backend.log
+
       # ---- Email picking (opcional, dejar vacío para deshabilitar) ----
       SHOWROOM_PICKING_EMAIL_ENABLED: ${SHOWROOM_PICKING_EMAIL_ENABLED:-false}
       SHOWROOM_PICKING_EMAIL_TO: ${SHOWROOM_PICKING_EMAIL_TO:-}
@@ -90,6 +95,10 @@ services:
       # Carpeta con imágenes de productos {sku}.{jpg|png|webp...} — read-only,
       # el operador la mantiene desde fuera (FTP, sync manual, etc.).
       - "${SHOWROOM_IMAGENES_PATH}:/app/imagenes:ro"
+      # Logs persistentes en el host. Sobrevive a `docker compose down`. Útil
+      # para diagnosticar incidentes pasados ("se cayó el sync ayer a la noche")
+      # sin tener que entrar al contenedor.
+      - "./logs:/app/logs"
     ports:
       - "8081:8081"
     networks:

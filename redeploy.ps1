@@ -5,7 +5,7 @@
     levantarlo con --build.
 
 .DESCRIPTION
-    1. docker compose down (con --env-file y -f explícitos)
+    1. docker compose down (con --env-file y -f explicitos)
     2. git pull --ff-only origin main (avisa si hay cambios locales)
     3. docker compose up -d --build
     4. docker image prune -f (limpia dangling images del rebuild)
@@ -13,7 +13,13 @@
     6. docker compose ps + tail de logs del backend + URLs
 
     Aborta limpio si cualquier paso falla. Trabaja siempre desde el directorio
-    donde vive el script, así funciona desde cualquier CWD o doble-click.
+    donde vive el script, asi funciona desde cualquier CWD o doble-click.
+
+    NOTA DE ENCODING: el script se mantiene en ASCII puro (sin tildes ni
+    em-dash). PowerShell 5.1 sin BOM interpreta el archivo en la codepage del
+    sistema (CP1252 en Windows ES), y los caracteres multi-byte UTF-8 rompen el
+    parser - en particular el em-dash, que decodifica con una comilla doble que
+    parte los strings.
 
     Repo: https://github.com/Leo-Virgolini/showroom.git
 #>
@@ -31,7 +37,7 @@ $composeFile = Join-Path $PSScriptRoot 'docker-compose.yml'
 # el "up" arranca pero los volumes quedan rotos y la app falla en runtime.
 if (-not (Test-Path $envFile)) {
     Write-Host "[ERROR] Falta $envFile" -ForegroundColor Red
-    Write-Host '        Copiá .env.example a .env y completá las rutas/secretos.' -ForegroundColor Red
+    Write-Host '        Copia .env.example a .env y completa las rutas/secretos.' -ForegroundColor Red
     exit 1
 }
 
@@ -44,7 +50,7 @@ function Write-Section {
 }
 
 # Las CLIs nativas (docker, git) no tiran terminating errors aunque
-# $ErrorActionPreference esté en Stop — hay que chequear $LASTEXITCODE a mano.
+# $ErrorActionPreference este en Stop - hay que chequear $LASTEXITCODE a mano.
 function Invoke-Step {
     param(
         [Parameter(Mandatory)] [scriptblock]$Action,
@@ -90,7 +96,7 @@ docker image prune -f
 Write-Section 5 6 'Esperando que el backend este healthy'
 # El healthcheck del compose tiene start_period=60s + 5 retries x 15s = ~135s
 # en el peor caso. Damos 150s de margen y polleamos cada 5s. Si no llega a
-# healthy, abortamos mostrando los ultimos logs para debug rapido — sin esto,
+# healthy, abortamos mostrando los ultimos logs para debug rapido - sin esto,
 # el script terminaba diciendo "OK" aunque el backend estuviera en loop de
 # restart, y el bug solo se detectaba al usar la app.
 $timeoutSec = 150
@@ -104,7 +110,7 @@ while ($elapsed -lt $timeoutSec) {
     if ($status -eq 'unhealthy') { break }
     Start-Sleep -Seconds $intervalSec
     $elapsed += $intervalSec
-    Write-Host ("  ... {0}/{1}s — estado: {2}" -f $elapsed, $timeoutSec, $status) -ForegroundColor DarkGray
+    Write-Host ("  ... {0}/{1}s - estado: {2}" -f $elapsed, $timeoutSec, $status) -ForegroundColor DarkGray
 }
 if ($status -ne 'healthy') {
     Write-Host ("[ERROR] Backend no llego a 'healthy' (estado final: {0})" -f $status) -ForegroundColor Red
