@@ -26,7 +26,7 @@
   </ng-template>
 </p-dialog>
 
-<div class="flex flex-col min-h-screen bg-orange-50/30 dark:bg-surface-950">
+<div class="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden bg-orange-50/30 dark:bg-surface-950">
   <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient del PDF) -->
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
 
@@ -57,7 +57,7 @@
     </ng-template>
   </p-toolbar>
 
-  <main class="flex-1 grid gap-4 p-3 sm:p-4 lg:p-6 grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px] lg:grid-rows-1">
+  <main class="flex-1 min-h-0 grid gap-4 p-3 sm:p-4 lg:p-6 grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px] lg:grid-rows-1">
     <section class="flex flex-col min-h-0">
       <p-card class="stretch-card">
         <ng-template #title>
@@ -280,11 +280,6 @@
             <span class="inline-flex items-center gap-2">
               <i class="pi pi-shopping-cart text-primary"></i>
               <span>Carrito</span>
-              @if (cantidadTotal() > 0) {
-              <span class="inline-flex items-center justify-center min-w-6 h-6 px-2 rounded-full bg-primary text-primary-contrast text-xs font-semibold">
-                {{ cantidadTotal() }}
-              </span>
-              }
             </span>
             <div class="inline-flex items-center gap-1">
               <p-button icon="pi pi-refresh" severity="secondary" [text]="true" [rounded]="true" [loading]="refrescando()" [disabled]="carrito().length === 0"
@@ -366,15 +361,15 @@
         </ul>
 
         <div class="flex flex-col gap-1.5 mt-4 pt-3 border-t border-surface-200 dark:border-surface-700">
-          <div class="flex items-baseline justify-between text-sm">
-            <span class="text-muted-color">Subtotal</span>
+          <div class="flex items-baseline justify-between text-sm text-muted-color">
+            <span>Subtotal</span>
             <span class="tabular-nums">
               {{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
 
           @if (descuentoAplicado() > 0) {
-          <div class="flex items-baseline justify-between text-sm" [class.text-amber-600]="descuentoAplicado() === 5" [class.dark:text-amber-400]="descuentoAplicado() === 5"
+          <div class="flex items-baseline justify-between text-sm" [class.text-amber-700]="descuentoAplicado() === 5" [class.dark:text-amber-300]="descuentoAplicado() === 5"
             [class.text-emerald-600]="descuentoAplicado() === 10" [class.dark:text-emerald-400]="descuentoAplicado() === 10">
             <span class="font-medium inline-flex items-center gap-1.5">
               <i class="pi pi-percentage text-xs"></i>
@@ -399,8 +394,8 @@
           }
 
           <div class="flex items-baseline justify-between mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold">Total</span>
-            <span class="tabular-nums font-bold text-xl text-primary">
+            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold">Total</span>
+            <span class="tabular-nums font-bold text-xl text-emerald-700 dark:text-emerald-400">
               {{ totalCarrito() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
