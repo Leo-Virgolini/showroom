@@ -406,16 +406,16 @@ public class CatalogoSyncService {
     }
 
     /**
-     * Devuelve cuándo terminó la última sync global exitosa. Si la tabla está
-     * vacía (deploy inicial sobre BD existente, o nunca se completó una sync),
-     * cae en {@link ProductoCacheRepository#findMaxSincronizadoAt()} como
-     * fallback para que el banner del frontend muestre algo razonable hasta
-     * que ocurra el primer sync con esta lógica nueva.
+     * Devuelve cuándo terminó la última sync global exitosa. Si nunca corrió
+     * una (sync_metadata vacío), devuelve empty — el frontend oculta el banner
+     * y el cursor del incremental cae en null, lo que dispara un sync completo
+     * la próxima vez. Antes se caía a {@code MAX(producto_cache.sincronizado_at)}
+     * como fallback, pero ese MAX se contamina con refreshes individuales y con
+     * items persistidos por syncs cancelados, así que el banner reportaba
+     * "fresco" sin que hubiera habido una sync global exitosa.
      */
     public Optional<Instant> getUltimaSyncGlobalAt() {
-        Optional<Instant> persistido = syncMetadataRepository.findById(SyncMetadata.SINGLETON_ID)
+        return syncMetadataRepository.findById(SyncMetadata.SINGLETON_ID)
                 .map(SyncMetadata::getUltimaSyncGlobalAt);
-        if (persistido.isPresent()) return persistido;
-        return repository.findMaxSincronizadoAt();
     }
 }

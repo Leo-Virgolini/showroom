@@ -9,7 +9,8 @@
     2. git pull --ff-only origin main (avisa si hay cambios locales)
     3. docker compose up -d --build
     4. docker image prune -f (limpia dangling images del rebuild)
-    5. docker compose ps + URLs
+    5. Espera a que el backend llegue a healthy (timeout ~2.5 min)
+    6. docker compose ps + tail de logs del backend + URLs
 
     Aborta limpio si cualquier paso falla. Trabaja siempre desde el directorio
     donde vive el script, así funciona desde cualquier CWD o doble-click.
@@ -58,11 +59,11 @@ function Invoke-Step {
 
 # Pipeline -------------------------------------------------------------------
 
-Write-Section 1 5 'Bajando containers'
+Write-Section 1 6 'Bajando containers'
 Invoke-Step -Action { docker compose --env-file $envFile -f $composeFile down } `
     -ErrorMessage 'Fallo "docker compose down".'
 
-Write-Section 2 5 'Actualizando desde GitHub'
+Write-Section 2 6 'Actualizando desde GitHub'
 
 # Aviso si hay cambios locales: el pull con --ff-only podria fallar.
 git diff --quiet
@@ -77,17 +78,48 @@ if ($dirty -or $staged) {
 Invoke-Step -Action { git pull --ff-only origin main } `
     -ErrorMessage 'Fallo "git pull". Resolve el conflicto y volve a correr el script.'
 
-Write-Section 3 5 'Rebuild y up del stack'
+Write-Section 3 6 'Rebuild y up del stack'
 Invoke-Step -Action { docker compose --env-file $envFile -f $composeFile up -d --build } `
     -ErrorMessage 'Fallo "docker compose up". Revisa los logs con: docker compose logs -f'
 
-Write-Section 4 5 'Limpiando imagenes dangling'
+Write-Section 4 6 'Limpiando imagenes dangling'
 # Cada `--build` deja la imagen vieja como <none>. Sin prune se acumulan y
 # llenan el disco. -f evita el prompt interactivo. No tocamos volumes.
 docker image prune -f
 
-Write-Section 5 5 'Estado final'
+Write-Section 5 6 'Esperando que el backend este healthy'
+# El healthcheck del compose tiene start_period=60s + 5 retries x 15s = ~135s
+# en el peor caso. Damos 150s de margen y polleamos cada 5s. Si no llega a
+# healthy, abortamos mostrando los ultimos logs para debug rapido — sin esto,
+# el script terminaba diciendo "OK" aunque el backend estuviera en loop de
+# restart, y el bug solo se detectaba al usar la app.
+$timeoutSec = 150
+$intervalSec = 5
+$elapsed = 0
+$status = ''
+while ($elapsed -lt $timeoutSec) {
+    # 2>$null silencia el error si el container todavia no existe en docker.
+    $status = (docker inspect --format='{{.State.Health.Status}}' showroom-backend 2>$null)
+    if ($status -eq 'healthy') { break }
+    if ($status -eq 'unhealthy') { break }
+    Start-Sleep -Seconds $intervalSec
+    $elapsed += $intervalSec
+    Write-Host ("  ... {0}/{1}s — estado: {2}" -f $elapsed, $timeoutSec, $status) -ForegroundColor DarkGray
+}
+if ($status -ne 'healthy') {
+    Write-Host ("[ERROR] Backend no llego a 'healthy' (estado final: {0})" -f $status) -ForegroundColor Red
+    Write-Host 'Ultimos 100 lineas del backend:' -ForegroundColor Yellow
+    docker compose --env-file $envFile -f $composeFile logs --tail 100 backend
+    exit 1
+}
+Write-Host '[OK] Backend healthy' -ForegroundColor Green
+
+Write-Section 6 6 'Estado final'
 docker compose --env-file $envFile -f $composeFile ps
+
+Write-Host ''
+Write-Host 'Ultimas lineas del backend:' -ForegroundColor DarkGray
+docker compose --env-file $envFile -f $composeFile logs --tail 30 backend
 
 Write-Host ''
 Write-Host 'OK - Redeploy terminado.' -ForegroundColor Green

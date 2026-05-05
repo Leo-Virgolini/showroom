@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,9 +30,6 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
             order by p.sku asc
             """)
     List<ProductoCache> findByCodigoBarra(@Param("ean") String ean);
-
-    @Query("select max(p.sincronizadoAt) from ProductoCache p")
-    Optional<Instant> findMaxSincronizadoAt();
 
     /**
      * Busca por SKU, descripción o código de barras (contains).
