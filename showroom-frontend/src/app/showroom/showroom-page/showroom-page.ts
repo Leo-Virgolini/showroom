@@ -350,7 +350,10 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   excedeStock(it: CarritoItem): boolean {
-    return it.stockTotal != null && it.stockTotal >= 0 && it.cantidad > it.stockTotal;
+    // null = stock desconocido (no marcamos como excedido); cualquier número
+    // (incluso negativo, que DUX a veces devuelve) cuenta — la cantidad pedida
+    // tiene que entrar en el stock disponible.
+    return it.stockTotal != null && it.cantidad > it.stockTotal;
   }
 
   readonly hayItemsExcedidos = computed(() => this.carrito().some((it) => this.excedeStock(it)));
@@ -1040,7 +1043,7 @@ export class ShowroomPage implements AfterViewInit {
             const fresh = map.get(it.sku);
             if (!fresh) return it;
             const stock = fresh.stockTotal;
-            if (stock != null && stock >= 0 && it.cantidad > stock) {
+            if (stock != null && it.cantidad > stock) {
               excedidos.push({
                 sku: it.sku,
                 descripcion: it.descripcion,

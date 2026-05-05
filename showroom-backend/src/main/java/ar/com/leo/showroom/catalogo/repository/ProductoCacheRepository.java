@@ -61,7 +61,8 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
      * `q` matchea contra SKU, descripción o cualquiera de los códigos de barra
      * (contains, case-insensitive).
      * `soloDeshabilitados=true` deja solo `habilitado=false` (NULL no entra).
-     * `soloSinStock=true` deja stock null o 0.
+     * `soloSinStock=true` deja stock null, 0 o negativo (DUX a veces devuelve
+     * stock negativo cuando hubo movimientos no reflejados — sigue siendo "sin stock vendible").
      *
      * Orden por relevancia (startsWith antes que contains) seguido del
      * {@link Pageable} sort (que viene de la columna que clickea el operador
@@ -76,7 +77,7 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
                    or lower(p.descripcion) like lower(concat('%', :q, '%'))
                    or c like concat('%', :q, '%'))
               and (:soloDeshabilitados = false or p.habilitado = false)
-              and (:soloSinStock = false or p.stockTotal is null or p.stockTotal = 0)
+              and (:soloSinStock = false or p.stockTotal is null or p.stockTotal <= 0)
             order by
               case
                 when :q is null or :q = '' then 0
