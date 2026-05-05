@@ -1,7 +1,7 @@
 package ar.com.leo.showroom.dux.model;
 
-import tools.jackson.annotation.JsonIgnoreProperties;
-import tools.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
