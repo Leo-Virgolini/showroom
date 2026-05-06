@@ -36,6 +36,21 @@
   }
 }
 
+// Modo "panel dashboard" (cada sección con su propio scroll interno) solo en
+// pantallas anchas Y altas. Sin esto, en monitores chicos / browsers con zoom
+// alto / ventanas no maximizadas el `lg:h-screen + lg:overflow-hidden` bloquea
+// el scroll del body y deja contenido inalcanzable.
+.page-container {
+  min-height: 100vh;
+}
+
+@media (min-width: 1024px) and (min-height: 750px) {
+  .page-container {
+    height: 100vh;
+    overflow: hidden;
+  }
+}
+
 // Item del carrito que supera el stock disponible — fondo rojo claro y borde
 // para llamar la atención sin necesidad de 5 bindings [class.X] en el template.
 .item-excedido {
