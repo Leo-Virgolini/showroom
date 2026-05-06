@@ -149,18 +149,18 @@ SKU003" class="w-full font-mono text-sm"></textarea>
           <h4 class="m-0 mb-2 text-sm text-muted-color font-semibold">Tamaño de etiqueta</h4>
 
           <label class="flex flex-col gap-1 text-xs text-muted-color mb-2">
-            Formato de hoja
+            <span class="flex items-center gap-1.5"><i class="pi pi-file text-[0.7rem]"></i>Formato de hoja</span>
             <p-select [options]="opcionesHoja" [ngModel]="formatoHoja()" (ngModelChange)="formatoHoja.set($event)" optionLabel="label" optionValue="value" appendTo="body" size="small" class="w-full" />
           </label>
 
           <div class="grid grid-cols-2 gap-2 mb-2">
             <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-              Ancho etiqueta (mm)
+              <span class="flex items-center gap-1.5"><i class="pi pi-arrows-h text-[0.7rem]"></i>Ancho etiqueta (mm)</span>
               <p-inputNumber [ngModel]="anchoMm()" (ngModelChange)="anchoMm.set($event)" [min]="10" [max]="200" [showButtons]="true"
                 size="small" class="w-full" inputStyleClass="w-full min-w-0" />
             </label>
             <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-              Alto etiqueta (mm)
+              <span class="flex items-center gap-1.5"><i class="pi pi-arrows-v text-[0.7rem]"></i>Alto etiqueta (mm)</span>
               <p-inputNumber [ngModel]="altoMm()" (ngModelChange)="altoMm.set($event)" [min]="10" [max]="346" [showButtons]="true"
                 size="small" class="w-full" inputStyleClass="w-full min-w-0" />
             </label>
@@ -171,37 +171,83 @@ SKU003" class="w-full font-mono text-sm"></textarea>
             <div class="text-[0.65rem] font-semibold text-muted-color uppercase tracking-wider mb-2">Geometría del rollo</div>
             <div class="grid grid-cols-2 gap-2 mb-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Etiquetas por fila
+                <span class="flex items-center gap-1.5"><i class="pi pi-th-large text-[0.7rem]"></i>Etiquetas por fila</span>
                 <p-inputNumber [ngModel]="etiquetasPorFila()" (ngModelChange)="etiquetasPorFila.set($event)" [min]="1" [max]="10" [showButtons]="true"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Separación entre etiquetas (mm)
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrow-right-arrow-left text-[0.7rem]"></i>Separación entre etiquetas (mm)</span>
                 <p-inputNumber [ngModel]="separacionMm()" (ngModelChange)="separacionMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
             </div>
             <div class="grid grid-cols-2 gap-2 mb-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Margen sup. (mm)
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrow-up text-[0.7rem]"></i>Margen sup. (mm)</span>
                 <p-inputNumber [ngModel]="margenSuperiorMm()" (ngModelChange)="margenSuperiorMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Margen inf. (mm)
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrow-down text-[0.7rem]"></i>Margen inf. (mm)</span>
                 <p-inputNumber [ngModel]="margenInferiorMm()" (ngModelChange)="margenInferiorMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
             </div>
             <div class="grid grid-cols-2 gap-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Margen izq. (mm)
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrow-left text-[0.7rem]"></i>Margen izq. (mm)</span>
                 <p-inputNumber [ngModel]="margenIzqMm()" (ngModelChange)="margenIzqMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-                Margen der. (mm)
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrow-right text-[0.7rem]"></i>Margen der. (mm)</span>
                 <p-inputNumber [ngModel]="margenDerMm()" (ngModelChange)="margenDerMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+            </div>
+          </div>
+
+          <div class="mb-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+            <div class="text-[0.65rem] font-semibold text-muted-color uppercase tracking-wider mb-2">Tamaños del contenido</div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-qrcode text-[0.7rem]"></i>QR (mm)</span>
+                <p-inputNumber [ngModel]="qrSizeMm()" (ngModelChange)="qrSizeMm.set($event)" [min]="2" [max]="200" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-window-maximize text-[0.7rem]"></i>Padding etiqueta (mm)</span>
+                <p-inputNumber [ngModel]="paddingEtiquetaMm()" (ngModelChange)="paddingEtiquetaMm.set($event)" [min]="0" [max]="20" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-arrows-h text-[0.7rem]"></i>Gap QR↔texto (mm)</span>
+                <p-inputNumber [ngModel]="gapEtiquetaMm()" (ngModelChange)="gapEtiquetaMm.set($event)" [min]="0" [max]="20" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-bars text-[0.7rem]"></i>Gap entre líneas (mm)</span>
+                <p-inputNumber [ngModel]="textoGapMm()" (ngModelChange)="textoGapMm.set($event)" [min]="0" [max]="10" [showButtons]="true" [step]="0.1" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-tag text-[0.7rem]"></i>Font SKU (mm)</span>
+                <p-inputNumber [ngModel]="fontSkuMm()" (ngModelChange)="fontSkuMm.set($event)" [min]="0.5" [max]="50" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-hashtag text-[0.7rem]"></i>Font #orden (mm)</span>
+                <p-inputNumber [ngModel]="fontOrdenMm()" (ngModelChange)="fontOrdenMm.set($event)" [min]="0.5" [max]="50" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-align-left text-[0.7rem]"></i>Font descripción (mm)</span>
+                <p-inputNumber [ngModel]="fontDescMm()" (ngModelChange)="fontDescMm.set($event)" [min]="0.5" [max]="50" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                <span class="flex items-center gap-1.5"><i class="pi pi-dollar text-[0.7rem]"></i>Font precio (mm)</span>
+                <p-inputNumber [ngModel]="fontPrecioMm()" (ngModelChange)="fontPrecioMm.set($event)" [min]="0.5" [max]="50" [showButtons]="true" [step]="0.25" [minFractionDigits]="0" [maxFractionDigits]="2"
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
             </div>
@@ -245,18 +291,22 @@ SKU003" class="w-full font-mono text-sm"></textarea>
           }
           <label class="flex items-center gap-2 mb-1 text-sm">
             <p-toggleSwitch [ngModel]="mostrarSku()" (ngModelChange)="mostrarSku.set($event)" size="small" />
+            <i class="pi pi-tag text-[0.75rem] text-muted-color"></i>
             Mostrar SKU
           </label>
           <label class="flex items-center gap-2 mb-1 text-sm">
             <p-toggleSwitch [ngModel]="mostrarNumeroOrden()" (ngModelChange)="mostrarNumeroOrden.set($event)" size="small" />
+            <i class="pi pi-hashtag text-[0.75rem] text-muted-color"></i>
             Mostrar nº de orden
           </label>
           <label class="flex items-center gap-2 mb-1 text-sm">
             <p-toggleSwitch [ngModel]="mostrarDescripcion()" (ngModelChange)="mostrarDescripcion.set($event)" size="small" />
+            <i class="pi pi-align-left text-[0.75rem] text-muted-color"></i>
             Mostrar descripción
           </label>
           <label class="flex items-center gap-2 mb-1 text-sm">
             <p-toggleSwitch [ngModel]="mostrarPrecio()" (ngModelChange)="mostrarPrecio.set($event)" size="small" />
+            <i class="pi pi-dollar text-[0.75rem] text-muted-color"></i>
             Mostrar precio
           </label>
         </div>

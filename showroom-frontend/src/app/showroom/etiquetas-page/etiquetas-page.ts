@@ -66,9 +66,6 @@ const HOJAS: Record<FormatoSheet, DimensionHoja> = {
 /** Margen mínimo de impresión para formatos hoja (no aplica a térmica). */
 const MARGEN_HOJA_MM = 5;
 
-const clamp = (value: number, min: number, max: number): number =>
-  Math.max(min, Math.min(max, value));
-
 /** Configuración de impresión persistida en localStorage. Versionamos la clave
  *  para poder migrar/invalidar si en el futuro cambiamos el shape del objeto
  *  (ej. agregamos un campo nuevo con un default que no debería pisarse). */
@@ -76,6 +73,7 @@ const STORAGE_KEY = 'showroom.etiquetas.config.v1';
 
 interface ConfigPersistida {
   formatoHoja: FormatoHoja;
+  // Geometría del rollo / etiqueta
   anchoMm: number;
   altoMm: number;
   etiquetasPorFila: number;
@@ -84,6 +82,18 @@ interface ConfigPersistida {
   margenIzqMm: number;
   margenDerMm: number;
   separacionMm: number;
+  // Tamaños del contenido (independientes del tamaño de la etiqueta — el
+  // operador los ajusta a mano para tener control total y que no varíen al
+  // cambiar separación, márgenes, etc).
+  qrSizeMm: number;
+  fontSkuMm: number;
+  fontOrdenMm: number;
+  fontDescMm: number;
+  fontPrecioMm: number;
+  paddingEtiquetaMm: number;
+  gapEtiquetaMm: number;
+  textoGapMm: number;
+  // Toggles
   mostrarSku: boolean;
   mostrarNumeroOrden: boolean;
   mostrarPrecio: boolean;
@@ -100,6 +110,16 @@ const DEFAULTS_CONFIG: ConfigPersistida = {
   margenIzqMm: 2,
   margenDerMm: 1,
   separacionMm: 3,
+  // Defaults calibrados para etiqueta 29×19. Si el operador cambia el tamaño
+  // del label tiene que ajustar estos a mano (pero sólo cuando los necesite).
+  qrSizeMm: 14,
+  fontSkuMm: 3,
+  fontOrdenMm: 1.8,
+  fontDescMm: 2,
+  fontPrecioMm: 2.5,
+  paddingEtiquetaMm: 1,
+  gapEtiquetaMm: 1,
+  textoGapMm: 0.5,
   mostrarSku: true,
   mostrarNumeroOrden: true,
   mostrarPrecio: false,
@@ -216,33 +236,19 @@ export class EtiquetasPage {
     () => this.margenSuperiorMm() + this.altoMm() + this.margenInferiorMm(),
   );
 
-  // Tipografía y spacing proporcionales al tamaño de la etiqueta. Sin esto los
-  // textos quedan ridículamente chicos en labels grandes o gigantes en labels
-  // chicos. Los ratios están calibrados para que la etiqueta "default" 29×19 mm
-  // dé números cercanos a los originales (sku ~3mm, orden ~1.8mm, padding ~0.8mm,
-  // gap ~1mm). Los clamps evitan extremos: en una etiqueta de 100mm de alto el
-  // SKU no crece más de 6mm; en una de 12mm no baja de 2mm.
-  readonly fontSkuMm = computed(() => clamp(this.altoMm() * 0.15, 2, 5.5));
-  readonly fontOrdenMm = computed(() => clamp(this.altoMm() * 0.085, 1.3, 4));
-  readonly fontDescMm = computed(() => clamp(this.altoMm() * 0.095, 1.4, 4));
-  readonly fontPrecioMm = computed(() => clamp(this.altoMm() * 0.115, 1.6, 5));
-  // Padding usa el menor de los dos lados — etiquetas chatas o angostas no
-  // pueden tener un padding que se coma todo el espacio interno.
-  readonly paddingEtiquetaMm = computed(() =>
-    clamp(Math.min(this.anchoMm() * 0.04, this.altoMm() * 0.05), 0.5, 2),
-  );
-  readonly gapEtiquetaMm = computed(() => clamp(this.anchoMm() * 0.04, 0.5, 2));
-  readonly textoGapMm = computed(() => clamp(this.altoMm() * 0.025, 0.2, 1));
-
-  /** QR size = el menor entre el alto disponible (alto - 2*padding) y 48% del
-   *  ancho. 48% deja ~12mm de texto libre en una etiqueta de 29mm — alcanza
-   *  para SKUs de hasta 8 caracteres con holgura. */
-  readonly qrSizeMm = computed(() =>
-    Math.min(
-      this.altoMm() - 2 * this.paddingEtiquetaMm(),
-      this.anchoMm() * 0.48,
-    ),
-  );
+  // Tamaños del contenido — manuales, NO proporcionales al tamaño de la
+  // etiqueta. El operador los ajusta directamente desde el panel "Tamaños del
+  // contenido" para que cambiar separación, márgenes o ancho/alto del label
+  // no muevan el QR ni los textos. Si la etiqueta cambia mucho de tamaño, el
+  // operador re-ajusta estos valores una vez (y se persisten en localStorage).
+  readonly qrSizeMm = signal(this.configInicial.qrSizeMm);
+  readonly fontSkuMm = signal(this.configInicial.fontSkuMm);
+  readonly fontOrdenMm = signal(this.configInicial.fontOrdenMm);
+  readonly fontDescMm = signal(this.configInicial.fontDescMm);
+  readonly fontPrecioMm = signal(this.configInicial.fontPrecioMm);
+  readonly paddingEtiquetaMm = signal(this.configInicial.paddingEtiquetaMm);
+  readonly gapEtiquetaMm = signal(this.configInicial.gapEtiquetaMm);
+  readonly textoGapMm = signal(this.configInicial.textoGapMm);
 
   /** Posición horizontal donde arranca el bloque de texto dentro de la etiqueta. */
   readonly textoLeftMm = computed(
@@ -353,6 +359,14 @@ export class EtiquetasPage {
         margenIzqMm: this.margenIzqMm(),
         margenDerMm: this.margenDerMm(),
         separacionMm: this.separacionMm(),
+        qrSizeMm: this.qrSizeMm(),
+        fontSkuMm: this.fontSkuMm(),
+        fontOrdenMm: this.fontOrdenMm(),
+        fontDescMm: this.fontDescMm(),
+        fontPrecioMm: this.fontPrecioMm(),
+        paddingEtiquetaMm: this.paddingEtiquetaMm(),
+        gapEtiquetaMm: this.gapEtiquetaMm(),
+        textoGapMm: this.textoGapMm(),
         mostrarSku: this.mostrarSku(),
         mostrarNumeroOrden: this.mostrarNumeroOrden(),
         mostrarPrecio: this.mostrarPrecio(),

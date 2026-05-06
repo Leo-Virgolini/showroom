@@ -103,10 +103,12 @@
       gap: var(--texto-gap, 0.4mm);
 
       // Número de orden: secundario, queda como hint arriba del SKU.
+      // Color negro: el gris no se imprime bien en impresoras térmicas (que
+      // solo tienen "tinta o no tinta" — los grises terminan ralos o ausentes).
       .numero-orden {
         font-size: var(--font-orden, 1.8mm);
         font-weight: 600;
-        color: #555;
+        color: #000;
         letter-spacing: 0.05mm;
         white-space: nowrap;
         overflow: hidden;
