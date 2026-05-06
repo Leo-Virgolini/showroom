@@ -17,8 +17,12 @@ public record PedidoListItemDTO(
         Instant anuladoAt,
         EstadoPedido estado,
         Long nroDoc,
-        /** Nombre/razón social del cliente para mostrar en el listado y permitir buscarlo. */
+        /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`.
+         *  No es el nombre real del cliente — eso vive en `nombre`. */
         String apellidoRazonSocial,
+        /** Nombre y apellido (o razón social) real del cliente. Es el campo que se
+         *  muestra en la columna Cliente del listado. Null si el operador no lo cargó. */
+        String nombre,
         /** Total CON IVA — lo que se manda a DUX en el comprobante. */
         BigDecimal total,
         /** Total SIN IVA — lo que efectivamente paga el cliente en el showroom. */

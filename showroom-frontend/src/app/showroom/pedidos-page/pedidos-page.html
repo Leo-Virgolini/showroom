@@ -134,8 +134,8 @@
             <th style="width: 7rem" pSortableColumn="estado">
               Estado <p-sortIcon field="estado" />
             </th>
-            <th style="width: 9rem" pSortableColumn="apellidoRazonSocial">
-              Cliente <p-sortIcon field="apellidoRazonSocial" />
+            <th style="width: 9rem" pSortableColumn="nombre">
+              Cliente <p-sortIcon field="nombre" />
             </th>
             <th style="width: 9rem" pSortableColumn="nroDoc">
               CUIT <p-sortIcon field="nroDoc" />
@@ -173,8 +173,8 @@
             <td>
               <p-tag [severity]="estadoSeverity(p.estado)" [value]="estadoLabel(p.estado)" />
             </td>
-            <td class="text-sm truncate max-w-[12rem]" [pTooltip]="p.apellidoRazonSocial ?? ''" tooltipPosition="top">
-              {{ p.apellidoRazonSocial ?? '—' }}
+            <td class="text-sm truncate max-w-[12rem]" [pTooltip]="nombreCliente(p) ?? ''" tooltipPosition="top">
+              {{ nombreCliente(p) ?? '—' }}
             </td>
             <td class="font-mono text-sm">
               {{ p.nroDoc ?? '—' }}
@@ -268,7 +268,9 @@
                     <div>
                       <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Cliente / Envío</h4>
                       <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
-                        <dt class="text-muted-color">Razón social</dt>
+                        <dt class="text-muted-color">Nombre y apellido</dt>
+                        <dd>{{ det.nombre ?? '—' }}</dd>
+                        <dt class="text-muted-color">Razón social en DUX</dt>
                         <dd>{{ det.apellidoRazonSocial ?? '—' }}</dd>
                         <dt class="text-muted-color">Doc</dt>
                         <dd class="font-mono">{{ det.tipoDoc }} {{ det.nroDoc ?? '—' }}</dd>
@@ -489,7 +491,7 @@
           ¿Anular el pedido
           <span class="font-mono font-semibold">#{{ p.id }}</span>
           de
-          <span class="font-semibold">{{ p.apellidoRazonSocial ?? '—' }}</span>?
+          <span class="font-semibold">{{ nombreCliente(p) ?? '—' }}</span>?
         </div>
 
         <div>

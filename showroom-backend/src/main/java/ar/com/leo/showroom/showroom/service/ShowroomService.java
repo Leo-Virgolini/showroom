@@ -197,7 +197,10 @@ public class ShowroomService {
             "creadoAt", "creadoAt",
             "estado", "estado",
             "nroDoc", "nroDoc",
-            "apellidoRazonSocial", "apellidoRazonSocial",
+            // El header "Cliente" del listado ordena por `nombre` (el dato real
+            // del cliente). Antes era `apellidoRazonSocial`, pero ahora ese campo
+            // es el placeholder fijo "PEDIDO SHOWROOM" → ordenar por él no aportaba.
+            "nombre", "nombre",
             "descuentoPorcentaje", "descuentoPorcentaje",
             "totalSinIva", "totalSinIva",
             "total", "total"
@@ -270,6 +273,7 @@ public class ShowroomService {
                 p.getNroDoc(),
                 p.getTipoDoc(),
                 p.getApellidoRazonSocial(),
+                p.getNombre(),
                 p.getTelefono(),
                 p.getEmail(),
                 p.getDomicilio(),
@@ -344,6 +348,7 @@ public class ShowroomService {
                 p.getEstado(),
                 p.getNroDoc(),
                 p.getApellidoRazonSocial(),
+                p.getNombre(),
                 p.getTotal(),
                 p.getTotalSinIva(),
                 p.getDescuentoPorcentaje(),
@@ -397,6 +402,7 @@ public class ShowroomService {
                 .estado(EstadoPedido.PENDIENTE)
                 .observaciones(request.observaciones())
                 .apellidoRazonSocial(request.apellidoRazonSocial())
+                .nombre(StringUtils.hasText(request.nombre()) ? request.nombre() : null)
                 .tipoDoc(request.tipoDoc())
                 .nroDoc(request.nroDoc())
                 .telefono(request.telefono())

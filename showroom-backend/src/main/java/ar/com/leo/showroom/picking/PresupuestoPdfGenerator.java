@@ -123,7 +123,7 @@ public class PresupuestoPdfGenerator {
         LocalDate fecha = pedido.getCreadoAt() != null
                 ? pedido.getCreadoAt().atZone(TZ_AR).toLocalDate()
                 : LocalDate.now(TZ_AR);
-        String cliente = NombreArchivoUtils.sanitizar(pedido.getApellidoRazonSocial());
+        String cliente = NombreArchivoUtils.sanitizar(pedido.getNombreCompleto());
         return "presupuesto-" + cliente + "-pedido-" + pedido.getId() + "-"
                 + fecha.format(DateTimeFormatter.ofPattern("ddMMyyyy")) + ".pdf";
     }
@@ -142,8 +142,8 @@ public class PresupuestoPdfGenerator {
             logoImg.setMarginBottom(20);
         }
 
-        // Título: razón social del cliente en naranja KT (o "PRESUPUESTO" como fallback).
-        String tituloTexto = safe(pedido.getApellidoRazonSocial(), "PRESUPUESTO");
+        // Título: nombre completo del cliente en naranja KT (o "PRESUPUESTO" como fallback).
+        String tituloTexto = safe(pedido.getNombreCompleto(), "PRESUPUESTO");
         Paragraph titulo = new Paragraph(tituloTexto)
                 .simulateBold()
                 .setFontSize(36)

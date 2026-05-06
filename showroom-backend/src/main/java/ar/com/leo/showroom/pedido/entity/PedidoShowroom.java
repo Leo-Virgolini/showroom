@@ -70,6 +70,14 @@ public class PedidoShowroom {
     @Column(name = "apellido_razon_social", length = 100)
     private String apellidoRazonSocial;
 
+    /** Nombre y apellido (o razón social) real del cliente. Se manda a DUX en el
+     *  campo `nombre` del payload de /pedido/nuevopedido. Opcional: si el operador
+     *  no lo carga queda null y la columna Cliente del listado muestra "—".
+     *  El campo `apellidoRazonSocial` se reserva para el placeholder fijo
+     *  "PEDIDO SHOWROOM" que la operadora reemplaza en DUX al asociar el comprobante. */
+    @Column(name = "nombre", length = 100)
+    private String nombre;
+
     @Column(name = "tipo_doc", length = 10)
     private String tipoDoc;
 
@@ -101,4 +109,17 @@ public class PedidoShowroom {
     @BatchSize(size = 50)
     @Builder.Default
     private List<PedidoShowroomItem> items = new ArrayList<>();
+
+    /**
+     * Nombre del cliente real para mostrar en PDF, XLSX, email y nombre de archivo.
+     * Prioriza `nombre` (donde el operador carga el nombre y apellido / razón
+     * social real del cliente) y cae a `apellidoRazonSocial` solo si no hay
+     * nombre — en pedidos del showroom ese fallback va a ser el placeholder
+     * "PEDIDO SHOWROOM" que la operadora reemplaza al editar el comprobante en DUX.
+     */
+    public String getNombreCompleto() {
+        if (nombre != null && !nombre.isBlank()) return nombre.trim();
+        if (apellidoRazonSocial != null && !apellidoRazonSocial.isBlank()) return apellidoRazonSocial.trim();
+        return null;
+    }
 }

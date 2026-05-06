@@ -61,7 +61,7 @@ public class PickingExcelGenerator {
                 ? pedido.getCreadoAt().atZone(tzAr).toLocalDate()
                 : java.time.LocalDate.now(tzAr);
         String fechaStr = fecha.format(java.time.format.DateTimeFormatter.ofPattern("ddMMyyyy"));
-        String cliente = NombreArchivoUtils.sanitizar(pedido.getApellidoRazonSocial());
+        String cliente = NombreArchivoUtils.sanitizar(pedido.getNombreCompleto());
         return "picking-" + cliente + "-pedido-" + pedido.getId() + "-" + fechaStr + ".xlsx";
     }
 }

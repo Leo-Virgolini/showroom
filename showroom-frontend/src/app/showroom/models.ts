@@ -176,7 +176,12 @@ export interface PedidoListItem {
   anuladoAt: string | null;
   estado: EstadoPedido;
   nroDoc: number | null;
+  /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`.
+   *  No es el nombre real del cliente — eso vive en `nombre`. */
   apellidoRazonSocial: string | null;
+  /** Nombre y apellido (o razón social) real del cliente. Es lo que se muestra
+   *  en la columna Cliente del listado. Null si el operador no lo cargó. */
+  nombre: string | null;
   /** Total CON IVA — lo que va a DUX en el comprobante. */
   total: number | null;
   /** Total SIN IVA — lo que efectivamente paga el cliente. */
@@ -216,7 +221,10 @@ export interface PedidoDetalle {
   respuestaDux: string | null;
   nroDoc: number | null;
   tipoDoc: string | null;
+  /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`. */
   apellidoRazonSocial: string | null;
+  /** Nombre y apellido (o razón social) real del cliente. Null si no se cargó. */
+  nombre: string | null;
   telefono: string | null;
   email: string | null;
   domicilio: string | null;

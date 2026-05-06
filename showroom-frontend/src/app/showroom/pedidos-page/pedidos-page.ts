@@ -247,6 +247,16 @@ export class PedidosPage {
     });
   }
 
+  /** Nombre del cliente real (lo que el operador tipeó en "Nombre y apellido")
+   *  para mostrar en la columna Cliente, detalle y modal de anulación. NO
+   *  cae a `apellidoRazonSocial`: ese campo es el placeholder fijo "PEDIDO
+   *  SHOWROOM" que se manda a DUX como `apellido_razon_social`, no info del
+   *  cliente real. Si el operador no cargó nombre, devolvemos null para que
+   *  el template muestre "—". */
+  nombreCliente(p: { nombre: string | null }): string | null {
+    return p.nombre?.trim() || null;
+  }
+
   estadoSeverity(e: EstadoPedido): 'success' | 'warn' | 'danger' | 'secondary' {
     if (e === 'ENVIADO') return 'success';
     if (e === 'PENDIENTE') return 'warn';

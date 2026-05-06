@@ -41,16 +41,18 @@ import { toastError } from '../toast.utils';
 
 /**
  * Datos del cliente que el vendedor completa al cerrar el pedido.
- * El resto (apellidoRazonSocial, categoriaFiscal, tipoDoc) se hardcodea
- * en el envío a DUX — el CUIT es la clave que después usa la operadora
- * para autocompletar los datos reales en DUX.
+ * El `apellido_razon_social` que recibe DUX es siempre el placeholder fijo
+ * "PEDIDO SHOWROOM" (la operadora lo asocia con el cliente real al editar el
+ * comprobante), así que no es input. categoriaFiscal y tipoDoc también van
+ * hardcodeadas. El CUIT es la clave que conecta el pedido con el cliente real.
  */
 interface DatosCliente {
   nroDoc: number | null;
-  /** Nombre y apellido (o razón social) del cliente. Se manda a DUX como
-   * `apellido_razon_social`, se muestra en la carátula del PDF de presupuesto
-   * y va en el nombre del archivo. Si queda vacío, se usa el fallback "PEDIDO SHOWROOM". */
-  nombreCompleto: string;
+  /** Nombre y apellido (o razón social) del cliente. Se manda a DUX en el campo
+   * `nombre` del payload de /pedido/nuevopedido y se muestra en la carátula del
+   * PDF de presupuesto, en el XLSX de picking y en la columna Cliente del
+   * listado. Opcional: si queda vacío, la columna Cliente muestra "—". */
+  nombre: string;
   telefono: string;
   email: string;
   domicilio: string;
@@ -63,7 +65,7 @@ interface DatosCliente {
 
 const CLIENTE_VACIO: DatosCliente = {
   nroDoc: null,
-  nombreCompleto: '',
+  nombre: '',
   telefono: '',
   email: '',
   domicilio: '',
@@ -368,11 +370,11 @@ export class ShowroomPage implements AfterViewInit {
     );
   });
 
-  /** Valor final de `apellido_razon_social` que recibe DUX: lo tipeado en
-   *  "Nombre y apellido" o, si quedó vacío, el fallback "PEDIDO SHOWROOM". */
-  readonly apellidoRazonSocialFinal = computed(
-    () => this.cliente().nombreCompleto.trim() || APELLIDO_RAZON_SOCIAL,
-  );
+  /** Valor de `apellido_razon_social` que recibe DUX. Siempre es el placeholder
+   *  fijo: la operadora lo asocia con el cliente real al editar el comprobante
+   *  en DUX usando el CUIT. El nombre real del cliente va en el campo `nombre`
+   *  del payload, no acá. */
+  readonly apellidoRazonSocialFinal: string = APELLIDO_RAZON_SOCIAL;
 
   /** Hardcoded en el envío a DUX. Se expone al operador como input deshabilitado
    *  para que vea exactamente qué se carga, y se referencia desde el payload de
@@ -1099,10 +1101,11 @@ export class ShowroomPage implements AfterViewInit {
     this.enviando.set(true);
     this.api
       .crearPedido({
-        // Si el operador completa "Nombre y apellido", lo mandamos como razón social
-        // (queda en DUX y en el PDF/XLSX). Si lo deja vacío, fallback al placeholder
-        // que la operadora puede asociar con el cliente real después.
-        apellidoRazonSocial: c.nombreCompleto.trim() || APELLIDO_RAZON_SOCIAL,
+        // `apellido_razon_social` (obligatorio en DUX) siempre es el placeholder fijo:
+        // la operadora lo edita en DUX al asociar el comprobante con el cliente real.
+        apellidoRazonSocial: APELLIDO_RAZON_SOCIAL,
+        // "Nombre y apellido" del cliente real → DUX `nombre` (opcional).
+        nombre: c.nombre.trim() || undefined,
         categoriaFiscal: this.categoriaFiscalFinal,
         tipoDoc: 'CUIT',
         nroDoc: c.nroDoc ?? undefined,

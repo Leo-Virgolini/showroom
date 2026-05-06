@@ -134,7 +134,7 @@ public class PickingEmailService {
                     + " - " + pedido.getItems().size() + " items");
 
             String idLocal = String.valueOf(pedido.getId());
-            String razonSocial = vacioOPlaceholder(pedido.getApellidoRazonSocial());
+            String razonSocial = vacioOPlaceholder(pedido.getNombreCompleto());
             String cuit = pedido.getNroDoc() != null ? String.valueOf(pedido.getNroDoc()) : "—";
             String emailCliente = vacioOPlaceholder(pedido.getEmail());
             String telefono = vacioOPlaceholder(pedido.getTelefono());
