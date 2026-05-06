@@ -70,7 +70,7 @@
             <p-inputicon>
               <i class="pi pi-qrcode text-lg"></i>
             </p-inputicon>
-            <input #scanInput pInputText type="text" placeholder="Escaneá el código, o tipeá SKU/descripción y Enter…" [ngModel]="skuInput()" (ngModelChange)="skuInput.set($event)"
+            <input #scanInput pInputText type="text" placeholder="Escaneá QR / código de barras, o tipeá la descripción y Enter…" [ngModel]="skuInput()" (ngModelChange)="skuInput.set($event)"
               (keydown.enter)="onSubmitScan()" class="w-full text-xl font-mono py-3" autocomplete="off" inputmode="text" />
             <p-inputicon class="!right-3">
               <kbd

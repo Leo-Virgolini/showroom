@@ -31,5 +31,19 @@ USER app
 
 EXPOSE 8081
 
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
+# Flags de JVM optimizadas para Spring Boot + JDK 25:
+#   - MaxRAMPercentage=75: usa hasta el 75% de la RAM del container.
+#   - UseZGC: garbage collector de baja latencia (<1ms pauses). En JDK 25
+#     ya viene en modo generacional por default — ideal para apps web con
+#     cargas variables (sync de catálogo = picos de heap).
+#   - UseStringDeduplication: deduplica strings idénticos en el heap. El
+#     cache de productos suele tener muchas descripciones/categorías
+#     repetidas; ahorra ~5-10% de heap sin afectar performance.
+# Override desde docker-compose con `environment: JAVA_OPTS: "..."` si hace falta.
+#
+# Flag opcional NO incluida por default (probar si querés ahorrar heap):
+#   -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders
+#   (JEP 450/519 — reduce el header de cada objeto Java de 12 a 4 bytes;
+#    todavía marcada experimental en JDK 25 pero estable en producción).
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseZGC -XX:+UseStringDeduplication"
 ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]
