@@ -721,10 +721,15 @@ export class EtiquetasPage {
   private async obtenerQR(sku: string): Promise<string> {
     const cached = this.qrCache.get(sku);
     if (cached) return cached;
+    // scale: 4 da QRs de ~100×100 px que pesan ~700 bytes (vs ~2KB con scale 8)
+    // y siguen siendo perfectamente escaneables a 14mm de impresión.
+    // Los drivers térmicos tienen buffers chicos y procesan pixel a pixel; con
+    // muchas etiquetas el spooler puede saturarse y producir buffer underrun
+    // (síntoma típico: la impresora se traba a partir de la 3ª-4ª etiqueta).
     const dataUrl = await QRCode.toDataURL(sku, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      scale: 8,
+      scale: 4,
       color: { dark: '#000000', light: '#ffffff' },
     });
     this.qrCache.set(sku, dataUrl);
