@@ -37,6 +37,11 @@ interface EtiquetaImprimible {
   qrDataUrl: string;
 }
 
+/** Resolución estándar de la GC420T (y de la mayoría de las Zebra desktop). */
+const ZPL_DPI = 203;
+const MM_TO_DOTS = ZPL_DPI / 25.4;
+const mmToDots = (mm: number) => Math.round(mm * MM_TO_DOTS);
+
 /** Formatos soportados:
  *  - A4/A5/Letter/Legal: hojas con grilla de etiquetas; queda margen y borde de corte.
  *  - Termica: rollo continuo donde cada FILA del rollo es una página. El rollo
@@ -718,18 +723,253 @@ export class EtiquetasPage {
     }
   }
 
+  /**
+   * Genera un archivo ZPL con todas las etiquetas y lo descarga. Para volúmenes
+   * grandes (cientos/miles de etiquetas) o impresoras Zebra que se traban con
+   * `window.print()` por buffer underrun.
+   *
+   * Cómo usar el archivo descargado:
+   *   1. Abrir Zebra Setup Utilities (viene con el driver Zebra).
+   *   2. Seleccionar la GC420T → "Open Communication With Printer".
+   *   3. "File" → "Send file" → elegir el .zpl descargado.
+   *
+   * Diferencias con `preparaImpresion()`:
+   *   - El QR lo genera la impresora con `^BQ`, no se manda como bitmap → ~30
+   *     bytes por etiqueta vs ~400-700 bytes.
+   *   - La impresora controla su propio ritmo, sin spooler de Windows en medio.
+   *   - El cabezal calienta menos porque el firmware optimiza el barrido.
+   */
+  async descargarZPL(): Promise<void> {
+    this.generandoQR.set(true);
+    try {
+      const seleccionadas = this.seleccionadas();
+      // Expandir según copias — cada etiqueta es una entrada en el ZPL.
+      const expandidas = seleccionadas.flatMap((it) =>
+        Array.from({ length: it.copias }, () => ({
+          sku: it.sku,
+          descripcion: it.descripcion,
+          precio: it.pvpKtGastroSinIva,
+          numeroOrden: it.numeroOrden,
+        })),
+      );
+      if (expandidas.length === 0) return;
+
+      const zpl = this.generarZPL(expandidas);
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const filename = `etiquetas-${ts}.zpl`;
+
+      const blob = new Blob([zpl], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Liberar el object URL después de que el browser termine la descarga.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      this.toast.add({
+        severity: 'success',
+        summary: 'ZPL generado',
+        detail: `${expandidas.length} etiqueta${expandidas.length === 1 ? '' : 's'} en ${filename}. Abrilo con Zebra Setup Utilities → Send file.`,
+        life: 6000,
+      });
+    } catch (e) {
+      const err = e as Error;
+      this.toast.add({
+        severity: 'error',
+        summary: 'Generar ZPL',
+        detail: err.message ?? 'No se pudo generar el archivo',
+      });
+    } finally {
+      this.generandoQR.set(false);
+    }
+  }
+
+  /**
+   * Construye el string ZPL para todas las etiquetas. Cada FILA del rollo es
+   * una etiqueta lógica de ZPL (^XA...^XZ) que internamente posiciona N labels
+   * con sus respectivos QR y textos. Las posiciones se calculan en dots a
+   * 203 DPI (8 dots/mm).
+   *
+   * Setup que va al inicio (sin `^JUS`, así no persiste en EEPROM):
+   *   - ^PR2,2: speed 2 ips (lento pero estable, mejor para tiradas largas
+   *     con QR que calienta el cabezal).
+   *   - ~SD8:   darkness 8 sobre 30 (suficiente para QR ECC L sin sobrecalentar).
+   *   - ^CI28:  codepage UTF-8 (para descripciones con acentos).
+   *
+   * NO incluimos `^MTD` (direct thermal) porque depende del setup físico de la
+   * impresora (con/sin ribbon). El operador configura el modo desde Zebra Setup
+   * Utilities; nosotros respetamos esa config.
+   */
+  private generarZPL(
+    etiquetas: { sku: string; descripcion: string | null; precio: number | null; numeroOrden: string | null }[],
+  ): string {
+    const cfg = {
+      ancho: this.anchoMm(),
+      alto: this.altoMm(),
+      n: this.etiquetasPorFila(),
+      sep: this.separacionMm(),
+      margenIzq: this.margenIzqMm(),
+      margenSup: this.margenSuperiorMm(),
+      padding: this.paddingEtiquetaMm(),
+      gap: this.gapEtiquetaMm(),
+      qrSize: this.qrSizeMm(),
+      fontSku: this.fontSkuMm(),
+      fontOrden: this.fontOrdenMm(),
+      fontDesc: this.fontDescMm(),
+      fontPrecio: this.fontPrecioMm(),
+      textoGap: this.textoGapMm(),
+      anchoRollo: this.anchoRolloMm(),
+      altoRollo: this.altoRolloMm(),
+      mostrarSku: this.mostrarSku(),
+      mostrarOrden: this.mostrarNumeroOrden(),
+      mostrarDesc: this.mostrarDescripcion(),
+      mostrarPrecio: this.mostrarPrecio(),
+    };
+
+    // Magnificación del QR (dots por módulo, rango ZPL 1-10). Asumimos versión 1
+    // (21 módulos) — la mínima de QR. En ECC L con modo numérico cabe hasta
+    // 41 dígitos, más que suficiente para los SKUs de 7 dígitos del cliente.
+    // Si el cliente cambia a SKUs más largos o alfanuméricos, hay que volver
+    // a un baseline más conservador (25) para que no overflow.
+    const QR_MODULOS_BASELINE = 21;
+    const qrMag = Math.max(
+      1,
+      Math.min(10, Math.floor(mmToDots(cfg.qrSize) / QR_MODULOS_BASELINE)),
+    );
+    // Tamaño REAL del QR (basado en magnificación discreta, no en qrSize ideal).
+    // Lo usamos para centrar correctamente — sino el QR queda 1-2 mm descentrado.
+    const qrSizeRealMm = (QR_MODULOS_BASELINE * qrMag) / MM_TO_DOTS;
+    const anchoTextoMm = cfg.ancho - cfg.padding - cfg.qrSize - cfg.gap - cfg.padding;
+
+    // Dividir en filas según etiquetasPorFila.
+    const filas: typeof etiquetas[] = [];
+    for (let i = 0; i < etiquetas.length; i += cfg.n) {
+      filas.push(etiquetas.slice(i, i + cfg.n));
+    }
+
+    const out: string[] = [];
+
+    // Setup global. Sin `^JUS` los settings duran solo hasta que la impresora
+    // se reinicie; no contaminamos la EEPROM con configs específicas de este
+    // trabajo (otros prints pueden necesitar speed/darkness distintos).
+    out.push('^XA');
+    out.push('^PR2,2');
+    out.push('~SD8');
+    out.push('^CI28');
+    out.push('^XZ');
+    out.push('');
+
+    for (const fila of filas) {
+      out.push('^XA');
+      out.push(`^PW${mmToDots(cfg.anchoRollo)}`);
+      out.push(`^LL${mmToDots(cfg.altoRollo)}`);
+      out.push('^LH0,0');
+      out.push('^LS0');
+
+      fila.forEach((et, i) => {
+        const xEt = cfg.margenIzq + i * (cfg.ancho + cfg.sep);
+        const yEt = cfg.margenSup;
+
+        // QR — centrado vertical en la etiqueta usando el tamaño REAL renderizado.
+        const qrX = mmToDots(xEt + cfg.padding);
+        const qrY = mmToDots(yEt + (cfg.alto - qrSizeRealMm) / 2);
+        // ^BQN,2,M  — N=normal orientation, 2=model 2 (estándar), M=magnification.
+        // ^FDLN,<data>  — L=ECC level low, N=numeric (10 bits cada 3 dígitos,
+        // más eficiente que A=alphanumeric para SKUs solo numéricos).
+        out.push(`^FO${qrX},${qrY}^BQN,2,${qrMag}^FDLN,${this.escZpl(et.sku)}^FS`);
+
+        // Bloque de texto a la derecha del QR.
+        const textoX = mmToDots(xEt + cfg.padding + cfg.qrSize + cfg.gap);
+
+        // `lineasReales` cuenta cuánto alto consume cada línea (la descripción
+        // multiline ocupa hasta 2× su font-size). Lo usamos para centrar bien.
+        const lineas: {
+          font: 'A0' | 'AD';
+          alto: number;
+          lineasReales: number;
+          texto: string;
+          anchoMm?: number;
+        }[] = [];
+        if (cfg.mostrarOrden && et.numeroOrden) {
+          lineas.push({ font: 'A0', alto: cfg.fontOrden, lineasReales: 1, texto: `#${et.numeroOrden}` });
+        }
+        if (cfg.mostrarSku) {
+          lineas.push({ font: 'AD', alto: cfg.fontSku, lineasReales: 1, texto: et.sku });
+        }
+        if (cfg.mostrarDesc && et.descripcion) {
+          lineas.push({
+            font: 'A0',
+            alto: cfg.fontDesc,
+            lineasReales: 2, // ^FB con max 2 líneas
+            texto: et.descripcion,
+            anchoMm: anchoTextoMm,
+          });
+        }
+        if (cfg.mostrarPrecio && et.precio != null) {
+          lineas.push({
+            font: 'A0',
+            alto: cfg.fontPrecio,
+            lineasReales: 1,
+            texto: `$${Math.round(et.precio).toLocaleString('es-AR')}`,
+          });
+        }
+
+        // Altura total del bloque considerando que la descripción puede ocupar
+        // 2 líneas. Si no la mostramos, el cálculo es trivial (1 línea c/u).
+        const altoBloque =
+          lineas.reduce((acc, l) => acc + l.alto * l.lineasReales, 0) +
+          Math.max(0, lineas.length - 1) * cfg.textoGap;
+        let yCursorMm = yEt + (cfg.alto - altoBloque) / 2;
+
+        for (const linea of lineas) {
+          const altoDots = mmToDots(linea.alto);
+          const yDots = mmToDots(yCursorMm);
+          // Width 0 → proporcional al alto (ZPL para fonts scalable A0/AD).
+          const fontCmd = `^A${linea.font}N,${altoDots},0`;
+          if (linea.anchoMm) {
+            // ^FB<width>,<maxLines>,<lineSpacing>,<justify>,<hangingIndent>
+            out.push(
+              `^FO${textoX},${yDots}${fontCmd}^FB${mmToDots(linea.anchoMm)},${linea.lineasReales},0,L,0^FD${this.escZpl(linea.texto)}^FS`,
+            );
+          } else {
+            out.push(`^FO${textoX},${yDots}${fontCmd}^FD${this.escZpl(linea.texto)}^FS`);
+          }
+          yCursorMm += linea.alto * linea.lineasReales + cfg.textoGap;
+        }
+      });
+
+      out.push('^PQ1');
+      out.push('^XZ');
+      out.push('');
+    }
+
+    return out.join('\n');
+  }
+
+  /** Escapa caracteres especiales de ZPL (^, ~, \) en el contenido del ^FD. */
+  private escZpl(s: string): string {
+    return s.replace(/[\^~\\]/g, '_');
+  }
+
   private async obtenerQR(sku: string): Promise<string> {
     const cached = this.qrCache.get(sku);
     if (cached) return cached;
-    // scale: 4 da QRs de ~100×100 px que pesan ~700 bytes (vs ~2KB con scale 8)
-    // y siguen siendo perfectamente escaneables a 14mm de impresión.
-    // Los drivers térmicos tienen buffers chicos y procesan pixel a pixel; con
-    // muchas etiquetas el spooler puede saturarse y producir buffer underrun
-    // (síntoma típico: la impresora se traba a partir de la 3ª-4ª etiqueta).
+    // QR optimizado al máximo para impresora térmica con spooler chico:
+    //   - errorCorrectionLevel: 'L' (7% redundancia) en lugar de 'M' (15%) →
+    //     menos módulos negros y un QR más chico (versión QR menor para el
+    //     mismo dato). Para SKUs cortos numéricos como 1101736 alcanza
+    //     sobradamente — los lectores comerciales escanean L sin problemas.
+    //   - scale: 3 → imagen ~75×75 px, ~400 bytes en data URL (vs ~700 bytes
+    //     con scale 4). A 14.5 mm impresos sigue siendo nítido.
+    // Sin esto la impresora térmica entra en buffer underrun a mitad de fila
+    // y deja columnas en blanco / se pausa por sobrecalentamiento del cabezal.
     const dataUrl = await QRCode.toDataURL(sku, {
-      errorCorrectionLevel: 'M',
+      errorCorrectionLevel: 'L',
       margin: 1,
-      scale: 4,
+      scale: 3,
       color: { dark: '#000000', light: '#ffffff' },
     });
     this.qrCache.set(sku, dataUrl);

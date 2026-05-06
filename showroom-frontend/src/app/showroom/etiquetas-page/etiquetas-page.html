@@ -311,7 +311,11 @@ SKU003" class="w-full font-mono text-sm"></textarea>
           </label>
         </div>
 
-        <div class="flex justify-end mt-3">
+        <div class="flex justify-end mt-3 gap-2 flex-wrap">
+          <p-button label="ZPL (Zebra)" icon="pi pi-download" severity="secondary" [outlined]="true"
+            [loading]="generandoQR()" [disabled]="!puedeImprimir()" (onClick)="descargarZPL()"
+            pTooltip="Descarga un archivo ZPL para enviar con Zebra Setup Utilities. Recomendado para tiradas grandes (50+ etiquetas)."
+            tooltipPosition="top" />
           <p-button label="Imprimir etiquetas" icon="pi pi-print" [loading]="generandoQR()" [disabled]="!puedeImprimir()" (onClick)="preparaImpresion()" />
         </div>
         }
