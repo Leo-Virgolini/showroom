@@ -957,19 +957,19 @@ export class EtiquetasPage {
   private async obtenerQR(sku: string): Promise<string> {
     const cached = this.qrCache.get(sku);
     if (cached) return cached;
-    // QR optimizado al máximo para impresora térmica con spooler chico:
-    //   - errorCorrectionLevel: 'L' (7% redundancia) en lugar de 'M' (15%) →
-    //     menos módulos negros y un QR más chico (versión QR menor para el
-    //     mismo dato). Para SKUs cortos numéricos como 1101736 alcanza
-    //     sobradamente — los lectores comerciales escanean L sin problemas.
-    //   - scale: 3 → imagen ~75×75 px, ~400 bytes en data URL (vs ~700 bytes
-    //     con scale 4). A 14.5 mm impresos sigue siendo nítido.
-    // Sin esto la impresora térmica entra en buffer underrun a mitad de fila
-    // y deja columnas en blanco / se pausa por sobrecalentamiento del cabezal.
+    // QR para impresión térmica con configuración balanceada:
+    //   - errorCorrectionLevel: 'M' (15% redundancia) — escanea bien aunque
+    //     haya suciedad o rasguños.
+    //   - scale: 6 — imagen 150×150 px (~1.2 KB). A 14.5 mm impresos en 203 DPI
+    //     hay ~116 px físicos: downscaling de 1.3×, calidad óptima sin
+    //     desperdicio. Subir más no aporta nitidez perceptible (el cabezal
+    //     térmico no resuelve por debajo de 0.125 mm/punto).
+    // Esto solo aplica al modo `window.print()` — el ZPL genera su propio QR
+    // internamente con ^BQ y no consume este bitmap.
     const dataUrl = await QRCode.toDataURL(sku, {
-      errorCorrectionLevel: 'L',
+      errorCorrectionLevel: 'M',
       margin: 1,
-      scale: 3,
+      scale: 6,
       color: { dark: '#000000', light: '#ffffff' },
     });
     this.qrCache.set(sku, dataUrl);
