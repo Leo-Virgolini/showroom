@@ -136,7 +136,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
                 <div class="text-xs text-muted-color">{{ it.descripcion ?? '—' }}</div>
               </td>
               <td class="text-right">
-                <p-inputNumber [ngModel]="it.copias" (ngModelChange)="cambiarCopias(it.uid, $event)" [showButtons]="true" [min]="0" [max]="200" inputStyleClass="w-20 text-center" />
+                <p-inputNumber [ngModel]="it.copias" (ngModelChange)="cambiarCopias(it.uid, $event)" [showButtons]="true" [min]="0" [max]="9999" inputStyleClass="w-24 text-center" />
               </td>
               <td>
                 <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true" (onClick)="quitar(it.uid)" />

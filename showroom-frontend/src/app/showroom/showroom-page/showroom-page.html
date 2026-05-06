@@ -11,10 +11,9 @@
         <p-checkbox [(ngModel)]="forzarSyncCompleto" [binary]="true" inputId="forzarSync" />
         <div class="flex flex-col gap-1">
           <span class="font-medium">Sincronización completa</span>
-          <span class="text-xs text-muted-color">
-            Descarga TODO el catálogo desde DUX (~12 minutos). Útil si sospechás que
-            el cache divergió o querés limpiar items eliminados en DUX. Sin marcar,
-            solo se traen los cambios desde el último sync (rápido).
+          <span class="text-xs text-muted-color flex flex-col gap-1 mt-1">
+            <span><strong>Marcado:</strong> descarga TODO el catálogo desde DUX (~12 minutos).</span>
+            <span><strong>Sin marcar:</strong> solo trae los productos que tuvieron cambios de <strong>stock</strong> o <strong>precio</strong> desde la última sincronización (más rápido).</span>
           </span>
         </div>
       </label>

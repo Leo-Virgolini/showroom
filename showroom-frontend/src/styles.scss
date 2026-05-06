@@ -40,6 +40,21 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+// Caret invisible por default — sólo aparece en inputs/textareas/contenteditable
+// reales. Sin esto el browser muestra el caret en cualquier elemento que reciba
+// focus (headers de tabla, labels, etc.) cuando el usuario hace click en zonas
+// que parecen texto pero no son editables.
+* {
+  caret-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+[contenteditable=''] {
+  caret-color: auto;
+}
+
 // Evita que iOS Safari haga zoom al enfocar inputs con font-size < 16px.
 // Solo aplica a coarse pointer para no afectar la densidad visual en desktop.
 @media (pointer: coarse) {
