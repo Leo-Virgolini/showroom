@@ -129,7 +129,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
               <td>
                 @if (it.numeroOrden) {
                   <div class="text-[0.65rem] font-semibold text-[#FF861C] uppercase tracking-wider">
-                    Orden {{ it.numeroOrden }}
+                    #{{ it.numeroOrden }}
                   </div>
                 }
                 <div class="font-mono text-xs">{{ it.sku }}</div>
@@ -155,32 +155,74 @@ SKU003" class="w-full font-mono text-sm"></textarea>
 
           <div class="grid grid-cols-2 gap-2 mb-2">
             <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-              Ancho (mm)
-              <p-inputNumber [ngModel]="anchoMm()" (ngModelChange)="anchoMm.set($event)" [min]="20" [max]="200" [showButtons]="true"
+              Ancho etiqueta (mm)
+              <p-inputNumber [ngModel]="anchoMm()" (ngModelChange)="anchoMm.set($event)" [min]="10" [max]="200" [showButtons]="true"
                 size="small" class="w-full" inputStyleClass="w-full min-w-0" />
             </label>
             <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
-              Alto (mm)
-              <p-inputNumber [ngModel]="altoMm()" (ngModelChange)="altoMm.set($event)" [min]="15" [max]="346" [showButtons]="true"
+              Alto etiqueta (mm)
+              <p-inputNumber [ngModel]="altoMm()" (ngModelChange)="altoMm.set($event)" [min]="10" [max]="346" [showButtons]="true"
                 size="small" class="w-full" inputStyleClass="w-full min-w-0" />
             </label>
           </div>
 
           @if (esTermica()) {
+          <div class="mb-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+            <div class="text-[0.65rem] font-semibold text-muted-color uppercase tracking-wider mb-2">Geometría del rollo</div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Etiquetas por fila
+                <p-inputNumber [ngModel]="etiquetasPorFila()" (ngModelChange)="etiquetasPorFila.set($event)" [min]="1" [max]="10" [showButtons]="true"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Separación entre etiquetas (mm)
+                <p-inputNumber [ngModel]="separacionMm()" (ngModelChange)="separacionMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Margen sup. (mm)
+                <p-inputNumber [ngModel]="margenSuperiorMm()" (ngModelChange)="margenSuperiorMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Margen inf. (mm)
+                <p-inputNumber [ngModel]="margenInferiorMm()" (ngModelChange)="margenInferiorMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Margen izq. (mm)
+                <p-inputNumber [ngModel]="margenIzqMm()" (ngModelChange)="margenIzqMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+              <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
+                Margen der. (mm)
+                <p-inputNumber [ngModel]="margenDerMm()" (ngModelChange)="margenDerMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
+                  size="small" class="w-full" inputStyleClass="w-full min-w-0" />
+              </label>
+            </div>
+          </div>
+
           <div class="mb-2 p-2 rounded-lg bg-orange-50 dark:bg-surface-900 border border-[#FF861C]/30 text-xs text-[#3B1E09] dark:text-surface-200">
             <div class="flex items-center gap-2 mb-0.5">
               <i class="pi pi-print text-[#FF861C]"></i>
-              <span class="font-semibold">Modo térmica · 1 etiqueta por página</span>
+              <span class="font-semibold">
+                Modo térmica · {{ etiquetasPorFila() }} etiqueta{{ etiquetasPorFila() === 1 ? '' : 's' }} por fila
+              </span>
             </div>
             <div class="text-muted-color">
-              Página = {{ anchoMm() }} × {{ altoMm() }} mm, sin márgenes
-              @if (totalEtiquetas() > 0) {
-              · <strong>{{ totalEtiquetas() }}</strong> página{{ totalEtiquetas() === 1 ? '' : 's' }}
+              Página {{ anchoRolloMm() }} × {{ altoRolloMm() }} mm · etiqueta {{ anchoMm() }} × {{ altoMm() }} mm
+              @if (totalEtiquetas() > 0 && hojasNecesarias() > 0) {
+              · <strong>{{ hojasNecesarias() }}</strong> página{{ hojasNecesarias() === 1 ? '' : 's' }}
               }
             </div>
             <div class="flex items-start gap-1 text-[0.65rem] text-amber-800 dark:text-amber-300 mt-1 pt-1 border-t border-[#FF861C]/20">
               <i class="pi pi-exclamation-circle text-[0.65rem] mt-0.5"></i>
-              <span>En el diálogo, elegí tu impresora térmica y un papel de <strong>{{ anchoMm() }}×{{ altoMm() }} mm</strong> (o "personalizado").</span>
+              <span>En el diálogo, elegí tu impresora térmica y un papel de <strong>{{ anchoRolloMm() }}×{{ altoRolloMm() }} mm</strong> (o "personalizado") y escala 100%.</span>
             </div>
           </div>
           } @else if (distribucionHoja(); as d) {
@@ -254,13 +296,46 @@ SKU003" class="w-full font-mono text-sm"></textarea>
   </ng-template>
 </p-dialog>
 
-<div class="hoja-impresion" [class.thermal]="esTermica()" [style.--ancho-etiqueta.mm]="anchoMm()" [style.--alto-etiqueta.mm]="altoMm()">
-  @for (et of etiquetasImprimibles(); track $index) {
-  <div class="etiqueta">
-    <img [src]="et.qrDataUrl" alt="QR" class="qr" />
-    <div class="texto">
+<div class="hoja-impresion" [class.thermal]="esTermica()" [style]="cssVars()">
+  @if (esTermica()) {
+    @for (fila of filasTermicas(); track $index) {
+      <div class="fila-termica"
+           [style.width.mm]="anchoRolloMm()"
+           [style.height.mm]="altoRolloMm()"
+           [style.padding-top.mm]="margenSuperiorMm()"
+           [style.padding-bottom.mm]="margenInferiorMm()"
+           [style.padding-left.mm]="margenIzqMm()"
+           [style.padding-right.mm]="margenDerMm()"
+           [style.gap.mm]="separacionMm()">
+        @for (et of fila; track $index) {
+          <ng-container *ngTemplateOutlet="etiquetaTpl; context: { $implicit: et }" />
+        }
+      </div>
+    }
+  } @else {
+    @for (et of etiquetasImprimibles(); track $index) {
+      <ng-container *ngTemplateOutlet="etiquetaTpl; context: { $implicit: et }" />
+    }
+  }
+</div>
+
+<ng-template #etiquetaTpl let-et>
+  <div class="etiqueta"
+       [style.width.mm]="anchoMm()"
+       [style.height.mm]="altoMm()">
+    <div class="qr" role="img" aria-label="QR"
+         [style.left.mm]="paddingEtiquetaMm()"
+         [style.top.mm]="qrTopMm()"
+         [style.width.mm]="qrSizeMm()"
+         [style.height.mm]="qrSizeMm()"
+         [style.background-image]="'url(' + et.qrDataUrl + ')'"></div>
+    <div class="texto"
+         [style.left.mm]="textoLeftMm()"
+         [style.right.mm]="paddingEtiquetaMm()"
+         [style.top]="'0'"
+         [style.bottom]="'0'">
       @if (mostrarNumeroOrden() && et.numeroOrden) {
-      <div class="numero-orden">Orden {{ et.numeroOrden }}</div>
+      <div class="numero-orden">#{{ et.numeroOrden }}</div>
       }
       @if (mostrarSku()) {
       <div class="sku">{{ et.sku }}</div>
@@ -273,5 +348,4 @@ SKU003" class="w-full font-mono text-sm"></textarea>
       }
     </div>
   </div>
-  }
-</div>
+</ng-template>

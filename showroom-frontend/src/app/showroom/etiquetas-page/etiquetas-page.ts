@@ -39,9 +39,10 @@ interface EtiquetaImprimible {
 
 /** Formatos soportados:
  *  - A4/A5/Letter/Legal: hojas con grilla de etiquetas; queda margen y borde de corte.
- *  - Termica: una etiqueta por página, página = tamaño de la etiqueta, sin márgenes.
- *    Útil para impresoras térmicas tipo Zebra/Brother/Dymo que tienen un rollo
- *    continuo y avanzan al siguiente label entre páginas. */
+ *  - Termica: rollo continuo donde cada FILA del rollo es una página. El rollo
+ *    puede traer 1 o N etiquetas por fila (configurable) con márgenes y
+ *    separación interna definidos por el operador. Útil para impresoras tipo
+ *    Zebra/Brother/Dymo que avanzan al siguiente label entre páginas. */
 type FormatoHoja = 'A4' | 'A5' | 'Letter' | 'Legal' | 'Termica';
 /** Subset de formatos que son hojas con grilla (excluye térmica). */
 type FormatoSheet = Exclude<FormatoHoja, 'Termica'>;
@@ -64,6 +65,61 @@ const HOJAS: Record<FormatoSheet, DimensionHoja> = {
 
 /** Margen mínimo de impresión para formatos hoja (no aplica a térmica). */
 const MARGEN_HOJA_MM = 5;
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+/** Configuración de impresión persistida en localStorage. Versionamos la clave
+ *  para poder migrar/invalidar si en el futuro cambiamos el shape del objeto
+ *  (ej. agregamos un campo nuevo con un default que no debería pisarse). */
+const STORAGE_KEY = 'showroom.etiquetas.config.v1';
+
+interface ConfigPersistida {
+  formatoHoja: FormatoHoja;
+  anchoMm: number;
+  altoMm: number;
+  etiquetasPorFila: number;
+  margenSuperiorMm: number;
+  margenInferiorMm: number;
+  margenIzqMm: number;
+  margenDerMm: number;
+  separacionMm: number;
+  mostrarSku: boolean;
+  mostrarNumeroOrden: boolean;
+  mostrarPrecio: boolean;
+  mostrarDescripcion: boolean;
+}
+
+const DEFAULTS_CONFIG: ConfigPersistida = {
+  formatoHoja: 'Termica',
+  anchoMm: 29,
+  altoMm: 19,
+  etiquetasPorFila: 3,
+  margenSuperiorMm: 1.5,
+  margenInferiorMm: 1.5,
+  margenIzqMm: 2,
+  margenDerMm: 1,
+  separacionMm: 3,
+  mostrarSku: true,
+  mostrarNumeroOrden: true,
+  mostrarPrecio: false,
+  mostrarDescripcion: false,
+};
+
+/** Lee la config persistida; cae al default si no hay nada guardado, el JSON
+ *  está corrupto o localStorage no está disponible (modo privado, etc).
+ *  Mergea con DEFAULTS_CONFIG por si la versión guardada tiene menos campos
+ *  (ej. veníamos de una build anterior sin `margenInferiorMm`). */
+function cargarConfig(): ConfigPersistida {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULTS_CONFIG;
+    const parsed = JSON.parse(raw) as Partial<ConfigPersistida>;
+    return { ...DEFAULTS_CONFIG, ...parsed };
+  } catch {
+    return DEFAULTS_CONFIG;
+  }
+}
 
 @Component({
   selector: 'app-etiquetas-page',
@@ -99,12 +155,24 @@ export class EtiquetasPage {
   readonly buscando = signal(false);
   readonly seleccionadas = signal<EtiquetaSeleccionada[]>([]);
 
-  readonly anchoMm = signal(50);
-  readonly altoMm = signal(30);
-  readonly mostrarSku = signal(true);
-  readonly mostrarNumeroOrden = signal(true);
-  readonly mostrarPrecio = signal(false);
-  readonly mostrarDescripcion = signal(false);
+  /** Config inicial leída de localStorage — los signals la usan como valor
+   *  inicial y un effect del constructor sincroniza cualquier cambio de vuelta
+   *  al storage. Defaults pensados para el rollo del cliente: 96×22 mm con
+   *  3 etiquetas de 29×19 mm por fila, márgenes 1.5/1/2/1 y separación 3. */
+  private readonly configInicial = cargarConfig();
+
+  readonly anchoMm = signal(this.configInicial.anchoMm);
+  readonly altoMm = signal(this.configInicial.altoMm);
+  readonly etiquetasPorFila = signal(this.configInicial.etiquetasPorFila);
+  readonly margenSuperiorMm = signal(this.configInicial.margenSuperiorMm);
+  readonly margenInferiorMm = signal(this.configInicial.margenInferiorMm);
+  readonly margenIzqMm = signal(this.configInicial.margenIzqMm);
+  readonly margenDerMm = signal(this.configInicial.margenDerMm);
+  readonly separacionMm = signal(this.configInicial.separacionMm);
+  readonly mostrarSku = signal(this.configInicial.mostrarSku);
+  readonly mostrarNumeroOrden = signal(this.configInicial.mostrarNumeroOrden);
+  readonly mostrarPrecio = signal(this.configInicial.mostrarPrecio);
+  readonly mostrarDescripcion = signal(this.configInicial.mostrarDescripcion);
 
   /** Estado de la importación del CSV — para deshabilitar el input mientras parseamos. */
   readonly importandoCsv = signal(false);
@@ -116,8 +184,8 @@ export class EtiquetasPage {
 
   /** Formato de hoja seleccionado — afecta tanto el cálculo de etiquetas/hoja
    *  como el `@page size` que se inyecta para imprimir. Default a "Termica"
-   *  porque el cliente imprime en impresora térmica (1 etiqueta por página). */
-  readonly formatoHoja = signal<FormatoHoja>('Termica');
+   *  porque el cliente imprime en rollo continuo (cada fila es una página). */
+  readonly formatoHoja = signal<FormatoHoja>(this.configInicial.formatoHoja);
 
   /** Opciones para el p-select del formato — agregamos manualmente la térmica
    *  porque no está en HOJAS (sus dimensiones dependen del Ancho/Alto). */
@@ -126,17 +194,86 @@ export class EtiquetasPage {
       value: k as FormatoHoja,
       label: HOJAS[k].label,
     })),
-    { value: 'Termica' as FormatoHoja, label: 'Impresora térmica (1 etiqueta/página)' },
+    { value: 'Termica' as FormatoHoja, label: 'Impresora térmica (rollo continuo)' },
   ];
 
-  /** True cuando la salida es a impresora térmica (cada label = 1 página). */
+  /** True cuando la salida es a impresora térmica (cada fila = 1 página). */
   readonly esTermica = computed(() => this.formatoHoja() === 'Termica');
 
+  /** Ancho total de una "página" térmica = margen izq + N etiquetas + (N-1) gaps + margen der. */
+  readonly anchoRolloMm = computed(() => {
+    const n = this.etiquetasPorFila();
+    return (
+      this.margenIzqMm() +
+      n * this.anchoMm() +
+      Math.max(0, n - 1) * this.separacionMm() +
+      this.margenDerMm()
+    );
+  });
+
+  /** Alto total de una "página" térmica = margen sup + alto etiqueta + margen inf. */
+  readonly altoRolloMm = computed(
+    () => this.margenSuperiorMm() + this.altoMm() + this.margenInferiorMm(),
+  );
+
+  // Tipografía y spacing proporcionales al tamaño de la etiqueta. Sin esto los
+  // textos quedan ridículamente chicos en labels grandes o gigantes en labels
+  // chicos. Los ratios están calibrados para que la etiqueta "default" 29×19 mm
+  // dé números cercanos a los originales (sku ~3mm, orden ~1.8mm, padding ~0.8mm,
+  // gap ~1mm). Los clamps evitan extremos: en una etiqueta de 100mm de alto el
+  // SKU no crece más de 6mm; en una de 12mm no baja de 2mm.
+  readonly fontSkuMm = computed(() => clamp(this.altoMm() * 0.15, 2, 5.5));
+  readonly fontOrdenMm = computed(() => clamp(this.altoMm() * 0.085, 1.3, 4));
+  readonly fontDescMm = computed(() => clamp(this.altoMm() * 0.095, 1.4, 4));
+  readonly fontPrecioMm = computed(() => clamp(this.altoMm() * 0.115, 1.6, 5));
+  // Padding usa el menor de los dos lados — etiquetas chatas o angostas no
+  // pueden tener un padding que se coma todo el espacio interno.
+  readonly paddingEtiquetaMm = computed(() =>
+    clamp(Math.min(this.anchoMm() * 0.04, this.altoMm() * 0.05), 0.5, 2),
+  );
+  readonly gapEtiquetaMm = computed(() => clamp(this.anchoMm() * 0.04, 0.5, 2));
+  readonly textoGapMm = computed(() => clamp(this.altoMm() * 0.025, 0.2, 1));
+
+  /** QR size = el menor entre el alto disponible (alto - 2*padding) y 48% del
+   *  ancho. 48% deja ~12mm de texto libre en una etiqueta de 29mm — alcanza
+   *  para SKUs de hasta 8 caracteres con holgura. */
+  readonly qrSizeMm = computed(() =>
+    Math.min(
+      this.altoMm() - 2 * this.paddingEtiquetaMm(),
+      this.anchoMm() * 0.48,
+    ),
+  );
+
+  /** Posición horizontal donde arranca el bloque de texto dentro de la etiqueta. */
+  readonly textoLeftMm = computed(
+    () => this.paddingEtiquetaMm() + this.qrSizeMm() + this.gapEtiquetaMm(),
+  );
+
+  /** Top del QR — centrado vertical sin usar transform. (alto - qrSize)/2 */
+  readonly qrTopMm = computed(() => (this.altoMm() - this.qrSizeMm()) / 2);
+
+  /** CSS vars de tipografía y spacing del texto — se usan dentro de
+   *  `.numero-orden`, `.sku`, `.descripcion`, `.precio` y `.texto`. Las
+   *  dimensiones del layout (width/height/padding/gap) NO van por acá: se
+   *  aplican como `[style.X.mm]` inline directo en cada elemento, porque
+   *  Angular no honra el sufijo `.mm` para custom properties (solo para
+   *  props estándar). Sin unidad explícita los `calc()` del SCSS fallan
+   *  en print y caen al fallback. Por eso las cosas críticas para el
+   *  layout van inline; acá solo lo que es puramente visual. */
+  readonly cssVars = computed<Record<string, string>>(() => ({
+    '--font-sku': `${this.fontSkuMm()}mm`,
+    '--font-orden': `${this.fontOrdenMm()}mm`,
+    '--font-desc': `${this.fontDescMm()}mm`,
+    '--font-precio': `${this.fontPrecioMm()}mm`,
+    '--texto-gap': `${this.textoGapMm()}mm`,
+  }));
+
   /** Tamaño usable de la hoja actual (descontando márgenes).
-   *  En modo térmica, la "hoja" es la etiqueta misma — sin márgenes. */
+   *  En modo térmica, la "hoja" es una fila del rollo — el tamaño total ya
+   *  contempla los márgenes del rollo. */
   readonly hojaUsable = computed(() => {
     if (this.esTermica()) {
-      return { ancho: this.anchoMm(), alto: this.altoMm() };
+      return { ancho: this.anchoRolloMm(), alto: this.altoRolloMm() };
     }
     const h = HOJAS[this.formatoHoja() as FormatoSheet];
     return {
@@ -145,10 +282,11 @@ export class EtiquetasPage {
     };
   });
 
-  /** Cuántas etiquetas entran en una hoja. En térmica siempre 1×1. */
+  /** Cuántas etiquetas entran en una hoja. En térmica = N×1 (N = etiquetasPorFila). */
   readonly distribucionHoja = computed(() => {
     if (this.esTermica()) {
-      return { columnas: 1, filas: 1, total: 1 };
+      const cols = this.etiquetasPorFila();
+      return { columnas: cols, filas: 1, total: cols };
     }
     const a = this.anchoMm();
     const h = this.altoMm();
@@ -180,31 +318,73 @@ export class EtiquetasPage {
     effect(() => {
       const formato = this.formatoHoja();
       if (formato === 'Termica') {
-        // Cada etiqueta es su propia página; la página = tamaño de la etiqueta.
-        // Sin márgenes (la impresora térmica avanza por feed, no por hoja).
-        const w = this.anchoMm();
-        const h = this.altoMm();
-        styleEl.textContent = `
-          @media print {
-            @page { size: ${w}mm ${h}mm; margin: 0; }
-          }
-        `;
+        // Cada fila del rollo es una página. El ancho total contempla márgenes
+        // izq/der del rollo y las separaciones entre etiquetas; el alto incluye
+        // el margen superior. `@page margin: 0` porque los márgenes los aplica
+        // el wrapper `.fila-termica`.
+        // NOTA: `@page` se declara a nivel top (NO dentro de `@media print`).
+        // Algunos browsers (Chrome viejo, Safari) ignoran `@page` cuando está
+        // anidado, lo que hace que la página real quede en su tamaño default
+        // (A4) y las filas con `page-break-after` produzcan páginas A4 con
+        // contenido recortado.
+        const w = this.anchoRolloMm();
+        const h = this.altoRolloMm();
+        styleEl.textContent = `@page { size: ${w}mm ${h}mm; margin: 0; }`;
       } else {
         const cssSize = HOJAS[formato as FormatoSheet].cssSize;
-        styleEl.textContent = `
-          @media print {
-            @page { size: ${cssSize}; margin: ${MARGEN_HOJA_MM}mm; }
-          }
-        `;
+        styleEl.textContent = `@page { size: ${cssSize}; margin: ${MARGEN_HOJA_MM}mm; }`;
       }
     });
 
     this.destroyRef.onDestroy(() => styleEl.remove());
+
+    // Persistencia: cualquier cambio en los signals de config se serializa y
+    // guarda en localStorage. Un único effect que lee todos los signals — más
+    // eficiente que un effect por campo y garantiza atomicidad (siempre se
+    // guarda un snapshot consistente, no estados intermedios).
+    effect(() => {
+      const config: ConfigPersistida = {
+        formatoHoja: this.formatoHoja(),
+        anchoMm: this.anchoMm(),
+        altoMm: this.altoMm(),
+        etiquetasPorFila: this.etiquetasPorFila(),
+        margenSuperiorMm: this.margenSuperiorMm(),
+        margenInferiorMm: this.margenInferiorMm(),
+        margenIzqMm: this.margenIzqMm(),
+        margenDerMm: this.margenDerMm(),
+        separacionMm: this.separacionMm(),
+        mostrarSku: this.mostrarSku(),
+        mostrarNumeroOrden: this.mostrarNumeroOrden(),
+        mostrarPrecio: this.mostrarPrecio(),
+        mostrarDescripcion: this.mostrarDescripcion(),
+      };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      } catch {
+        // localStorage puede fallar (quota llena, modo privado en Safari).
+        // No es crítico — la sesión actual sigue funcionando con la config
+        // en memoria; solo se pierde la persistencia entre recargas.
+      }
+    });
   }
 
   private readonly qrCache = new Map<string, string>();
   readonly generandoQR = signal(false);
   readonly etiquetasImprimibles = signal<EtiquetaImprimible[]>([]);
+
+  /** Etiquetas agrupadas en filas de N (modo térmica). Cada fila se renderiza
+   *  como un wrapper `.fila-termica` que es una página completa, con padding
+   *  para los márgenes del rollo y gap entre etiquetas. La última fila puede
+   *  quedar incompleta — el espacio sobrante queda en blanco. */
+  readonly filasTermicas = computed(() => {
+    const items = this.etiquetasImprimibles();
+    const n = Math.max(1, this.etiquetasPorFila());
+    const filas: EtiquetaImprimible[][] = [];
+    for (let i = 0; i < items.length; i += n) {
+      filas.push(items.slice(i, i + n));
+    }
+    return filas;
+  });
 
   readonly textoPegado = signal('');
 

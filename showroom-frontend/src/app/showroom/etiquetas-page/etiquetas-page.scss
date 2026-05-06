@@ -19,23 +19,46 @@
     padding: 0;
     margin: 0;
     background: white;
+    // Fuerza al browser a imprimir backgrounds y colores tal cual — sin esto,
+    // muchos browsers omiten los background-image (ej. el QR convertido a div)
+    // para ahorrar tinta. Crítico para que el QR aparezca en el PDF/papel.
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
 
-    // Modo impresora térmica: cada etiqueta es su propia página, sin grilla.
-    // El @page se setea desde TS al tamaño exacto del label (sin márgenes).
+    // Modo impresora térmica: cada FILA del rollo es una página. Cuando el rollo
+    // trae 1 etiqueta por fila el wrapper colapsa a un solo label; cuando trae
+    // varias, las dispone con gap horizontal y respeta los márgenes izq/sup/der
+    // que el operador midió del rollo. El @page se setea desde TS al tamaño
+    // total de la fila (margen izq + N labels + (N-1) gaps + margen der).
     &.thermal {
       display: block;
 
-      .etiqueta {
-        // Cada etiqueta = una página entera. Sin borde de corte (la térmica
-        // no necesita guías visuales, corta entre labels por sí sola).
+      // Las dimensiones (width/height/padding/gap) llegan como inline styles
+      // desde el HTML. NO usamos var(--*) acá — las custom properties no se
+      // aplicaban consistentemente en print y caía a los fallbacks (50mm, 30mm),
+      // partiendo cada fila en dos páginas. Inline styles son canónicos y
+      // garantizados.
+      .fila-termica {
+        box-sizing: border-box;
+        display: flex;
+        align-items: stretch;
         page-break-after: always;
         break-after: page;
-        border: none;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: hidden;
+        background: #fff;
       }
 
-      .etiqueta:last-child {
+      .fila-termica:last-child {
         page-break-after: auto;
         break-after: auto;
+      }
+
+      .etiqueta {
+        // Sin borde de corte — la térmica corta entre labels por sí sola.
+        border: none;
+        flex-shrink: 0;
       }
     }
   }
@@ -45,59 +68,66 @@
   // (A4 / A5 / Letter / Legal / Termica). Ver el constructor de EtiquetasPage.
 
   .etiqueta {
-    width: var(--ancho-etiqueta, 50mm);
-    height: var(--alto-etiqueta, 30mm);
+    // Width/height llegan como inline style desde el HTML para evitar issues
+    // de CSS vars en print. Position relative para anclar a los hijos absolute.
+    position: relative;
     box-sizing: border-box;
-    padding: 1.5mm;
-    display: flex;
-    align-items: center;
-    gap: 1.5mm;
+    padding: 0;
     page-break-inside: avoid;
+    break-inside: avoid;
     border: 0.2mm dashed #ccc;
     overflow: hidden;
     color: #000;
     background: #fff;
 
+    // QR posicionado absoluto a la izquierda. Top en mm explícito (calculado
+    // como (alto - qrSize)/2). Sin transform — algunos browsers se confunden
+    // con transform al paginar.
     .qr {
-      height: 100%;
-      width: auto;
-      max-width: 50%;
-      object-fit: contain;
+      position: absolute;
+      background-repeat: no-repeat;
+      background-size: contain;
+      background-position: center;
     }
 
+    // Texto posicionado absoluto. top: 0 / bottom: 0 inline ocupa toda la
+    // altura del label, y el flex centra verticalmente el contenido.
     .texto {
-      flex: 1;
-      min-width: 0;
+      position: absolute;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.05;
+      color: #000;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 0.8mm;
-      font-family: 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.1;
-      color: #000;
+      gap: var(--texto-gap, 0.4mm);
 
+      // Número de orden: secundario, queda como hint arriba del SKU.
       .numero-orden {
-        font-size: 3.2mm;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.2mm;
+        font-size: var(--font-orden, 1.8mm);
+        font-weight: 600;
+        color: #555;
+        letter-spacing: 0.05mm;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
+      // SKU: lo más prominente del bloque de texto junto al QR.
+      // letter-spacing negativo aprieta el texto monospace para que entren
+      // 1-2 caracteres más dentro del ancho disponible.
       .sku {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 4.5mm;
+        font-size: var(--font-sku, 3mm);
         font-weight: 700;
-        letter-spacing: 0.1mm;
+        letter-spacing: -0.05mm;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
       .descripcion {
-        font-size: 2.6mm;
+        font-size: var(--font-desc, 1.8mm);
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
@@ -106,7 +136,7 @@
       }
 
       .precio {
-        font-size: 3.2mm;
+        font-size: var(--font-precio, 2.2mm);
         font-weight: 600;
       }
     }
