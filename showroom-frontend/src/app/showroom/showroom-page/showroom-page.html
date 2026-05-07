@@ -315,6 +315,41 @@
             Apuntá la pistola al código de barras del producto (o al QR), o tipeá el SKU o palabras de la descripción y presioná
             <kbd class="px-1.5 py-0.5 rounded border border-surface-300 dark:border-surface-600 bg-surface-100 dark:bg-surface-800 text-xs font-mono">Enter</kbd>.
           </p>
+
+          @if (escalasDescuento().length > 0) {
+            <div class="mt-8 w-full max-w-2xl">
+              <div class="text-xs font-semibold uppercase tracking-wider text-muted-color mb-3">
+                Descuentos vigentes
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                @for (escala of escalasDescuento(); track escala.umbralMin; let i = $index) {
+                  <div class="rounded-xl border-2 p-3 flex items-center gap-3 text-left"
+                    [class.border-amber-300]="i === 0"
+                    [class.dark:border-amber-700]="i === 0"
+                    [class.bg-amber-50]="i === 0"
+                    [class.dark:bg-amber-950/40]="i === 0"
+                    [class.border-emerald-400]="i >= 1"
+                    [class.dark:border-emerald-700]="i >= 1"
+                    [class.bg-emerald-50]="i >= 1"
+                    [class.dark:bg-emerald-950/40]="i >= 1">
+                    <span class="px-2.5 py-1 rounded-full text-white text-xs font-bold shrink-0"
+                      [class.bg-amber-500]="i === 0"
+                      [class.bg-emerald-600]="i >= 1">
+                      −{{ escala.porcentaje }}%
+                    </span>
+                    <div class="text-sm"
+                      [class.text-amber-800]="i === 0"
+                      [class.dark:text-amber-300]="i === 0"
+                      [class.text-emerald-800]="i >= 1"
+                      [class.dark:text-emerald-300]="i >= 1">
+                      Por compras desde
+                      <span class="font-bold tabular-nums">{{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
         </div>
         }
       </p-card>
