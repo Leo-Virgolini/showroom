@@ -49,10 +49,10 @@
         }
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
           [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
-        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-gris" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
+        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-marron" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
         <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-verde" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
         <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
-        <p-button icon="pi pi-cog" ariaLabel="Configuración" routerLink="/configuracion" pTooltip="Configurar escalones de descuento" tooltipPosition="bottom" severity="secondary" [outlined]="true" />
+        <p-button icon="pi pi-cog" ariaLabel="Configuración" class="btn-kt-gris" routerLink="/configuracion" pTooltip="Descuentos y horarios de sincronización" tooltipPosition="bottom" />
       </div>
     </ng-template>
   </p-toolbar>

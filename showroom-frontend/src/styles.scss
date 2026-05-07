@@ -124,6 +124,18 @@ textarea,
   --p-button-primary-active-border-color: #7e3d04;
 }
 
+// Marrón KT — el tono del subtítulo "GASTRONOMIA" del logo.
+.btn-kt-marron {
+  --p-button-primary-background: #3B1E09;
+  --p-button-primary-border-color: #3B1E09;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #2c1607;
+  --p-button-primary-hover-border-color: #2c1607;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #1f0f04;
+  --p-button-primary-active-border-color: #1f0f04;
+}
+
 // Tag más grande — para estados destacados (stock disponible / sin stock).
 // Usamos `transform: scale` en lugar de override de padding/font-size para no
 // pelearnos con el styling interno de Aura (cuyas reglas de severity tienen
