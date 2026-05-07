@@ -145,19 +145,19 @@ public class PickingEmailService {
 
             BigDecimal totalSinIvaBruto = pedido.getTotalSinIva();
             BigDecimal totalConIvaBruto = pedido.getTotal();
-            Integer descPct = pedido.getDescuentoPorcentaje();
+            BigDecimal descPct = pedido.getDescuentoPorcentaje();
             BigDecimal totalSinIvaFinal = aplicarDescuento(totalSinIvaBruto, descPct);
             BigDecimal totalConIvaFinal = aplicarDescuento(totalConIvaBruto, descPct);
             BigDecimal ahorro = (totalSinIvaBruto != null && totalSinIvaFinal != null)
                     ? totalSinIvaBruto.subtract(totalSinIvaFinal)
                     : null;
-            boolean hayDescuento = descPct != null && descPct > 0 && ahorro != null;
+            boolean hayDescuento = descPct != null && descPct.signum() > 0 && ahorro != null;
 
             String subtotalSinIva = formatPesos(totalSinIvaBruto);
             String totalSinIva = formatPesos(totalSinIvaFinal);
             String totalConIva = formatPesos(totalConIvaFinal);
             String descuentoLinea = hayDescuento
-                    ? descPct + "% (−" + formatPesos(ahorro) + ")"
+                    ? formatPorcentaje(descPct) + "% (−" + formatPesos(ahorro) + ")"
                     : null;
             String observaciones = pedido.getObservaciones();
             boolean hayObservaciones = observaciones != null && !observaciones.isBlank();
@@ -284,11 +284,18 @@ public class PickingEmailService {
         return v != null ? PESO_FMT.format(v.doubleValue()) : "—";
     }
 
-    private static BigDecimal aplicarDescuento(BigDecimal valor, Integer porcentaje) {
+    private static BigDecimal aplicarDescuento(BigDecimal valor, BigDecimal porcentaje) {
         if (valor == null) return null;
-        if (porcentaje == null || porcentaje <= 0) return valor;
-        BigDecimal factor = BigDecimal.ONE.subtract(BigDecimal.valueOf(porcentaje).movePointLeft(2));
+        if (porcentaje == null || porcentaje.signum() <= 0) return valor;
+        BigDecimal factor = BigDecimal.ONE.subtract(porcentaje.movePointLeft(2));
         return valor.multiply(factor);
+    }
+
+    /** Formatea el porcentaje sin decimales innecesarios: 5 → "5", 5.5 → "5,5". */
+    private static String formatPorcentaje(BigDecimal pct) {
+        BigDecimal stripped = pct.stripTrailingZeros();
+        if (stripped.scale() <= 0) return stripped.toPlainString();
+        return stripped.toPlainString().replace('.', ',');
     }
 
     /** Fila label/value de la tabla del mail (value puede contener HTML inline). */

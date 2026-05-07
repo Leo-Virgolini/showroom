@@ -36,7 +36,7 @@ public record PedidoDetailDTO(
         BigDecimal total,
         /** Total SIN IVA — lo que paga el cliente. */
         BigDecimal totalSinIva,
-        Integer descuentoPorcentaje,
+        BigDecimal descuentoPorcentaje,
         String observaciones,
         List<PedidoItemDTO> items
 ) {

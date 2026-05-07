@@ -62,9 +62,10 @@ public class PedidoShowroom {
     @Column(name = "total_sin_iva", precision = 18, scale = 2)
     private BigDecimal totalSinIva;
 
-    /** % de descuento aplicado al pedido entero (0/5/10) según escala del total. */
-    @Column(name = "descuento_porcentaje")
-    private Integer descuentoPorcentaje;
+    /** % de descuento aplicado al pedido entero (según escala configurada
+     *  en {@code escala_descuento}). Soporta decimales (ej: 5.50). */
+    @Column(name = "descuento_porcentaje", precision = 5, scale = 2)
+    private BigDecimal descuentoPorcentaje;
 
     /** Datos del cliente del pedido — copiados del payload al crear. */
     @Column(name = "apellido_razon_social", length = 100)

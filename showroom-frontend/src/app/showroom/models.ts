@@ -108,6 +108,8 @@ export interface CatalogoItem {
   habilitado: boolean | null;
   /** URL del endpoint local de imagen, o null si no existe el archivo. */
   imagenUrl: string | null;
+  /** Stock total sumado de todos los depósitos. Null si nunca se sincronizó. */
+  stockTotal: number | null;
 }
 
 export interface CatalogoPage {

@@ -168,7 +168,8 @@ public class ShowroomService {
                 pc.getDescripcion(),
                 sinIva,
                 pc.getHabilitado(),
-                urlImagenLocal(pc.getSku()));
+                urlImagenLocal(pc.getSku()),
+                pc.getStockTotal());
     }
 
     /**
@@ -418,11 +419,10 @@ public class ShowroomService {
         // Si todos los items vienen con el mismo descuento (típico — el frontend manda
         // el descuento global), lo guardamos a nivel pedido también para que la pantalla
         // de listado lo muestre sin tener que iterar items.
-        Integer descuentoGlobal = request.items().stream()
+        BigDecimal descuentoGlobal = request.items().stream()
                 .map(CrearPedidoRequestDTO.Item::descuentoPorcentaje)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .map(BigDecimal::intValue)
                 .orElse(null);
 
         PedidoShowroom pedido = PedidoShowroom.builder()

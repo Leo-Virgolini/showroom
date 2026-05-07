@@ -27,7 +27,7 @@ public record PedidoListItemDTO(
         BigDecimal total,
         /** Total SIN IVA — lo que efectivamente paga el cliente en el showroom. */
         BigDecimal totalSinIva,
-        Integer descuentoPorcentaje,
+        BigDecimal descuentoPorcentaje,
         int cantidadItems
 ) {
 }

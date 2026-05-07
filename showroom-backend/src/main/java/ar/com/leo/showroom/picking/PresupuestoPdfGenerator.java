@@ -220,7 +220,7 @@ public class PresupuestoPdfGenerator {
 
     private void agregarPaginasProductos(Document doc, PedidoShowroom pedido, ImageData sinImagen) {
         var items = pedido.getItems();
-        Integer descuentoGlobal = pedido.getDescuentoPorcentaje();
+        BigDecimal descuentoGlobal = pedido.getDescuentoPorcentaje();
 
         // Calcular la altura de cada bloque para que entren PRODUCTOS_POR_PAGINA
         // bien distribuidos en el alto útil de la página. Margen extra de ~60pt
@@ -258,7 +258,7 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    private Table buildItemBlock(PedidoShowroomItem it, Integer descuentoGlobal,
+    private Table buildItemBlock(PedidoShowroomItem it, BigDecimal descuentoGlobal,
                                  ImageData sinImagenData,
                                  boolean imagenIzquierda, float bloqueHeight) {
         // Layout horizontal 50/50: imagen y card alternan lado según el índice.
@@ -391,10 +391,10 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    private static BigDecimal aplicarDescuento(BigDecimal valor, Integer porcentaje) {
+    private static BigDecimal aplicarDescuento(BigDecimal valor, BigDecimal porcentaje) {
         if (valor == null) return null;
-        if (porcentaje == null || porcentaje <= 0) return valor;
-        BigDecimal factor = BigDecimal.ONE.subtract(BigDecimal.valueOf(porcentaje).movePointLeft(2));
+        if (porcentaje == null || porcentaje.signum() <= 0) return valor;
+        BigDecimal factor = BigDecimal.ONE.subtract(porcentaje.movePointLeft(2));
         return valor.multiply(factor);
     }
 
