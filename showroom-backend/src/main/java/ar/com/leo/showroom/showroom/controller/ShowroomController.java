@@ -19,6 +19,7 @@ import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
 import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
+import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
@@ -383,6 +384,26 @@ public class ShowroomController {
     public List<EscalaDescuentoDTO> actualizarEscalasDescuento(
             @RequestBody List<EscalaDescuentoDTO> nuevas) {
         return service.reemplazarEscalasDescuento(nuevas);
+    }
+
+    /**
+     * Horarios diarios de sincronización automática con DUX (zona AR).
+     * Si la lista está vacía, no hay sync automática — solo manual.
+     */
+    @GetMapping("/config/horarios-sync")
+    public List<HorarioSyncDTO> listarHorariosSync() {
+        return service.listarHorariosSync();
+    }
+
+    /**
+     * Reemplaza la lista completa de horarios (operación atómica). El backend
+     * valida (hora 0..23, minuto 0..59, sin duplicados), persiste y reprograma
+     * los disparos. 400 si alguna validación falla.
+     */
+    @PutMapping("/config/horarios-sync")
+    public List<HorarioSyncDTO> actualizarHorariosSync(
+            @RequestBody List<HorarioSyncDTO> nuevos) {
+        return service.reemplazarHorariosSync(nuevos);
     }
 
     @GetMapping("/health")

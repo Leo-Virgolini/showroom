@@ -256,6 +256,15 @@ export interface EscalaDescuento {
   porcentaje: number;
 }
 
+/**
+ * Horario diario al que disparar la sincronización automática con DUX.
+ * Se interpreta en zona America/Argentina/Buenos_Aires.
+ */
+export interface HorarioSync {
+  hora: number;
+  minuto: number;
+}
+
 export interface ListarPedidosParams {
   q?: string;
   estado?: EstadoPedido;

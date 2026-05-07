@@ -9,7 +9,7 @@
 # Antes del primer arranque copiar .env.example → .env y ajustar las variables.
 #
 # URLs:
-#  - Frontend (sucursal):  http://<ip-servidor>:8080
+#  - Frontend (sucursal):  http://<ip-servidor>:4200
 #  - Backend (debug/api):  http://<ip-servidor>:8081/api/showroom/health
 # =============================================================================
 
@@ -121,7 +121,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "8080:80"
+      - "4200:80"
     networks:
       - showroom-net
 

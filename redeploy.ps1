@@ -136,7 +136,7 @@ docker compose --env-file $envFile -f $composeFile logs --tail 30 backend
 
 Write-Host ''
 Write-Host 'OK - Redeploy terminado.' -ForegroundColor Green
-Write-Host ' - Frontend:  http://localhost:8080'
+Write-Host ' - Frontend:  http://localhost:4200'
 Write-Host ' - Backend:   http://localhost:8081/api/showroom/health'
 Write-Host ''
 Write-Host 'Para ver logs en vivo:  docker compose logs -f' -ForegroundColor DarkGray

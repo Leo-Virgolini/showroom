@@ -76,7 +76,7 @@ docker compose ps
 
 | Servicio | URL |
 |---|---|
-| Frontend (operador del showroom) | http://localhost:8080 |
+| Frontend (operador del showroom) | http://localhost:4200 |
 | Backend (API + healthcheck) | http://localhost:8081/api/showroom/health |
 | MySQL (si exponés el puerto) | localhost:3307 |
 
@@ -220,13 +220,13 @@ Hay un módulo en `/etiquetas` para generar etiquetas QR de las muestras del sho
 ```
 ┌─────────────────────────────────────────────────┐
 │  Operador del showroom (browser, tablet)        │
-│  http://<ip-pc>:8080                            │
+│  http://<ip-pc>:4200                            │
 └────────────────┬────────────────────────────────┘
                  │ HTTP
                  ↓
 ┌─────────────────────────────────────────────────┐
 │  showroom-frontend (Angular 21 + nginx)         │
-│  Puerto 8080. Sirve PWA + proxy /api → :8081   │
+│  Puerto 4200. Sirve PWA + proxy /api → :8081   │
 └────────────────┬────────────────────────────────┘
                  │ /api
                  ↓

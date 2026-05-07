@@ -11,21 +11,34 @@ import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { DatePickerModule } from 'primeng/datepicker';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { EscalaDescuento } from '../models';
+import { EscalaDescuento, HorarioSync } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 
 /**
- * Fila editable de la tabla. {@code umbralMin} y {@code porcentaje} pueden
- * ser null mientras el operador está completando — solo se valida al guardar.
+ * Fila editable de la tabla de escalones. {@code umbralMin} y {@code porcentaje}
+ * pueden ser null mientras el operador está completando — solo se valida al
+ * guardar.
  */
 interface FilaEscala {
   umbralMin: number | null;
   porcentaje: number | null;
+}
+
+/**
+ * Fila editable de la tabla de horarios. Internamente la guardamos como
+ * {@code Date} para que el {@code p-datePicker} con {@code timeOnly} la
+ * pueda atar directo con {@code [(ngModel)]}. Solo nos importan las horas
+ * y minutos — la fecha base no se usa. Null = fila recién agregada sin
+ * completar.
+ */
+interface FilaHorario {
+  tiempo: Date | null;
 }
 
 @Component({
@@ -38,6 +51,7 @@ interface FilaEscala {
     RouterLink,
     ButtonModule,
     CardModule,
+    DatePickerModule,
     InputNumberModule,
     TableModule,
     ToolbarModule,
@@ -50,6 +64,9 @@ export class ConfiguracionPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
 
+  // ============================================================
+  // Escalones de descuento
+  // ============================================================
   readonly cargando = signal(false);
   readonly guardando = signal(false);
   readonly filas = signal<FilaEscala[]>([]);
@@ -66,9 +83,36 @@ export class ConfiguracionPage {
     );
   });
 
+  // ============================================================
+  // Horarios de sincronización automática con DUX
+  // ============================================================
+  readonly cargandoHorarios = signal(false);
+  readonly guardandoHorarios = signal(false);
+  readonly horarios = signal<FilaHorario[]>([]);
+
+  /** Snapshot de los horarios como vinieron del backend — para el "deshacer". */
+  private readonly horariosOriginal = signal<FilaHorario[]>([]);
+
+  readonly hayCambiosHorarios = computed(() => {
+    const a = this.horarios();
+    const b = this.horariosOriginal();
+    if (a.length !== b.length) return true;
+    return a.some((fila, i) => {
+      const ta = fila.tiempo;
+      const tb = b[i].tiempo;
+      if (ta == null || tb == null) return ta !== tb;
+      return ta.getHours() !== tb.getHours() || ta.getMinutes() !== tb.getMinutes();
+    });
+  });
+
   constructor() {
     this.cargar();
+    this.cargarHorarios();
   }
+
+  // ============================================================
+  // Escalones — métodos
+  // ============================================================
 
   private cargar(): void {
     this.cargando.set(true);
@@ -183,6 +227,124 @@ export class ConfiguracionPage {
       error: (err) => {
         this.guardando.set(false);
         toastError(this.toast, 'Guardar', err, 'No se pudo guardar la configuración');
+      },
+    });
+  }
+
+  // ============================================================
+  // Horarios — métodos
+  // ============================================================
+
+  /** Construye un Date "anclado" a hoy con la hora/minuto deseados. La fecha
+   *  base es irrelevante para la UI (timeOnly), pero el datepicker necesita
+   *  un Date válido para mostrar el valor. */
+  private aTiempo(hora: number, minuto: number): Date {
+    const d = new Date();
+    d.setHours(hora, minuto, 0, 0);
+    return d;
+  }
+
+  private cargarHorarios(): void {
+    this.cargandoHorarios.set(true);
+    this.api.obtenerHorariosSync().subscribe({
+      next: (lista) => {
+        this.cargandoHorarios.set(false);
+        const filas: FilaHorario[] = lista.map((h) => ({
+          tiempo: this.aTiempo(h.hora, h.minuto),
+        }));
+        this.horarios.set(filas);
+        // El snapshot original guarda copias propias del Date — sin esto,
+        // mutar el Date desde el datepicker contaminaría la referencia que
+        // usa hayCambiosHorarios para detectar diffs.
+        this.horariosOriginal.set(
+          filas.map((f) => ({ tiempo: f.tiempo ? new Date(f.tiempo) : null })),
+        );
+      },
+      error: (err) => {
+        this.cargandoHorarios.set(false);
+        toastError(this.toast, 'Horarios', err, 'No se pudieron cargar los horarios');
+      },
+    });
+  }
+
+  agregarHorario(): void {
+    this.horarios.set([...this.horarios(), { tiempo: null }]);
+  }
+
+  eliminarHorario(index: number): void {
+    this.horarios.set(this.horarios().filter((_, i) => i !== index));
+  }
+
+  actualizarTiempo(index: number, valor: Date | null): void {
+    this.horarios.set(
+      this.horarios().map((f, i) => (i === index ? { tiempo: valor } : f)),
+    );
+  }
+
+  descartarCambiosHorarios(): void {
+    this.horarios.set(
+      this.horariosOriginal().map((f) => ({
+        tiempo: f.tiempo ? new Date(f.tiempo) : null,
+      })),
+    );
+  }
+
+  guardarHorarios(): void {
+    const filas = this.horarios();
+
+    for (let i = 0; i < filas.length; i++) {
+      const t = filas[i].tiempo;
+      if (t == null) {
+        this.toast.add({
+          severity: 'warn',
+          summary: `Horario #${i + 1} incompleto`,
+          detail: 'Elegí un horario o eliminá la fila.',
+          life: 4000,
+        });
+        return;
+      }
+    }
+    const claves = new Set(
+      filas.map((f) => `${f.tiempo!.getHours()}:${f.tiempo!.getMinutes()}`),
+    );
+    if (claves.size !== filas.length) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Horarios duplicados',
+        detail: 'No puede haber dos horarios iguales.',
+        life: 4000,
+      });
+      return;
+    }
+
+    const payload: HorarioSync[] = filas.map((f) => ({
+      hora: f.tiempo!.getHours(),
+      minuto: f.tiempo!.getMinutes(),
+    }));
+
+    this.guardandoHorarios.set(true);
+    this.api.actualizarHorariosSync(payload).subscribe({
+      next: (lista) => {
+        this.guardandoHorarios.set(false);
+        const nuevos: FilaHorario[] = lista.map((h) => ({
+          tiempo: this.aTiempo(h.hora, h.minuto),
+        }));
+        this.horarios.set(nuevos);
+        this.horariosOriginal.set(
+          nuevos.map((f) => ({ tiempo: f.tiempo ? new Date(f.tiempo) : null })),
+        );
+        this.toast.add({
+          severity: 'success',
+          summary: 'Horarios guardados',
+          detail: nuevos.length === 0
+            ? 'Sin horarios — la sync automática queda deshabilitada.'
+            : `${nuevos.length} horario${nuevos.length === 1 ? '' : 's'} programado${nuevos.length === 1 ? '' : 's'}.`,
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoHorarios.set(false);
+        toastError(this.toast, 'Guardar horarios', err, 'No se pudieron guardar los horarios');
       },
     });
   }

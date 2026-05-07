@@ -9,7 +9,9 @@ import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
+import ar.com.leo.showroom.config.entity.HorarioSync;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
+import ar.com.leo.showroom.config.service.HorarioSyncSchedulerService;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.service.DuxClient;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
@@ -22,6 +24,7 @@ import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
 import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
+import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListItemDTO;
@@ -70,6 +73,7 @@ public class ShowroomService {
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
     private final EscalaDescuentoService escalaDescuentoService;
+    private final HorarioSyncSchedulerService horarioSyncService;
 
     @Value("${showroom.cache.stock-stale-minutes:15}")
     private int stockStaleMinutes;
@@ -125,6 +129,26 @@ public class ShowroomService {
     public List<EscalaDescuentoDTO> reemplazarEscalasDescuento(List<EscalaDescuentoDTO> nuevas) {
         return escalaDescuentoService.reemplazar(nuevas).stream()
                 .map(e -> new EscalaDescuentoDTO(e.getUmbralMin(), e.getPorcentaje()))
+                .toList();
+    }
+
+    /**
+     * Horarios diarios de sincronización automática con DUX (zona AR).
+     * El frontend los muestra en la pantalla de configuración.
+     */
+    public List<HorarioSyncDTO> listarHorariosSync() {
+        return horarioSyncService.listar().stream()
+                .map(h -> new HorarioSyncDTO(h.getHora(), h.getMinuto()))
+                .toList();
+    }
+
+    /**
+     * Reemplaza la lista de horarios. El servicio reprograma los disparos
+     * inmediatamente — los cambios aplican sin reiniciar el backend.
+     */
+    public List<HorarioSyncDTO> reemplazarHorariosSync(List<HorarioSyncDTO> nuevos) {
+        return horarioSyncService.reemplazar(nuevos).stream()
+                .map(h -> new HorarioSyncDTO(h.getHora(), h.getMinuto()))
                 .toList();
     }
 

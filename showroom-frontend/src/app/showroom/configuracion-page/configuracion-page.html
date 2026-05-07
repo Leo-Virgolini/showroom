@@ -10,7 +10,7 @@
         <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
           <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Configuración</span>
           <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
-            Escalones de descuento
+            Descuentos y horarios
           </span>
         </div>
       </div>
@@ -73,7 +73,7 @@
                 [min]="0"
                 [maxFractionDigits]="2"
                 placeholder="Ej: 399.999"
-                styleClass="w-full"
+                styleClass="w-full max-w-[14rem]"
                 inputStyleClass="w-full"
               />
             </td>
@@ -86,7 +86,7 @@
                 [max]="100"
                 [maxFractionDigits]="2"
                 placeholder="Ej: 5"
-                styleClass="w-full"
+                styleClass="w-full max-w-[8rem]"
                 inputStyleClass="w-full"
               />
             </td>
@@ -140,6 +140,114 @@
           (onClick)="guardar()"
           [loading]="guardando()"
           [disabled]="!hayCambios()"
+        />
+      </div>
+    </p-card>
+
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          La sincronización automática con DUX se dispara en cada uno de los <strong>horarios</strong> configurados (zona Argentina). Podés definir varios disparos por día — por ejemplo, uno a la mañana y otro a la tarde.
+        </div>
+        <div class="text-xs text-muted-color">
+          Si la lista queda vacía, no hay sincronización automática — solo manual desde la pantalla principal. Los cambios se aplican inmediatamente.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-semibold m-0">Horarios de sincronización</h3>
+        <p-button
+          icon="pi pi-plus"
+          label="Agregar horario"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="agregarHorario()"
+        />
+      </div>
+
+      <p-table
+        [value]="horarios()"
+        [loading]="cargandoHorarios()"
+        [rowTrackBy]="trackByIndex"
+        class="p-datatable-sm"
+      >
+        <ng-template #header>
+          <tr>
+            <th style="width: 5rem" class="text-center">#</th>
+            <th>Hora del día (zona AR)</th>
+            <th style="width: 5rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-fila let-i="rowIndex">
+          <tr>
+            <td class="text-center text-muted-color font-mono">{{ i + 1 }}</td>
+            <td>
+              <p-datepicker
+                [ngModel]="fila.tiempo"
+                (ngModelChange)="actualizarTiempo(i, $event)"
+                [timeOnly]="true"
+                [showIcon]="true"
+                iconDisplay="input"
+                hourFormat="24"
+                [stepMinute]="5"
+                placeholder="Elegí la hora"
+                appendTo="body"
+                styleClass="w-full max-w-[16rem]"
+                inputStyleClass="w-full"
+              />
+            </td>
+            <td class="text-center">
+              <p-button
+                icon="pi pi-trash"
+                severity="danger"
+                [text]="true"
+                [rounded]="true"
+                size="small"
+                (onClick)="eliminarHorario(i)"
+                pTooltip="Eliminar horario"
+                tooltipPosition="left"
+              />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="3" class="text-center py-12 text-muted-color">
+              <i class="pi pi-clock text-3xl opacity-50 block mb-2"></i>
+              No hay horarios configurados — la sincronización automática está deshabilitada.
+              <div class="mt-3">
+                <p-button
+                  icon="pi pi-plus"
+                  label="Agregar el primero"
+                  size="small"
+                  (onClick)="agregarHorario()"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+
+      <div class="flex justify-end gap-2 mt-4">
+        @if (hayCambiosHorarios()) {
+          <p-button
+            label="Descartar cambios"
+            severity="secondary"
+            [outlined]="true"
+            icon="pi pi-undo"
+            (onClick)="descartarCambiosHorarios()"
+            [disabled]="guardandoHorarios()"
+          />
+        }
+        <p-button
+          label="Guardar"
+          icon="pi pi-check"
+          (onClick)="guardarHorarios()"
+          [loading]="guardandoHorarios()"
+          [disabled]="!hayCambiosHorarios()"
         />
       </div>
     </p-card>

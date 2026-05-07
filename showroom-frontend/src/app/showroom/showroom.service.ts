@@ -8,6 +8,7 @@ import {
   CrearPedidoResponse,
   EscalaDescuento,
   Health,
+  HorarioSync,
   ListarPedidosParams,
   ListarProductosParams,
   Localidad,
@@ -81,6 +82,16 @@ export class ShowroomService {
   /** Reemplaza atómicamente la lista de escalones. Devuelve la lista actualizada. */
   actualizarEscalasDescuento(escalas: EscalaDescuento[]): Observable<EscalaDescuento[]> {
     return this.http.put<EscalaDescuento[]>(`${this.base}/config/escalas-descuento`, escalas);
+  }
+
+  /** Horarios diarios de sincronización automática con DUX (zona AR). */
+  obtenerHorariosSync(): Observable<HorarioSync[]> {
+    return this.http.get<HorarioSync[]>(`${this.base}/config/horarios-sync`);
+  }
+
+  /** Reemplaza atómicamente la lista de horarios. El backend reprograma los disparos en el momento. */
+  actualizarHorariosSync(horarios: HorarioSync[]): Observable<HorarioSync[]> {
+    return this.http.put<HorarioSync[]>(`${this.base}/config/horarios-sync`, horarios);
   }
 
   obtenerProvincias(): Observable<Provincia[]> {

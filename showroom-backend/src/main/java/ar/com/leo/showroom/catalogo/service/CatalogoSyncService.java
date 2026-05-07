@@ -18,7 +18,6 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -93,18 +92,6 @@ public class CatalogoSyncService {
         }
         log.info("Cache vacío al arrancar — disparando sync inicial en background");
         self.sincronizarCatalogoCompletoAsync();
-    }
-
-    /** Ejecuta sync periódico según showroom.cache.refresh-cron (default: 6 AM AR todos los días).
-     *  La zona se fija explícitamente para que el cron no dependa de cómo esté configurada
-     *  la TZ del server (UTC en cloud, AR local, etc.). */
-    @Scheduled(cron = "${showroom.cache.refresh-cron}", zone = "America/Argentina/Buenos_Aires")
-    public void syncProgramado() {
-        if (!duxClient.isConfigured()) {
-            log.info("Sync DUX salteado: cliente no configurado");
-            return;
-        }
-        self.sincronizarCatalogoCompleto();
     }
 
     /**
