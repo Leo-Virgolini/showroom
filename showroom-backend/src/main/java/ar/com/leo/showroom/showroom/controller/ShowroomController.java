@@ -18,6 +18,7 @@ import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
+import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
@@ -360,6 +361,28 @@ public class ShowroomController {
     public ResponseEntity<String> debugDuxGet(@RequestParam("path") String path) {
         String body = duxClient.rawGet(path);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Escalones de descuento configurados (umbral subtotal s/IVA → % a aplicar).
+     * El frontend los lee al iniciar para que las pantallas de scan y carrito
+     * usen los mismos umbrales/porcentajes que el backend persiste.
+     */
+    @GetMapping("/config/escalas-descuento")
+    public List<EscalaDescuentoDTO> listarEscalasDescuento() {
+        return service.listarEscalasDescuento();
+    }
+
+    /**
+     * Reemplaza la lista completa de escalones (operación atómica). El payload
+     * es la nueva lista entera; el backend valida (umbrales positivos,
+     * porcentajes 0..100, sin duplicados) y devuelve la lista actualizada.
+     * 400 si alguna validación falla.
+     */
+    @PutMapping("/config/escalas-descuento")
+    public List<EscalaDescuentoDTO> actualizarEscalasDescuento(
+            @RequestBody List<EscalaDescuentoDTO> nuevas) {
+        return service.reemplazarEscalasDescuento(nuevas);
     }
 
     @GetMapping("/health")

@@ -8,6 +8,8 @@ import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.config.entity.EscalaDescuento;
+import ar.com.leo.showroom.config.service.EscalaDescuentoService;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.service.DuxClient;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
@@ -19,6 +21,7 @@ import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
+import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListItemDTO;
@@ -52,8 +55,6 @@ import java.util.*;
 public class ShowroomService {
 
     private static final BigDecimal CIEN = new BigDecimal("100");
-    private static final BigDecimal MENOS_5 = new BigDecimal("0.95");
-    private static final BigDecimal MENOS_10 = new BigDecimal("0.90");
     private static final DateTimeFormatter DUX_FECHA = DateTimeFormatter.ofPattern("ddMMyyyy");
     /** DUX espera la fecha en horario Argentina, no en UTC del servidor. */
     private static final ZoneId ZONA_AR = ZoneId.of("America/Argentina/Buenos_Aires");
@@ -68,6 +69,7 @@ public class ShowroomService {
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
+    private final EscalaDescuentoService escalaDescuentoService;
 
     @Value("${showroom.cache.stock-stale-minutes:15}")
     private int stockStaleMinutes;
@@ -107,6 +109,26 @@ public class ShowroomService {
     }
 
     /**
+     * Escalones de descuento configurados (orden ascendente por umbral).
+     * El frontend los lee al iniciar para decidir qué % aplicar al carrito.
+     */
+    public List<EscalaDescuentoDTO> listarEscalasDescuento() {
+        return escalaDescuentoService.listar().stream()
+                .map(e -> new EscalaDescuentoDTO(e.getUmbralMin(), e.getPorcentaje()))
+                .toList();
+    }
+
+    /**
+     * Reemplaza la lista de escalones por la recibida (operación atómica).
+     * Devuelve la lista resultante ya ordenada por umbral asc.
+     */
+    public List<EscalaDescuentoDTO> reemplazarEscalasDescuento(List<EscalaDescuentoDTO> nuevas) {
+        return escalaDescuentoService.reemplazar(nuevas).stream()
+                .map(e -> new EscalaDescuentoDTO(e.getUmbralMin(), e.getPorcentaje()))
+                .toList();
+    }
+
+    /**
      * Búsqueda paginada en el cache local (sin tocar DUX).
      * Usada por la pantalla de generación de etiquetas QR.
      */
@@ -141,7 +163,12 @@ public class ShowroomService {
 
     private CatalogoItemDTO toCatalogoItem(ProductoCache pc) {
         BigDecimal sinIva = calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva());
-        return new CatalogoItemDTO(pc.getSku(), pc.getDescripcion(), sinIva, pc.getHabilitado());
+        return new CatalogoItemDTO(
+                pc.getSku(),
+                pc.getDescripcion(),
+                sinIva,
+                pc.getHabilitado(),
+                urlImagenLocal(pc.getSku()));
     }
 
     /**
@@ -155,6 +182,7 @@ public class ShowroomService {
             "descripcion", "descripcion",
             "pvpKtGastroConIva", "pvpKtGastroConIva",
             "pvpKtGastroSinIva", "pvpKtGastroConIva", // mismo campo (sin-IVA es derivado)
+            "porcIva", "porcIva",
             "stockTotal", "stockTotal",
             "habilitado", "habilitado",
             "sincronizadoAt", "sincronizadoAt"
@@ -531,8 +559,17 @@ public class ShowroomService {
 
     private ScanResultDTO toScanResult(ProductoCache pc) {
         BigDecimal sinIva = calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva());
-        BigDecimal menos5 = aplicarFactor(sinIva, MENOS_5);
-        BigDecimal menos10 = aplicarFactor(sinIva, MENOS_10);
+
+        // Los dos primeros escalones (orden ascendente por umbral) llenan los
+        // campos Menos5 / Menos10 del DTO de scan. Si la tabla tiene menos
+        // escalones, los faltantes quedan en null.
+        List<EscalaDescuento> escalas = escalaDescuentoService.listar();
+        BigDecimal menos5 = escalas.size() >= 1
+                ? aplicarDescuento(sinIva, escalas.get(0).getPorcentaje())
+                : null;
+        BigDecimal menos10 = escalas.size() >= 2
+                ? aplicarDescuento(sinIva, escalas.get(1).getPorcentaje())
+                : null;
 
         boolean stockStale = pc.getSincronizadoAt() == null
                 || Duration.between(pc.getSincronizadoAt(), Instant.now())
@@ -561,8 +598,10 @@ public class ShowroomService {
         return conIva.divide(divisor, 2, RoundingMode.HALF_UP);
     }
 
-    private BigDecimal aplicarFactor(BigDecimal base, BigDecimal factor) {
+    /** Aplica un descuento porcentual: base × (1 − porcentaje/100). */
+    private BigDecimal aplicarDescuento(BigDecimal base, BigDecimal porcentaje) {
         if (base == null) return null;
+        BigDecimal factor = BigDecimal.ONE.subtract(porcentaje.divide(CIEN, 6, RoundingMode.HALF_UP));
         return base.multiply(factor).setScale(2, RoundingMode.HALF_UP);
     }
 

@@ -34,7 +34,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, Localidad, Provincia, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -248,9 +248,25 @@ export class ShowroomPage implements AfterViewInit {
     ordenarPorPrefijo(this.localidades(), this.localidadesQuery(), (l) => l.nombre),
   );
 
-  /** Umbrales de descuento por escala — el % se aplica al carrito completo. */
-  readonly umbral5 = 399_999;
-  readonly umbral10 = 899_999;
+  /**
+   * Escalones de descuento configurados (umbral subtotal s/IVA → % a aplicar).
+   * Se cargan en el constructor desde el backend; mientras llegan se asume
+   * lista vacía (sin descuento), lo cual es el default seguro.
+   */
+  readonly escalasDescuento = signal<EscalaDescuento[]>([]);
+
+  /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
+  private readonly escalasDesc = computed(() =>
+    [...this.escalasDescuento()].sort((a, b) => b.umbralMin - a.umbralMin),
+  );
+
+  /** Compatibilidad con el HTML: primer y segundo umbral de la lista. */
+  readonly umbral5 = computed(() => this.escalasDescuento()[0]?.umbralMin ?? 0);
+  readonly umbral10 = computed(() => this.escalasDescuento()[1]?.umbralMin ?? 0);
+  /** Porcentajes correspondientes — el HTML los usa en pildoras y cálculos
+   *  de ahorro para mantenerse consistente con la config (no hardcodear 5/10). */
+  readonly porcentaje5 = computed(() => this.escalasDescuento()[0]?.porcentaje ?? 0);
+  readonly porcentaje10 = computed(() => this.escalasDescuento()[1]?.porcentaje ?? 0);
 
   /** Suma del PVP s/IVA por cantidad, sin aplicar descuento — base para decidir el escalón. */
   readonly subtotalPreDescuento = computed(() =>
@@ -260,12 +276,11 @@ export class ShowroomPage implements AfterViewInit {
     ),
   );
 
-  /** Descuento % derivado del subtotal — 0/5/10 según los umbrales. */
+  /** Descuento % vigente según el subtotal y los escalones configurados. */
   readonly descuentoAplicado = computed(() => {
     const sub = this.subtotalPreDescuento();
-    if (sub >= this.umbral10) return 10;
-    if (sub >= this.umbral5) return 5;
-    return 0;
+    const aplicable = this.escalasDesc().find((e) => sub >= e.umbralMin);
+    return aplicable?.porcentaje ?? 0;
   });
 
   /** Monto del descuento (en pesos) sobre el subtotal pre-descuento. */
@@ -292,21 +307,20 @@ export class ShowroomPage implements AfterViewInit {
     return (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
   }
 
-  /** Pesos que faltan para llegar al próximo escalón — null si ya está en -10%. */
-  readonly faltaParaProximo = computed(() => {
+  /** Próximo escalón a alcanzar (umbralMin > subtotal actual), o null si ya está en el tope. */
+  private readonly proximoEscalonObj = computed(() => {
     const sub = this.subtotalPreDescuento();
-    if (sub >= this.umbral10) return null;
-    if (sub >= this.umbral5) return this.umbral10 - sub;
-    return this.umbral5 - sub;
+    return this.escalasDescuento().find((e) => sub < e.umbralMin) ?? null;
   });
 
-  /** Próximo escalón al que se llegaría — 5 o 10, null si ya está en -10%. */
-  readonly proximoEscalon = computed(() => {
-    const sub = this.subtotalPreDescuento();
-    if (sub >= this.umbral10) return null;
-    if (sub >= this.umbral5) return 10;
-    return 5;
+  /** Pesos que faltan para llegar al próximo escalón — null si ya está en el tope. */
+  readonly faltaParaProximo = computed(() => {
+    const proximo = this.proximoEscalonObj();
+    return proximo ? proximo.umbralMin - this.subtotalPreDescuento() : null;
   });
+
+  /** % del próximo escalón al que se llegaría, null si ya está en el tope. */
+  readonly proximoEscalon = computed(() => this.proximoEscalonObj()?.porcentaje ?? null);
 
   stockSeverity(stock: number | null): 'success' | 'danger' | 'secondary' {
     if (stock == null) return 'secondary';
@@ -328,6 +342,15 @@ export class ShowroomPage implements AfterViewInit {
   onImagenErrorCarrito(sku: string): void {
     this.carrito.set(
       this.carrito().map((it) =>
+        it.sku === sku && it.imagenUrl ? { ...it, imagenUrl: null } : it,
+      ),
+    );
+  }
+
+  /** Mismo fallback para los thumbnails de la lista de resultados de búsqueda. */
+  onImagenResultadoError(sku: string): void {
+    this.resultadosBusqueda.set(
+      this.resultadosBusqueda().map((it) =>
         it.sku === sku && it.imagenUrl ? { ...it, imagenUrl: null } : it,
       ),
     );
@@ -404,6 +427,15 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   constructor() {
+    // Carga los escalones de descuento desde el backend al iniciar. Si la
+    // request falla, la signal queda vacía → no se aplica ningún descuento
+    // (default seguro: el operador siempre puede vender al precio de lista).
+    this.api.obtenerEscalasDescuento().subscribe({
+      next: (lista) => this.escalasDescuento.set(lista),
+      error: (err) =>
+        console.warn('[escalas-descuento] no se pudieron cargar:', err),
+    });
+
     // Persiste el carrito en localStorage en cada cambio. Cuando queda vacío
     // (vaciarCarrito() o envío exitoso) borra la key. Sobrevive a F5 accidental.
     effect(() => {

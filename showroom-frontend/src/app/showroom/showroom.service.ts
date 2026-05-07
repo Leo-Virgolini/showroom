@@ -6,6 +6,7 @@ import {
   CatalogoPage,
   CrearPedidoRequest,
   CrearPedidoResponse,
+  EscalaDescuento,
   Health,
   ListarPedidosParams,
   ListarProductosParams,
@@ -70,6 +71,16 @@ export class ShowroomService {
 
   health(): Observable<Health> {
     return this.http.get<Health>(`${this.base}/health`);
+  }
+
+  /** Escalones de descuento configurados (umbral subtotal s/IVA → % a aplicar). */
+  obtenerEscalasDescuento(): Observable<EscalaDescuento[]> {
+    return this.http.get<EscalaDescuento[]>(`${this.base}/config/escalas-descuento`);
+  }
+
+  /** Reemplaza atómicamente la lista de escalones. Devuelve la lista actualizada. */
+  actualizarEscalasDescuento(escalas: EscalaDescuento[]): Observable<EscalaDescuento[]> {
+    return this.http.put<EscalaDescuento[]>(`${this.base}/config/escalas-descuento`, escalas);
   }
 
   obtenerProvincias(): Observable<Provincia[]> {

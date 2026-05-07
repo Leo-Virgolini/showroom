@@ -106,6 +106,8 @@ export interface CatalogoItem {
   descripcion: string | null;
   pvpKtGastroSinIva: number | null;
   habilitado: boolean | null;
+  /** URL del endpoint local de imagen, o null si no existe el archivo. */
+  imagenUrl: string | null;
 }
 
 export interface CatalogoPage {
@@ -239,6 +241,17 @@ export interface PedidoDetalle {
   descuentoPorcentaje: number | null;
   observaciones: string | null;
   items: PedidoItemDetalle[];
+}
+
+/**
+ * Escalón de descuento por subtotal del carrito (sin IVA). Cuando el subtotal
+ * iguala o supera `umbralMin`, se aplica `porcentaje` al carrito completo.
+ * El frontend lee la lista al iniciar y elige el escalón con mayor `umbralMin`
+ * cuyo umbral fue alcanzado.
+ */
+export interface EscalaDescuento {
+  umbralMin: number;
+  porcentaje: number;
 }
 
 export interface ListarPedidosParams {

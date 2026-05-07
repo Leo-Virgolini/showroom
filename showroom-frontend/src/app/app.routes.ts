@@ -21,5 +21,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
   },
+  {
+    path: 'configuracion',
+    loadComponent: () =>
+      import('./showroom/configuracion-page/configuracion-page').then((m) => m.ConfiguracionPage),
+  },
   { path: '**', redirectTo: '' },
 ];

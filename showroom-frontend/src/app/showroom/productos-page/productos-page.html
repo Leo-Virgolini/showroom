@@ -125,6 +125,9 @@
             <th class="text-right" style="width: 9rem" pSortableColumn="pvpKtGastroConIva">
               PVP c/IVA <p-sortIcon field="pvpKtGastroConIva" />
             </th>
+            <th class="text-right" style="width: 5rem" pSortableColumn="porcIva">
+              IVA % <p-sortIcon field="porcIva" />
+            </th>
             <th class="text-right" style="width: 6rem" pSortableColumn="stockTotal">
               Stock <p-sortIcon field="stockTotal" />
             </th>
@@ -170,6 +173,13 @@
             <td class="text-right tabular-nums">
               {{ it.pvpKtGastroConIva | currency:'ARS':'symbol':'1.0-0' }}
             </td>
+            <td class="text-right tabular-nums text-muted-color">
+              @if (it.porcIva != null) {
+                {{ it.porcIva | number:'1.0-2' }}%
+              } @else {
+                —
+              }
+            </td>
             <td
               class="text-right tabular-nums font-semibold"
               [class.text-red-600]="(it.stockTotal ?? 0) <= 0"
@@ -213,7 +223,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="10" class="text-center py-12 text-muted-color">
+            <td colspan="11" class="text-center py-12 text-muted-color">
               <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
                 Ningún producto coincide con los filtros.
