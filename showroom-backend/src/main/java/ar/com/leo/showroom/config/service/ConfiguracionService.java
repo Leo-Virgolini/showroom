@@ -4,7 +4,6 @@ import ar.com.leo.showroom.config.entity.Configuracion;
 import ar.com.leo.showroom.config.repository.ConfiguracionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,10 +11,10 @@ import java.util.regex.Pattern;
 
 /**
  * Lectura/escritura de configuración runtime (tabla {@code configuracion}).
- * Cada clave puede tener un default en {@code application.properties}: si la BD
- * no tiene fila para esa clave, se devuelve el default. Cuando el operador
- * guarda un valor desde la UI, queda persistido y a partir de ese momento la
- * BD pisa al default.
+ * La BD es la única fuente de verdad — no hay fallback a propiedades ni a
+ * variables de entorno. Si la fila no existe, se devuelve cadena vacía y el
+ * caller debe chequear con {@link org.springframework.util.StringUtils#hasText}
+ * antes de usar el valor.
  */
 @Slf4j
 @Service
@@ -34,26 +33,22 @@ public class ConfiguracionService {
 
     private final ConfiguracionRepository repository;
 
-    @Value("${showroom.picking.email-to:}")
-    private String emailToDefault;
-
     /**
-     * Devuelve el destinatario configurado en BD; si no hay fila, cae al
-     * default de {@code application.properties}. Puede ser cadena vacía si
-     * tampoco hay default — el caller debe chequear con
-     * {@link org.springframework.util.StringUtils#hasText} antes de usarlo.
+     * Devuelve el destinatario configurado en BD, o cadena vacía si no hay
+     * fila. Sin fallback a properties/env — si está vacío, el envío queda
+     * deshabilitado.
      */
     @Transactional(readOnly = true)
     public String getEmailPickingTo() {
         return repository.findById(CLAVE_PICKING_EMAIL_TO)
                 .map(Configuracion::getValor)
-                .orElse(emailToDefault == null ? "" : emailToDefault);
+                .orElse("");
     }
 
     /**
      * Persiste el destinatario del email de picking. Pasar cadena vacía
-     * "borra" la configuración (vuelve a usar el default). El valor se
-     * trimma antes de guardar.
+     * borra la fila — a partir de ese momento el envío queda deshabilitado.
+     * El valor se trimma antes de guardar.
      *
      * @return el valor efectivo después de guardar (para que el frontend
      *         actualice su estado sin tener que pedir el GET de nuevo).
@@ -65,7 +60,7 @@ public class ConfiguracionService {
         if (valor.isEmpty()) {
             repository.deleteById(CLAVE_PICKING_EMAIL_TO);
             log.info("Email de picking limpiado — el envío queda deshabilitado");
-            return emailToDefault == null ? "" : emailToDefault;
+            return "";
         }
         repository.save(Configuracion.builder()
                 .clave(CLAVE_PICKING_EMAIL_TO)
@@ -76,7 +71,7 @@ public class ConfiguracionService {
     }
 
     private static void validarEmailTo(String valor) {
-        if (valor.isEmpty()) return; // vacío = "vuelve al default", es válido
+        if (valor.isEmpty()) return; // vacío = borrar la config, es válido
         for (String parte : valor.split("\\s*,\\s*")) {
             if (parte.isBlank()) {
                 throw new IllegalArgumentException("Email inválido (entrada vacía entre comas)");
