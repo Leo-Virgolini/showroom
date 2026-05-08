@@ -45,7 +45,7 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '95vw', maxWidth: '64rem' }" [breakpoints]="{ '768px': '95vw' }"
+<p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '95vw', maxWidth: '72rem' }" [breakpoints]="{ '768px': '95vw' }"
   [draggable]="false">
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:divide-x md:divide-surface-200 dark:md:divide-surface-700">
 
@@ -55,10 +55,7 @@
         <i class="pi pi-wifi text-[#FF861C] text-xl"></i>
         <h3 class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 m-0">1. Conectarse al WiFi</h3>
       </div>
-      <p class="m-0 text-sm text-muted-color text-center">
-        Escaneá con la cámara del celular para conectarse a la red del showroom.
-      </p>
-      <img src="conexion-wifi.png" alt="QR del WiFi" class="w-full rounded-xl shadow-sm" />
+      <img src="conexion-wifi.png" alt="QR del WiFi" class="w-full max-h-[65vh] object-contain rounded-xl shadow-sm" />
     </div>
 
     <!-- Sección Visor -->
@@ -67,10 +64,7 @@
         <i class="pi pi-mobile text-[#FF861C] text-xl"></i>
         <h3 class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 m-0">2. Ver los precios</h3>
       </div>
-      <p class="m-0 text-sm text-muted-color text-center">
-        Una vez conectado al WiFi, escaneá este QR para ver los productos en tiempo real.
-      </p>
-      <img src="qr-precios.png" alt="QR del visor" class="w-full rounded-xl shadow-sm" />
+      <img src="qr-precios.png" alt="QR del visor" class="w-full max-h-[65vh] object-contain rounded-xl shadow-sm" />
     </div>
 
   </div>
