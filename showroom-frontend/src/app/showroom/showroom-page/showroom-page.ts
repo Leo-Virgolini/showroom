@@ -932,27 +932,12 @@ export class ShowroomPage implements AfterViewInit {
    * igual evitamos una HTTP innecesaria cuando ya está en memoria del frontend.
    */
   private cargarProvinciasSiHaceFalta(): void {
-    if (this.provincias().length > 0) {
-      this.aplicarProvinciaDefault();
-      return;
-    }
+    if (this.provincias().length > 0) return;
     this.api.obtenerProvincias().subscribe({
-      next: (lista) => {
-        this.provincias.set(lista);
-        this.aplicarProvinciaDefault();
-      },
+      next: (lista) => this.provincias.set(lista),
       error: (err) =>
         toastError(this.toast, 'Provincias', err, 'No se pudieron cargar las provincias'),
     });
-  }
-
-  /** Selecciona "BUENOS AIRES" si todavía no hay provincia elegida. */
-  private aplicarProvinciaDefault(): void {
-    if (this.cliente().codigoProvincia) return;
-    const ba = this.provincias().find((p) =>
-      p.nombre.trim().toUpperCase() === 'BUENOS AIRES',
-    );
-    if (ba) this.cambiarProvincia(ba.codigo);
   }
 
   /** Subscription a la request en curso de localidades — para poder cancelarla. */
@@ -1044,7 +1029,7 @@ export class ShowroomPage implements AfterViewInit {
       this.toast.add({
         severity: 'warn',
         summary: 'Faltan datos',
-        detail: 'CUIT (11 dígitos) y provincia son requeridos.',
+        detail: 'CUIT (11 dígitos) requerido.',
       });
       return;
     }
