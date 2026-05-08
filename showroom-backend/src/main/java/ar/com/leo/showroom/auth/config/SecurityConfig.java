@@ -70,6 +70,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/showroom/productos/*/imagen").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/config/escalas-descuento").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
+                        // Healthcheck — el container Docker hace curl /health
+                        // para saber si está UP. Sin esto, queda "starting" para
+                        // siempre porque el endpoint responde 401 sin sesión.
+                        .requestMatchers(HttpMethod.GET, "/api/showroom/health").permitAll()
                         .requestMatchers("/error").permitAll()
                         // Resto del API: requiere login.
                         .requestMatchers("/api/**").authenticated()
