@@ -20,6 +20,11 @@ import { PickingEmailEvent, ScanResult, SyncEvent } from './models';
  *
  * Detección instant: el HTTP interceptor marca desconectado en cuanto un
  * request HTTP falla con status 0, sin esperar al timeout del SSE.
+ *
+ * Recuperación rápida en mobile: cuando la pestaña vuelve del background
+ * (visibilitychange) o el dispositivo recupera red (online event), forzamos
+ * un health-ping inmediato + reconexión del SSE si quedó cerrado, en lugar
+ * de esperar el siguiente tick del poll de 10s.
  */
 @Injectable({ providedIn: 'root' })
 export class BackendStatusService {
@@ -52,10 +57,46 @@ export class BackendStatusService {
       }
     });
 
+    // Recuperación rápida cuando la pestaña vuelve del background (mobile)
+    // o vuelve la red. Sin esto, hay que esperar hasta 10s al siguiente
+    // health-ping para que el modal "Sin conexión" se cierre.
+    if (typeof document !== 'undefined') {
+      const onVisible = () => {
+        if (document.visibilityState === 'visible') this.recuperarConexion();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      this.destroyRef.onDestroy(() =>
+        document.removeEventListener('visibilitychange', onVisible),
+      );
+    }
+    if (typeof window !== 'undefined') {
+      const onOnline = () => this.recuperarConexion();
+      window.addEventListener('online', onOnline);
+      this.destroyRef.onDestroy(() =>
+        window.removeEventListener('online', onOnline),
+      );
+    }
+
     this.destroyRef.onDestroy(() => {
       this.cerrarSSE();
       if (this.healthPoll != null) clearInterval(this.healthPoll);
     });
+  }
+
+  /**
+   * Forzá un health-ping inmediato y reconectá el SSE si quedó cerrado.
+   * Idempotente: si la conexión ya está sana, el ping responde 200 y no
+   * pasa nada. Lo llamamos cuando la pestaña vuelve del background o el
+   * dispositivo recupera red — eventos donde lo más probable es que el
+   * SSE haya quedado muerto silenciosamente y no querríamos esperar al
+   * siguiente tick del poll de 10s para enterarnos.
+   */
+  private recuperarConexion(): void {
+    this.pingHealth();
+    if (this.source && this.source.readyState === EventSource.CLOSED) {
+      this.cerrarSSE();
+      this.iniciarSSE();
+    }
   }
 
   private pingHealth(): void {
