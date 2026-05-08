@@ -303,57 +303,5 @@
       </div>
     </p-card>
 
-    <p-card>
-      <div class="flex flex-col gap-2 mb-4">
-        <div class="text-sm text-surface-700 dark:text-surface-200">
-          Host:puerto del servidor que se usa para armar el QR del visor (la pantalla espejo en celular). Cargalo con la IP de la PC servidor para que el celular pueda acceder.
-        </div>
-        <div class="text-xs text-muted-color">
-          Si lo dejás vacío, el QR usa el host actual del browser — sirve sólo si accedés a la app desde otro dispositivo de la red, no desde la propia PC servidor.
-        </div>
-      </div>
-
-      <h3 class="text-base font-semibold m-0 mb-3">Host del visor</h3>
-
-      <div class="flex flex-col gap-2 max-w-xl">
-        <label for="visorHostInput" class="text-sm font-medium text-muted-color">
-          IP o hostname con puerto
-        </label>
-        <p-iconfield class="w-full">
-          <p-inputicon class="pi pi-server" />
-          <input
-            pInputText
-            id="visorHostInput"
-            type="text"
-            [ngModel]="visorHost()"
-            (ngModelChange)="visorHost.set($event)"
-            placeholder="ej: 192.168.1.50:4200"
-            autocomplete="off"
-            class="w-full font-mono"
-            [disabled]="cargandoVisorHost() || guardandoVisorHost()"
-          />
-        </p-iconfield>
-      </div>
-
-      <div class="flex justify-end gap-2 mt-4">
-        @if (hayCambiosVisorHost()) {
-          <p-button
-            label="Descartar cambios"
-            severity="secondary"
-            [outlined]="true"
-            icon="pi pi-undo"
-            (onClick)="descartarCambiosVisorHost()"
-            [disabled]="guardandoVisorHost()"
-          />
-        }
-        <p-button
-          label="Guardar"
-          icon="pi pi-check"
-          (onClick)="guardarVisorHost()"
-          [loading]="guardandoVisorHost()"
-          [disabled]="!hayCambiosVisorHost()"
-        />
-      </div>
-    </p-card>
   </main>
 </div>

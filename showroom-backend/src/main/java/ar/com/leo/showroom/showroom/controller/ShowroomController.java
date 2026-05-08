@@ -26,7 +26,6 @@ import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.PickingEmailConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
-import ar.com.leo.showroom.showroom.dto.VisorHostConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
@@ -434,26 +433,6 @@ public class ShowroomController {
     @PutMapping("/config/picking-email")
     public PickingEmailConfigDTO actualizarEmailPicking(@RequestBody PickingEmailConfigDTO body) {
         return new PickingEmailConfigDTO(service.setEmailPicking(body.email()));
-    }
-
-    /**
-     * Host:puerto del servidor que se usa para armar el QR del visor (ej.
-     * {@code 192.168.1.50:4200}). Cadena vacía = no configurado; el frontend
-     * cae al host del browser.
-     */
-    @GetMapping("/config/visor-host")
-    public VisorHostConfigDTO obtenerVisorHost() {
-        return new VisorHostConfigDTO(service.getVisorHost());
-    }
-
-    /**
-     * Persiste el host del visor. Cadena vacía borra la config. 400 si el
-     * formato es inválido (debe ser IP o hostname con puerto opcional, sin
-     * protocolo ni paths).
-     */
-    @PutMapping("/config/visor-host")
-    public VisorHostConfigDTO actualizarVisorHost(@RequestBody VisorHostConfigDTO body) {
-        return new VisorHostConfigDTO(service.setVisorHost(body.host()));
     }
 
     @GetMapping("/health")
