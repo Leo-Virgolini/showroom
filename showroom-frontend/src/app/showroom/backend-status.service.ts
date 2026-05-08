@@ -1,7 +1,7 @@
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
-import { PickingEmailEvent, SyncEvent } from './models';
+import { PickingEmailEvent, ScanResult, SyncEvent } from './models';
 
 /**
  * Estado de conectividad con el backend.
@@ -26,6 +26,9 @@ export class BackendStatusService {
   readonly connected = signal(true);
   readonly syncEvents$ = new Subject<SyncEvent>();
   readonly pickingEmailEvents$ = new Subject<PickingEmailEvent>();
+  /** Scans publicados al visor (pantalla espejo en celular). El backend
+   *  emite uno cada vez que el operador escanea desde la página principal. */
+  readonly scanVisorEvents$ = new Subject<ScanResult>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
@@ -104,6 +107,14 @@ export class BackendStatusService {
     src.addEventListener('picking-email', (e: MessageEvent) => {
       try {
         this.pickingEmailEvents$.next(JSON.parse(e.data) as PickingEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('scan-visor', (e: MessageEvent) => {
+      try {
+        this.scanVisorEvents$.next(JSON.parse(e.data) as ScanResult);
       } catch {
         /* payload malformado, ignoramos */
       }

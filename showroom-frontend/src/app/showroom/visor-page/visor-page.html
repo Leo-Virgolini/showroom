@@ -1,0 +1,152 @@
+<div class="min-h-screen bg-gradient-to-b from-orange-50/50 to-white dark:from-surface-950 dark:to-surface-900 flex flex-col">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <header class="px-4 pt-4 pb-2 flex items-center justify-center">
+    <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+  </header>
+
+  @if (ultimoScan(); as r) {
+    <main class="flex-1 flex flex-col gap-4 px-4 pb-6">
+      <!-- Imagen grande -->
+      @if (r.imagenUrl) {
+        <div class="rounded-2xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 p-3 flex items-center justify-center">
+          <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true"
+            imageClass="w-full max-h-[55vh] object-contain rounded-md cursor-zoom-in" />
+        </div>
+      }
+
+      <!-- SKU + descripción -->
+      <div class="flex flex-col gap-2 px-1">
+        <div class="font-mono text-3xl sm:text-4xl font-bold tracking-wide text-primary text-center">
+          {{ r.sku }}
+        </div>
+        <div class="text-surface-700 dark:text-surface-200 text-base sm:text-lg text-center">
+          {{ r.descripcion ?? '—' }}
+        </div>
+      </div>
+
+      <!-- Tags de estado -->
+      <div class="flex justify-center gap-2 flex-wrap">
+        @if (r.habilitado === false) {
+          <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
+        }
+        @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) {
+          <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
+        }
+        @if (r.stockTotal != null && r.stockTotal > 0) {
+          <p-tag severity="info" [value]="'Stock: ' + r.stockTotal" icon="pi pi-box" class="tag-grande" />
+        }
+      </div>
+
+      <!-- Banner sin stock -->
+      @if (r.stockTotal != null && r.stockTotal <= 0) {
+        <div class="rounded-xl border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 flex items-center gap-3">
+          <i class="pi pi-exclamation-triangle text-red-600 dark:text-red-400 text-3xl shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-red-700 dark:text-red-400 text-base sm:text-lg">
+              Sin stock disponible
+            </div>
+            <div class="text-sm text-red-700/80 dark:text-red-300/80">
+              Consultá disponibilidad.
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Precio principal -->
+      @if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
+        <div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm"
+             [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2 text-center">
+            Precio
+          </div>
+          <div class="flex items-baseline gap-2 flex-wrap justify-center">
+            <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
+            <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">
+              {{ r.pvpKtGastroSinIva | number:'1.0-0' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Tiles de descuento por escala -->
+        @if (umbral5() > 0 || umbral10() > 0) {
+          <div class="flex flex-col gap-2"
+               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+            <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
+              Comprá más y ahorrás
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              @if (umbral5() > 0) {
+                <div
+                  class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 flex flex-col gap-1.5 transition-opacity"
+                  [class.opacity-50]="r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">−{{ porcentaje5() }}%</span>
+                    @if (r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0) {
+                      <span class="text-[0.7rem] font-medium text-amber-800/70 dark:text-amber-300/70 italic">
+                        Superado por −{{ porcentaje10() }}%
+                      </span>
+                    } @else if (r.pvpKtGastroSinIva >= umbral5()) {
+                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-amber-800 dark:text-amber-300">
+                        <i class="pi pi-check-circle text-[0.75rem]"></i>
+                        Aplicado
+                      </span>
+                    } @else {
+                      <span class="text-[0.7rem] font-medium text-amber-800 dark:text-amber-300">
+                        Por compras desde {{ umbral5() | currency:'ARS':'symbol':'1.0-0' }}
+                      </span>
+                    }
+                  </div>
+                  <div class="text-2xl sm:text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-0.5">
+                    {{ r.pvpKtGastroSinIvaMenos5 | currency:'ARS':'symbol':'1.0-0' }}
+                  </div>
+                  <div class="text-xs text-amber-700/80 dark:text-amber-300/80 inline-flex items-center gap-1">
+                    <i class="pi pi-arrow-down text-[0.65rem]"></i>
+                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje5()) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                  </div>
+                </div>
+              }
+
+              @if (umbral10() > 0) {
+                <div class="rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 flex flex-col gap-1.5">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">−{{ porcentaje10() }}%</span>
+                    @if (r.pvpKtGastroSinIva >= umbral10()) {
+                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-emerald-800 dark:text-emerald-300">
+                        <i class="pi pi-check-circle text-[0.75rem]"></i>
+                        Aplicado
+                      </span>
+                    } @else {
+                      <span class="text-[0.7rem] font-medium text-emerald-800 dark:text-emerald-300">
+                        Por compras desde {{ umbral10() | currency:'ARS':'symbol':'1.0-0' }}
+                      </span>
+                    }
+                  </div>
+                  <div class="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-0.5">
+                    {{ r.pvpKtGastroSinIvaMenos10 | currency:'ARS':'symbol':'1.0-0' }}
+                  </div>
+                  <div class="text-xs text-emerald-700/80 dark:text-emerald-300/80 inline-flex items-center gap-1">
+                    <i class="pi pi-arrow-down text-[0.65rem]"></i>
+                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje10()) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      }
+    </main>
+  } @else {
+    <main class="flex-1 flex flex-col items-center justify-center px-6 gap-4">
+      <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-100 dark:bg-surface-800 flex items-center justify-center">
+        <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
+      </div>
+      <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
+        Esperando producto…
+      </div>
+      <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
+        Cuando se escanee un código en el showroom, vas a ver el producto acá.
+      </div>
+    </main>
+  }
+</div>

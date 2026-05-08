@@ -26,9 +26,11 @@ import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.PickingEmailConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
+import ar.com.leo.showroom.showroom.dto.VisorHostConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
+import ar.com.leo.showroom.visor.VisorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
@@ -63,6 +65,7 @@ public class ShowroomController {
     private final PresupuestoPdfGenerator pdfGenerator;
     private final PickingEmailService pickingEmailService;
     private final ImagenLocalService imagenLocalService;
+    private final VisorService visorService;
 
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -70,10 +73,16 @@ public class ShowroomController {
     /**
      * Lookup rápido por SKU desde el cache local.
      * Si no está en cache, hace 1 request a DUX (rate-limited).
+     *
+     * <p>El resultado también se publica al visor (SSE {@code scan-visor})
+     * para que las pantallas en {@code /visor} (típicamente celulares de
+     * clientes) muestren el producto en tiempo real.
      */
     @GetMapping("/scan/{sku}")
     public ScanResultDTO scan(@PathVariable String sku) {
-        return service.scan(sku);
+        ScanResultDTO result = service.scan(sku);
+        visorService.publicarScan(result);
+        return result;
     }
 
     /**
@@ -425,6 +434,26 @@ public class ShowroomController {
     @PutMapping("/config/picking-email")
     public PickingEmailConfigDTO actualizarEmailPicking(@RequestBody PickingEmailConfigDTO body) {
         return new PickingEmailConfigDTO(service.setEmailPicking(body.email()));
+    }
+
+    /**
+     * Host:puerto del servidor que se usa para armar el QR del visor (ej.
+     * {@code 192.168.1.50:4200}). Cadena vacía = no configurado; el frontend
+     * cae al host del browser.
+     */
+    @GetMapping("/config/visor-host")
+    public VisorHostConfigDTO obtenerVisorHost() {
+        return new VisorHostConfigDTO(service.getVisorHost());
+    }
+
+    /**
+     * Persiste el host del visor. Cadena vacía borra la config. 400 si el
+     * formato es inválido (debe ser IP o hostname con puerto opcional, sin
+     * protocolo ni paths).
+     */
+    @PutMapping("/config/visor-host")
+    public VisorHostConfigDTO actualizarVisorHost(@RequestBody VisorHostConfigDTO body) {
+        return new VisorHostConfigDTO(service.setVisorHost(body.host()));
     }
 
     @GetMapping("/health")

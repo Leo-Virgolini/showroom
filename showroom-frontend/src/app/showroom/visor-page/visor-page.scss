@@ -1,0 +1,7 @@
+// Misma utility que la pantalla principal — agranda el padding/font de los
+// p-tag de estado para que sean legibles desde lejos en una tablet/celular.
+:host ::ng-deep .tag-grande .p-tag {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}

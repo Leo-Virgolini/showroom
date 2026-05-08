@@ -15,6 +15,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
+import QRCode from 'qrcode';
 import { MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -206,6 +207,42 @@ export class ShowroomPage implements AfterViewInit {
 
   readonly mostrarSyncDialog = signal(false);
   readonly forzarSyncCompleto = signal(false);
+
+  /** Dialog para abrir el visor en un celular — muestra QR + URL armada con
+   *  el host:puerto configurado en {@code /configuracion}.
+   *
+   *  El host vive en la BD (tabla {@code configuracion}, clave {@code visor.host}).
+   *  Si el operador no lo cargó, caemos al host del browser, lo cual sólo
+   *  funciona cuando se accede desde otro dispositivo de la red — no desde
+   *  la propia PC servidor por localhost. */
+  readonly mostrarDialogVisor = signal(false);
+  readonly qrVisorDataUrl = signal<string | null>(null);
+
+  /** Host:puerto configurado en /configuracion. Vacío = no cargado. */
+  readonly visorHostConfigurado = signal('');
+
+  /** Host actual del browser (lo que muestra la barra de direcciones). */
+  readonly hostActual = computed(() => {
+    if (typeof window === 'undefined') return '';
+    return window.location.host;
+  });
+
+  /** Host efectivo para el QR: el configurado si está cargado, sino el del browser. */
+  readonly visorHostEfectivo = computed(
+    () => this.visorHostConfigurado().trim() || this.hostActual(),
+  );
+
+  readonly urlVisor = computed(() => {
+    const host = this.visorHostEfectivo();
+    if (!host) return '';
+    return `http://${host}/visor`;
+  });
+
+  /** true si la URL final usa localhost — el QR no va a funcionar en el celu. */
+  readonly urlVisorNoSirveParaCelu = computed(() => {
+    const h = this.visorHostEfectivo().split(':')[0];
+    return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
+  });
 
   /** Si está activo, al apretar "Enviar a DUX" refrescamos stock+precio
    *  contra DUX como última validación antes de crear el pedido. Default
@@ -538,6 +575,81 @@ export class ShowroomPage implements AfterViewInit {
       },
       error: (err) => toastError(this.toast, 'Sync', err, 'No se pudo iniciar el sync'),
     });
+  }
+
+  /**
+   * Abre el dialog de "compartir visor" — genera el QR de la URL del visor
+   * para que el cliente lo escanee con la cámara del celular y entre a
+   * {@link VisorPage}. La URL se arma con {@code window.location.origin},
+   * así que toma la IP/host por la que el operador está accediendo (lo
+   * que ve en su barra de direcciones es lo que va al QR).
+   */
+  abrirDialogVisor(): void {
+    this.mostrarDialogVisor.set(true);
+    this.qrVisorDataUrl.set(null);
+    // Refrescamos el host configurado en cada apertura — barato (1 GET)
+    // y captura cambios hechos en /configuracion sin tener que recargar la página.
+    this.api.obtenerVisorHost().subscribe({
+      next: (res) => {
+        this.visorHostConfigurado.set(res.host ?? '');
+        this.regenerarQrVisor();
+      },
+      error: () => {
+        // Si falla el GET seguimos con el último valor en memoria —
+        // peor escenario, el operador ve un QR con localhost y va a
+        // /configuracion a cargar el host.
+        this.regenerarQrVisor();
+      },
+    });
+  }
+
+  /** Regenera el QR a partir de la URL actual. */
+  private regenerarQrVisor(): void {
+    const url = this.urlVisor();
+    if (!url) {
+      this.qrVisorDataUrl.set(null);
+      return;
+    }
+    QRCode.toDataURL(url, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      scale: 8,
+      color: { dark: '#3B1E09', light: '#ffffff' },
+    })
+      .then((data) => this.qrVisorDataUrl.set(data))
+      .catch((err) => {
+        console.warn('Error generando QR del visor:', err);
+        this.toast.add({
+          severity: 'warn',
+          summary: 'No se pudo generar el QR',
+          detail: 'Compartí la URL manualmente.',
+          life: 4000,
+        });
+      });
+  }
+
+  /** Copia la URL del visor al clipboard. Mostrar toast con confirmación. */
+  copiarUrlVisor(): void {
+    const url = this.urlVisor();
+    if (!url) return;
+    navigator.clipboard
+      .writeText(url)
+      .then(() =>
+        this.toast.add({
+          severity: 'success',
+          summary: 'URL copiada',
+          detail: url,
+          life: 2000,
+        }),
+      )
+      .catch(() =>
+        this.toast.add({
+          severity: 'warn',
+          summary: 'No se pudo copiar',
+          detail: 'Copialo a mano desde el dialog.',
+          life: 4000,
+        }),
+      );
   }
 
   /**

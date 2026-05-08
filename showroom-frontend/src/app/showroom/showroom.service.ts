@@ -104,6 +104,16 @@ export class ShowroomService {
     return this.http.put<{ email: string }>(`${this.base}/config/picking-email`, { email });
   }
 
+  /** Host:puerto que se usa para el QR del visor (ej. 192.168.1.50:4200). */
+  obtenerVisorHost(): Observable<{ host: string }> {
+    return this.http.get<{ host: string }>(`${this.base}/config/visor-host`);
+  }
+
+  /** Persiste el host del visor. Cadena vacía borra la config. */
+  actualizarVisorHost(host: string): Observable<{ host: string }> {
+    return this.http.put<{ host: string }>(`${this.base}/config/visor-host`, { host });
+  }
+
   obtenerProvincias(): Observable<Provincia[]> {
     return this.http.get<Provincia[]>(`${this.base}/provincias`);
   }

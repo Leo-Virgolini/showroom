@@ -164,6 +164,16 @@ public class ShowroomService {
         return configuracionService.setEmailPickingTo(email);
     }
 
+    /** Host configurado para el QR del visor (cadena vacía si no se cargó). */
+    public String getVisorHost() {
+        return configuracionService.getVisorHost();
+    }
+
+    /** Persiste el host del visor. Devuelve el valor efectivo. */
+    public String setVisorHost(String host) {
+        return configuracionService.setVisorHost(host);
+    }
+
     /**
      * Búsqueda paginada en el cache local (sin tocar DUX).
      * Usada por la pantalla de generación de etiquetas QR.

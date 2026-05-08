@@ -26,5 +26,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./showroom/configuracion-page/configuracion-page').then((m) => m.ConfiguracionPage),
   },
+  {
+    path: 'visor',
+    loadComponent: () =>
+      import('./showroom/visor-page/visor-page').then((m) => m.VisorPage),
+  },
   { path: '**', redirectTo: '' },
 ];

@@ -25,6 +25,49 @@
   </ng-template>
 </p-dialog>
 
+<p-dialog header="Visor en celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [draggable]="false">
+  <div class="flex flex-col items-center gap-4">
+    <p class="m-0 text-sm text-surface-700 dark:text-surface-200 text-center">
+      Escaneá este QR con la cámara del celular para ver en tiempo real cada producto que se escanea en el showroom.
+    </p>
+
+    <div class="rounded-xl border-2 border-[#FF861C]/40 dark:border-primary-900 bg-white p-3 flex items-center justify-center min-h-[16rem] min-w-[16rem]"
+         [class.opacity-50]="urlVisorNoSirveParaCelu()">
+      @if (qrVisorDataUrl(); as qr) {
+        <img [src]="qr" alt="QR del visor" class="w-64 h-64 object-contain" />
+      } @else {
+        <p-progressSpinner class="!w-12 !h-12" strokeWidth="4" />
+      }
+    </div>
+
+    @if (urlVisorNoSirveParaCelu()) {
+      <div class="w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3 flex items-start gap-2">
+        <i class="pi pi-exclamation-triangle text-amber-600 dark:text-amber-400 text-xl shrink-0 mt-0.5"></i>
+        <div class="flex-1 min-w-0 text-xs text-amber-800 dark:text-amber-200">
+          El celular no puede acceder a <strong>localhost</strong>. Cargá la IP de la PC servidor en
+          <a routerLink="/configuracion" (click)="mostrarDialogVisor.set(false)" class="underline font-semibold">Configuración</a>
+          (típicamente <span class="font-mono">192.168.x.x:4200</span>).
+        </div>
+      </div>
+    }
+
+    <div class="w-full flex flex-col gap-1.5">
+      <label class="text-xs font-semibold uppercase tracking-wider text-muted-color">URL</label>
+      <div class="flex gap-2 items-center">
+        <input pInputText readonly [value]="urlVisor()" class="flex-1 font-mono text-sm" />
+        <p-button icon="pi pi-copy" severity="secondary" [outlined]="true" (onClick)="copiarUrlVisor()" pTooltip="Copiar URL" ariaLabel="Copiar URL" />
+      </div>
+      <span class="text-xs text-muted-color">
+        El celular tiene que estar en la misma red WiFi del showroom.
+      </span>
+    </div>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cerrar" severity="secondary" [outlined]="true" (onClick)="mostrarDialogVisor.set(false)" />
+  </ng-template>
+</p-dialog>
+
 <div class="page-container flex flex-col bg-orange-50/30 dark:bg-surface-950">
   <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient del PDF) -->
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
@@ -52,6 +95,7 @@
         <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-marron" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
         <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-verde" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
         <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
+        <p-button icon="pi pi-mobile" ariaLabel="Abrir visor en celular" class="btn-kt-marron" (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
         <p-button icon="pi pi-cog" ariaLabel="Configuración" class="btn-kt-gris" routerLink="/configuracion" pTooltip="Descuentos y horarios de sincronización" tooltipPosition="bottom" />
       </div>
     </ng-template>

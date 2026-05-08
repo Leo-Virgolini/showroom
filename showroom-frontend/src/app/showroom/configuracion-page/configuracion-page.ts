@@ -124,10 +124,23 @@ export class ConfiguracionPage {
     () => this.emailPicking().trim() !== this.emailPickingOriginal().trim(),
   );
 
+  // ============================================================
+  // Host del visor (IP:puerto del servidor para el QR)
+  // ============================================================
+  readonly cargandoVisorHost = signal(false);
+  readonly guardandoVisorHost = signal(false);
+  readonly visorHost = signal('');
+  private readonly visorHostOriginal = signal('');
+
+  readonly hayCambiosVisorHost = computed(
+    () => this.visorHost().trim() !== this.visorHostOriginal().trim(),
+  );
+
   constructor() {
     this.cargar();
     this.cargarHorarios();
     this.cargarEmail();
+    this.cargarVisorHost();
   }
 
   // ============================================================
@@ -429,6 +442,64 @@ export class ConfiguracionPage {
       error: (err) => {
         this.guardandoEmail.set(false);
         toastError(this.toast, 'Email picking', err, 'No se pudo guardar el email');
+      },
+    });
+  }
+
+  // ============================================================
+  // Visor host — métodos
+  // ============================================================
+
+  private cargarVisorHost(): void {
+    this.cargandoVisorHost.set(true);
+    this.api.obtenerVisorHost().subscribe({
+      next: (res) => {
+        this.cargandoVisorHost.set(false);
+        this.visorHost.set(res.host ?? '');
+        this.visorHostOriginal.set(res.host ?? '');
+      },
+      error: (err) => {
+        this.cargandoVisorHost.set(false);
+        toastError(this.toast, 'Visor host', err, 'No se pudo cargar el host del visor');
+      },
+    });
+  }
+
+  descartarCambiosVisorHost(): void {
+    this.visorHost.set(this.visorHostOriginal());
+  }
+
+  guardarVisorHost(): void {
+    const valor = this.visorHost().trim();
+    // Validación cliente liviana — la canónica la hace el backend.
+    if (valor.length > 0 && !/^[a-zA-Z0-9.\-]+(:\d{1,5})?$/.test(valor)) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Host inválido',
+        detail: 'Usá IP o hostname con puerto opcional, sin protocolo (ej. 192.168.1.50:4200).',
+        life: 4000,
+      });
+      return;
+    }
+    this.guardandoVisorHost.set(true);
+    this.api.actualizarVisorHost(valor).subscribe({
+      next: (res) => {
+        this.guardandoVisorHost.set(false);
+        const efectivo = res.host ?? '';
+        this.visorHost.set(efectivo);
+        this.visorHostOriginal.set(efectivo);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Host guardado',
+          detail: efectivo
+            ? `El QR del visor va a usar: ${efectivo}`
+            : 'Vacío — el QR usa el host del browser.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoVisorHost.set(false);
+        toastError(this.toast, 'Visor host', err, 'No se pudo guardar el host del visor');
       },
     });
   }

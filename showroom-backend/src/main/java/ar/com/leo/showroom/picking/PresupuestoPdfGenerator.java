@@ -36,13 +36,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Genera un PDF de presupuesto con tema KT GASTRO para mandarle al cliente.
@@ -369,17 +373,79 @@ public class PresupuestoPdfGenerator {
     // Helpers
     // =====================================================
 
+    /**
+     * Carga la imagen del producto recortando los bordes blancos. Misma lógica
+     * que el {@code java-pdf-catalog-generator} original: detecta el bounding
+     * box de píxeles con R/G/B &lt; 240, agrega 50px de margen vertical y
+     * reencodea como PNG. Sin esto, las imágenes de productos con mucho fondo
+     * blanco salen chicas y centradas — recortando se aprovecha mejor la celda.
+     *
+     * <p>Si {@code ImageIO} no puede leer el formato (ej. webp animado),
+     * carga el archivo tal cual sin recortar — iText soporta más formatos
+     * que ImageIO. Si la imagen es completamente blanca o falla el procesado,
+     * cae al fallback (SINIMAGEN).
+     */
     private Image cargarImagenProducto(String sku, ImageData fallback) {
-        return imagenLocalService.buscar(sku)
-                .map(file -> {
-                    try {
-                        return new Image(ImageDataFactory.create(file.toString()));
-                    } catch (Exception e) {
-                        log.warn("Error cargando imagen {}: {}", file, e.getMessage());
-                        return fallback != null ? new Image(fallback) : null;
-                    }
-                })
-                .orElseGet(() -> fallback != null ? new Image(fallback) : null);
+        Optional<File> fileOpt = imagenLocalService.buscar(sku);
+        if (fileOpt.isEmpty()) {
+            return fallback != null ? new Image(fallback) : null;
+        }
+        File file = fileOpt.get();
+        try {
+            BufferedImage original = ImageIO.read(file);
+            if (original == null) {
+                // ImageIO no soporta el formato — lo cargamos tal cual via iText.
+                return new Image(ImageDataFactory.create(file.toString()));
+            }
+            BufferedImage recortada = recortarBordesBlancos(original);
+            if (recortada == null) {
+                log.warn("Imagen sin contenido visible (toda blanca): {}", file.getName());
+                return fallback != null ? new Image(fallback) : null;
+            }
+            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                ImageIO.write(recortada, "png", baos);
+                return new Image(ImageDataFactory.create(baos.toByteArray()));
+            }
+        } catch (Exception e) {
+            log.warn("Error procesando imagen {}: {}", file.getName(), e.getMessage());
+            return fallback != null ? new Image(fallback) : null;
+        }
+    }
+
+    /**
+     * Detecta el bounding box de píxeles "no blancos" (R, G o B &lt; 240) y
+     * devuelve la subimagen recortada con 50px de margen vertical extra arriba
+     * y abajo (para que el producto no quede pegado al borde de la celda).
+     * Devuelve {@code null} si la imagen es completamente blanca.
+     */
+    private static BufferedImage recortarBordesBlancos(BufferedImage original) {
+        final int width = original.getWidth();
+        final int height = original.getHeight();
+        final int threshold = 240;
+        // Lectura masiva de píxeles — mucho más rápido que getRGB(x,y) por píxel.
+        int[] pixels = original.getRGB(0, 0, width, height, null, 0, width);
+        int left = width, right = -1, top = height, bottom = -1;
+        for (int y = 0, idx = 0; y < height; y++) {
+            for (int x = 0; x < width; x++, idx++) {
+                int rgb = pixels[idx];
+                int r = (rgb >> 16) & 0xff;
+                int g = (rgb >> 8) & 0xff;
+                int b = rgb & 0xff;
+                if (r < threshold || g < threshold || b < threshold) {
+                    if (x < left) left = x;
+                    if (x > right) right = x;
+                    if (y < top) top = y;
+                    if (y > bottom) bottom = y;
+                }
+            }
+        }
+        if (right < left || bottom < top) {
+            return null;
+        }
+        final int marginVertical = 50;
+        top = Math.max(0, top - marginVertical);
+        bottom = Math.min(height - 1, bottom + marginVertical);
+        return original.getSubimage(left, top, right - left + 1, bottom - top + 1);
     }
 
     private ImageData cargarRecurso(String resourcePath) {
