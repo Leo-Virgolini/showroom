@@ -68,66 +68,44 @@
           </div>
         </div>
 
-        <!-- Tiles de descuento por escala -->
-        @if (umbral5() > 0 || umbral10() > 0) {
+        <!-- Tiles de descuento — uno por escala configurada -->
+        @if (escalasOrdenadas().length > 0) {
           <div class="flex flex-col gap-2"
                [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
             <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
               Comprá más y ahorrás
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              @if (umbral5() > 0) {
-                <div
-                  class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 flex flex-col gap-1.5 transition-opacity"
-                  [class.opacity-50]="r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0">
+              @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+                @let c = escalaColorScheme(i);
+                <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity"
+                     [class]="c.border + ' ' + c.bg"
+                     [class.opacity-50]="haySuperior(r.pvpKtGastroSinIva, escala)">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">−{{ porcentaje5() }}%</span>
-                    @if (r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0) {
-                      <span class="text-[0.7rem] font-medium text-amber-800/70 dark:text-amber-300/70 italic">
-                        Superado por −{{ porcentaje10() }}%
+                    <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
+                      −{{ escala.porcentaje }}%
+                    </span>
+                    @if (haySuperior(r.pvpKtGastroSinIva, escala)) {
+                      <span class="text-[0.7rem] font-medium italic" [class]="c.textItalic">
+                        Superado por mejor descuento
                       </span>
-                    } @else if (r.pvpKtGastroSinIva >= umbral5()) {
-                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-amber-800 dark:text-amber-300">
+                    } @else if (r.pvpKtGastroSinIva >= escala.umbralMin) {
+                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold" [class]="c.textTitle">
                         <i class="pi pi-check-circle text-[0.75rem]"></i>
                         Aplicado
                       </span>
                     } @else {
-                      <span class="text-[0.7rem] font-medium text-amber-800 dark:text-amber-300">
-                        Por compras desde {{ umbral5() | currency:'ARS':'symbol':'1.0-0' }}
+                      <span class="text-[0.7rem] font-medium" [class]="c.textTitle">
+                        Por compras desde {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
                       </span>
                     }
                   </div>
-                  <div class="text-2xl sm:text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-0.5">
-                    {{ r.pvpKtGastroSinIvaMenos5 | currency:'ARS':'symbol':'1.0-0' }}
+                  <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
+                    {{ precioConDescuento(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
                   </div>
-                  <div class="text-xs text-amber-700/80 dark:text-amber-300/80 inline-flex items-center gap-1">
+                  <div class="text-xs inline-flex items-center gap-1" [class]="c.textSmall">
                     <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje5()) | currency:'ARS':'symbol':'1.0-0' }} c/u
-                  </div>
-                </div>
-              }
-
-              @if (umbral10() > 0) {
-                <div class="rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 flex flex-col gap-1.5">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">−{{ porcentaje10() }}%</span>
-                    @if (r.pvpKtGastroSinIva >= umbral10()) {
-                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-emerald-800 dark:text-emerald-300">
-                        <i class="pi pi-check-circle text-[0.75rem]"></i>
-                        Aplicado
-                      </span>
-                    } @else {
-                      <span class="text-[0.7rem] font-medium text-emerald-800 dark:text-emerald-300">
-                        Por compras desde {{ umbral10() | currency:'ARS':'symbol':'1.0-0' }}
-                      </span>
-                    }
-                  </div>
-                  <div class="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-0.5">
-                    {{ r.pvpKtGastroSinIvaMenos10 | currency:'ARS':'symbol':'1.0-0' }}
-                  </div>
-                  <div class="text-xs text-emerald-700/80 dark:text-emerald-300/80 inline-flex items-center gap-1">
-                    <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje10()) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }} c/u
                   </div>
                 </div>
               }
@@ -137,16 +115,43 @@
       }
     </main>
   } @else {
-    <main class="flex-1 flex flex-col items-center justify-center px-6 gap-4">
-      <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-100 dark:bg-surface-800 flex items-center justify-center">
-        <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
+    <main class="flex-1 flex flex-col items-center justify-center px-6 gap-6 pb-6">
+      <div class="flex flex-col items-center gap-4">
+        <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-100 dark:bg-surface-800 flex items-center justify-center">
+          <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
+        </div>
+        <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
+          Esperando producto…
+        </div>
+        <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
+          Cuando se escanee un código en el showroom, vas a ver el producto acá.
+        </div>
       </div>
-      <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
-        Esperando producto…
-      </div>
-      <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
-        Cuando se escanee un código en el showroom, vas a ver el producto acá.
-      </div>
+
+      @if (escalasOrdenadas().length > 0) {
+        <div class="w-full max-w-xl flex flex-col gap-3 mt-4">
+          <div class="text-xs font-semibold uppercase tracking-wider text-muted-color text-center">
+            Promociones vigentes
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+              @let c = escalaColorScheme(i);
+              <div class="rounded-xl border-2 p-4 flex flex-col items-center gap-2"
+                   [class]="c.border + ' ' + c.bg">
+                <span class="px-3 py-1 rounded-full text-white text-base font-bold" [class]="c.pill">
+                  −{{ escala.porcentaje }}%
+                </span>
+                <div class="text-sm font-medium text-center" [class]="c.textTitle">
+                  Por compras desde
+                </div>
+                <div class="text-xl sm:text-2xl font-bold tabular-nums leading-none" [class]="c.textBig">
+                  {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      }
     </main>
   }
 </div>

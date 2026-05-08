@@ -1,35 +1,49 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './auth/auth.guard';
 
 export const routes: Routes = [
+  // Rutas públicas — no requieren login.
   {
-    path: '',
+    path: 'login',
     loadComponent: () =>
-      import('./showroom/showroom-page/showroom-page').then((m) => m.ShowroomPage),
-  },
-  {
-    path: 'etiquetas',
-    loadComponent: () =>
-      import('./showroom/etiquetas-page/etiquetas-page').then((m) => m.EtiquetasPage),
-  },
-  {
-    path: 'productos',
-    loadComponent: () =>
-      import('./showroom/productos-page/productos-page').then((m) => m.ProductosPage),
-  },
-  {
-    path: 'pedidos',
-    loadComponent: () =>
-      import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
-  },
-  {
-    path: 'configuracion',
-    loadComponent: () =>
-      import('./showroom/configuracion-page/configuracion-page').then((m) => m.ConfiguracionPage),
+      import('./auth/login-page/login-page').then((m) => m.LoginPage),
   },
   {
     path: 'visor',
     loadComponent: () =>
       import('./showroom/visor-page/visor-page').then((m) => m.VisorPage),
+  },
+
+  // Rutas protegidas — requieren sesión activa.
+  {
+    path: '',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/showroom-page/showroom-page').then((m) => m.ShowroomPage),
+  },
+  {
+    path: 'etiquetas',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/etiquetas-page/etiquetas-page').then((m) => m.EtiquetasPage),
+  },
+  {
+    path: 'productos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/productos-page/productos-page').then((m) => m.ProductosPage),
+  },
+  {
+    path: 'pedidos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
+  },
+  {
+    path: 'configuracion',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/configuracion-page/configuracion-page').then((m) => m.ConfiguracionPage),
   },
   { path: '**', redirectTo: '' },
 ];

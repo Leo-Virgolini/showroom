@@ -136,6 +136,19 @@ textarea,
   --p-button-primary-active-border-color: #1f0f04;
 }
 
+// Rojo apagado — para acciones de salida/cierre como logout. No tan agresivo
+// como un danger pero claramente distinto del resto de la toolbar.
+.btn-kt-rojo {
+  --p-button-primary-background: #b91c1c;
+  --p-button-primary-border-color: #b91c1c;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #991b1b;
+  --p-button-primary-hover-border-color: #991b1b;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #7f1d1d;
+  --p-button-primary-active-border-color: #7f1d1d;
+}
+
 // Tag más grande — para estados destacados (stock disponible / sin stock).
 // Usamos `transform: scale` en lugar de override de padding/font-size para no
 // pelearnos con el styling interno de Aura (cuyas reglas de severity tienen

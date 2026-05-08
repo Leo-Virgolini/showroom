@@ -597,17 +597,6 @@ public class ShowroomService {
     private ScanResultDTO toScanResult(ProductoCache pc) {
         BigDecimal sinIva = calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva());
 
-        // Los dos primeros escalones (orden ascendente por umbral) llenan los
-        // campos Menos5 / Menos10 del DTO de scan. Si la tabla tiene menos
-        // escalones, los faltantes quedan en null.
-        List<EscalaDescuento> escalas = escalaDescuentoService.listar();
-        BigDecimal menos5 = escalas.size() >= 1
-                ? aplicarDescuento(sinIva, escalas.get(0).getPorcentaje())
-                : null;
-        BigDecimal menos10 = escalas.size() >= 2
-                ? aplicarDescuento(sinIva, escalas.get(1).getPorcentaje())
-                : null;
-
         boolean stockStale = pc.getSincronizadoAt() == null
                 || Duration.between(pc.getSincronizadoAt(), Instant.now())
                         .toMinutes() >= stockStaleMinutes;
@@ -617,8 +606,6 @@ public class ShowroomService {
                 pc.getDescripcion(),
                 pc.getPvpKtGastroConIva(),
                 sinIva,
-                menos5,
-                menos10,
                 pc.getPorcIva(),
                 pc.getStockTotal(),
                 pc.getHabilitado(),
@@ -633,13 +620,6 @@ public class ShowroomService {
         if (porcIva == null || porcIva.signum() == 0) return conIva.setScale(2, RoundingMode.HALF_UP);
         BigDecimal divisor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
         return conIva.divide(divisor, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Aplica un descuento porcentual: base × (1 − porcentaje/100). */
-    private BigDecimal aplicarDescuento(BigDecimal base, BigDecimal porcentaje) {
-        if (base == null) return null;
-        BigDecimal factor = BigDecimal.ONE.subtract(porcentaje.divide(CIEN, 6, RoundingMode.HALF_UP));
-        return base.multiply(factor).setScale(2, RoundingMode.HALF_UP);
     }
 
     /**

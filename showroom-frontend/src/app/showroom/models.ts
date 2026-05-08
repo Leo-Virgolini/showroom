@@ -3,8 +3,6 @@ export interface ScanResult {
   descripcion: string | null;
   pvpKtGastroConIva: number | null;
   pvpKtGastroSinIva: number | null;
-  pvpKtGastroSinIvaMenos5: number | null;
-  pvpKtGastroSinIvaMenos10: number | null;
   porcIva: number | null;
   stockTotal: number | null;
   habilitado: boolean | null;

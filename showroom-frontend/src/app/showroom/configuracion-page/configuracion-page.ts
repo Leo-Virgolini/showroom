@@ -11,7 +11,9 @@ import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { CheckboxModule } from 'primeng/checkbox';
 import { DatePickerModule } from 'primeng/datepicker';
+import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -19,6 +21,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
+import { AuthService, Usuario } from '../../auth/auth.service';
 import { EscalaDescuento, HorarioSync } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -54,7 +57,9 @@ interface FilaHorario {
     RouterLink,
     ButtonModule,
     CardModule,
+    CheckboxModule,
     DatePickerModule,
+    DialogModule,
     IconFieldModule,
     InputIconModule,
     InputNumberModule,
@@ -68,6 +73,7 @@ interface FilaHorario {
 })
 export class ConfiguracionPage {
   private readonly api = inject(ShowroomService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(MessageService);
 
   // ============================================================
@@ -124,10 +130,29 @@ export class ConfiguracionPage {
     () => this.emailPicking().trim() !== this.emailPickingOriginal().trim(),
   );
 
+  // ============================================================
+  // Usuarios (CRUD)
+  // ============================================================
+  readonly cargandoUsuarios = signal(false);
+  readonly usuarios = signal<Usuario[]>([]);
+
+  /** Dialog para crear/editar usuario. null = cerrado. */
+  readonly usuarioEditar = signal<Usuario | null>(null);
+  readonly mostrarDialogUsuario = signal(false);
+  readonly modoEdicionUsuario = signal<'crear' | 'editar'>('crear');
+  readonly guardandoUsuario = signal(false);
+  readonly formUsername = signal('');
+  readonly formPassword = signal('');
+  readonly formNombre = signal('');
+  readonly formActivo = signal(true);
+  readonly mostrarFormPassword = signal(false);
+
+
   constructor() {
     this.cargar();
     this.cargarHorarios();
     this.cargarEmail();
+    this.cargarUsuarios();
   }
 
   // ============================================================
@@ -434,5 +459,149 @@ export class ConfiguracionPage {
   }
 
 
+  // ============================================================
+  // Usuarios — métodos
+  // ============================================================
+
+  private cargarUsuarios(): void {
+    this.cargandoUsuarios.set(true);
+    this.auth.listarUsuarios().subscribe({
+      next: (lista) => {
+        this.cargandoUsuarios.set(false);
+        this.usuarios.set(lista);
+      },
+      error: (err) => {
+        this.cargandoUsuarios.set(false);
+        toastError(this.toast, 'Usuarios', err, 'No se pudieron cargar los usuarios');
+      },
+    });
+  }
+
+  abrirDialogCrearUsuario(): void {
+    this.modoEdicionUsuario.set('crear');
+    this.usuarioEditar.set(null);
+    this.formUsername.set('');
+    this.formPassword.set('');
+    this.formNombre.set('');
+    this.formActivo.set(true);
+    this.mostrarFormPassword.set(false);
+    this.mostrarDialogUsuario.set(true);
+  }
+
+  abrirDialogEditarUsuario(u: Usuario): void {
+    this.modoEdicionUsuario.set('editar');
+    this.usuarioEditar.set(u);
+    this.formUsername.set(u.username);
+    this.formPassword.set('');
+    this.formNombre.set(u.nombre ?? '');
+    this.formActivo.set(u.activo);
+    this.mostrarDialogUsuario.set(true);
+  }
+
+  guardarUsuario(): void {
+    const username = this.formUsername().trim();
+    const nombre = this.formNombre().trim();
+    const activo = this.formActivo();
+
+    if (this.modoEdicionUsuario() === 'crear') {
+      const password = this.formPassword();
+      if (!username || !password) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'Datos incompletos',
+          detail: 'Cargá username y password.',
+          life: 3000,
+        });
+        return;
+      }
+      this.guardandoUsuario.set(true);
+      this.auth.crearUsuario({ username, password, nombre, activo }).subscribe({
+        next: () => {
+          this.guardandoUsuario.set(false);
+          this.mostrarDialogUsuario.set(false);
+          this.cargarUsuarios();
+          this.toast.add({
+            severity: 'success',
+            summary: 'Usuario creado',
+            detail: `${username} ya puede iniciar sesión.`,
+            life: 3000,
+          });
+        },
+        error: (err) => {
+          this.guardandoUsuario.set(false);
+          toastError(this.toast, 'Crear usuario', err, 'No se pudo crear el usuario');
+        },
+      });
+    } else {
+      const u = this.usuarioEditar();
+      if (!u) return;
+      const password = this.formPassword();
+      // Validación: si pidió cambiar password, mínimo 6 chars.
+      if (password.length > 0 && password.length < 6) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'Contraseña inválida',
+          detail: 'Mínimo 6 caracteres.',
+          life: 4000,
+        });
+        return;
+      }
+      this.guardandoUsuario.set(true);
+      this.auth.actualizarUsuario(u.id, { nombre, activo }).subscribe({
+        next: () => {
+          // Si el operador cargó una contraseña nueva, hago un reset extra.
+          // Si no, terminamos acá.
+          if (password.length === 0) {
+            this.finalizarEdicion(u.username, false);
+            return;
+          }
+          this.auth.resetearPassword(u.id, password).subscribe({
+            next: () => this.finalizarEdicion(u.username, true),
+            error: (err) => {
+              this.guardandoUsuario.set(false);
+              toastError(this.toast, 'Cambiar password', err,
+                'Datos guardados, pero no se pudo cambiar la contraseña');
+            },
+          });
+        },
+        error: (err) => {
+          this.guardandoUsuario.set(false);
+          toastError(this.toast, 'Actualizar usuario', err, 'No se pudo actualizar el usuario');
+        },
+      });
+    }
+  }
+
+  private finalizarEdicion(username: string, passwordCambiado: boolean): void {
+    this.guardandoUsuario.set(false);
+    this.mostrarDialogUsuario.set(false);
+    this.cargarUsuarios();
+    this.toast.add({
+      severity: 'success',
+      summary: 'Usuario actualizado',
+      detail: passwordCambiado
+        ? `Cambios guardados para ${username}, incluida la nueva contraseña.`
+        : `Cambios guardados para ${username}.`,
+      life: 3000,
+    });
+  }
+
+  eliminarUsuario(u: Usuario): void {
+    if (!confirm(`¿Eliminar al usuario "${u.username}"?`)) return;
+    this.auth.eliminarUsuario(u.id).subscribe({
+      next: () => {
+        this.cargarUsuarios();
+        this.toast.add({
+          severity: 'success',
+          summary: 'Usuario eliminado',
+          detail: u.username,
+          life: 3000,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Eliminar usuario', err, 'No se pudo eliminar'),
+    });
+  }
+
+  trackByUsuarioId = (_: number, u: Usuario) => u.id;
   trackByIndex = (i: number) => i;
 }

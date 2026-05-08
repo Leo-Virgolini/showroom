@@ -303,5 +303,152 @@
       </div>
     </p-card>
 
+    <!-- ============================================================
+         Usuarios (CRUD)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Operadores del showroom con acceso a la app. Cualquier usuario activo puede iniciar sesión.
+        </div>
+        <div class="text-xs text-muted-color">
+          Si un usuario está deshabilitado, el login le falla aunque la contraseña sea correcta.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-semibold m-0">Usuarios</h3>
+        <p-button
+          icon="pi pi-plus"
+          label="Nuevo usuario"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="abrirDialogCrearUsuario()"
+        />
+      </div>
+
+      <p-table
+        [value]="usuarios()"
+        [loading]="cargandoUsuarios()"
+        [rowTrackBy]="trackByUsuarioId"
+        class="p-datatable-sm"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th style="width: 6rem" class="text-center">Activo</th>
+            <th style="width: 12rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-u>
+          <tr>
+            <td class="font-mono">{{ u.username }}</td>
+            <td>{{ u.nombre || '—' }}</td>
+            <td class="text-center">
+              @if (u.activo) {
+                <i class="pi pi-check-circle text-emerald-600 dark:text-emerald-400"></i>
+              } @else {
+                <i class="pi pi-ban text-red-600 dark:text-red-400"></i>
+              }
+            </td>
+            <td class="text-right">
+              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
+                (onClick)="abrirDialogEditarUsuario(u)" pTooltip="Editar (incluye cambio de contraseña)" tooltipPosition="left" />
+              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+                (onClick)="eliminarUsuario(u)" pTooltip="Eliminar" tooltipPosition="left" />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="4" class="text-center py-12 text-muted-color">
+              <i class="pi pi-users text-3xl opacity-50 block mb-2"></i>
+              No hay usuarios cargados.
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+
   </main>
 </div>
+
+<!-- Dialog: crear / editar usuario -->
+<p-dialog [(visible)]="mostrarDialogUsuario" [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [header]="modoEdicionUsuario() === 'crear' ? 'Nuevo usuario' : 'Editar usuario'">
+  <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-1.5">
+      <label for="formUsername" class="text-sm font-medium text-muted-color">Usuario</label>
+      <input
+        pInputText
+        id="formUsername"
+        type="text"
+        [ngModel]="formUsername()"
+        (ngModelChange)="formUsername.set($event)"
+        autocomplete="off"
+        class="w-full font-mono"
+        [disabled]="modoEdicionUsuario() === 'editar' || guardandoUsuario()"
+      />
+      @if (modoEdicionUsuario() === 'editar') {
+        <span class="text-xs text-muted-color">El username no se puede cambiar después de creado.</span>
+      }
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="formPassword" class="text-sm font-medium text-muted-color">
+        {{ modoEdicionUsuario() === 'crear' ? 'Contraseña' : 'Nueva contraseña (opcional)' }}
+      </label>
+      <div class="relative w-full">
+        <input
+          pInputText
+          id="formPassword"
+          [type]="mostrarFormPassword() ? 'text' : 'password'"
+          [ngModel]="formPassword()"
+          (ngModelChange)="formPassword.set($event)"
+          [placeholder]="modoEdicionUsuario() === 'editar' ? 'Dejar vacío para no cambiar' : ''"
+          autocomplete="new-password"
+          class="w-full pr-10"
+          [disabled]="guardandoUsuario()"
+        />
+        <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-color hover:text-surface-700 dark:hover:text-surface-200 cursor-pointer bg-transparent border-0"
+          (click)="mostrarFormPassword.set(!mostrarFormPassword())">
+          <i [class]="mostrarFormPassword() ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
+        </button>
+      </div>
+      <span class="text-xs text-muted-color">Mínimo 6 caracteres.</span>
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="formNombre" class="text-sm font-medium text-muted-color">Nombre (opcional)</label>
+      <input
+        pInputText
+        id="formNombre"
+        type="text"
+        [ngModel]="formNombre()"
+        (ngModelChange)="formNombre.set($event)"
+        placeholder="Ej: Juan Pérez"
+        class="w-full"
+        [disabled]="guardandoUsuario()"
+      />
+    </div>
+
+    <label class="flex items-center gap-2 cursor-pointer">
+      <p-checkbox [ngModel]="formActivo()" (ngModelChange)="formActivo.set($event)" [binary]="true" inputId="formActivo"
+        [disabled]="guardandoUsuario()" />
+      <span class="text-sm">Activo (puede iniciar sesión)</span>
+    </label>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogUsuario.set(false)" [disabled]="guardandoUsuario()" />
+    <p-button [label]="modoEdicionUsuario() === 'crear' ? 'Crear' : 'Guardar'"
+      icon="pi pi-check" (onClick)="guardarUsuario()" [loading]="guardandoUsuario()" />
+  </ng-template>
+</p-dialog>
+

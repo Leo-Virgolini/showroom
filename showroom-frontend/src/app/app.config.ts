@@ -6,7 +6,7 @@ import {
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import localeEsArExtra from '@angular/common/locales/extra/es-AR';
@@ -41,6 +41,7 @@ const KTPreset = definePreset(Aura, {
 import { routes } from './app.routes';
 import { provideServiceWorker } from '@angular/service-worker';
 import { backendStatusInterceptor } from './showroom/backend-status.interceptor';
+import { authInterceptor } from './auth/auth.interceptor';
 
 // Registramos los datos del locale es-AR para que pipes como currency, date,
 // number y decimal usen formato argentino sin tener que pasar el locale en cada
@@ -53,7 +54,13 @@ export const appConfig: ApplicationConfig = {
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'ARS' },
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    provideHttpClient(withFetch(), withInterceptors([backendStatusInterceptor])),
+    provideHttpClient(
+      withFetch(),
+      // CSRF: Spring Security manda la cookie `XSRF-TOKEN` y espera el header
+      // `X-XSRF-TOKEN` en requests mutantes. Angular lo hace automáticamente.
+      withXsrfConfiguration({ cookieName: 'XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }),
+      withInterceptors([authInterceptor, backendStatusInterceptor]),
+    ),
     providePrimeNG({
       theme: {
         preset: KTPreset,

@@ -102,6 +102,7 @@
         <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
         <p-button icon="pi pi-mobile" ariaLabel="Abrir visor en celular" class="btn-kt-marron" (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
         <p-button icon="pi pi-cog" ariaLabel="Configuración" class="btn-kt-gris" routerLink="/configuracion" pTooltip="Descuentos y horarios de sincronización" tooltipPosition="bottom" />
+        <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo" (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />
       </div>
     </ng-template>
   </p-toolbar>
@@ -207,71 +208,47 @@
           </div>
 
           <!-- AHORROS POR ESCALA — comprando más bajan el precio unitario.
-               Solo se muestra si hay escalones configurados; si la tabla
-               está vacía no aplica ningún descuento y el bloque sobra. -->
-          @if (umbral5() > 0 || umbral10() > 0) {
+               Itera sobre todas las escalas configuradas; alterna ámbar
+               (índice par) y verde (índice impar) para distinguir. -->
+          @if (escalasOrdenadas().length > 0) {
           <div class="flex flex-col gap-2"
                [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
             <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1">
               Comprá más y ahorrás
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <!-- Primer escalón -->
-              @if (umbral5() > 0) {
-              <div
-                class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20 p-4 flex flex-col gap-1.5 transition-opacity"
-                [class.opacity-50]="r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">−{{ porcentaje5() }}%</span>
-                  @if (r.pvpKtGastroSinIva >= umbral10() && umbral10() > 0) {
-                    <span class="text-[0.7rem] font-medium text-amber-800/70 dark:text-amber-300/70 italic">
-                      Superado por −{{ porcentaje10() }}%
+              @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+                @let c = escalaColorScheme(i);
+                <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity"
+                     [class]="c.border + ' ' + c.bg"
+                     [class.opacity-50]="haySuperior(r.pvpKtGastroSinIva, escala)">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
+                      −{{ escala.porcentaje }}%
                     </span>
-                  } @else if (r.pvpKtGastroSinIva >= umbral5()) {
-                    <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-amber-800 dark:text-amber-300">
-                      <i class="pi pi-check-circle text-[0.75rem]"></i>
-                      Aplicado
-                    </span>
-                  } @else {
-                    <span class="text-[0.7rem] font-medium text-amber-800 dark:text-amber-300">
-                      Por compras desde {{ umbral5() | currency:'ARS':'symbol':'1.0-0' }}
-                    </span>
-                  }
+                    @if (haySuperior(r.pvpKtGastroSinIva, escala)) {
+                      <span class="text-[0.7rem] font-medium italic" [class]="c.textItalic">
+                        Superado por mejor descuento
+                      </span>
+                    } @else if (r.pvpKtGastroSinIva >= escala.umbralMin) {
+                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold" [class]="c.textTitle">
+                        <i class="pi pi-check-circle text-[0.75rem]"></i>
+                        Aplicado
+                      </span>
+                    } @else {
+                      <span class="text-[0.7rem] font-medium" [class]="c.textTitle">
+                        Por compras desde {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
+                      </span>
+                    }
+                  </div>
+                  <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
+                    {{ precioConDescuento(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
+                  </div>
+                  <div class="text-xs inline-flex items-center gap-1" [class]="c.textSmall">
+                    <i class="pi pi-arrow-down text-[0.65rem]"></i>
+                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                  </div>
                 </div>
-                <div class="text-2xl sm:text-3xl font-bold tabular-nums text-amber-700 dark:text-amber-300 leading-none mt-0.5">
-                  {{ r.pvpKtGastroSinIvaMenos5 | currency:'ARS':'symbol':'1.0-0' }}
-                </div>
-                <div class="text-xs text-amber-700/80 dark:text-amber-300/80 inline-flex items-center gap-1">
-                  <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                  Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje5()) | currency:'ARS':'symbol':'1.0-0' }} c/u
-                </div>
-              </div>
-              }
-
-              <!-- Segundo escalón -->
-              @if (umbral10() > 0) {
-              <div class="rounded-xl border-2 border-emerald-400 dark:border-emerald-700 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20 p-4 flex flex-col gap-1.5">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold">−{{ porcentaje10() }}%</span>
-                  @if (r.pvpKtGastroSinIva >= umbral10()) {
-                    <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold text-emerald-800 dark:text-emerald-300">
-                      <i class="pi pi-check-circle text-[0.75rem]"></i>
-                      Aplicado
-                    </span>
-                  } @else {
-                    <span class="text-[0.7rem] font-medium text-emerald-800 dark:text-emerald-300">
-                      Por compras desde {{ umbral10() | currency:'ARS':'symbol':'1.0-0' }}
-                    </span>
-                  }
-                </div>
-                <div class="text-2xl sm:text-3xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300 leading-none mt-0.5">
-                  {{ r.pvpKtGastroSinIvaMenos10 | currency:'ARS':'symbol':'1.0-0' }}
-                </div>
-                <div class="text-xs text-emerald-700/80 dark:text-emerald-300/80 inline-flex items-center gap-1">
-                  <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                  Ahorrás {{ ahorro(r.pvpKtGastroSinIva, porcentaje10()) | currency:'ARS':'symbol':'1.0-0' }} c/u
-                </div>
-              </div>
               }
             </div>
           </div>
@@ -371,26 +348,13 @@
                 Descuentos vigentes
               </div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                @for (escala of escalasDescuento(); track escala.umbralMin; let i = $index) {
-                  <div class="rounded-xl border-2 p-3 flex items-center gap-3 text-left"
-                    [class.border-amber-300]="i === 0"
-                    [class.dark:border-amber-700]="i === 0"
-                    [class.bg-amber-50]="i === 0"
-                    [class.dark:bg-amber-950/40]="i === 0"
-                    [class.border-emerald-400]="i >= 1"
-                    [class.dark:border-emerald-700]="i >= 1"
-                    [class.bg-emerald-50]="i >= 1"
-                    [class.dark:bg-emerald-950/40]="i >= 1">
-                    <span class="px-2.5 py-1 rounded-full text-white text-xs font-bold shrink-0"
-                      [class.bg-amber-500]="i === 0"
-                      [class.bg-emerald-600]="i >= 1">
+                @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+                  @let c = escalaColorScheme(i);
+                  <div class="rounded-xl border-2 p-3 flex items-center gap-3 text-left" [class]="c.border + ' ' + c.bg">
+                    <span class="px-2.5 py-1 rounded-full text-white text-xs font-bold shrink-0" [class]="c.pill">
                       −{{ escala.porcentaje }}%
                     </span>
-                    <div class="text-sm"
-                      [class.text-amber-800]="i === 0"
-                      [class.dark:text-amber-300]="i === 0"
-                      [class.text-emerald-800]="i >= 1"
-                      [class.dark:text-emerald-300]="i >= 1">
+                    <div class="text-sm" [class]="c.textTitle">
                       Por compras desde
                       <span class="font-bold tabular-nums">{{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}</span>
                     </div>
@@ -500,11 +464,7 @@
           </div>
 
           @if (descuentoAplicado() > 0) {
-          <div class="flex items-baseline justify-between text-sm"
-            [class.text-amber-700]="descuentoAplicado() === porcentaje5()"
-            [class.dark:text-amber-300]="descuentoAplicado() === porcentaje5()"
-            [class.text-emerald-600]="descuentoAplicado() === porcentaje10()"
-            [class.dark:text-emerald-400]="descuentoAplicado() === porcentaje10()">
+          <div class="flex items-baseline justify-between text-sm text-emerald-700 dark:text-emerald-300">
             <span class="font-medium inline-flex items-center gap-1.5">
               <i class="pi pi-percentage text-xs"></i>
               Descuento {{ descuentoAplicado() }}%

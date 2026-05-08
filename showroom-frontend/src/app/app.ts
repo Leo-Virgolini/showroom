@@ -16,6 +16,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ToastModule } from 'primeng/toast';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TooltipModule } from 'primeng/tooltip';
+import { AuthService } from './auth/auth.service';
 import { BackendStatusService } from './showroom/backend-status.service';
 import { PwaInstallService } from './showroom/pwa-install.service';
 import { ShowroomService } from './showroom/showroom.service';
@@ -34,6 +35,7 @@ export class App {
   protected readonly syncState = inject(SyncStateService);
   protected readonly backendStatus = inject(BackendStatusService);
   protected readonly pwaInstall = inject(PwaInstallService);
+  protected readonly auth = inject(AuthService);
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
@@ -137,6 +139,11 @@ export class App {
   });
 
   constructor() {
+    // Resolver la sesión inicial al arrancar la app — el guard también lo
+    // hace pero precargarlo acá evita el flicker de "no logueado → logueado"
+    // cuando el operador abre la app con una sesión ya activa.
+    this.auth.cargarSesionInicial().subscribe();
+
     // Tick por segundo solo cuando el banner es visible — sin sync, no hay
     // necesidad de invalidar `transcurrido()` ni `progresoEstimado()` cada
     // segundo (el árbol del banner ni siquiera está montado).

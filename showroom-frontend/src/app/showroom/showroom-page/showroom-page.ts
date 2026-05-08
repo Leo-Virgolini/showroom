@@ -13,7 +13,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
@@ -34,6 +34,7 @@ import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
+import { AuthService } from '../../auth/auth.service';
 import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
@@ -158,6 +159,8 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
 })
 export class ShowroomPage implements AfterViewInit {
   private readonly api = inject(ShowroomService);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly toast = inject(MessageService);
   private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
@@ -270,13 +273,11 @@ export class ShowroomPage implements AfterViewInit {
     [...this.escalasDescuento()].sort((a, b) => b.umbralMin - a.umbralMin),
   );
 
-  /** Compatibilidad con el HTML: primer y segundo umbral de la lista. */
-  readonly umbral5 = computed(() => this.escalasDescuento()[0]?.umbralMin ?? 0);
-  readonly umbral10 = computed(() => this.escalasDescuento()[1]?.umbralMin ?? 0);
-  /** Porcentajes correspondientes — el HTML los usa en pildoras y cálculos
-   *  de ahorro para mantenerse consistente con la config (no hardcodear 5/10). */
-  readonly porcentaje5 = computed(() => this.escalasDescuento()[0]?.porcentaje ?? 0);
-  readonly porcentaje10 = computed(() => this.escalasDescuento()[1]?.porcentaje ?? 0);
+  /** Escalones ordenados de menor a mayor umbral — orden natural para mostrar
+   *  los tiles "comprá más" (el más cercano primero, los mejores al final). */
+  readonly escalasOrdenadas = computed(() =>
+    [...this.escalasDescuento()].sort((a, b) => a.umbralMin - b.umbralMin),
+  );
 
   /** Suma del PVP s/IVA por cantidad, sin aplicar descuento — base para decidir el escalón. */
   readonly subtotalPreDescuento = computed(() =>
@@ -340,6 +341,36 @@ export class ShowroomPage implements AfterViewInit {
   ahorro(base: number | null, descuento: number): number {
     if (base == null) return 0;
     return base * (descuento / 100);
+  }
+
+  /** Precio final aplicando el descuento. */
+  precioConDescuento(base: number | null, descuento: number): number {
+    if (base == null) return 0;
+    return base - this.ahorro(base, descuento);
+  }
+
+  /** true si hay un escalón con umbral mayor (mejor descuento) que el precio
+   *  ya alcanza. Usado para atenuar tiles "menores" cuando otro mejor aplica. */
+  haySuperior(precio: number, escala: EscalaDescuento): boolean {
+    return this.escalasOrdenadas().some(
+      (e) => e.umbralMin > escala.umbralMin && precio >= e.umbralMin,
+    );
+  }
+
+  /**
+   * Esquema de colores para el tile N (0-indexado). 5 colores distintos
+   * (ámbar → esmeralda → cielo → violeta → rosa), a partir del 6° cicla.
+   */
+  escalaColorScheme(i: number): {
+    border: string;
+    bg: string;
+    pill: string;
+    textTitle: string;
+    textBig: string;
+    textSmall: string;
+    textItalic: string;
+  } {
+    return ESCALA_COLOR_SCHEMES[i % ESCALA_COLOR_SCHEMES.length];
   }
 
   /** Si la URL de la imagen falla al cargar, blanqueamos el campo para que aparezca el placeholder. */
@@ -557,6 +588,17 @@ export class ShowroomPage implements AfterViewInit {
    */
   abrirDialogVisor(): void {
     this.mostrarDialogVisor.set(true);
+  }
+
+  /** Cierra la sesión y redirige al login. */
+  cerrarSesion(): void {
+    this.auth.logout().subscribe({
+      next: () => this.router.navigate(['/login']),
+      error: () => {
+        // Igual mandamos al login — el logout también limpió el signal local.
+        this.router.navigate(['/login']);
+      },
+    });
   }
 
   /**
@@ -1196,3 +1238,51 @@ export class ShowroomPage implements AfterViewInit {
 
   trackBySku = (_: number, it: CarritoItem) => it.sku;
 }
+
+const ESCALA_COLOR_SCHEMES = [
+  {
+    border: 'border-amber-300 dark:border-amber-700',
+    bg: 'bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/40 dark:to-amber-900/20',
+    pill: 'bg-amber-500',
+    textTitle: 'text-amber-800 dark:text-amber-300',
+    textBig: 'text-amber-700 dark:text-amber-300',
+    textSmall: 'text-amber-700/80 dark:text-amber-300/80',
+    textItalic: 'text-amber-800/70 dark:text-amber-300/70',
+  },
+  {
+    border: 'border-emerald-400 dark:border-emerald-700',
+    bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:from-emerald-950/40 dark:to-emerald-900/20',
+    pill: 'bg-emerald-600',
+    textTitle: 'text-emerald-800 dark:text-emerald-300',
+    textBig: 'text-emerald-700 dark:text-emerald-300',
+    textSmall: 'text-emerald-700/80 dark:text-emerald-300/80',
+    textItalic: 'text-emerald-800/70 dark:text-emerald-300/70',
+  },
+  {
+    border: 'border-sky-400 dark:border-sky-700',
+    bg: 'bg-gradient-to-br from-sky-50 to-sky-100/50 dark:from-sky-950/40 dark:to-sky-900/20',
+    pill: 'bg-sky-600',
+    textTitle: 'text-sky-800 dark:text-sky-300',
+    textBig: 'text-sky-700 dark:text-sky-300',
+    textSmall: 'text-sky-700/80 dark:text-sky-300/80',
+    textItalic: 'text-sky-800/70 dark:text-sky-300/70',
+  },
+  {
+    border: 'border-violet-400 dark:border-violet-700',
+    bg: 'bg-gradient-to-br from-violet-50 to-violet-100/50 dark:from-violet-950/40 dark:to-violet-900/20',
+    pill: 'bg-violet-600',
+    textTitle: 'text-violet-800 dark:text-violet-300',
+    textBig: 'text-violet-700 dark:text-violet-300',
+    textSmall: 'text-violet-700/80 dark:text-violet-300/80',
+    textItalic: 'text-violet-800/70 dark:text-violet-300/70',
+  },
+  {
+    border: 'border-rose-400 dark:border-rose-700',
+    bg: 'bg-gradient-to-br from-rose-50 to-rose-100/50 dark:from-rose-950/40 dark:to-rose-900/20',
+    pill: 'bg-rose-600',
+    textTitle: 'text-rose-800 dark:text-rose-300',
+    textBig: 'text-rose-700 dark:text-rose-300',
+    textSmall: 'text-rose-700/80 dark:text-rose-300/80',
+    textItalic: 'text-rose-800/70 dark:text-rose-300/70',
+  },
+] as const;
