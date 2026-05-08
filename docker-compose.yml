@@ -41,9 +41,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    # Descomentá para conectar con DBeaver/MySQL Workbench desde el host:
-    # ports:
-    #   - "3307:3306"
+    # Acceso desde el host con DBeaver/MySQL Workbench: puerto 3307 (no 3306
+    # para no chocar con otro MySQL que pueda estar corriendo en el host).
+    ports:
+      - "3307:3306"
 
   backend:
     build:
