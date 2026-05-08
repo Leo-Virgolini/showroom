@@ -236,7 +236,7 @@ public class DuxClient {
             }
             vacios = 0;
             all.addAll(parsed.getResults());
-            // Progreso página a página en DEBUG: para 5000 items son ~100 líneas
+            // Progreso página a página en DEBUG: para ~5800 items son ~120 líneas
             // por sync, ruidoso en logs persistentes. El banner SSE ya muestra el
             // progreso a los operadores; el resumen final ("DUX devolvió N items")
             // queda en INFO en CatalogoSyncService.

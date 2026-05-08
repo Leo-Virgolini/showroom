@@ -23,6 +23,7 @@ import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
+import ar.com.leo.showroom.showroom.dto.PickingEmailConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
@@ -276,7 +277,7 @@ public class ShowroomController {
     /**
      * Dispara sincronización del catálogo desde DUX.
      * Por default es incremental (rápido); con ?force=true descarga TODO el
-     * catálogo (~12 minutos por el rate limit de DUX) — útil para resetear el cache.
+     * catálogo (~15 minutos por el rate limit de DUX) — útil para resetear el cache.
      */
     @PostMapping("/sync-catalogo")
     public ResponseEntity<Map<String, Object>> sincronizarCatalogo(
@@ -404,6 +405,26 @@ public class ShowroomController {
     public List<HorarioSyncDTO> actualizarHorariosSync(
             @RequestBody List<HorarioSyncDTO> nuevos) {
         return service.reemplazarHorariosSync(nuevos);
+    }
+
+    /**
+     * Destinatario del email de picking. Acepta uno o varios mails separados
+     * por coma. Persiste en BD — los cambios se aplican en el próximo envío
+     * sin reiniciar el backend.
+     */
+    @GetMapping("/config/picking-email")
+    public PickingEmailConfigDTO obtenerEmailPicking() {
+        return new PickingEmailConfigDTO(service.getEmailPicking());
+    }
+
+    /**
+     * Actualiza el destinatario del email de picking. Pasar email vacío vuelve
+     * al default de application.properties (deshabilita el envío si tampoco
+     * hay default). 400 si el formato es inválido.
+     */
+    @PutMapping("/config/picking-email")
+    public PickingEmailConfigDTO actualizarEmailPicking(@RequestBody PickingEmailConfigDTO body) {
+        return new PickingEmailConfigDTO(service.setEmailPicking(body.email()));
     }
 
     @GetMapping("/health")

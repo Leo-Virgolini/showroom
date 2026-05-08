@@ -12,7 +12,7 @@
         <div class="flex flex-col gap-1">
           <span class="font-medium">Sincronización completa</span>
           <span class="text-xs text-muted-color flex flex-col gap-1 mt-1">
-            <span><strong>Marcado:</strong> descarga TODO el catálogo desde DUX (~12 minutos).</span>
+            <span><strong>Marcado:</strong> descarga TODO el catálogo desde DUX (~15 minutos).</span>
             <span><strong>Sin marcar:</strong> solo trae los productos que tuvieron cambios de <strong>stock</strong> o <strong>precio</strong> desde la última sincronización (más rápido).</span>
           </span>
         </div>
@@ -546,8 +546,7 @@
         <label class="text-sm font-medium text-muted-color">
           CUIT <span class="text-red-500">*</span>
         </label>
-        <p-inputMask mask="99-99999999-9" [unmask]="true" [ngModel]="cuitInputValue()" (ngModelChange)="onCuitChange($event)" placeholder="XX-XXXXXXXX-X" class="w-full"
-          styleClass="w-full" />
+        <p-inputMask mask="99-99999999-9" [unmask]="true" [ngModel]="cuitInputValue()" (ngModelChange)="onCuitChange($event)" placeholder="XX-XXXXXXXX-X" class="w-full" />
         @if (cliente().nroDoc != null && !cuitValido(cliente().nroDoc)) {
         <span class="text-xs text-red-600 dark:text-red-400">El CUIT debe tener 11 dígitos.</span>
         }
@@ -651,7 +650,7 @@
   <ng-template #footer>
     <div class="flex items-center justify-between flex-wrap gap-3 w-full">
       <label class="flex items-center gap-2 text-xs text-muted-color cursor-pointer"
-        pTooltip="Antes de mandar a DUX refresca stock y precio de cada item para confirmar que no cambiaron. Tarda ~7s por item — desactivalo si recién hiciste un refresh manual."
+        pTooltip="Antes de mandar a DUX refresca stock y precio de cada item para confirmar que no cambiaron. Tarda ~7s por item — desactivalo si no querés verificar stock."
         tooltipPosition="top">
         <p-checkbox [ngModel]="verificarStockAlEnviar()" (ngModelChange)="verificarStockAlEnviar.set($event)"
           [binary]="true" [disabled]="enviando() || refrescando()" inputId="verifStockEnvio" />

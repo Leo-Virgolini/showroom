@@ -10,6 +10,7 @@ import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.entity.HorarioSync;
+import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
 import ar.com.leo.showroom.config.service.HorarioSyncSchedulerService;
 import ar.com.leo.showroom.dux.config.DuxProperties;
@@ -74,6 +75,7 @@ public class ShowroomService {
     private final LocalidadRepository localidadRepository;
     private final EscalaDescuentoService escalaDescuentoService;
     private final HorarioSyncSchedulerService horarioSyncService;
+    private final ConfiguracionService configuracionService;
 
     @Value("${showroom.cache.stock-stale-minutes:15}")
     private int stockStaleMinutes;
@@ -150,6 +152,16 @@ public class ShowroomService {
         return horarioSyncService.reemplazar(nuevos).stream()
                 .map(h -> new HorarioSyncDTO(h.getHora(), h.getMinuto()))
                 .toList();
+    }
+
+    /** Destinatario actual del email de picking (DB o default de properties). */
+    public String getEmailPicking() {
+        return configuracionService.getEmailPickingTo();
+    }
+
+    /** Persiste el destinatario del email de picking. Devuelve el valor efectivo. */
+    public String setEmailPicking(String email) {
+        return configuracionService.setEmailPickingTo(email);
     }
 
     /**

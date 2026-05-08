@@ -106,7 +106,7 @@ export class App {
 
   /**
    * Progreso real del sync 0-100 cuando el backend reporta `items/total` por página.
-   * Si todavía no llegó ningún PROGRESS, cae al estimado por tiempo (~12 min para 5000).
+   * Si todavía no llegó ningún PROGRESS, cae al estimado por tiempo (~15 min para ~5800).
    */
   readonly progresoEstimado = computed(() => {
     const actual = this.syncState.progresoActual();
@@ -114,12 +114,12 @@ export class App {
     if (actual != null && total && total > 0) {
       return Math.min(100, Math.round((actual / total) * 100));
     }
-    // Fallback al estimado por tiempo (12 min) solo si todavía no llegó ningún PROGRESS.
+    // Fallback al estimado por tiempo (15 min) solo si todavía no llegó ningún PROGRESS.
     this.tick();
     const iso = this.syncState.syncIniciadoAt();
     if (!iso) return 0;
     const elapsed = Date.now() - new Date(iso).getTime();
-    return Math.min(99, Math.round((elapsed / (12 * 60_000)) * 100));
+    return Math.min(99, Math.round((elapsed / (15 * 60_000)) * 100));
   });
 
   /** Texto del banner: "X / Y productos" cuando hay progreso real, "X productos"

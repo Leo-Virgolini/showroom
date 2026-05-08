@@ -80,8 +80,9 @@ services:
       LOG_FILE_PATH: /app/logs/showroom-backend.log
 
       # ---- Email picking (opcional, dejar vacío para deshabilitar) ----
+      # El destinatario (email-to) se configura desde la pantalla /configuracion
+      # y vive en la tabla `configuracion`, NO se setea acá.
       SHOWROOM_PICKING_EMAIL_ENABLED: ${SHOWROOM_PICKING_EMAIL_ENABLED:-false}
-      SHOWROOM_PICKING_EMAIL_TO: ${SHOWROOM_PICKING_EMAIL_TO:-}
       SHOWROOM_PICKING_EMAIL_FROM: ${SHOWROOM_PICKING_EMAIL_FROM:-}
       SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
       SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}

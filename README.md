@@ -11,7 +11,7 @@ Punto de venta para el showroom físico de **Kitchen Tools Gastronomía**, integ
 - 📤 **Envío del pedido a DUX** con creación del cliente si no existe.
 - 📧 **Email de picking** automático con planilla XLSX (SKU + cantidad) para el depósito.
 - 🏷️ **Generador de etiquetas QR** para las muestras del showroom — soporta hojas A4/Carta/Oficio o impresoras térmicas Zebra (modo `window.print()` o ZPL nativo para volúmenes grandes).
-- 🔄 **Sincronización con DUX**: incremental (solo cambios de stock/precio, ~1 min) o completa (~12 min). Corre programada cada día a las 6 AM o on-demand desde la UI.
+- 🔄 **Sincronización con DUX**: incremental (solo cambios de stock/precio, ~1 min) o completa (~15 min). Corre programada cada día a las 6 AM o on-demand desde la UI.
 - 📦 **Cache local** del catálogo en MySQL para que el showroom no dependa de la latencia ni del rate limit de DUX.
 - 🖼️ **Imágenes de productos** servidas desde una carpeta local indexada en memoria (lookup O(1)).
 
@@ -196,7 +196,7 @@ Configurada en [`application.properties`](showroom-backend/src/main/resources/ap
 Desde el botón **"Sincronizar"** en la toolbar del showroom:
 
 - **Sin marcar "Sincronización completa"**: solo trae los productos que tuvieron cambios de **stock** o **precio** desde la última sync (~1 min).
-- **Marcado**: descarga TODO el catálogo desde DUX (~12 min, ~5000 productos). Útil si hay sospechas de divergencia o productos eliminados en DUX.
+- **Marcado**: descarga TODO el catálogo desde DUX (~15 min, ~5800 productos). Útil si hay sospechas de divergencia o productos eliminados en DUX.
 
 Corre en background — el operador puede seguir usando el sistema. Un banner global muestra el progreso a todos los usuarios conectados (vía SSE).
 

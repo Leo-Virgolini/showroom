@@ -113,20 +113,20 @@ public class CatalogoSyncService {
     /**
      * Sync incremental: si el cache ya tiene datos, pide a DUX solo lo que cambió
      * desde el último sincronizado (con 1 min de margen por drift de reloj).
-     * Si el cache está vacío, hace el sync completo (~12 min para 5000 items).
+     * Si el cache está vacío, hace el sync completo (~15 min para ~5800 items).
      */
     public int sincronizarCatalogoCompleto() {
         return sincronizarCatalogoCompleto(false);
     }
 
     /**
-     * Orquestador del sync. La descarga de DUX (~12 min por el rate limit) corre
+     * Orquestador del sync. La descarga de DUX (~15 min por el rate limit) corre
      * SIN transacción para no mantener una conexión a la BD ocupada todo ese tiempo
      * ni inflar la sesión Hibernate con miles de objetos. La persistencia se hace
      * después en una transacción corta delegada a {@link #persistirItems}.
      *
      * @param forzarCompleto si es true, ignora el último sincronizado_at del cache
-     *                       y descarga TODO el catálogo desde DUX (12 min para 5000 items).
+     *                       y descarga TODO el catálogo desde DUX (15 min para ~5800 items).
      *                       Útil para resetear el cache si se sospecha que divergió.
      */
     public int sincronizarCatalogoCompleto(boolean forzarCompleto) {
@@ -158,7 +158,7 @@ public class CatalogoSyncService {
             } else {
                 log.info("Sync incremental desde {}", desde);
             }
-            // FUERA de transacción — la descarga puede tardar ~12 min y no debe
+            // FUERA de transacción — la descarga puede tardar ~15 min y no debe
             // ocupar conexión BD ni inflar la sesión Hibernate.
             List<DuxItem> items = duxClient.obtenerTodosLosItems(
                     desde,
@@ -193,9 +193,9 @@ public class CatalogoSyncService {
 
     /**
      * Persiste los items descargados de DUX en una transacción corta (~10-30s
-     * típicos, vs. los ~12 min del download). Hibernate batch_size=50 + el
+     * típicos, vs. los ~15 min del download). Hibernate batch_size=50 + el
      * rewriteBatchedStatements del JDBC URL agrupan los inserts/updates en
-     * lotes — para 5000 productos pasa de ~5000 round-trips a ~100.
+     * lotes — para ~5800 productos pasa de ~5800 round-trips a ~120.
      */
     @Transactional
     public int persistirItems(List<DuxItem> items, String listaObjetivo) {

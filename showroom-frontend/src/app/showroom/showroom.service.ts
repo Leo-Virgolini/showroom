@@ -94,6 +94,16 @@ export class ShowroomService {
     return this.http.put<HorarioSync[]>(`${this.base}/config/horarios-sync`, horarios);
   }
 
+  /** Destinatario del email de picking (uno o varios mails separados por coma). */
+  obtenerEmailPicking(): Observable<{ email: string }> {
+    return this.http.get<{ email: string }>(`${this.base}/config/picking-email`);
+  }
+
+  /** Persiste el destinatario del email de picking. Cadena vacía vuelve al default. */
+  actualizarEmailPicking(email: string): Observable<{ email: string }> {
+    return this.http.put<{ email: string }>(`${this.base}/config/picking-email`, { email });
+  }
+
   obtenerProvincias(): Observable<Provincia[]> {
     return this.http.get<Provincia[]>(`${this.base}/provincias`);
   }

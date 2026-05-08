@@ -12,7 +12,10 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
+import { IconFieldModule } from 'primeng/iconfield';
+import { InputIconModule } from 'primeng/inputicon';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -52,7 +55,10 @@ interface FilaHorario {
     ButtonModule,
     CardModule,
     DatePickerModule,
+    IconFieldModule,
+    InputIconModule,
     InputNumberModule,
+    InputTextModule,
     TableModule,
     ToolbarModule,
     TooltipModule,
@@ -105,9 +111,23 @@ export class ConfiguracionPage {
     });
   });
 
+  // ============================================================
+  // Email destinatario del picking
+  // ============================================================
+  readonly cargandoEmail = signal(false);
+  readonly guardandoEmail = signal(false);
+  readonly emailPicking = signal('');
+  /** Snapshot del email como vino del backend — para detectar cambios y deshacer. */
+  private readonly emailPickingOriginal = signal('');
+
+  readonly hayCambiosEmail = computed(
+    () => this.emailPicking().trim() !== this.emailPickingOriginal().trim(),
+  );
+
   constructor() {
     this.cargar();
     this.cargarHorarios();
+    this.cargarEmail();
   }
 
   // ============================================================
@@ -345,6 +365,70 @@ export class ConfiguracionPage {
       error: (err) => {
         this.guardandoHorarios.set(false);
         toastError(this.toast, 'Guardar horarios', err, 'No se pudieron guardar los horarios');
+      },
+    });
+  }
+
+  // ============================================================
+  // Email — métodos
+  // ============================================================
+
+  private cargarEmail(): void {
+    this.cargandoEmail.set(true);
+    this.api.obtenerEmailPicking().subscribe({
+      next: (res) => {
+        this.cargandoEmail.set(false);
+        this.emailPicking.set(res.email ?? '');
+        this.emailPickingOriginal.set(res.email ?? '');
+      },
+      error: (err) => {
+        this.cargandoEmail.set(false);
+        toastError(this.toast, 'Email picking', err, 'No se pudo cargar el email');
+      },
+    });
+  }
+
+  descartarCambiosEmail(): void {
+    this.emailPicking.set(this.emailPickingOriginal());
+  }
+
+  guardarEmail(): void {
+    const valor = this.emailPicking().trim();
+    // El backend hace la validación canónica; acá solo descartamos el caso
+    // "claramente roto" para feedback inmediato (sin pegarle a la BD).
+    if (valor.length > 0) {
+      const partes = valor.split(/\s*,\s*/);
+      const formato = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/;
+      const invalido = partes.find((p) => !formato.test(p));
+      if (invalido) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'Email inválido',
+          detail: `"${invalido}" no parece un email. Usá el formato nombre@dominio.com.`,
+          life: 4000,
+        });
+        return;
+      }
+    }
+    this.guardandoEmail.set(true);
+    this.api.actualizarEmailPicking(valor).subscribe({
+      next: (res) => {
+        this.guardandoEmail.set(false);
+        const efectivo = res.email ?? '';
+        this.emailPicking.set(efectivo);
+        this.emailPickingOriginal.set(efectivo);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Email guardado',
+          detail: efectivo
+            ? `Picking se va a enviar a: ${efectivo}`
+            : 'Email vacío — el envío queda deshabilitado.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoEmail.set(false);
+        toastError(this.toast, 'Email picking', err, 'No se pudo guardar el email');
       },
     });
   }

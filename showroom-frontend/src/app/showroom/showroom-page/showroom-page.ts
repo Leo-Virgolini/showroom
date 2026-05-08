@@ -5,11 +5,11 @@ import {
   DestroyRef,
   ElementRef,
   HostListener,
-  ViewChild,
   computed,
   effect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -162,7 +162,7 @@ export class ShowroomPage implements AfterViewInit {
   private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
 
-  @ViewChild('scanInput') scanInput?: ElementRef<HTMLInputElement>;
+  readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
   readonly skuInput = signal('');
   readonly cantidadInput = signal(1);
@@ -209,9 +209,9 @@ export class ShowroomPage implements AfterViewInit {
 
   /** Si está activo, al apretar "Enviar a DUX" refrescamos stock+precio
    *  contra DUX como última validación antes de crear el pedido. Default
-   *  true (seguro). El operador puede desactivarlo si confía en el cache
-   *  (ej: acaba de refrescar manualmente). */
-  readonly verificarStockAlEnviar = signal(true);
+   *  false (más rápido). El operador puede activarlo si quiere asegurarse
+   *  contra DUX en el momento de enviar (suma ~7s por item). */
+  readonly verificarStockAlEnviar = signal(false);
 
   /** Items del carrito que quedaron con stock insuficiente al re-validar
    *  contra DUX antes de enviar el pedido. Se muestran en un diálogo
@@ -505,7 +505,7 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   private focusInput(): void {
-    queueMicrotask(() => this.scanInput?.nativeElement.focus());
+    queueMicrotask(() => this.scanInput()?.nativeElement.focus());
   }
 
   confirmarSincronizar(): void {
@@ -530,7 +530,7 @@ export class ShowroomPage implements AfterViewInit {
           severity: 'info',
           summary: force ? 'Sync completo iniciado' : 'Sincronización iniciada',
           detail: force
-            ? 'Descarga todo el catálogo (~12 min). El banner global muestra el progreso.'
+            ? 'Descarga todo el catálogo (~15 min). El banner global muestra el progreso.'
             : 'Va a correr en background. El banner global muestra el progreso.',
           life: 5000,
         });

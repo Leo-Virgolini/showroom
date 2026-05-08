@@ -2,6 +2,7 @@ package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
+import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickingEmailEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
@@ -22,13 +23,15 @@ import java.util.Optional;
 
 /**
  * Envía el XLSX de picking + presupuesto PDF por email al destinatario
- * configurado en `showroom.picking.email-to`. Se invoca async después de
- * cada pedido exitoso para no bloquear la respuesta al frontend, y también
- * se puede disparar manualmente desde el endpoint `POST /pedidos/{id}/email`.
+ * configurado desde la pantalla /configuracion (tabla {@code configuracion},
+ * clave {@code picking.email-to}). Se invoca async después de cada pedido
+ * exitoso para no bloquear la respuesta al frontend, y también se puede
+ * disparar manualmente desde el endpoint `POST /pedidos/{id}/email`.
  *
- * Si {@code showroom.picking.email-enabled=false} o falta config, loguea
- * un warn y no manda nada (no rompe el flujo del pedido). El controller
- * usa {@link #motivoNoConfigurado()} para responder con 503 al disparo manual.
+ * Si {@code showroom.picking.email-enabled=false} o falta destinatario,
+ * loguea un warn y no manda nada (no rompe el flujo del pedido). El
+ * controller usa {@link #motivoNoConfigurado()} para responder con 503
+ * al disparo manual.
  *
  * Tras el envío, se publica un evento SSE "picking-email" (SENT/FAILED)
  * para que el frontend muestre toast de confirmación.
@@ -50,12 +53,10 @@ public class PickingEmailService {
     private final SyncEventService eventService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
+    private final ConfiguracionService configuracionService;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean enabled;
-
-    @Value("${showroom.picking.email-to:}")
-    private String emailTo;
 
     @Value("${showroom.picking.email-from:}")
     private String emailFrom;
@@ -73,13 +74,15 @@ public class PickingEmailService {
             org.springframework.beans.factory.ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
             ProvinciaRepository provinciaRepository,
-            LocalidadRepository localidadRepository) {
+            LocalidadRepository localidadRepository,
+            ConfiguracionService configuracionService) {
         this.excelGenerator = excelGenerator;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
+        this.configuracionService = configuracionService;
     }
 
     /**
@@ -94,8 +97,8 @@ public class PickingEmailService {
         if (mailSender == null) {
             return Optional.of("JavaMailSender no configurado (revisar spring.mail.* en application.properties)");
         }
-        if (!StringUtils.hasText(emailTo)) {
-            return Optional.of("Falta destinatario (showroom.picking.email-to vacío)");
+        if (!StringUtils.hasText(configuracionService.getEmailPickingTo())) {
+            return Optional.of("Falta destinatario — configuralo en la pantalla de Configuración");
         }
         return Optional.empty();
     }
@@ -110,8 +113,9 @@ public class PickingEmailService {
             log.warn("Picking email enabled pero JavaMailSender no está configurado (revisar spring.mail.* en application.properties).");
             return;
         }
+        String emailTo = configuracionService.getEmailPickingTo();
         if (!StringUtils.hasText(emailTo)) {
-            log.warn("Picking email enabled pero `showroom.picking.email-to` está vacío. Pedido {} no se envía.", pedido.getId());
+            log.warn("Picking email enabled pero no hay destinatario configurado. Pedido {} no se envía.", pedido.getId());
             return;
         }
 
