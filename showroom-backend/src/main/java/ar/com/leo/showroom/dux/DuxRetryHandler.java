@@ -1,7 +1,6 @@
 package ar.com.leo.showroom.dux;
 
 import ar.com.leo.showroom.common.exception.SyncCancelledException;
-import com.google.common.util.concurrent.RateLimiter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,12 +17,17 @@ import java.util.function.Supplier;
 /**
  * Reintentos + rate limiting para llamadas a DUX.
  *
- * - Rate limit local con Guava (1 req/7s por default) para evitar 429 desde el cliente.
- * - Si DUX igual responde 429, hace hasta 10 reintentos con backoff exponencial + jitter.
- * - Respeta el header Retry-After si DUX lo manda (tiene prioridad sobre el backoff calculado).
- * - 5xx y errores de red: 3 reintentos con backoff exponencial.
- * - Si el rate limit persiste varios reintentos consecutivos, notifica vía un callback
- *   opcional (consumido por SyncEventService → SSE → banner global del frontend).
+ * <ul>
+ *   <li>Rate limit local con {@link PriorityRateLimiter} (1 req/7s por default)
+ *       para evitar 429 desde el cliente. Las llamadas HIGH (scan ad-hoc, pedido)
+ *       se reservan el próximo slot antes que cualquier LOW (sync) encolada —
+ *       así un pedido nunca espera la cola completa del sync.</li>
+ *   <li>Si DUX igual responde 429, hace hasta 10 reintentos con backoff exponencial + jitter.</li>
+ *   <li>Respeta el header Retry-After si DUX lo manda (tiene prioridad sobre el backoff calculado).</li>
+ *   <li>5xx y errores de red: 3 reintentos con backoff exponencial.</li>
+ *   <li>Si el rate limit persiste varios reintentos consecutivos, notifica vía un callback
+ *       opcional (consumido por SyncEventService → SSE → banner global del frontend).</li>
+ * </ul>
  */
 @Slf4j
 public class DuxRetryHandler {
@@ -36,7 +40,7 @@ public class DuxRetryHandler {
 
     private final RestClient restClient;
     private final long baseWaitMs;
-    private final RateLimiter rateLimiter;
+    private final PriorityRateLimiter rateLimiter;
     private final RateLimitListener onRateLimited;
 
     public DuxRetryHandler(RestClient restClient, long baseWaitMs, double permitsPerSecond) {
@@ -47,12 +51,12 @@ public class DuxRetryHandler {
                            RateLimitListener onRateLimited) {
         this.restClient = restClient;
         this.baseWaitMs = baseWaitMs;
-        this.rateLimiter = RateLimiter.create(permitsPerSecond);
+        this.rateLimiter = new PriorityRateLimiter(permitsPerSecond);
         this.onRateLimited = onRateLimited;
     }
 
     public <T> T get(String uri, String token, Class<T> responseType) {
-        return get(uri, token, responseType, null);
+        return get(uri, token, responseType, null, false);
     }
 
     /**
@@ -62,7 +66,17 @@ public class DuxRetryHandler {
      * thread bloqueado hasta ~17 min en backoff y 10 reintentos sin atender el cancel.
      */
     public <T> T get(String uri, String token, Class<T> responseType, BooleanSupplier isCancelled) {
-        return executeWithRetries("GET", isCancelled, () -> restClient.get()
+        return get(uri, token, responseType, isCancelled, false);
+    }
+
+    /**
+     * Variante con prioridad — {@code highPriority=true} para scans del operador
+     * y creación de pedido. Esas llamadas se atienden antes que el sync de catálogo
+     * que pueda estar consumiendo permits del rate limiter.
+     */
+    public <T> T get(String uri, String token, Class<T> responseType,
+                     BooleanSupplier isCancelled, boolean highPriority) {
+        return executeWithRetries("GET", isCancelled, highPriority, () -> restClient.get()
                 .uri(uri)
                 .header("authorization", token)
                 .retrieve()
@@ -70,12 +84,18 @@ public class DuxRetryHandler {
     }
 
     public String postJson(String uri, String token, String jsonBody) {
-        return postJson(uri, token, jsonBody, null);
+        return postJson(uri, token, jsonBody, null, false);
     }
 
     /** Variante con cancelación cooperativa — ver {@link #get(String, String, Class, BooleanSupplier)}. */
     public String postJson(String uri, String token, String jsonBody, BooleanSupplier isCancelled) {
-        return executeWithRetries("POST", isCancelled, () -> restClient.post()
+        return postJson(uri, token, jsonBody, isCancelled, false);
+    }
+
+    /** Variante con prioridad — usar {@code highPriority=true} para POST /pedido/nuevopedido. */
+    public String postJson(String uri, String token, String jsonBody,
+                           BooleanSupplier isCancelled, boolean highPriority) {
+        return executeWithRetries("POST", isCancelled, highPriority, () -> restClient.post()
                 .uri(uri)
                 .header("authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -84,13 +104,14 @@ public class DuxRetryHandler {
                 .body(String.class));
     }
 
-    private <T> T executeWithRetries(String op, BooleanSupplier isCancelled, Supplier<T> call) {
+    private <T> T executeWithRetries(String op, BooleanSupplier isCancelled,
+                                     boolean highPriority, Supplier<T> call) {
         int normalRetries = 0;
         int rateLimitRetries = 0;
         while (true) {
             checkCancelled(isCancelled);
             try {
-                acquireRateLimit(isCancelled);
+                acquireRateLimit(isCancelled, highPriority);
                 return call.get();
             } catch (HttpClientErrorException e) {
                 int status = e.getStatusCode().value();
@@ -126,18 +147,23 @@ public class DuxRetryHandler {
     }
 
     /**
-     * Adquiere un permit del rate limiter chequeando cancelación periódicamente.
-     * Sin supplier, comportamiento original (bloqueo total). Con supplier,
-     * intenta obtener el permit con timeout de 500ms y revisa el flag entre
-     * intentos — la cancelación se hace efectiva en hasta 500ms.
+     * Adquiere un permit del rate limiter con la prioridad indicada, chequeando
+     * cancelación periódicamente. Sin supplier, espera bloqueado hasta tenerlo.
+     * Con supplier, intenta cada 500ms y revisa el flag entre intentos — la
+     * cancelación se hace efectiva en hasta 500ms.
      */
-    private void acquireRateLimit(BooleanSupplier isCancelled) {
-        if (isCancelled == null) {
-            rateLimiter.acquire();
-            return;
-        }
-        while (!rateLimiter.tryAcquire(500, TimeUnit.MILLISECONDS)) {
-            checkCancelled(isCancelled);
+    private void acquireRateLimit(BooleanSupplier isCancelled, boolean highPriority) {
+        try {
+            if (isCancelled == null) {
+                rateLimiter.acquire(highPriority);
+                return;
+            }
+            while (!rateLimiter.tryAcquire(highPriority, 500, TimeUnit.MILLISECONDS)) {
+                checkCancelled(isCancelled);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Interrumpido esperando rate limit DUX", e);
         }
     }
 

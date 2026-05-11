@@ -8,7 +8,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -50,6 +52,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException ex, HttpServletRequest req) {
         return body(HttpStatus.BAD_REQUEST, ex.getMessage(), req);
+    }
+
+    /**
+     * Cliente cerró la conexión antes de que terminara la response (típico
+     * en SSE: tablet se durmió, browser cerrado, red caída). No hay nada que
+     * devolver — devolver body causaría
+     * {@code HttpMessageNotWritableException} porque el response ya está
+     * marcado como {@code text/event-stream} y el converter de JSON falla.
+     */
+    @ExceptionHandler({AsyncRequestNotUsableException.class, IOException.class})
+    public void handleClientDisconnect(Exception ex, HttpServletRequest req) {
+        log.debug("Cliente desconectado en {}: {}", req.getRequestURI(), ex.getMessage());
     }
 
     @ExceptionHandler(Exception.class)

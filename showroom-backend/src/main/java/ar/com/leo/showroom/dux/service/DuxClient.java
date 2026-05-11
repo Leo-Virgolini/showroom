@@ -108,7 +108,9 @@ public class DuxClient {
         if (cachedListaPrecioId != null) return cachedListaPrecioId;
         verificarTokens();
 
-        String response = retryHandler.get("/listaprecioventa", tokens.token, String.class);
+        // HIGH: este lookup lo dispara el primer scan/pedido — si está en frío,
+        // no queremos que quede atrás de las páginas pendientes del sync.
+        String response = retryHandler.get("/listaprecioventa", tokens.token, String.class, null, true);
         try {
             JsonNode root = objectMapper.readTree(response);
             if (!root.isArray()) {
@@ -139,9 +141,10 @@ public class DuxClient {
     public Optional<DuxItem> obtenerItemPorSku(String sku) {
         verificarTokens();
         long idLista = obtenerIdListaPrecios();
+        // HIGH: scan ad-hoc del operador — latencia visible en pantalla.
         String response = retryHandler.get(
                 "/items?codigoItem=" + sku + "&idListaPrecio=" + idLista,
-                tokens.token, String.class);
+                tokens.token, String.class, null, true);
         if (response == null) return Optional.empty();
 
         try {
@@ -381,7 +384,9 @@ public class DuxClient {
      */
     public String crearPedido(String jsonBody) {
         verificarTokens();
-        return retryHandler.postJson("/pedido/nuevopedido", tokens.token, jsonBody);
+        // HIGH: operación crítica del operador — nunca debe esperar a que termine
+        // el sync de catálogo (~15 min) ni quedar atrás de páginas en cola.
+        return retryHandler.postJson("/pedido/nuevopedido", tokens.token, jsonBody, null, true);
     }
 
     /**

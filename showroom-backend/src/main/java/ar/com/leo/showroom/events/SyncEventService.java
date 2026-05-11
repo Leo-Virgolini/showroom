@@ -47,16 +47,25 @@ public class SyncEventService {
     }
 
     /**
-     * Publica un evento a todos los clientes conectados. Si alguno falla, se
-     * remueve de la lista (el browser hace reconnect automático del EventSource).
+     * Publica un evento a todos los clientes conectados. Si alguno falla
+     * (típico: cliente cerró el browser, tablet se durmió, etc.), se remueve
+     * de la lista — el EventSource del browser reconecta automáticamente.
+     *
+     * Atrapamos {@code Throwable} (no solo Exception): {@code SseEmitter.send}
+     * puede propagar errores del response chain de Tomcat que no son
+     * subclases de Exception en todas las versiones, y si se escapan suben
+     * hasta el {@link ar.com.leo.showroom.common.exception.GlobalExceptionHandler}
+     * que intenta devolver JSON sobre un response ya marcado como
+     * {@code text/event-stream} — segundo error encadenado.
      */
     public void publish(String event, Object data) {
         log.debug("SSE publish: event={}, clientes={}", event, emitters.size());
         for (SseEmitter e : emitters) {
             try {
                 e.send(SseEmitter.event().name(event).data(data));
-            } catch (Exception ex) {
+            } catch (Throwable t) {
                 emitters.remove(e);
+                log.debug("Removí emitter SSE desconectado: {}", t.toString());
             }
         }
     }

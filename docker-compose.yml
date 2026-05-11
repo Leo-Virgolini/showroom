@@ -78,7 +78,11 @@ services:
       # ---- Logging a archivo ----
       # Spring Boot escribe acá con rotación (configurada en application.properties).
       # La carpeta /app/logs está montada en ./logs del host → leíble sin docker exec.
-      LOG_FILE_PATH: /app/logs/showroom-backend.log
+      # `LOGGING_FILE_NAME` es el binding oficial de Spring Boot para
+      # `logging.file.name` (relaxed binding). No usamos un placeholder en
+      # application.properties porque Logback se inicializa antes de que Spring
+      # resuelva placeholders custom — y entonces el FileAppender no se crea.
+      LOGGING_FILE_NAME: /app/logs/showroom-backend.log
 
       # ---- Email picking (opcional, dejar vacío para deshabilitar) ----
       # El destinatario (email-to) se configura desde la pantalla /configuracion
