@@ -1,6 +1,6 @@
 <p-toast position="top-right" />
 
-@if (syncState.syncEnCurso()) {
+@if (syncState.syncEnCurso() && !esVistaVisor()) {
   <div
     class="sticky top-0 z-50 text-white shadow-md transition-colors duration-500 bg-gradient-to-r {{ bannerClass() }}"
     role="status"
@@ -74,7 +74,7 @@
   </div>
 }
 
-@if (pwaInstall.disponible() && backendStatus.connected()) {
+@if (pwaInstall.disponible() && backendStatus.connected() && !esVistaVisor()) {
   <p-button
     icon="pi pi-download"
     label="Instalar app"

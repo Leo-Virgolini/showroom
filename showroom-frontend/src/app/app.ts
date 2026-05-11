@@ -8,14 +8,15 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ProgressBarModule } from 'primeng/progressbar';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ToastModule } from 'primeng/toast';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { TooltipModule } from 'primeng/tooltip';
+import { filter, map, startWith } from 'rxjs/operators';
 import { AuthService } from './auth/auth.service';
 import { BackendStatusService } from './showroom/backend-status.service';
 import { PwaInstallService } from './showroom/pwa-install.service';
@@ -39,6 +40,19 @@ export class App {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly router = inject(Router);
+
+  /** True cuando la ruta activa es /visor — la pantalla del visor del cliente
+   *  no debe mostrar overlays operativos (banner de sync, botón de instalar PWA)
+   *  porque es read-only y debería verse limpia desde el celular. */
+  protected readonly esVistaVisor = toSignal(
+    this.router.events.pipe(
+      filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+      map((e) => e.urlAfterRedirects.startsWith('/visor')),
+      startWith(this.router.url.startsWith('/visor')),
+    ),
+    { initialValue: this.router.url.startsWith('/visor') },
+  );
 
   /** True mientras la request de cancelar el sync está en vuelo — el botón se
    *  deshabilita y muestra "Cancelando…" hasta que el evento SSE CANCELLED
