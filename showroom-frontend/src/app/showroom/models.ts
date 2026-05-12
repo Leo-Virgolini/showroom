@@ -99,19 +99,25 @@ export interface PickingEmailEvent {
   error?: string | null;
 }
 
-/** Evento SSE emitido cuando un cliente agrega un item al carrito desde /visor. */
-export interface VisorAddCartEvent {
-  scan: ScanResult;
-  cantidad: number;
+/** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
+ *  diferenciado cuando un cliente desde /visor agrega algo. */
+export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';
+
+/** Estado completo del carrito server-side. Payload del SSE `carrito-updated`
+ *  y respuesta de todos los endpoints mutadores. */
+export interface CarritoState {
+  items: CarritoItem[];
+  origen: CarritoOrigen;
 }
 
-/** Evento SSE que avisa al visor que un add anterior no se cumplió completamente
- *  (carrito ya al tope o recortado por stock). El visor lo usa para corregir el
- *  toast "Agregado x10" que mostró antes con la cantidad real agregada. */
-export interface VisorAddRejectedEvent {
-  sku: string;
-  intentada: number;
-  agregada: number;
+/** Respuesta del POST a agregar al carrito (operador o visor). Incluye cuánto
+ *  se agregó realmente (puede ser menor a `cantidadPedida` si quedó al tope). */
+export interface CarritoAgregarResponse {
+  carrito: CarritoState;
+  cantidadPedida: number;
+  cantidadAgregada: number;
+  recortado: boolean;
+  motivo: string | null;
 }
 
 export interface CatalogoItem {

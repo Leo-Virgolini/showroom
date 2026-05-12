@@ -95,24 +95,6 @@ export class VisorPage {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((scan) => this.ultimoScan.set(scan));
 
-    // Si el operador rechazó/recortó un add que disparamos antes, el backend
-    // emite este evento para que mostremos al cliente la cantidad real.
-    // Filtramos por SKU del producto que el visor muestra ahora (sino, dos
-    // visores en productos distintos verían toasts de adds ajenos).
-    this.backendStatus.visorAddRejectedEvents$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((e) => {
-        if (this.ultimoScan()?.sku !== e.sku) return;
-        this.toast.add({
-          severity: 'warn',
-          summary: 'No se agregó todo',
-          detail: e.agregada === 0
-            ? `${e.sku}: el carrito ya tiene el stock completo (${e.intentada} no se sumaron).`
-            : `${e.sku}: solo se agregaron ${e.agregada} de ${e.intentada} (stock limitado).`,
-          life: 6000,
-        });
-      });
-
     // Cada vez que cambia el producto, reseteamos la cantidad a 1.
     effect(() => {
       this.ultimoScan();
@@ -121,8 +103,10 @@ export class VisorPage {
   }
 
   /** Disparado por el botón "Agregar al carrito". Envía sku + cantidad al
-   *  backend; éste valida y publica el evento SSE que actualiza la pantalla
-   *  del operador. El visor solo muestra toast de confirmación o error. */
+   *  backend; el backend muta el carrito server-side (único global) y emite
+   *  SSE `carrito-updated`. El response trae cuánto se sumó realmente — si
+   *  fue menor a lo pedido (carrito ya al tope), mostramos warning al cliente
+   *  con la cantidad real. */
   agregar(): void {
     const r = this.ultimoScan();
     if (!r || !this.puedeAgregar() || this.enviandoAgregar()) return;
@@ -130,14 +114,30 @@ export class VisorPage {
 
     this.enviandoAgregar.set(true);
     this.api.visorAgregarAlCarrito(r.sku, cant).subscribe({
-      next: () => {
+      next: (res) => {
         this.enviandoAgregar.set(false);
-        this.toast.add({
-          severity: 'success',
-          summary: 'Agregado al carrito',
-          detail: `${r.sku} x${cant}`,
-          life: 2500,
-        });
+        if (res.cantidadAgregada === 0) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'No se agregó al carrito',
+            detail: res.motivo ?? `${r.sku}: el carrito ya tiene el stock completo.`,
+            life: 6000,
+          });
+        } else if (res.recortado) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'No se agregó todo',
+            detail: `${r.sku}: solo se sumaron ${res.cantidadAgregada} de ${res.cantidadPedida} (stock limitado).`,
+            life: 6000,
+          });
+        } else {
+          this.toast.add({
+            severity: 'success',
+            summary: 'Agregado al carrito',
+            detail: `${r.sku} x${res.cantidadAgregada}`,
+            life: 2500,
+          });
+        }
         this.cantidad.set(1);
       },
       error: (err) => {

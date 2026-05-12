@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.showroom.controller;
 
+import ar.com.leo.showroom.carrito.CarritoService;
 import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
@@ -14,6 +15,10 @@ import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.PickingExcelGenerator;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
 import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
+import ar.com.leo.showroom.showroom.dto.CantidadRequestDTO;
+import ar.com.leo.showroom.showroom.dto.CarritoAgregarRequestDTO;
+import ar.com.leo.showroom.showroom.dto.CarritoAgregarResponseDTO;
+import ar.com.leo.showroom.showroom.dto.CarritoStateDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
@@ -28,8 +33,6 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
-import ar.com.leo.showroom.showroom.dto.VisorAddRejectedRequestDTO;
-import ar.com.leo.showroom.showroom.dto.VisorAgregarCarritoRequestDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.VisorService;
 import jakarta.validation.Valid;
@@ -56,6 +59,7 @@ import java.util.Map;
 public class ShowroomController {
 
     private final ShowroomService service;
+    private final CarritoService carritoService;
     private final CatalogoSyncService catalogoSync;
     private final DuxClient duxClient;
     private final SyncEventService eventService;
@@ -88,35 +92,56 @@ public class ShowroomController {
 
     /**
      * Disparado desde {@code /visor}: el cliente agregó un producto al carrito
-     * desde el celular. El backend valida (precio, stock, habilitado) contra el
-     * cache local y publica un evento SSE {@code visor-add-cart} para que la
-     * pantalla del operador sume el item al carrito automáticamente.
+     * desde el celular. Pasa por el {@link CarritoService} igual que el endpoint
+     * del operador — el carrito es único global, así que el item aparece en la
+     * pantalla del operador automáticamente vía SSE {@code carrito-updated}.
      *
-     * <p>Devuelve 200 + {@link ScanResultDTO} si pasó la validación. 404 si el
-     * SKU no existe; 409 si no se puede agregar (sin stock, sin precio, etc.).
-     * Endpoint público (el visor lo es).
+     * <p>El response incluye cuánto se agregó realmente (puede ser menor a lo
+     * pedido si el carrito ya estaba al tope por stock). El visor muestra esa
+     * cantidad real al cliente, no la pedida.
+     *
+     * <p>Endpoint público (el visor no tiene sesión).
      */
     @PostMapping("/visor/agregar-carrito")
-    public ScanResultDTO visorAgregarAlCarrito(@RequestBody @Valid VisorAgregarCarritoRequestDTO request) {
-        ScanResultDTO scan = service.validarAgregarDesdeVisor(request.sku(), request.cantidad());
-        visorService.publicarAddToCart(scan, request.cantidad());
-        return scan;
+    public CarritoAgregarResponseDTO visorAgregarAlCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
+        return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR);
     }
 
-    /**
-     * Llamado por la pantalla del operador cuando un "agregar al carrito" del
-     * visor no se pudo cumplir como pidió el cliente: el carrito ya tenía la
-     * cantidad máxima por stock o se recortó. El backend reenvía como SSE
-     * {@code visor-add-cart-rejected} para que el visor muestre al cliente la
-     * cantidad realmente agregada (en vez del "Agregado x10" inicial que
-     * resulta mentira).
-     *
-     * <p>Endpoint <b>autenticado</b> — sólo el operador puede emitirlo.
-     */
-    @PostMapping("/visor-add-rejected")
-    public ResponseEntity<Void> visorAddRejected(@RequestBody @Valid VisorAddRejectedRequestDTO request) {
-        visorService.publicarAddRejected(request.sku(), request.intentada(), request.agregada());
-        return ResponseEntity.accepted().build();
+    // =====================================================
+    // Carrito (operador, autenticado). Es el mismo carrito que toca el visor —
+    // único global y broadcasteado por SSE {@code carrito-updated}.
+    // =====================================================
+
+    @GetMapping("/carrito")
+    public CarritoStateDTO obtenerCarrito() {
+        return carritoService.obtener();
+    }
+
+    @PostMapping("/carrito/items")
+    public CarritoAgregarResponseDTO agregarItemCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
+        return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.OPERADOR);
+    }
+
+    @PatchMapping("/carrito/items/{sku}")
+    public CarritoStateDTO actualizarCantidadItemCarrito(
+            @PathVariable String sku,
+            @RequestBody @Valid CantidadRequestDTO request) {
+        return carritoService.actualizarCantidad(sku, request.cantidad());
+    }
+
+    @DeleteMapping("/carrito/items/{sku}")
+    public CarritoStateDTO eliminarItemCarrito(@PathVariable String sku) {
+        return carritoService.eliminar(sku);
+    }
+
+    @DeleteMapping("/carrito")
+    public CarritoStateDTO vaciarCarrito() {
+        return carritoService.vaciar(CarritoStateDTO.Origen.OPERADOR);
+    }
+
+    @PostMapping("/carrito/refresh-stock")
+    public CarritoStateDTO refrescarStockCarrito() {
+        return carritoService.refrescarStock();
     }
 
     /**

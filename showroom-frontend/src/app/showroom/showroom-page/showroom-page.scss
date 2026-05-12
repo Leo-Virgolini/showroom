@@ -37,14 +37,20 @@
 }
 
 // Modo "panel dashboard" (cada sección con su propio scroll interno) solo en
-// pantallas anchas Y altas. Sin esto, en monitores chicos / browsers con zoom
-// alto / ventanas no maximizadas el `lg:h-screen + lg:overflow-hidden` bloquea
-// el scroll del body y deja contenido inalcanzable.
+// pantallas anchas Y razonablemente altas. Sin esto, en monitores chicos /
+// browsers con zoom alto, el `h-screen + overflow-hidden` bloquearía el
+// scroll del body y dejaría contenido inalcanzable.
+//
+// El umbral de altura es 600px para incluir notebooks 1920x1080 con scaling
+// Windows 125-150% (viewport efectivo ~640-770px). Sin esto, en esas máquinas
+// el grid `lg:grid-rows-1` empareja la altura de ambas columnas y un carrito
+// con muchos items arrastra hacia abajo a la columna izquierda, dejando el
+// botón "Agregar al carrito" fuera del viewport.
 .page-container {
   min-height: 100vh;
 }
 
-@media (min-width: 1024px) and (min-height: 750px) {
+@media (min-width: 1024px) and (min-height: 600px) {
   .page-container {
     height: 100vh;
     overflow: hidden;

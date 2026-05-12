@@ -2,11 +2,10 @@ import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
 import {
+  CarritoState,
   PickingEmailEvent,
   ScanResult,
   SyncEvent,
-  VisorAddCartEvent,
-  VisorAddRejectedEvent,
 } from './models';
 
 /**
@@ -40,13 +39,9 @@ export class BackendStatusService {
   /** Scans publicados al visor (pantalla espejo en celular). El backend
    *  emite uno cada vez que el operador escanea desde la página principal. */
   readonly scanVisorEvents$ = new Subject<ScanResult>();
-  /** Items agregados al carrito desde la pantalla /visor (cliente en su celular).
-   *  La pantalla del operador escucha esto para sumar el item al carrito local. */
-  readonly visorAddCartEvents$ = new Subject<VisorAddCartEvent>();
-  /** Avisos al visor de que un add anterior no se pudo cumplir completamente
-   *  (carrito ya al tope o recortado por stock). El visor los muestra como
-   *  toast warn al cliente para corregir el "Agregado" inicial. */
-  readonly visorAddRejectedEvents$ = new Subject<VisorAddRejectedEvent>();
+  /** Estado completo del carrito tras cualquier mutación (operador o visor).
+   *  Es el único canal de sincronización del carrito entre pantallas. */
+  readonly carritoEvents$ = new Subject<CarritoState>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
@@ -174,17 +169,9 @@ export class BackendStatusService {
       }
     });
 
-    src.addEventListener('visor-add-cart', (e: MessageEvent) => {
+    src.addEventListener('carrito-updated', (e: MessageEvent) => {
       try {
-        this.visorAddCartEvents$.next(JSON.parse(e.data) as VisorAddCartEvent);
-      } catch {
-        /* payload malformado, ignoramos */
-      }
-    });
-
-    src.addEventListener('visor-add-cart-rejected', (e: MessageEvent) => {
-      try {
-        this.visorAddRejectedEvents$.next(JSON.parse(e.data) as VisorAddRejectedEvent);
+        this.carritoEvents$.next(JSON.parse(e.data) as CarritoState);
       } catch {
         /* payload malformado, ignoramos */
       }

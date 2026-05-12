@@ -6,7 +6,6 @@ import {
   ElementRef,
   HostListener,
   computed,
-  effect,
   inject,
   signal,
   viewChild,
@@ -90,25 +89,6 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
 /** Nombre con el que se carga todo pedido del showroom — la operadora lo
  * sobrescribe en DUX al asociar el CUIT con el cliente real. */
 const APELLIDO_RAZON_SOCIAL = 'PEDIDO SHOWROOM';
-
-/** Key del localStorage donde persistimos el carrito para sobrevivir refrescos
- *  accidentales de la pestaña. Se limpia al vaciar el carrito o al enviar el
- *  pedido con éxito (ambos pasan por `vaciarCarrito()`, que setea []). */
-const CARRITO_STORAGE_KEY = 'showroom.carrito';
-
-/** Lee el carrito persistido del localStorage. Vuelve [] si no hay nada,
- *  si el JSON está corrupto o si estamos en SSR (sin window). */
-function cargarCarritoPersistido(): CarritoItem[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(CARRITO_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as CarritoItem[]) : [];
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Re-ordena una lista para que los items cuyo nombre empieza con `query` aparezcan
@@ -196,7 +176,11 @@ export class ShowroomPage implements AfterViewInit {
    *  anterior, solo la última respuesta actualiza la UI — así evitamos
    *  que un request lento "pise" al rápido al volver fuera de orden. */
   private scanSeq = 0;
-  readonly carrito = signal<CarritoItem[]>(cargarCarritoPersistido());
+  /** Estado del carrito. Vive en el backend (single source of truth) y se
+   *  hidrata en el constructor + se sincroniza vía SSE `carrito-updated`.
+   *  Las mutaciones siempre van por HTTP — nunca se modifica este signal a
+   *  mano, salvo la asignación inicial al hidratar. */
+  readonly carrito = signal<CarritoItem[]>([]);
   readonly refrescando = signal(false);
   /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
    *  que es para el carrito completo. */
@@ -480,27 +464,25 @@ export class ShowroomPage implements AfterViewInit {
         console.warn('[escalas-descuento] no se pudieron cargar:', err),
     });
 
-    // Si un cliente toca "Agregar al carrito" en su celular (/visor), llega
-    // un evento SSE y sumamos el item al carrito local del operador.
-    this.backendStatus.visorAddCartEvents$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((e) => this.agregarDesdeVisor(e.scan, e.cantidad));
-
-    // Persiste el carrito en localStorage en cada cambio. Cuando queda vacío
-    // (vaciarCarrito() o envío exitoso) borra la key. Sobrevive a F5 accidental.
-    effect(() => {
-      const items = this.carrito();
-      if (typeof window === 'undefined') return;
-      try {
-        if (items.length === 0) {
-          window.localStorage.removeItem(CARRITO_STORAGE_KEY);
-        } else {
-          window.localStorage.setItem(CARRITO_STORAGE_KEY, JSON.stringify(items));
-        }
-      } catch (e) {
-        console.warn('[carrito persist] no se pudo guardar:', e);
-      }
+    // Hidratación inicial del carrito server-side. Si la pestaña recarga o se
+    // abre una segunda PC, el estado se levanta del backend (sin localStorage).
+    this.api.obtenerCarrito().subscribe({
+      next: (state) => this.carrito.set(state.items),
+      error: (err) => console.warn('[carrito] no se pudo hidratar:', err),
     });
+
+    // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor)
+    // llega como SSE y reemplaza el estado local. Si el origen es VISOR,
+    // mostramos un toast informativo para que el operador se entere.
+    this.backendStatus.carritoEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((state) => {
+        const previo = this.carrito();
+        this.carrito.set(state.items);
+        if (state.origen === 'VISOR') {
+          this.mostrarToastCambioDesdeVisor(previo, state.items);
+        }
+      });
 
     if (typeof window === 'undefined') return;
 
@@ -805,110 +787,93 @@ export class ShowroomPage implements AfterViewInit {
       });
       return;
     }
-    const res = this.aplicarAgregar(r, cantidad);
-    if (!res.ok) {
-      this.toast.add({
-        severity: 'warn',
-        summary: 'Sin stock',
-        detail: `${r.sku} no tiene unidades disponibles.`,
-      });
-      return;
-    }
-    this.toast.add({
-      severity: res.recortado ? 'warn' : 'success',
-      summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado',
-      detail: res.recortado
-        ? `${r.sku}: tope ${r.stockTotal} unidades disponibles.`
-        : `${r.sku} x${res.cantidadAgregada}`,
-      life: res.recortado ? 3500 : 1500,
+    const cant = cantidad <= 0 ? 1 : cantidad;
+    this.api.agregarItemCarrito(r.sku, cant).subscribe({
+      next: (res) => {
+        // El SSE carrito-updated ya va a llegar (con el state nuevo); igual
+        // tocamos `this.carrito` con el state del response para no esperar
+        // al round-trip del SSE en la misma pantalla.
+        this.carrito.set(res.carrito.items);
+        if (res.cantidadAgregada === 0) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Sin stock',
+            detail: `${r.sku}: ${res.motivo ?? 'no se pudieron sumar unidades.'}`,
+          });
+        } else {
+          this.toast.add({
+            severity: res.recortado ? 'warn' : 'success',
+            summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado',
+            detail: res.recortado
+              ? `${r.sku} x${res.cantidadAgregada} (tope ${r.stockTotal}).`
+              : `${r.sku} x${res.cantidadAgregada}`,
+            life: res.recortado ? 3500 : 1500,
+          });
+        }
+        this.focusInput();
+      },
+      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo agregar al carrito.'),
     });
-    this.focusInput();
   }
 
-  /** Llamado cuando llega un evento SSE `visor-add-cart` (el cliente tocó
-   *  "Agregar al carrito" desde su celular en /visor). Aplica la misma lógica
-   *  que el operador, con toast diferenciado para que se note. Si lo
-   *  realmente agregado es menor a lo pedido (carrito ya al tope, recorte por
-   *  stock), notifica al backend con `visorAddRejected` — el backend reenvía
-   *  como SSE al visor para que el cliente vea la cantidad real. */
-  private agregarDesdeVisor(scan: ScanResult, cantidad: number): void {
-    const res = this.aplicarAgregar(scan, cantidad);
-    const agregadaReal = res.ok ? res.cantidadAgregada : 0;
-
-    if (agregadaReal < cantidad) {
-      // El cliente vio "Agregado xN" pero no sumamos eso — corregimos en su
-      // pantalla. Subscribe vacío: si falla, queda en el log del backend; el
-      // operador igual ve su toast con la cantidad real.
-      this.api.visorAddRejected(scan.sku, cantidad, agregadaReal).subscribe({
-        error: (err) => console.warn('[visor-add-rejected] no se pudo notificar:', err),
-      });
+  /** Toast informativo cuando un add proviene del visor (cliente en su celular).
+   *  Compara estado previo vs nuevo para decidir qué SKUs cambiaron y cuánto. */
+  private mostrarToastCambioDesdeVisor(previo: CarritoItem[], nuevo: CarritoItem[]): void {
+    const prevMap = new Map(previo.map((it) => [it.sku, it.cantidad]));
+    const cambios: string[] = [];
+    for (const it of nuevo) {
+      const antes = prevMap.get(it.sku) ?? 0;
+      const diff = it.cantidad - antes;
+      if (diff > 0) cambios.push(`${it.sku} x${diff}`);
     }
-
-    if (!res.ok) return;
+    if (cambios.length === 0) return;
     this.toast.add({
-      severity: res.recortado ? 'warn' : 'info',
+      severity: 'info',
       summary: 'Cliente agregó al carrito',
-      detail: res.recortado
-        ? `${scan.sku}: ajustado al tope ${scan.stockTotal}.`
-        : `${scan.sku} x${res.cantidadAgregada}`,
+      detail: cambios.join(', '),
       life: 4000,
     });
-  }
-
-  /** Aplica el agregar al carrito (merge con item existente + tope por stock)
-   *  sin disparar toasts. Devuelve metadata para que el caller decida UX. */
-  private aplicarAgregar(
-    r: ScanResult,
-    cantidad: number,
-  ): { ok: boolean; recortado: boolean; cantidadAgregada: number } {
-    if (cantidad <= 0) cantidad = 1;
-    const lista = [...this.carrito()];
-    const idx = lista.findIndex((it) => it.sku === r.sku);
-    const cantidadActual = idx >= 0 ? lista[idx].cantidad : 0;
-    const cantidadDeseada = cantidadActual + cantidad;
-    const stock = r.stockTotal;
-    const cantidadFinal =
-      stock != null && stock >= 0 ? Math.min(cantidadDeseada, stock) : cantidadDeseada;
-    const recortado = cantidadFinal < cantidadDeseada;
-    if (cantidadFinal <= 0) return { ok: false, recortado: false, cantidadAgregada: 0 };
-    if (idx >= 0) {
-      lista[idx] = { ...lista[idx], cantidad: cantidadFinal };
-    } else {
-      lista.push({ ...r, cantidad: cantidadFinal });
-    }
-    this.carrito.set(lista);
-    return { ok: true, recortado, cantidadAgregada: cantidadFinal - cantidadActual };
   }
 
   actualizarCantidad(sku: string, cantidad: number): void {
     // Mínimo 1 — para eliminar el item está la X dedicada al lado.
     const c = Math.max(1, cantidad ?? 1);
-    this.carrito.set(
-      this.carrito().map((it) => {
-        if (it.sku !== sku) return it;
-        const stock = it.stockTotal;
-        if (stock != null && stock >= 0 && c > stock) {
+    this.api.actualizarCantidadItemCarrito(sku, c).subscribe({
+      next: (state) => {
+        const item = state.items.find((it) => it.sku === sku);
+        // Si el backend recortó al stock, mostrar toast para que se note.
+        if (item && item.cantidad < c) {
           this.toast.add({
             severity: 'warn',
             summary: 'Cantidad ajustada al stock',
-            detail: `${it.sku}: tope ${stock} unidades.`,
+            detail: `${sku}: tope ${item.cantidad} unidades.`,
             life: 3500,
           });
-          return { ...it, cantidad: stock };
         }
-        return { ...it, cantidad: c };
-      }),
-    );
+        this.carrito.set(state.items);
+      },
+      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo actualizar la cantidad.'),
+    });
   }
 
   eliminarDelCarrito(sku: string): void {
-    this.carrito.set(this.carrito().filter((it) => it.sku !== sku));
+    this.api.eliminarItemCarrito(sku).subscribe({
+      next: (state) => this.carrito.set(state.items),
+      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo eliminar el item.'),
+    });
   }
 
   vaciarCarrito(): void {
+    // Vaciamos optimisticamente en pantalla; si el backend rechaza, el SSE
+    // siguiente lo va a corregir. Esto evita que el operador vea el carrito
+    // viejo unos ms tras enviar el pedido.
     this.carrito.set([]);
     this.ultimoScan.set(null);
     this.focusInput();
+    this.api.vaciarCarritoServer().subscribe({
+      next: (state) => this.carrito.set(state.items),
+      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo vaciar el carrito.'),
+    });
   }
 
   /** Refresh on-demand del producto que el operador acaba de scanear.
@@ -945,26 +910,18 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   refrescarStockCarrito(): void {
-    const skus = this.carrito().map((it) => it.sku);
-    if (skus.length === 0) return;
+    if (this.carrito().length === 0) return;
     this.refrescando.set(true);
-    this.api.refreshStock(skus).subscribe({
-      next: (resultados) => {
+    this.api.refrescarStockCarritoServer().subscribe({
+      next: (state) => {
         this.refrescando.set(false);
-        const map = new Map(resultados.map((r) => [r.sku, r]));
         const excedidos: string[] = [];
-        this.carrito.set(
-          this.carrito().map((it) => {
-            const fresh = map.get(it.sku);
-            if (!fresh) return it;
-            const stock = fresh.stockTotal;
-            const cantidad = it.cantidad;
-            if (stock != null && stock >= 0 && cantidad > stock) {
-              excedidos.push(`${it.sku} (${cantidad}→${stock})`);
-            }
-            return { ...fresh, cantidad };
-          }),
-        );
+        for (const it of state.items) {
+          if (it.stockTotal != null && it.stockTotal >= 0 && it.cantidad > it.stockTotal) {
+            excedidos.push(`${it.sku} (${it.cantidad}→${it.stockTotal})`);
+          }
+        }
+        this.carrito.set(state.items);
         if (excedidos.length > 0) {
           this.toast.add({
             severity: 'warn',
@@ -976,7 +933,7 @@ export class ShowroomPage implements AfterViewInit {
           this.toast.add({
             severity: 'success',
             summary: 'Stock actualizado',
-            detail: `${resultados.length} items refrescados desde DUX`,
+            detail: `${state.items.length} items refrescados desde DUX`,
           });
         }
       },
@@ -1147,45 +1104,35 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
 
-    // Refresh contra DUX antes de enviar — última validación.
-    // El backend persiste lo que trae de DUX (cache local actualizado para
-    // futuros scans), pero acá solo aplicamos al carrito el `stockTotal`
-    // y `sincronizadoAt` de cada item: mantenemos los precios que vio el
-    // cliente al armar el pedido (si DUX cambió un precio, no se lo trasladamos
-    // — el cliente paga lo que vio).
-    const skus = this.carrito().map((it) => it.sku);
+    // Refresh contra DUX antes de enviar — última validación. El backend
+    // sincroniza el cache + actualiza el carrito server-side (todas las PCs
+    // ven el nuevo stock vía SSE). Acá solo leemos el state resultante para
+    // detectar excedidos y mantenemos las cantidades pedidas (el operador
+    // decide si recortarlas en el diálogo).
+    const cantidadesPedidas = new Map(this.carrito().map((it) => [it.sku, it.cantidad]));
     this.refrescando.set(true);
-    this.api.refreshStock(skus).subscribe({
-      next: (resultados) => {
+    this.api.refrescarStockCarritoServer().subscribe({
+      next: (state) => {
         this.refrescando.set(false);
-        const map = new Map(resultados.map((r) => [r.sku, r]));
+        this.carrito.set(state.items);
         const excedidos: {
           sku: string;
           descripcion: string | null;
           cantidadPedida: number;
           stockDisponible: number;
         }[] = [];
-        this.carrito.set(
-          this.carrito().map((it) => {
-            const fresh = map.get(it.sku);
-            if (!fresh) return it;
-            const stock = fresh.stockTotal;
-            if (stock != null && it.cantidad > stock) {
-              excedidos.push({
-                sku: it.sku,
-                descripcion: it.descripcion,
-                cantidadPedida: it.cantidad,
-                stockDisponible: stock,
-              });
-            }
-            return {
-              ...it,
-              stockTotal: fresh.stockTotal,
-              stockStale: fresh.stockStale,
-              sincronizadoAt: fresh.sincronizadoAt,
-            };
-          }),
-        );
+        for (const it of state.items) {
+          const pedida = cantidadesPedidas.get(it.sku) ?? it.cantidad;
+          const stock = it.stockTotal;
+          if (stock != null && pedida > stock) {
+            excedidos.push({
+              sku: it.sku,
+              descripcion: it.descripcion,
+              cantidadPedida: pedida,
+              stockDisponible: stock,
+            });
+          }
+        }
 
         if (excedidos.length > 0) {
           // Stock cambió y ya no alcanza — cerramos el diálogo de confirmación

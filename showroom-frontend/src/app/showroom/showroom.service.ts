@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  CarritoAgregarResponse,
+  CarritoState,
   CatalogoItem,
   CatalogoPage,
   CrearPedidoRequest,
@@ -30,17 +32,43 @@ export class ShowroomService {
   }
 
   /** Llamada desde /visor cuando el cliente toca "Agregar al carrito" en el
-   *  celular. El backend valida stock/precio y publica un evento SSE que la
-   *  pantalla del operador toma para sumar el item al carrito. */
-  visorAgregarAlCarrito(sku: string, cantidad: number): Observable<ScanResult> {
-    return this.http.post<ScanResult>(`${this.base}/visor/agregar-carrito`, { sku, cantidad });
+   *  celular. El backend lo suma al carrito (único global) y emite SSE
+   *  `carrito-updated`. La respuesta incluye cuánto se sumó realmente. */
+  visorAgregarAlCarrito(sku: string, cantidad: number): Observable<CarritoAgregarResponse> {
+    return this.http.post<CarritoAgregarResponse>(
+      `${this.base}/visor/agregar-carrito`, { sku, cantidad });
   }
 
-  /** Llamada por la pantalla del operador cuando un add del visor no se cumplió
-   *  como pidió el cliente. Dispara un SSE que el visor escucha para mostrar
-   *  toast warn con la cantidad real agregada. */
-  visorAddRejected(sku: string, intentada: number, agregada: number): Observable<void> {
-    return this.http.post<void>(`${this.base}/visor-add-rejected`, { sku, intentada, agregada });
+  // =====================================================
+  // Carrito server-side (autenticado). El estado vive en el backend; las
+  // pantallas se sincronizan via SSE carrito-updated.
+  // =====================================================
+
+  obtenerCarrito(): Observable<CarritoState> {
+    return this.http.get<CarritoState>(`${this.base}/carrito`);
+  }
+
+  agregarItemCarrito(sku: string, cantidad: number): Observable<CarritoAgregarResponse> {
+    return this.http.post<CarritoAgregarResponse>(
+      `${this.base}/carrito/items`, { sku, cantidad });
+  }
+
+  actualizarCantidadItemCarrito(sku: string, cantidad: number): Observable<CarritoState> {
+    return this.http.patch<CarritoState>(
+      `${this.base}/carrito/items/${encodeURIComponent(sku)}`, { cantidad });
+  }
+
+  eliminarItemCarrito(sku: string): Observable<CarritoState> {
+    return this.http.delete<CarritoState>(
+      `${this.base}/carrito/items/${encodeURIComponent(sku)}`);
+  }
+
+  vaciarCarritoServer(): Observable<CarritoState> {
+    return this.http.delete<CarritoState>(`${this.base}/carrito`);
+  }
+
+  refrescarStockCarritoServer(): Observable<CarritoState> {
+    return this.http.post<CarritoState>(`${this.base}/carrito/refresh-stock`, {});
   }
 
   refreshStock(skus: string[]): Observable<ScanResult[]> {

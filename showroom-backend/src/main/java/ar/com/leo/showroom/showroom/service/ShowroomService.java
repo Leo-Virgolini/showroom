@@ -116,45 +116,6 @@ public class ShowroomService {
     }
 
     /**
-     * Valida un "agregar al carrito" disparado desde el visor: producto en
-     * cache, habilitado, con precio cargado en la lista KT GASTRO y con stock
-     * suficiente. Devuelve el {@link ScanResultDTO} que el controller usa
-     * para publicar el evento SSE.
-     *
-     * <p>El endpoint es público (igual que /scan, que también alimenta el
-     * visor) — confiamos en que sólo celulares dentro del showroom tienen
-     * la URL. Si llegamos a necesitar más control, agregar autenticación
-     * o un token efímero compartido entre operador y visor.
-     */
-    public ScanResultDTO validarAgregarDesdeVisor(String sku, int cantidad) {
-        if (sku == null || sku.isBlank()) {
-            throw new NotFoundException("SKU vacío");
-        }
-        if (cantidad <= 0) {
-            throw new ConflictException("La cantidad debe ser mayor a 0");
-        }
-        ProductoCache pc = catalogoSync.buscarPorSkuOEan(sku.trim())
-                .orElseThrow(() -> new NotFoundException("Producto no encontrado: " + sku));
-
-        if (Boolean.FALSE.equals(pc.getHabilitado())) {
-            throw new ConflictException("El producto está deshabilitado");
-        }
-        BigDecimal precio = pc.getPvpKtGastroConIva();
-        if (precio == null || precio.signum() <= 0) {
-            throw new ConflictException("El producto no tiene precio cargado en la lista KT GASTRO");
-        }
-        Integer stock = pc.getStockTotal();
-        if (stock != null && stock <= 0) {
-            throw new ConflictException("El producto no tiene stock disponible");
-        }
-        if (stock != null && cantidad > stock) {
-            throw new ConflictException("Cantidad solicitada (" + cantidad
-                    + ") supera el stock disponible (" + stock + ")");
-        }
-        return toScanResult(pc);
-    }
-
-    /**
      * Escalones de descuento configurados (orden ascendente por umbral).
      * El frontend los lee al iniciar para decidir qué % aplicar al carrito.
      */
@@ -638,7 +599,9 @@ public class ShowroomService {
     // Helpers
     // =====================================================
 
-    private ScanResultDTO toScanResult(ProductoCache pc) {
+    /** Visible para que {@code CarritoService} (paquete distinto) reuse el mismo
+     *  mapper sin duplicar la lógica de cálculo sin-IVA, stockStale, etc. */
+    public ScanResultDTO toScanResult(ProductoCache pc) {
         BigDecimal sinIva = calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva());
 
         boolean stockStale = pc.getSincronizadoAt() == null

@@ -5,13 +5,11 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * Payload del endpoint {@code POST /visor/agregar-carrito} — un cliente desde
- * la pantalla {@code /visor} pidió sumar {@code cantidad} unidades de
- * {@code sku} al carrito del operador. El backend valida stock y precio
- * contra el cache local; si pasa, publica un evento SSE que la pantalla del
- * operador escucha para actualizar su carrito.
+ * Request para agregar {@code cantidad} unidades de {@code sku} al carrito.
+ * Usado por el endpoint del operador {@code POST /carrito/items} y también
+ * por el endpoint público del visor {@code POST /visor/agregar-carrito}.
  */
-public record VisorAgregarCarritoRequestDTO(
+public record CarritoAgregarRequestDTO(
         @NotBlank(message = "sku requerido")
         String sku,
 
