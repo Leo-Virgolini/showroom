@@ -44,7 +44,12 @@ public class DuxClient {
     private static final long BASE_WAIT_MS = 5000L;
     private static final int MAX_INTENTOS_VACIOS = 3;
     private static final ZoneId ZONA_DUX = ZoneId.of("America/Argentina/Buenos_Aires");
-    private static final DateTimeFormatter DUX_FECHA_HORA = DateTimeFormatter.ofPattern("ddMMyyyy HH:mm");
+    // La doc oficial de DUX dice `ddMMyyyy HH:ss` para el filtro `fecha` de /items,
+    // pero `HH:ss` es casi seguro un typo (horas + segundos sin minutos no tiene
+    // sentido para un filtro). Probamos con el formato completo `HH:mm:ss` para
+    // ser explícitos — si DUX es tolerante, así interpreta el componente "10"
+    // como minutos sí o sí.
+    private static final DateTimeFormatter DUX_FECHA_HORA = DateTimeFormatter.ofPattern("ddMMyyyy HH:mm:ss");
 
     private final RestClient restClient;
     private final DuxProperties properties;
