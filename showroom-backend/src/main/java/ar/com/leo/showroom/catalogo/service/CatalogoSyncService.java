@@ -176,7 +176,12 @@ public class CatalogoSyncService {
                 log.info("Sync completado: {} productos actualizados", actualizados);
                 // Solo persistimos el timestamp cuando la sync global termina OK.
                 // Cancelaciones y fallos no cuentan como "última sync exitosa".
-                self.marcarUltimaSyncGlobal(Instant.now());
+                // Usamos `inicio` (no Instant.now()) para que el próximo
+                // incremental capture cualquier item modificado en DUX
+                // DURANTE este sync — sino se pierden los que cambiaron en una
+                // página que ya pasamos. Re-bajar items entre inicio y fin no
+                // es problema (es upsert idempotente).
+                self.marcarUltimaSyncGlobal(inicio);
                 eventService.publish("sync", SyncEvent.completed(inicio, actualizados));
             }
             return actualizados;
