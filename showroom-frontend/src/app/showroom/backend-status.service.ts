@@ -4,6 +4,7 @@ import { Subject } from 'rxjs';
 import {
   CarritoState,
   PickingEmailEvent,
+  PickitExternoEvent,
   ScanResult,
   SyncEvent,
 } from './models';
@@ -36,6 +37,10 @@ export class BackendStatusService {
   readonly connected = signal(true);
   readonly syncEvents$ = new Subject<SyncEvent>();
   readonly pickingEmailEvents$ = new Subject<PickingEmailEvent>();
+  /** Resultado de la generación del pickit externo (programa pickit-y-etiquetas).
+   *  Se dispara tras DUX OK (automático) o cuando el operador toca el botón
+   *  manual desde /pedidos. */
+  readonly pickitExternoEvents$ = new Subject<PickitExternoEvent>();
   /** Scans publicados al visor (pantalla espejo en celular). El backend
    *  emite uno cada vez que el operador escanea desde la página principal. */
   readonly scanVisorEvents$ = new Subject<ScanResult>();
@@ -156,6 +161,14 @@ export class BackendStatusService {
     src.addEventListener('picking-email', (e: MessageEvent) => {
       try {
         this.pickingEmailEvents$.next(JSON.parse(e.data) as PickingEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('pickit-externo', (e: MessageEvent) => {
+      try {
+        this.pickitExternoEvents$.next(JSON.parse(e.data) as PickitExternoEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

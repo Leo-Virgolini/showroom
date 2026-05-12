@@ -237,6 +237,18 @@
                   pTooltip="Reenviar email (XLSX + PDF)"
                   tooltipPosition="top"
                 />
+                <p-button
+                  icon="pi pi-cog"
+                  severity="warn"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  [loading]="estaGenerandoPickit(p.id)"
+                  (onClick)="regenerarPickitExterno(p)"
+                  ariaLabel="Generar pickit externo"
+                  pTooltip="Generar Excel pickit (programa externo)"
+                  tooltipPosition="top"
+                />
                 @if (puedeAnular(p)) {
                   <p-button
                     icon="pi pi-ban"

@@ -4,6 +4,7 @@ import ar.com.leo.showroom.catalogo.entity.ProductoCache;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.events.SyncCatalogoCompletadoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarResponseDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoItemDTO;
@@ -12,6 +13,7 @@ import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -237,6 +239,44 @@ public class CarritoService {
             CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
             broadcast(state);
             return state;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * Aplica al carrito el stock fresco del cache después de un sync global del
+     * catálogo. Preserva precios (igual que {@code refrescarStock} manual). Si
+     * algún item queda con cantidad > stock nuevo, el frontend lo detecta vía
+     * el computed {@code hayItemsExcedidos()} y muestra alerta — pero además
+     * nosotros mandamos el SSE con origen {@code SISTEMA} para que el caller
+     * sepa que el cambio vino del sync (no de un operador) y pueda mostrar un
+     * toast diferenciado.
+     *
+     * <p>Si no hay items en el carrito, no hacemos nada — evitar broadcast
+     * innecesario que disparía un toast vacío en el frontend.
+     */
+    @EventListener
+    public void onSyncCatalogoCompletado(SyncCatalogoCompletadoEvent event) {
+        lock.lock();
+        try {
+            if (items.isEmpty()) return;
+            boolean huboCambio = false;
+            for (Map.Entry<String, CarritoItemDTO> entry : items.entrySet()) {
+                var pcOpt = catalogoSync.buscarPorSkuOEan(entry.getKey());
+                if (pcOpt.isEmpty()) continue;
+                ScanResultDTO fresh = showroomService.toScanResult(pcOpt.get());
+                CarritoItemDTO actualizado = entry.getValue().withStockFrescoDe(fresh);
+                if (!actualizado.equals(entry.getValue())) {
+                    items.put(entry.getKey(), actualizado);
+                    huboCambio = true;
+                }
+            }
+            if (huboCambio) {
+                log.info("Carrito actualizado tras sync ({} productos en catálogo)",
+                        event.productosActualizados());
+                broadcast(snapshot(CarritoStateDTO.Origen.SISTEMA));
+            }
         } finally {
             lock.unlock();
         }

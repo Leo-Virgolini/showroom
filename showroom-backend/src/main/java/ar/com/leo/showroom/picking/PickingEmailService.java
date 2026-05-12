@@ -5,8 +5,10 @@ import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickingEmailEvent;
+import ar.com.leo.showroom.events.PickitExternoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,13 +50,13 @@ public class PickingEmailService {
         PESO_FMT.setMinimumFractionDigits(0);
     }
 
-    private final PickingExcelGenerator excelGenerator;
     private final PresupuestoPdfGenerator pdfGenerator;
     private final JavaMailSender mailSender;
     private final SyncEventService eventService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
     private final ConfiguracionService configuracionService;
+    private final PickitExternoService pickitExternoService;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean enabled;
@@ -70,20 +72,20 @@ public class PickingEmailService {
      * el bean podría ser null o un dummy. Lo recibimos via @Autowired-required=false.
      */
     public PickingEmailService(
-            PickingExcelGenerator excelGenerator,
             PresupuestoPdfGenerator pdfGenerator,
             org.springframework.beans.factory.ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
             ProvinciaRepository provinciaRepository,
             LocalidadRepository localidadRepository,
-            ConfiguracionService configuracionService) {
-        this.excelGenerator = excelGenerator;
+            ConfiguracionService configuracionService,
+            PickitExternoService pickitExternoService) {
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
         this.configuracionService = configuracionService;
+        this.pickitExternoService = pickitExternoService;
     }
 
     /**
@@ -121,9 +123,6 @@ public class PickingEmailService {
         }
 
         try {
-            byte[] xlsx = excelGenerator.generar(pedido);
-            String nombreArchivo = excelGenerator.nombreArchivo(pedido);
-
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
 
@@ -194,8 +193,7 @@ public class PickingEmailService {
                         .append(observaciones).append('\n');
             }
             plain.append('\n')
-                    .append("Adjuntos:\n")
-                    .append(" - XLSX (SKU, Cantidad): input para el sistema de picking.\n")
+                    .append("Adjunto:\n")
                     .append(" - PDF: presupuesto para mandarle al cliente.\n");
 
             // ----- HTML: dos tablas (Cliente + Pedido) -----
@@ -245,9 +243,8 @@ public class PickingEmailService {
 
                       %s
 
-                      <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Adjuntos</strong></p>
+                      <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Adjunto</strong></p>
                       <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
-                        <li><strong>XLSX</strong> (SKU, Cantidad) — input para el sistema de picking.</li>
                         <li><strong>PDF</strong> — presupuesto para mandarle al cliente.</li>
                       </ul>
                     </div>
@@ -255,12 +252,12 @@ public class PickingEmailService {
 
             helper.setText(plain.toString(), htmlText);
 
-            helper.addAttachment(nombreArchivo, new ByteArrayResource(xlsx));
+            // El email lleva SOLO el presupuesto PDF — el XLSX local de picking
+            // y el pickit externo ya no se adjuntan (eran para el operador, no
+            // para el destinatario del mail). El XLSX local sigue disponible
+            // vía GET /pedidos/{id}/excel; el pickit externo se sigue generando
+            // y se descarga automáticamente en el browser del operador.
             int pdfBytes = 0;
-
-            // Adjuntamos también el presupuesto PDF (look-and-feel KT, para mandar
-            // al cliente). Si la generación falla, seguimos solo con el XLSX —
-            // el picking es lo crítico.
             try {
                 byte[] pdf = pdfGenerator.generar(pedido);
                 pdfBytes = pdf.length;
@@ -270,15 +267,27 @@ public class PickingEmailService {
                 log.warn("No se pudo adjuntar presupuesto PDF al pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
             }
 
-            // Logueamos tamaño antes de enviar — si después hay un timeout SMTP,
-            // se puede correlacionar con adjuntos grandes (PDFs con muchas imágenes).
-            log.info("Picking email pedido {} — enviando XLSX={}KB + PDF={}KB",
-                    pedido.getId(), xlsx.length / 1024, pdfBytes / 1024);
-
+            log.info("Picking email pedido {} — enviando PDF={}KB", pedido.getId(), pdfBytes / 1024);
             mailSender.send(mime);
-            log.info("Picking email enviado a {} para pedido {} ({})", emailTo, pedido.getId(), nombreArchivo);
+            log.info("Picking email enviado a {} para pedido {}", emailTo, pedido.getId());
             eventService.publish("picking-email",
                     PickingEmailEvent.sent(pedido.getId(), cuitDe(pedido)));
+
+            // Después de mandar el mail (el camino crítico ya terminó OK),
+            // generamos el pickit externo si la integración está habilitada.
+            // Esto dispara el SSE pickit-externo que el frontend usa para
+            // auto-descargar el .xlsx en el browser del operador.
+            if (pickitExternoService.motivoNoConfigurado().isEmpty()) {
+                try {
+                    java.nio.file.Path pickitPath = pickitExternoService.generar(pedido);
+                    eventService.publish("pickit-externo",
+                            PickitExternoEvent.generated(pedido.getId(), pickitPath.toString()));
+                } catch (Exception ex) {
+                    log.warn("Pickit externo falló para pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
+                    eventService.publish("pickit-externo",
+                            PickitExternoEvent.failed(pedido.getId(), ex.getMessage()));
+                }
+            }
         } catch (Exception e) {
             // No tirar la excepción — el pedido ya está creado en DUX, no podemos
             // revertirlo si el email falla. Solo logueamos y notificamos al frontend.

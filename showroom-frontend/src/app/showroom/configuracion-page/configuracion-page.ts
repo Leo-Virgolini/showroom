@@ -22,7 +22,7 @@ import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
-import { EscalaDescuento, HorarioSync } from '../models';
+import { EscalaDescuento, HorarioSync, PickitConfig } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 
@@ -131,6 +131,40 @@ export class ConfiguracionPage {
   );
 
   // ============================================================
+  // Pickit externo (programa pickit-y-etiquetas)
+  // ============================================================
+  readonly cargandoPickit = signal(false);
+  readonly guardandoPickit = signal(false);
+  /** Estado editable de la config. */
+  readonly pickitConfig = signal<PickitConfig>({
+    enabled: false,
+    jarPath: '',
+    stockFile: '',
+    combosFile: '',
+    outputDir: '',
+  });
+  /** Snapshot del backend para detectar cambios y permitir deshacer. */
+  private readonly pickitConfigOriginal = signal<PickitConfig>({
+    enabled: false,
+    jarPath: '',
+    stockFile: '',
+    combosFile: '',
+    outputDir: '',
+  });
+
+  readonly hayCambiosPickit = computed(() => {
+    const a = this.pickitConfig();
+    const b = this.pickitConfigOriginal();
+    return (
+      a.enabled !== b.enabled ||
+      a.jarPath.trim() !== b.jarPath.trim() ||
+      a.stockFile.trim() !== b.stockFile.trim() ||
+      a.combosFile.trim() !== b.combosFile.trim() ||
+      a.outputDir.trim() !== b.outputDir.trim()
+    );
+  });
+
+  // ============================================================
   // Usuarios (CRUD)
   // ============================================================
   readonly cargandoUsuarios = signal(false);
@@ -152,6 +186,7 @@ export class ConfiguracionPage {
     this.cargar();
     this.cargarHorarios();
     this.cargarEmail();
+    this.cargarPickit();
     this.cargarUsuarios();
   }
 
@@ -454,6 +489,76 @@ export class ConfiguracionPage {
       error: (err) => {
         this.guardandoEmail.set(false);
         toastError(this.toast, 'Email picking', err, 'No se pudo guardar el email');
+      },
+    });
+  }
+
+
+  // ============================================================
+  // Pickit externo — métodos
+  // ============================================================
+
+  private cargarPickit(): void {
+    this.cargandoPickit.set(true);
+    this.api.obtenerPickitConfig().subscribe({
+      next: (cfg) => {
+        this.cargandoPickit.set(false);
+        this.pickitConfig.set({ ...cfg });
+        this.pickitConfigOriginal.set({ ...cfg });
+      },
+      error: (err) => {
+        this.cargandoPickit.set(false);
+        toastError(this.toast, 'Pickit externo', err, 'No se pudo cargar la config');
+      },
+    });
+  }
+
+  /** Cualquier cambio de un campo individual actualiza la signal completa
+   *  (se preserva la inmutabilidad para que `hayCambiosPickit` reaccione). */
+  actualizarPickit<K extends keyof PickitConfig>(campo: K, valor: PickitConfig[K]): void {
+    this.pickitConfig.set({ ...this.pickitConfig(), [campo]: valor });
+  }
+
+  descartarCambiosPickit(): void {
+    this.pickitConfig.set({ ...this.pickitConfigOriginal() });
+  }
+
+  guardarPickit(): void {
+    const cfg = this.pickitConfig();
+    if (cfg.enabled) {
+      const faltantes: string[] = [];
+      if (!cfg.jarPath.trim()) faltantes.push('jar');
+      if (!cfg.stockFile.trim()) faltantes.push('stock');
+      if (!cfg.combosFile.trim()) faltantes.push('combos');
+      if (!cfg.outputDir.trim()) faltantes.push('carpeta de salida');
+      if (faltantes.length > 0) {
+        this.toast.add({
+          severity: 'warn',
+          summary: 'Faltan datos',
+          detail: `Para habilitar el pickit hay que completar: ${faltantes.join(', ')}.`,
+          life: 4000,
+        });
+        return;
+      }
+    }
+    this.guardandoPickit.set(true);
+    this.api.actualizarPickitConfig(cfg).subscribe({
+      next: (res) => {
+        this.guardandoPickit.set(false);
+        this.pickitConfig.set({ ...res });
+        this.pickitConfigOriginal.set({ ...res });
+        this.toast.add({
+          severity: 'success',
+          summary: 'Pickit externo guardado',
+          detail: res.enabled
+            ? 'Se va a generar automáticamente tras cada pedido OK.'
+            : 'Generación deshabilitada — solo manual desde /pedidos.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoPickit.set(false);
+        toastError(this.toast, 'Pickit externo', err, 'No se pudo guardar la config');
       },
     });
   }

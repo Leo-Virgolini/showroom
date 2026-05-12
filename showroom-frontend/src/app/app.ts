@@ -244,5 +244,68 @@ export class App {
           });
         }
       });
+
+    // Toast del pickit externo (programa pickit-y-etiquetas). Igual que el
+    // email: lo ven todos los clientes operativos, no el visor. Cuando termina
+    // OK, el browser dispara la descarga automática del .xlsx.
+    this.backendStatus.pickitExternoEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((e) => {
+        if (this.esVistaVisor()) return;
+        const ref = `pedido #${e.pedidoId}`;
+        if (e.estado === 'GENERATED' && e.outputPath) {
+          this.toast.add({
+            severity: 'success',
+            summary: 'Pickit externo generado',
+            detail: `${ref}: descargando ${this.nombreArchivo(e.outputPath)}…`,
+            life: 5000,
+          });
+          this.descargarPickitExterno(e.outputPath);
+        } else if (e.estado === 'GENERATED') {
+          this.toast.add({
+            severity: 'success',
+            summary: 'Pickit externo generado',
+            detail: `Generado para ${ref}.`,
+            life: 5000,
+          });
+        } else {
+          this.toast.add({
+            severity: 'error',
+            summary: 'Falló el pickit externo',
+            detail: e.error
+              ? `${ref}: ${e.error}`
+              : `No se pudo generar (${ref}). Revisar config y logs.`,
+            life: 10000,
+          });
+        }
+      });
+  }
+
+  /** Extrae el nombre del archivo de un path (separadores Unix o Windows). */
+  private nombreArchivo(path: string): string {
+    const i = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return i >= 0 ? path.substring(i + 1) : path;
+  }
+
+  /** Pide el .xlsx al backend y dispara la descarga del browser sin abrir tab. */
+  private descargarPickitExterno(path: string): void {
+    this.api.descargarPickitExternoArchivo(path).subscribe({
+      next: (resp) => {
+        const blob = resp.body;
+        if (!blob) return;
+        const nombre = this.nombreArchivo(path);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = nombre;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      },
+      error: (err) => {
+        toastError(this.toast, 'Descarga pickit', err, 'No se pudo descargar el pickit generado.');
+      },
+    });
   }
 }

@@ -14,6 +14,7 @@ import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.PickingExcelGenerator;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
+import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CantidadRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarRequestDTO;
@@ -29,6 +30,7 @@ import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.PickingEmailConfigDTO;
+import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
@@ -69,6 +71,7 @@ public class ShowroomController {
     private final PickingExcelGenerator excelGenerator;
     private final PresupuestoPdfGenerator pdfGenerator;
     private final PickingEmailService pickingEmailService;
+    private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final VisorService visorService;
 
@@ -330,6 +333,57 @@ public class ShowroomController {
     }
 
     /**
+     * Regenera el pickit externo (programa pickit-y-etiquetas) para un pedido
+     * ya creado. Async — el resultado llega vía SSE {@code pickit-externo}.
+     * 503 si la integración no está configurada (jar faltante, paths incompletos).
+     */
+    @PostMapping("/pedidos/{id}/pickit-externo")
+    public ResponseEntity<Map<String, Object>> regenerarPickitExterno(@PathVariable Long id) {
+        PedidoShowroom pedido = pedidoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
+        return pickitExternoService.motivoNoConfigurado()
+                .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
+                        .status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", motivo)))
+                .orElseGet(() -> {
+                    pickitExternoService.generarAsync(pedido);
+                    return ResponseEntity.accepted().body(Map.of(
+                            "message", "Pickit externo encolado — el toast confirmará el path generado.",
+                            "pedidoId", pedido.getId()));
+                });
+    }
+
+    /**
+     * Descarga un .xlsx pickit generado por el programa externo. El path llega
+     * como query param (lo provee el SSE {@code pickit-externo}). Se valida que
+     * apunte dentro del {@code outputDir} configurado para prevenir path
+     * traversal — sino cualquiera podría leer arbitrariamente archivos del
+     * container con un GET autenticado.
+     */
+    @GetMapping("/pickit-externo/descargar")
+    public ResponseEntity<Resource> descargarPickitExterno(@RequestParam("path") String path) {
+        PickitConfigDTO cfg = service.getPickitConfig();
+        if (!cfg.enabled() || cfg.outputDir() == null || cfg.outputDir().isBlank()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        }
+        java.nio.file.Path solicitado = java.nio.file.Path.of(path).toAbsolutePath().normalize();
+        java.nio.file.Path permitido = java.nio.file.Path.of(cfg.outputDir()).toAbsolutePath().normalize();
+        if (!solicitado.startsWith(permitido)) {
+            // Intento de path traversal o path fuera del outputDir configurado.
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (!java.nio.file.Files.isRegularFile(solicitado)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok()
+                .contentType(XLSX)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + solicitado.getFileName().toString() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .body(new FileSystemResource(solicitado.toFile()));
+    }
+
+    /**
      * Crea un pedido en DUX a partir del carrito.
      */
     @PostMapping("/pedido-dux")
@@ -493,6 +547,20 @@ public class ShowroomController {
     @PutMapping("/config/picking-email")
     public PickingEmailConfigDTO actualizarEmailPicking(@RequestBody PickingEmailConfigDTO body) {
         return new PickingEmailConfigDTO(service.setEmailPicking(body.email()));
+    }
+
+    /**
+     * Configuración de la integración con el programa pickit-y-etiquetas (jar
+     * nativo en el host, ejecutado por el backend vía ProcessBuilder).
+     */
+    @GetMapping("/config/pickit")
+    public PickitConfigDTO obtenerPickitConfig() {
+        return service.getPickitConfig();
+    }
+
+    @PutMapping("/config/pickit")
+    public PickitConfigDTO actualizarPickitConfig(@RequestBody PickitConfigDTO body) {
+        return service.savePickitConfig(body);
     }
 
     @GetMapping("/health")

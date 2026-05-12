@@ -99,6 +99,25 @@ export interface PickingEmailEvent {
   error?: string | null;
 }
 
+/** Configuración de la integración con el programa externo pickit-y-etiquetas
+ *  (jar Java desktop en el host, ejecutado por el backend vía ProcessBuilder).
+ *  Los paths son del CONTAINER Docker, no del host — el host mapea via volúmenes. */
+export interface PickitConfig {
+  enabled: boolean;
+  jarPath: string;
+  stockFile: string;
+  combosFile: string;
+  outputDir: string;
+}
+
+/** SSE emitido tras intentar generar el pickit externo (auto post-DUX o manual). */
+export interface PickitExternoEvent {
+  estado: 'GENERATED' | 'FAILED';
+  pedidoId: number;
+  outputPath: string | null;
+  error: string | null;
+}
+
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
  *  diferenciado cuando un cliente desde /visor agrega algo. */
 export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';

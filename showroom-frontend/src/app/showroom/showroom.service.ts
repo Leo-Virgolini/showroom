@@ -11,6 +11,7 @@ import {
   EscalaDescuento,
   Health,
   HorarioSync,
+  PickitConfig,
   ListarPedidosParams,
   ListarProductosParams,
   Localidad,
@@ -144,6 +145,34 @@ export class ShowroomService {
   /** Persiste el destinatario del email de picking. Cadena vacía vuelve al default. */
   actualizarEmailPicking(email: string): Observable<{ email: string }> {
     return this.http.put<{ email: string }>(`${this.base}/config/picking-email`, { email });
+  }
+
+  /** Config de la integración con el programa pickit-y-etiquetas. */
+  obtenerPickitConfig(): Observable<PickitConfig> {
+    return this.http.get<PickitConfig>(`${this.base}/config/pickit`);
+  }
+
+  actualizarPickitConfig(cfg: PickitConfig): Observable<PickitConfig> {
+    return this.http.put<PickitConfig>(`${this.base}/config/pickit`, cfg);
+  }
+
+  /** Regenera el pickit externo manualmente para un pedido ya existente. El
+   *  resultado llega vía SSE pickit-externo (toast). */
+  regenerarPickitExterno(id: number): Observable<{ message: string; pedidoId: number }> {
+    return this.http.post<{ message: string; pedidoId: number }>(
+      `${this.base}/pedidos/${id}/pickit-externo`, {});
+  }
+
+  /** Descarga el .xlsx pickit generado por el programa externo. El `path` lo
+   *  provee el SSE `pickit-externo` con estado GENERATED. El backend valida
+   *  que esté dentro del outputDir configurado (anti path-traversal). */
+  descargarPickitExternoArchivo(path: string): Observable<HttpResponse<Blob>> {
+    const params = new HttpParams().set('path', path);
+    return this.http.get(`${this.base}/pickit-externo/descargar`, {
+      params,
+      observe: 'response',
+      responseType: 'blob',
+    });
   }
 
 

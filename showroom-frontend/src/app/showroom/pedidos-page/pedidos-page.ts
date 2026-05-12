@@ -91,6 +91,7 @@ export class PedidosPage {
   readonly descargandoExcel = signal<Set<number>>(new Set());
   readonly descargandoPdf = signal<Set<number>>(new Set());
   readonly enviandoEmail = signal<Set<number>>(new Set());
+  readonly generandoPickit = signal<Set<number>>(new Set());
   readonly anulandoPedido = signal<Set<number>>(new Set());
 
   /** Pedido que el operador eligió anular — null cuando el dialog está cerrado.
@@ -386,6 +387,31 @@ export class PedidosPage {
       error: (err) => {
         this.marcarDescarga(this.enviandoEmail, p.id, false);
         toastError(this.toast, 'Email', err, 'No se pudo encolar el envío');
+      },
+    });
+  }
+
+  estaGenerandoPickit(id: number): boolean {
+    return this.generandoPickit().has(id);
+  }
+
+  regenerarPickitExterno(p: PedidoListItem): void {
+    if (this.estaGenerandoPickit(p.id)) return;
+    this.marcarDescarga(this.generandoPickit, p.id, true);
+    this.api.regenerarPickitExterno(p.id).subscribe({
+      next: () => {
+        this.marcarDescarga(this.generandoPickit, p.id, false);
+        // El SSE pickit-externo (toast en app.ts) confirma el path generado.
+        this.toast.add({
+          severity: 'info',
+          summary: 'Pickit externo encolado',
+          detail: 'Generando archivo…',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.marcarDescarga(this.generandoPickit, p.id, false);
+        toastError(this.toast, 'Pickit externo', err, 'No se pudo generar el pickit');
       },
     });
   }

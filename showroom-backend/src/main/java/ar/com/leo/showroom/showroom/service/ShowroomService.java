@@ -168,6 +168,17 @@ public class ShowroomService {
         return configuracionService.setEmailPickingTo(email);
     }
 
+    /** Configuración runtime del pickit externo (paths del jar + Excels auxiliares + output dir). */
+    public ar.com.leo.showroom.showroom.dto.PickitConfigDTO getPickitConfig() {
+        return configuracionService.getPickitConfig();
+    }
+
+    /** Persiste la config del pickit externo. Valida que los paths estén presentes si enabled=true. */
+    public ar.com.leo.showroom.showroom.dto.PickitConfigDTO savePickitConfig(
+            ar.com.leo.showroom.showroom.dto.PickitConfigDTO cfg) {
+        return configuracionService.savePickitConfig(cfg);
+    }
+
 
     /**
      * Búsqueda paginada en el cache local (sin tocar DUX).

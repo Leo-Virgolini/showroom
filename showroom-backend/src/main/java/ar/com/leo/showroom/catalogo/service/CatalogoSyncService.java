@@ -8,8 +8,10 @@ import ar.com.leo.showroom.dux.model.DuxItem;
 import ar.com.leo.showroom.dux.model.DuxPrecio;
 import ar.com.leo.showroom.dux.model.DuxStock;
 import ar.com.leo.showroom.dux.service.DuxClient;
+import ar.com.leo.showroom.events.SyncCatalogoCompletadoEvent;
 import ar.com.leo.showroom.events.SyncEvent;
 import ar.com.leo.showroom.events.SyncEventService;
+import org.springframework.context.ApplicationEventPublisher;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,6 +50,7 @@ public class CatalogoSyncService {
     private final ProductoCacheRepository repository;
     private final SyncMetadataRepository syncMetadataRepository;
     private final SyncEventService eventService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * Self-injection para que las llamadas internas a métodos con {@code @Async}
@@ -183,6 +186,10 @@ public class CatalogoSyncService {
                 // es problema (es upsert idempotente).
                 self.marcarUltimaSyncGlobal(inicio);
                 eventService.publish("sync", SyncEvent.completed(inicio, actualizados));
+                // Notificamos al CarritoService para que actualice el stock de
+                // los items del carrito en curso — sino el operador podría
+                // intentar vender cantidades que ya no hay después del sync.
+                applicationEventPublisher.publishEvent(new SyncCatalogoCompletadoEvent(actualizados));
             }
             return actualizados;
         } catch (RuntimeException ex) {

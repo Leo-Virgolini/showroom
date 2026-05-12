@@ -471,9 +471,12 @@ export class ShowroomPage implements AfterViewInit {
       error: (err) => console.warn('[carrito] no se pudo hidratar:', err),
     });
 
-    // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor)
-    // llega como SSE y reemplaza el estado local. Si el origen es VISOR,
-    // mostramos un toast informativo para que el operador se entere.
+    // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor,
+    // sync de catálogo) llega como SSE y reemplaza el estado local. Según el
+    // origen mostramos toasts diferenciados:
+    //  - VISOR  → "cliente agregó al carrito X"
+    //  - SISTEMA → tras un sync global de catálogo. Si el sync hizo que algún
+    //              item quede con cantidad > stock disponible, alerta.
     this.backendStatus.carritoEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((state) => {
@@ -481,6 +484,8 @@ export class ShowroomPage implements AfterViewInit {
         this.carrito.set(state.items);
         if (state.origen === 'VISOR') {
           this.mostrarToastCambioDesdeVisor(previo, state.items);
+        } else if (state.origen === 'SISTEMA') {
+          this.mostrarToastStockTrasSync(previo, state.items);
         }
       });
 
@@ -813,6 +818,31 @@ export class ShowroomPage implements AfterViewInit {
         this.focusInput();
       },
       error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo agregar al carrito.'),
+    });
+  }
+
+  /** Toast warn cuando un sync global del catálogo dejó items del carrito con
+   *  cantidad > stock disponible. Solo notifica los items que ANTES estaban
+   *  OK y AHORA quedaron excedidos (los que ya estaban excedidos no tiene
+   *  sentido re-alertar, el operador ya los está viendo en rojo). */
+  private mostrarToastStockTrasSync(previo: CarritoItem[], nuevo: CarritoItem[]): void {
+    const prevMap = new Map(previo.map((it) => [it.sku, it]));
+    const ahoraExcedidos: string[] = [];
+    for (const it of nuevo) {
+      const stock = it.stockTotal;
+      if (stock == null || it.cantidad <= stock) continue;
+      const antes = prevMap.get(it.sku);
+      const estabaExcedido = antes != null && antes.stockTotal != null && antes.cantidad > antes.stockTotal;
+      if (!estabaExcedido) {
+        ahoraExcedidos.push(`${it.sku} (${it.cantidad}→${stock})`);
+      }
+    }
+    if (ahoraExcedidos.length === 0) return;
+    this.toast.add({
+      severity: 'warn',
+      summary: 'Stock actualizado tras sincronización',
+      detail: `Items que ya no tienen stock suficiente: ${ahoraExcedidos.join(', ')}`,
+      life: 10000,
     });
   }
 
