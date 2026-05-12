@@ -3,16 +3,22 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { MessageService } from 'primeng/api';
+import { ButtonModule } from 'primeng/button';
 import { ImageModule } from 'primeng/image';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
 import { EscalaDescuento, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
+import { toastError } from '../toast.utils';
 
 /**
  * Pantalla espejo del scan, pensada para abrir desde un celular y ver los
@@ -29,7 +35,7 @@ import { ShowroomService } from '../showroom.service';
   selector: 'app-visor-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ImageModule, TagModule],
+  imports: [CommonModule, FormsModule, ButtonModule, ImageModule, InputNumberModule, TagModule],
   templateUrl: './visor-page.html',
   styleUrl: './visor-page.scss',
 })
@@ -37,6 +43,7 @@ export class VisorPage {
   private readonly api = inject(ShowroomService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly toast = inject(MessageService);
 
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
   readonly ultimoScan = signal<ScanResult | null>(null);
@@ -45,11 +52,36 @@ export class VisorPage {
    *  la pantalla principal. Soporta N escalas (no sólo 2). */
   readonly escalas = signal<EscalaDescuento[]>([]);
 
+  /** Cantidad seleccionada con el stepper antes de "Agregar al carrito". Se
+   *  resetea a 1 cada vez que cambia el producto. */
+  readonly cantidad = signal(1);
+
+  /** True mientras la request al backend está en vuelo (evita doble-tap). */
+  readonly enviandoAgregar = signal(false);
+
   /** Escalas ordenadas asc por umbralMin — orden natural para mostrarlas
    *  como "comprá más para llegar al próximo descuento". */
   readonly escalasOrdenadas = computed(() =>
     [...this.escalas()].sort((a, b) => a.umbralMin - b.umbralMin),
   );
+
+  /** Producto vendible: con precio cargado, habilitado y con stock > 0. Si no
+   *  cumple alguno, no mostramos el stepper ni el botón. */
+  readonly puedeAgregar = computed(() => {
+    const r = this.ultimoScan();
+    if (!r) return false;
+    if (r.habilitado === false) return false;
+    if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) return false;
+    if (r.stockTotal != null && r.stockTotal <= 0) return false;
+    return true;
+  });
+
+  /** Tope superior del stepper de cantidad. Si el stock es null (no
+   *  sincronizado), no limitamos — el backend valida al recibir. */
+  readonly maxCantidad = computed(() => {
+    const r = this.ultimoScan();
+    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 9999;
+  });
 
   constructor() {
     this.api.obtenerEscalasDescuento().subscribe({
@@ -62,6 +94,40 @@ export class VisorPage {
     this.backendStatus.scanVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((scan) => this.ultimoScan.set(scan));
+
+    // Cada vez que cambia el producto, reseteamos la cantidad a 1.
+    effect(() => {
+      this.ultimoScan();
+      this.cantidad.set(1);
+    });
+  }
+
+  /** Disparado por el botón "Agregar al carrito". Envía sku + cantidad al
+   *  backend; éste valida y publica el evento SSE que actualiza la pantalla
+   *  del operador. El visor solo muestra toast de confirmación o error. */
+  agregar(): void {
+    const r = this.ultimoScan();
+    if (!r || !this.puedeAgregar() || this.enviandoAgregar()) return;
+    const cant = Math.max(1, Math.min(this.cantidad(), this.maxCantidad()));
+
+    this.enviandoAgregar.set(true);
+    this.api.visorAgregarAlCarrito(r.sku, cant).subscribe({
+      next: () => {
+        this.enviandoAgregar.set(false);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Agregado al carrito',
+          detail: `${r.sku} x${cant}`,
+          life: 2500,
+        });
+        this.cantidad.set(1);
+      },
+      error: (err) => {
+        this.enviandoAgregar.set(false);
+        toastError(this.toast, 'No se pudo agregar', err,
+          'No se pudo agregar al carrito. Reintentá en un momento.');
+      },
+    });
   }
 
   /** Monto que se ahorra el cliente por unidad al alcanzar un escalón. */

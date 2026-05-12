@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpStatusCodeException.class)
     public ResponseEntity<Map<String, Object>> handleUpstream(HttpStatusCodeException ex, HttpServletRequest req) {
         log.warn("Error upstream {}: {}", ex.getStatusCode(), ex.getResponseBodyAsString());
-        return body(HttpStatus.BAD_GATEWAY, "Error consultando DUX: " + ex.getStatusCode(), req);
+        return body(HttpStatus.BAD_GATEWAY, UserMessages.mensajeUpstream(ex), req);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -69,7 +69,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex, HttpServletRequest req) {
         log.error("Error interno", ex);
-        return body(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno: " + ex.getMessage(), req);
+        // No exponemos ex.getMessage() crudo — suele ser texto técnico (NPE,
+        // stacktrace de una lib) que no le sirve al operador. El detalle queda en
+        // el log para diagnóstico; en pantalla devolvemos algo traducible o un
+        // fallback genérico.
+        String msg = UserMessages.traducir(ex,
+                "Ocurrió un error inesperado. Revisá los logs del backend para más detalle.");
+        return body(HttpStatus.INTERNAL_SERVER_ERROR, msg, req);
     }
 
     private ResponseEntity<Map<String, Object>> body(HttpStatus status, String message, HttpServletRequest req) {

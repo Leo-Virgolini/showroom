@@ -99,6 +99,12 @@ export interface PickingEmailEvent {
   error?: string | null;
 }
 
+/** Evento SSE emitido cuando un cliente agrega un item al carrito desde /visor. */
+export interface VisorAddCartEvent {
+  scan: ScanResult;
+  cantidad: number;
+}
+
 export interface CatalogoItem {
   sku: string;
   descripcion: string | null;

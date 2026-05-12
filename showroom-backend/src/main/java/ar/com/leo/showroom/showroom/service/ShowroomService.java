@@ -8,6 +8,7 @@ import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.entity.HorarioSync;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
@@ -112,6 +113,45 @@ public class ShowroomService {
      */
     public List<ScanResultDTO> refrescarStock(List<String> skus) {
         return catalogoSync.refrescarSkus(skus).stream().map(this::toScanResult).toList();
+    }
+
+    /**
+     * Valida un "agregar al carrito" disparado desde el visor: producto en
+     * cache, habilitado, con precio cargado en la lista KT GASTRO y con stock
+     * suficiente. Devuelve el {@link ScanResultDTO} que el controller usa
+     * para publicar el evento SSE.
+     *
+     * <p>El endpoint es público (igual que /scan, que también alimenta el
+     * visor) — confiamos en que sólo celulares dentro del showroom tienen
+     * la URL. Si llegamos a necesitar más control, agregar autenticación
+     * o un token efímero compartido entre operador y visor.
+     */
+    public ScanResultDTO validarAgregarDesdeVisor(String sku, int cantidad) {
+        if (sku == null || sku.isBlank()) {
+            throw new NotFoundException("SKU vacío");
+        }
+        if (cantidad <= 0) {
+            throw new ConflictException("La cantidad debe ser mayor a 0");
+        }
+        ProductoCache pc = catalogoSync.buscarPorSkuOEan(sku.trim())
+                .orElseThrow(() -> new NotFoundException("Producto no encontrado: " + sku));
+
+        if (Boolean.FALSE.equals(pc.getHabilitado())) {
+            throw new ConflictException("El producto está deshabilitado");
+        }
+        BigDecimal precio = pc.getPvpKtGastroConIva();
+        if (precio == null || precio.signum() <= 0) {
+            throw new ConflictException("El producto no tiene precio cargado en la lista KT GASTRO");
+        }
+        Integer stock = pc.getStockTotal();
+        if (stock != null && stock <= 0) {
+            throw new ConflictException("El producto no tiene stock disponible");
+        }
+        if (stock != null && cantidad > stock) {
+            throw new ConflictException("Cantidad solicitada (" + cantidad
+                    + ") supera el stock disponible (" + stock + ")");
+        }
+        return toScanResult(pc);
     }
 
     /**
@@ -579,13 +619,17 @@ public class ShowroomService {
         } catch (Exception e) {
             log.error("Error enviando pedido a DUX: {}", e.getMessage(), e);
             pedido.setEstado(EstadoPedido.ERROR);
+            // Guardamos el getMessage() crudo en BD para diagnóstico; al frontend
+            // mandamos un mensaje legible (UserMessages traduce timeouts/red/DUX).
             pedido.setRespuestaDux(e.getMessage());
             pedidoRepository.save(pedido);
+            String detalle = UserMessages.traducir(e,
+                    "No se pudo enviar el pedido a DUX. El pedido quedó guardado y puede reintentarse desde Pedidos.");
             return new CrearPedidoResponseDTO(
                     pedido.getId(),
                     EstadoPedido.ERROR,
                     null,
-                    "Pedido guardado localmente pero falló envío a DUX: " + e.getMessage()
+                    "Pedido guardado localmente pero falló el envío a DUX. " + detalle
             );
         }
     }

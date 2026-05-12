@@ -28,6 +28,7 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
+import ar.com.leo.showroom.showroom.dto.VisorAgregarCarritoRequestDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.VisorService;
 import jakarta.validation.Valid;
@@ -82,6 +83,23 @@ public class ShowroomController {
         ScanResultDTO result = service.scan(sku);
         visorService.publicarScan(result);
         return result;
+    }
+
+    /**
+     * Disparado desde {@code /visor}: el cliente agregó un producto al carrito
+     * desde el celular. El backend valida (precio, stock, habilitado) contra el
+     * cache local y publica un evento SSE {@code visor-add-cart} para que la
+     * pantalla del operador sume el item al carrito automáticamente.
+     *
+     * <p>Devuelve 200 + {@link ScanResultDTO} si pasó la validación. 404 si el
+     * SKU no existe; 409 si no se puede agregar (sin stock, sin precio, etc.).
+     * Endpoint público (el visor lo es).
+     */
+    @PostMapping("/visor/agregar-carrito")
+    public ScanResultDTO visorAgregarAlCarrito(@RequestBody @Valid VisorAgregarCarritoRequestDTO request) {
+        ScanResultDTO scan = service.validarAgregarDesdeVisor(request.sku(), request.cantidad());
+        visorService.publicarAddToCart(scan, request.cantidad());
+        return scan;
     }
 
     /**

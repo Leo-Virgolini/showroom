@@ -58,7 +58,8 @@ public class SecurityConfig {
                         .csrfTokenRepository(csrfRepo)
                         .csrfTokenRequestHandler(csrfHandler)
                         // El login no tiene sesión todavía → exento.
-                        .ignoringRequestMatchers("/api/auth/login"))
+                        // El visor es público y sin sesión → su POST también va exento.
+                        .ignoringRequestMatchers("/api/auth/login", "/api/showroom/visor/**"))
                 .cors(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
@@ -70,6 +71,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/showroom/productos/*/imagen").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/config/escalas-descuento").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
+                        // El visor puede agregar al carrito del operador (público).
+                        .requestMatchers(HttpMethod.POST, "/api/showroom/visor/agregar-carrito").permitAll()
                         // Healthcheck — el container Docker hace curl /health
                         // para saber si está UP. Sin esto, queda "starting" para
                         // siempre porque el endpoint responde 401 sin sesión.

@@ -426,7 +426,9 @@ export class EtiquetasPage {
           this.toast.add({
             severity: 'info',
             summary: 'Sin resultados',
-            detail: q ? `Nada coincide con "${q}"` : 'El cache está vacío',
+            detail: q
+              ? `Nada coincide con "${q}".`
+              : 'No hay productos en el catálogo. Sincronizá desde la pantalla principal.',
           });
         }
       },

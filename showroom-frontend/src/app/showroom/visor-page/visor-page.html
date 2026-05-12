@@ -113,6 +113,41 @@
           </div>
         }
       }
+
+      <!-- Stepper + botón "Agregar al carrito" — al final, después de que el
+           cliente vio precio y descuentos. Solo si vendible. Mobile-first:
+           botones grandes (56px), stepper centrado, botón full-width. -->
+      @if (puedeAgregar()) {
+        <div class="rounded-2xl border-2 border-[#FF861C]/40 dark:border-primary-900 bg-white dark:bg-surface-900 p-4 sm:p-5 flex flex-col gap-4">
+          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color text-center">
+            Cantidad
+          </div>
+          <div class="flex justify-center">
+            <p-inputNumber
+              [ngModel]="cantidad()"
+              (ngModelChange)="cantidad.set($event ?? 1)"
+              [showButtons]="true"
+              buttonLayout="horizontal"
+              [min]="1"
+              [max]="maxCantidad()"
+              decrementButtonClass="!h-14 !w-14"
+              incrementButtonClass="!h-14 !w-14"
+              inputStyleClass="!w-20 !text-center !text-2xl !font-bold"
+              incrementButtonIcon="pi pi-plus"
+              decrementButtonIcon="pi pi-minus" />
+          </div>
+          <button
+            pButton
+            type="button"
+            (click)="agregar()"
+            [disabled]="enviandoAgregar()"
+            [loading]="enviandoAgregar()"
+            icon="pi pi-shopping-cart"
+            label="Agregar al carrito"
+            class="!w-full !h-16 !text-lg !font-bold"
+            severity="primary"></button>
+        </div>
+      }
     </main>
   } @else {
     <main class="flex-1 flex flex-col items-center justify-center px-6 gap-6 pb-6">

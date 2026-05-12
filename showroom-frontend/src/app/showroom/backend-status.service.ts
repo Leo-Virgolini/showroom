@@ -1,7 +1,7 @@
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
-import { PickingEmailEvent, ScanResult, SyncEvent } from './models';
+import { PickingEmailEvent, ScanResult, SyncEvent, VisorAddCartEvent } from './models';
 
 /**
  * Estado de conectividad con el backend.
@@ -34,6 +34,9 @@ export class BackendStatusService {
   /** Scans publicados al visor (pantalla espejo en celular). El backend
    *  emite uno cada vez que el operador escanea desde la página principal. */
   readonly scanVisorEvents$ = new Subject<ScanResult>();
+  /** Items agregados al carrito desde la pantalla /visor (cliente en su celular).
+   *  La pantalla del operador escucha esto para sumar el item al carrito local. */
+  readonly visorAddCartEvents$ = new Subject<VisorAddCartEvent>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
@@ -156,6 +159,14 @@ export class BackendStatusService {
     src.addEventListener('scan-visor', (e: MessageEvent) => {
       try {
         this.scanVisorEvents$.next(JSON.parse(e.data) as ScanResult);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('visor-add-cart', (e: MessageEvent) => {
+      try {
+        this.visorAddCartEvents$.next(JSON.parse(e.data) as VisorAddCartEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

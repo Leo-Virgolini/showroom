@@ -29,6 +29,13 @@ export class ShowroomService {
     return this.http.get<ScanResult>(`${this.base}/scan/${encodeURIComponent(sku)}`);
   }
 
+  /** Llamada desde /visor cuando el cliente toca "Agregar al carrito" en el
+   *  celular. El backend valida stock/precio y publica un evento SSE que la
+   *  pantalla del operador toma para sumar el item al carrito. */
+  visorAgregarAlCarrito(sku: string, cantidad: number): Observable<ScanResult> {
+    return this.http.post<ScanResult>(`${this.base}/visor/agregar-carrito`, { sku, cantidad });
+  }
+
   refreshStock(skus: string[]): Observable<ScanResult[]> {
     const body: RefreshStockRequest = { skus };
     return this.http.post<ScanResult[]>(`${this.base}/refresh-stock`, body);

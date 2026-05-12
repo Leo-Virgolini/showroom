@@ -176,10 +176,11 @@ export class App {
     });
 
     // Toasts globales basados en eventos SSE — todos los clientes reaccionan al mismo
-    // evento sin importar quién disparó el sync.
+    // evento sin importar quién disparó el sync. El visor es read-only para el
+    // cliente: no se muestran toasts operativos ahí.
     effect(() => {
       const e = this.syncState.ultimoEvento();
-      if (!e) return;
+      if (!e || this.esVistaVisor()) return;
       switch (e.estado) {
         case 'COMPLETED':
           this.cancelandoSync.set(false);
@@ -218,10 +219,12 @@ export class App {
     });
 
     // Toast de picking email — el envío es async después del pedido y todos los
-    // clientes lo ven (no solo el operador que cargó el pedido).
+    // clientes lo ven (no solo el operador que cargó el pedido). El visor es
+    // read-only para el cliente: no se muestran toasts operativos ahí.
     this.backendStatus.pickingEmailEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((e) => {
+        if (this.esVistaVisor()) return;
         const ref = e.cuit ? `CUIT ${e.cuit}` : `pedido #${e.pedidoId}`;
         if (e.estado === 'SENT') {
           this.toast.add({

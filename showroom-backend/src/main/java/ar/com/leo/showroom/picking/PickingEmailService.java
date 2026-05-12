@@ -2,6 +2,7 @@ package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
+import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickingEmailEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -255,17 +256,24 @@ public class PickingEmailService {
             helper.setText(plain.toString(), htmlText);
 
             helper.addAttachment(nombreArchivo, new ByteArrayResource(xlsx));
+            int pdfBytes = 0;
 
             // Adjuntamos también el presupuesto PDF (look-and-feel KT, para mandar
             // al cliente). Si la generación falla, seguimos solo con el XLSX —
             // el picking es lo crítico.
             try {
                 byte[] pdf = pdfGenerator.generar(pedido);
+                pdfBytes = pdf.length;
                 String nombrePdf = pdfGenerator.nombreArchivo(pedido);
                 helper.addAttachment(nombrePdf, new ByteArrayResource(pdf));
             } catch (Exception ex) {
-                log.warn("No se pudo adjuntar presupuesto PDF al pedido {}: {}", pedido.getId(), ex.getMessage());
+                log.warn("No se pudo adjuntar presupuesto PDF al pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
             }
+
+            // Logueamos tamaño antes de enviar — si después hay un timeout SMTP,
+            // se puede correlacionar con adjuntos grandes (PDFs con muchas imágenes).
+            log.info("Picking email pedido {} — enviando XLSX={}KB + PDF={}KB",
+                    pedido.getId(), xlsx.length / 1024, pdfBytes / 1024);
 
             mailSender.send(mime);
             log.info("Picking email enviado a {} para pedido {} ({})", emailTo, pedido.getId(), nombreArchivo);
@@ -275,8 +283,10 @@ public class PickingEmailService {
             // No tirar la excepción — el pedido ya está creado en DUX, no podemos
             // revertirlo si el email falla. Solo logueamos y notificamos al frontend.
             log.error("Falló envío de picking email para pedido {}: {}", pedido.getId(), e.getMessage(), e);
+            String detalle = UserMessages.traducir(e,
+                    "No se pudo enviar el email. Revisar logs del backend para más detalle.");
             eventService.publish("picking-email",
-                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), e.getMessage()));
+                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), detalle));
         }
     }
 

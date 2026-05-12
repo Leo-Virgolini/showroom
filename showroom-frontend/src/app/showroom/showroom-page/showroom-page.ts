@@ -12,6 +12,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -35,6 +36,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
+import { BackendStatusService } from '../backend-status.service';
 import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
@@ -164,6 +166,7 @@ export class ShowroomPage implements AfterViewInit {
   private readonly toast = inject(MessageService);
   private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly backendStatus = inject(BackendStatusService);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
@@ -476,6 +479,12 @@ export class ShowroomPage implements AfterViewInit {
       error: (err) =>
         console.warn('[escalas-descuento] no se pudieron cargar:', err),
     });
+
+    // Si un cliente toca "Agregar al carrito" en su celular (/visor), llega
+    // un evento SSE y sumamos el item al carrito local del operador.
+    this.backendStatus.visorAddCartEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((e) => this.agregarDesdeVisor(e.scan, e.cantidad));
 
     // Persiste el carrito en localStorage en cada cambio. Cuando queda vacío
     // (vaciarCarrito() o envío exitoso) borra la key. Sobrevive a F5 accidental.
@@ -796,17 +805,8 @@ export class ShowroomPage implements AfterViewInit {
       });
       return;
     }
-    if (cantidad <= 0) cantidad = 1;
-
-    const lista = [...this.carrito()];
-    const idx = lista.findIndex((it) => it.sku === r.sku);
-    const cantidadActual = idx >= 0 ? lista[idx].cantidad : 0;
-    const cantidadDeseada = cantidadActual + cantidad;
-    const stock = r.stockTotal;
-    const cantidadFinal = stock != null && stock >= 0 ? Math.min(cantidadDeseada, stock) : cantidadDeseada;
-    const recortado = cantidadFinal < cantidadDeseada;
-
-    if (cantidadFinal <= 0) {
+    const res = this.aplicarAgregar(r, cantidad);
+    if (!res.ok) {
       this.toast.add({
         severity: 'warn',
         summary: 'Sin stock',
@@ -814,23 +814,56 @@ export class ShowroomPage implements AfterViewInit {
       });
       return;
     }
+    this.toast.add({
+      severity: res.recortado ? 'warn' : 'success',
+      summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado',
+      detail: res.recortado
+        ? `${r.sku}: tope ${r.stockTotal} unidades disponibles.`
+        : `${r.sku} x${res.cantidadAgregada}`,
+      life: res.recortado ? 3500 : 1500,
+    });
+    this.focusInput();
+  }
 
+  /** Llamado cuando llega un evento SSE `visor-add-cart` (el cliente tocó
+   *  "Agregar al carrito" desde su celular en /visor). Aplica la misma lógica
+   *  que el operador, con toast diferenciado para que se note. */
+  private agregarDesdeVisor(scan: ScanResult, cantidad: number): void {
+    const res = this.aplicarAgregar(scan, cantidad);
+    if (!res.ok) return;
+    this.toast.add({
+      severity: res.recortado ? 'warn' : 'info',
+      summary: 'Cliente agregó al carrito',
+      detail: res.recortado
+        ? `${scan.sku}: ajustado al tope ${scan.stockTotal}.`
+        : `${scan.sku} x${res.cantidadAgregada}`,
+      life: 4000,
+    });
+  }
+
+  /** Aplica el agregar al carrito (merge con item existente + tope por stock)
+   *  sin disparar toasts. Devuelve metadata para que el caller decida UX. */
+  private aplicarAgregar(
+    r: ScanResult,
+    cantidad: number,
+  ): { ok: boolean; recortado: boolean; cantidadAgregada: number } {
+    if (cantidad <= 0) cantidad = 1;
+    const lista = [...this.carrito()];
+    const idx = lista.findIndex((it) => it.sku === r.sku);
+    const cantidadActual = idx >= 0 ? lista[idx].cantidad : 0;
+    const cantidadDeseada = cantidadActual + cantidad;
+    const stock = r.stockTotal;
+    const cantidadFinal =
+      stock != null && stock >= 0 ? Math.min(cantidadDeseada, stock) : cantidadDeseada;
+    const recortado = cantidadFinal < cantidadDeseada;
+    if (cantidadFinal <= 0) return { ok: false, recortado: false, cantidadAgregada: 0 };
     if (idx >= 0) {
       lista[idx] = { ...lista[idx], cantidad: cantidadFinal };
     } else {
       lista.push({ ...r, cantidad: cantidadFinal });
     }
     this.carrito.set(lista);
-
-    this.toast.add({
-      severity: recortado ? 'warn' : 'success',
-      summary: recortado ? 'Cantidad ajustada al stock' : 'Agregado',
-      detail: recortado
-        ? `${r.sku}: tope ${stock} unidades disponibles.`
-        : `${r.sku} x${cantidad}`,
-      life: recortado ? 3500 : 1500,
-    });
-    this.focusInput();
+    return { ok: true, recortado, cantidadAgregada: cantidadFinal - cantidadActual };
   }
 
   actualizarCantidad(sku: string, cantidad: number): void {
