@@ -95,6 +95,24 @@ export class VisorPage {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((scan) => this.ultimoScan.set(scan));
 
+    // Si el operador rechazó/recortó un add que disparamos antes, el backend
+    // emite este evento para que mostremos al cliente la cantidad real.
+    // Filtramos por SKU del producto que el visor muestra ahora (sino, dos
+    // visores en productos distintos verían toasts de adds ajenos).
+    this.backendStatus.visorAddRejectedEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((e) => {
+        if (this.ultimoScan()?.sku !== e.sku) return;
+        this.toast.add({
+          severity: 'warn',
+          summary: 'No se agregó todo',
+          detail: e.agregada === 0
+            ? `${e.sku}: el carrito ya tiene el stock completo (${e.intentada} no se sumaron).`
+            : `${e.sku}: solo se agregaron ${e.agregada} de ${e.intentada} (stock limitado).`,
+          life: 6000,
+        });
+      });
+
     // Cada vez que cambia el producto, reseteamos la cantidad a 1.
     effect(() => {
       this.ultimoScan();

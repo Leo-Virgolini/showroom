@@ -2,6 +2,7 @@ package ar.com.leo.showroom.visor;
 
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
+import ar.com.leo.showroom.showroom.dto.VisorAddRejectedEventDTO;
 import ar.com.leo.showroom.showroom.dto.VisorAgregarCarritoEventDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class VisorService {
 
     public static final String EVENTO_SCAN = "scan-visor";
     public static final String EVENTO_ADD_CART = "visor-add-cart";
+    public static final String EVENTO_ADD_REJECTED = "visor-add-cart-rejected";
 
     private final SyncEventService eventService;
 
@@ -45,5 +47,15 @@ public class VisorService {
     public void publicarAddToCart(ScanResultDTO scan, int cantidad) {
         if (scan == null) return;
         eventService.publish(EVENTO_ADD_CART, new VisorAgregarCarritoEventDTO(scan, cantidad));
+    }
+
+    /**
+     * Llamado por el operador (frontend) cuando un add del visor no se cumplió
+     * completamente — el carrito ya estaba al tope o se recortó por stock. El
+     * visor escucha este evento para mostrar al cliente la cantidad real.
+     */
+    public void publicarAddRejected(String sku, int intentada, int agregada) {
+        if (sku == null) return;
+        eventService.publish(EVENTO_ADD_REJECTED, new VisorAddRejectedEventDTO(sku, intentada, agregada));
     }
 }

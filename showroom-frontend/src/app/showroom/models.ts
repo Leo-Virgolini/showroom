@@ -105,6 +105,15 @@ export interface VisorAddCartEvent {
   cantidad: number;
 }
 
+/** Evento SSE que avisa al visor que un add anterior no se cumplió completamente
+ *  (carrito ya al tope o recortado por stock). El visor lo usa para corregir el
+ *  toast "Agregado x10" que mostró antes con la cantidad real agregada. */
+export interface VisorAddRejectedEvent {
+  sku: string;
+  intentada: number;
+  agregada: number;
+}
+
 export interface CatalogoItem {
   sku: string;
   descripcion: string | null;

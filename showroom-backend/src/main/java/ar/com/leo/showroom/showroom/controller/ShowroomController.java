@@ -28,6 +28,7 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
+import ar.com.leo.showroom.showroom.dto.VisorAddRejectedRequestDTO;
 import ar.com.leo.showroom.showroom.dto.VisorAgregarCarritoRequestDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.VisorService;
@@ -100,6 +101,22 @@ public class ShowroomController {
         ScanResultDTO scan = service.validarAgregarDesdeVisor(request.sku(), request.cantidad());
         visorService.publicarAddToCart(scan, request.cantidad());
         return scan;
+    }
+
+    /**
+     * Llamado por la pantalla del operador cuando un "agregar al carrito" del
+     * visor no se pudo cumplir como pidió el cliente: el carrito ya tenía la
+     * cantidad máxima por stock o se recortó. El backend reenvía como SSE
+     * {@code visor-add-cart-rejected} para que el visor muestre al cliente la
+     * cantidad realmente agregada (en vez del "Agregado x10" inicial que
+     * resulta mentira).
+     *
+     * <p>Endpoint <b>autenticado</b> — sólo el operador puede emitirlo.
+     */
+    @PostMapping("/visor-add-rejected")
+    public ResponseEntity<Void> visorAddRejected(@RequestBody @Valid VisorAddRejectedRequestDTO request) {
+        visorService.publicarAddRejected(request.sku(), request.intentada(), request.agregada());
+        return ResponseEntity.accepted().build();
     }
 
     /**

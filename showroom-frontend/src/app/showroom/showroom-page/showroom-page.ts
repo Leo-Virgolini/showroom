@@ -827,9 +827,23 @@ export class ShowroomPage implements AfterViewInit {
 
   /** Llamado cuando llega un evento SSE `visor-add-cart` (el cliente tocó
    *  "Agregar al carrito" desde su celular en /visor). Aplica la misma lógica
-   *  que el operador, con toast diferenciado para que se note. */
+   *  que el operador, con toast diferenciado para que se note. Si lo
+   *  realmente agregado es menor a lo pedido (carrito ya al tope, recorte por
+   *  stock), notifica al backend con `visorAddRejected` — el backend reenvía
+   *  como SSE al visor para que el cliente vea la cantidad real. */
   private agregarDesdeVisor(scan: ScanResult, cantidad: number): void {
     const res = this.aplicarAgregar(scan, cantidad);
+    const agregadaReal = res.ok ? res.cantidadAgregada : 0;
+
+    if (agregadaReal < cantidad) {
+      // El cliente vio "Agregado xN" pero no sumamos eso — corregimos en su
+      // pantalla. Subscribe vacío: si falla, queda en el log del backend; el
+      // operador igual ve su toast con la cantidad real.
+      this.api.visorAddRejected(scan.sku, cantidad, agregadaReal).subscribe({
+        error: (err) => console.warn('[visor-add-rejected] no se pudo notificar:', err),
+      });
+    }
+
     if (!res.ok) return;
     this.toast.add({
       severity: res.recortado ? 'warn' : 'info',

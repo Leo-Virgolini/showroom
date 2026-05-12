@@ -1,7 +1,13 @@
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
-import { PickingEmailEvent, ScanResult, SyncEvent, VisorAddCartEvent } from './models';
+import {
+  PickingEmailEvent,
+  ScanResult,
+  SyncEvent,
+  VisorAddCartEvent,
+  VisorAddRejectedEvent,
+} from './models';
 
 /**
  * Estado de conectividad con el backend.
@@ -37,6 +43,10 @@ export class BackendStatusService {
   /** Items agregados al carrito desde la pantalla /visor (cliente en su celular).
    *  La pantalla del operador escucha esto para sumar el item al carrito local. */
   readonly visorAddCartEvents$ = new Subject<VisorAddCartEvent>();
+  /** Avisos al visor de que un add anterior no se pudo cumplir completamente
+   *  (carrito ya al tope o recortado por stock). El visor los muestra como
+   *  toast warn al cliente para corregir el "Agregado" inicial. */
+  readonly visorAddRejectedEvents$ = new Subject<VisorAddRejectedEvent>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
@@ -167,6 +177,14 @@ export class BackendStatusService {
     src.addEventListener('visor-add-cart', (e: MessageEvent) => {
       try {
         this.visorAddCartEvents$.next(JSON.parse(e.data) as VisorAddCartEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('visor-add-cart-rejected', (e: MessageEvent) => {
+      try {
+        this.visorAddRejectedEvents$.next(JSON.parse(e.data) as VisorAddRejectedEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

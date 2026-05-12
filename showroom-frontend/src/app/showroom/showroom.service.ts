@@ -36,6 +36,13 @@ export class ShowroomService {
     return this.http.post<ScanResult>(`${this.base}/visor/agregar-carrito`, { sku, cantidad });
   }
 
+  /** Llamada por la pantalla del operador cuando un add del visor no se cumplió
+   *  como pidió el cliente. Dispara un SSE que el visor escucha para mostrar
+   *  toast warn con la cantidad real agregada. */
+  visorAddRejected(sku: string, intentada: number, agregada: number): Observable<void> {
+    return this.http.post<void>(`${this.base}/visor-add-rejected`, { sku, intentada, agregada });
+  }
+
   refreshStock(skus: string[]): Observable<ScanResult[]> {
     const body: RefreshStockRequest = { skus };
     return this.http.post<ScanResult[]>(`${this.base}/refresh-stock`, body);
