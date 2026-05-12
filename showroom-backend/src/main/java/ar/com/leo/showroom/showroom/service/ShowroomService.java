@@ -3,6 +3,7 @@ package ar.com.leo.showroom.showroom.service;
 import ar.com.leo.showroom.catalogo.entity.ProductoCache;
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
+import ar.com.leo.showroom.catalogo.repository.ProductoCacheSpecs;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
@@ -40,7 +41,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
@@ -173,10 +176,13 @@ public class ShowroomService {
     public CatalogoPageDTO buscarCatalogo(String q, int page, int size) {
         int pageSafe = Math.max(0, page);
         int sizeSafe = Math.min(Math.max(size, 1), 200);
-        Page<ProductoCache> resultado = productoCacheRepository.buscar(
-                q == null ? null : q.trim(),
-                PageRequest.of(pageSafe, sizeSafe)
-        );
+        List<String> tokens = ProductoCacheSpecs.tokenizar(q);
+        // Si no hay tokens, devolvemos paginado por SKU asc (sin ranking).
+        Pageable pageable = tokens.isEmpty()
+                ? PageRequest.of(pageSafe, sizeSafe, Sort.by(Sort.Direction.ASC, "sku"))
+                : PageRequest.of(pageSafe, sizeSafe);
+        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, true);
+        Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         List<CatalogoItemDTO> items = resultado.getContent().stream()
                 .map(this::toCatalogoItem)
                 .toList();
@@ -237,17 +243,32 @@ public class ShowroomService {
             String sortOrder) {
         int pageSafe = Math.max(0, page);
         int sizeSafe = Math.min(Math.max(size, 1), 200);
-        String campo = SORT_PRODUCTOS.getOrDefault(sortField, "sku");
-        Sort.Direction direccion = "desc".equalsIgnoreCase(sortOrder)
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-        Sort sort = Sort.by(direccion, campo);
-        Page<ProductoCache> resultado = productoCacheRepository.buscarConFiltros(
-                q == null ? null : q.trim(),
-                soloDeshabilitados,
-                soloSinStock,
-                PageRequest.of(pageSafe, sizeSafe, sort)
-        );
+        List<String> tokens = ProductoCacheSpecs.tokenizar(q);
+
+        // El operador eligió un sort de columna (clickeable) → respetar.
+        // Sin sort explícito + hay tokens → ranking por relevancia desde la spec.
+        // Sin sort explícito + sin tokens → SKU asc por default.
+        boolean operadorEligioSort = sortField != null && SORT_PRODUCTOS.containsKey(sortField);
+        Pageable pageable;
+        boolean aplicarRanking;
+        if (operadorEligioSort) {
+            String campo = SORT_PRODUCTOS.get(sortField);
+            Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
+            pageable = PageRequest.of(pageSafe, sizeSafe, Sort.by(dir, campo));
+            aplicarRanking = false;
+        } else if (!tokens.isEmpty()) {
+            pageable = PageRequest.of(pageSafe, sizeSafe);
+            aplicarRanking = true;
+        } else {
+            pageable = PageRequest.of(pageSafe, sizeSafe, Sort.by(Sort.Direction.ASC, "sku"));
+            aplicarRanking = false;
+        }
+
+        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, aplicarRanking);
+        if (soloDeshabilitados) spec = spec.and(ProductoCacheSpecs.soloDeshabilitados());
+        if (soloSinStock) spec = spec.and(ProductoCacheSpecs.soloSinStock());
+
+        Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         List<ProductoListItemDTO> items = resultado.getContent().stream()
                 .map(this::toProductoListItem)
                 .toList();

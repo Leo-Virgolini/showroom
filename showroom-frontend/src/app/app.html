@@ -1,4 +1,8 @@
 <p-toast position="top-right" />
+<!-- Toast dedicado al visor — `top-center` rinde mejor en celulares verticales,
+     donde `top-right` queda pegado al borde y se ve cortado. Los callers del
+     visor usan `key: 'visor'` al hacer `toast.add(...)`. -->
+<p-toast position="top-center" key="visor" />
 
 @if (syncState.syncEnCurso() && !esVistaVisor()) {
   <div

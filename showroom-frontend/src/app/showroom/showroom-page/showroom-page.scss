@@ -15,6 +15,11 @@
 // En PrimeNG 21 la clase `p-card` se aplica al mismo host que recibe nuestro
 // `stretch-card`, así que NO usamos `> .p-card` (sería el mismo elemento).
 // El primer hijo es directamente `.p-card-body`.
+// El borde + shadow para diferenciar la card del fondo crema viven en el
+// `styles.scss` global (afecta a TODAS las p-card). Acá solo dejamos el
+// override específico del "modo dashboard fijo": que la card estire el alto
+// al 100% del padre y propague flex-col para que mt-auto del CTA al pie
+// funcione.
 :host ::ng-deep .stretch-card {
   display: flex;
   flex-direction: column;

@@ -122,19 +122,35 @@
           <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color text-center">
             Cantidad
           </div>
-          <div class="flex justify-center">
-            <p-inputNumber
-              [ngModel]="cantidad()"
-              (ngModelChange)="cantidad.set($event ?? 1)"
-              [showButtons]="true"
-              buttonLayout="horizontal"
-              [min]="1"
-              [max]="maxCantidad()"
-              decrementButtonClass="!h-14 !w-14"
-              incrementButtonClass="!h-14 !w-14"
-              inputStyleClass="!w-20 !text-center !text-2xl !font-bold"
-              incrementButtonIcon="pi pi-plus"
-              decrementButtonIcon="pi pi-minus" />
+          <!-- Stepper custom (no p-inputNumber) — el componente de PrimeNG hace
+               focus en el input interno al tocar +/-, lo que en mobile abre
+               el teclado virtual. Acá usamos botones puros + un span con la
+               cantidad; el cliente nunca necesita tipear (el max lo da el
+               stock), así que evitamos el input por completo. -->
+          <div class="flex items-center justify-center gap-2">
+            <button
+              pButton
+              type="button"
+              icon="pi pi-minus"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="cantidad() <= 1"
+              (click)="cantidad.set(cantidad() - 1)"
+              class="!h-14 !w-14 !rounded-full"
+              aria-label="Restar uno"></button>
+            <div class="w-20 text-center text-2xl font-bold tabular-nums select-none">
+              {{ cantidad() }}
+            </div>
+            <button
+              pButton
+              type="button"
+              icon="pi pi-plus"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="cantidad() >= maxCantidad()"
+              (click)="cantidad.set(cantidad() + 1)"
+              class="!h-14 !w-14 !rounded-full"
+              aria-label="Sumar uno"></button>
           </div>
           <button
             pButton

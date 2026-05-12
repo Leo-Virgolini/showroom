@@ -8,17 +8,14 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ImageModule } from 'primeng/image';
-import { InputNumberModule } from 'primeng/inputnumber';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
 import { EscalaDescuento, ScanResult } from '../models';
 import { ShowroomService } from '../showroom.service';
-import { toastError } from '../toast.utils';
 
 /**
  * Pantalla espejo del scan, pensada para abrir desde un celular y ver los
@@ -35,7 +32,7 @@ import { toastError } from '../toast.utils';
   selector: 'app-visor-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, ButtonModule, ImageModule, InputNumberModule, TagModule],
+  imports: [CommonModule, ButtonModule, ImageModule, TagModule],
   templateUrl: './visor-page.html',
   styleUrl: './visor-page.scss',
 })
@@ -118,6 +115,7 @@ export class VisorPage {
         this.enviandoAgregar.set(false);
         if (res.cantidadAgregada === 0) {
           this.toast.add({
+            key: 'visor',
             severity: 'warn',
             summary: 'No se agregó al carrito',
             detail: res.motivo ?? `${r.sku}: el carrito ya tiene el stock completo.`,
@@ -125,6 +123,7 @@ export class VisorPage {
           });
         } else if (res.recortado) {
           this.toast.add({
+            key: 'visor',
             severity: 'warn',
             summary: 'No se agregó todo',
             detail: `${r.sku}: solo se sumaron ${res.cantidadAgregada} de ${res.cantidadPedida} (stock limitado).`,
@@ -132,6 +131,7 @@ export class VisorPage {
           });
         } else {
           this.toast.add({
+            key: 'visor',
             severity: 'success',
             summary: 'Agregado al carrito',
             detail: `${r.sku} x${res.cantidadAgregada}`,
@@ -142,8 +142,14 @@ export class VisorPage {
       },
       error: (err) => {
         this.enviandoAgregar.set(false);
-        toastError(this.toast, 'No se pudo agregar', err,
-          'No se pudo agregar al carrito. Reintentá en un momento.');
+        const detalle = (err as { error?: { message?: string } } | undefined)?.error?.message;
+        this.toast.add({
+          key: 'visor',
+          severity: 'error',
+          summary: 'No se pudo agregar',
+          detail: detalle ?? 'No se pudo agregar al carrito. Reintentá en un momento.',
+          life: 5000,
+        });
       },
     });
   }

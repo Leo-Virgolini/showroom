@@ -141,7 +141,9 @@ public class CarritoService {
     }
 
     /** Reemplaza la cantidad de un item existente. Si la nueva cantidad supera
-     *  el stock, se recorta. */
+     *  el stock, se recorta. Si el stock cayó a 0 entre el agregar y el editar
+     *  (DUX se actualizó mientras tanto), rechaza — sino quedaría un item con
+     *  cantidad 0 violando la invariante "items siempre con cantidad ≥ 1". */
     public CarritoStateDTO actualizarCantidad(String sku, int cantidad) {
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
@@ -154,6 +156,10 @@ public class CarritoService {
             }
             Integer stock = actual.stockTotal();
             int cantidadFinal = (stock != null && stock >= 0) ? Math.min(cantidad, stock) : cantidad;
+            if (cantidadFinal <= 0) {
+                throw new ConflictException(
+                        "El producto no tiene stock disponible. Eliminalo del carrito o esperá a que se reponga.");
+            }
             items.put(sku, actual.withCantidad(cantidadFinal));
             CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
             broadcast(state);

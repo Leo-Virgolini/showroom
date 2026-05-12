@@ -1,16 +1,16 @@
 package ar.com.leo.showroom.catalogo.repository;
 
 import ar.com.leo.showroom.catalogo.entity.ProductoCache;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Long> {
+public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Long>,
+        JpaSpecificationExecutor<ProductoCache> {
 
     Optional<ProductoCache> findBySku(String sku);
 
@@ -31,65 +31,9 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
             """)
     List<ProductoCache> findByCodigoBarra(@Param("ean") String ean);
 
-    /**
-     * Busca por SKU, descripción o código de barras (contains).
-     * Ordena por relevancia: matches que EMPIEZAN con la query van antes
-     * que los que solo CONTIENEN. SKU > descripción dentro de cada grupo.
-     * Si la query es vacía/null, todos quedan en el grupo 0 y el orden
-     * efectivo es por SKU asc.
-     */
-    @Query("""
-            select distinct p from ProductoCache p
-            left join p.codigosBarra c
-            where (:q is null or :q = ''
-                   or lower(p.sku) like lower(concat('%', :q, '%'))
-                   or lower(p.descripcion) like lower(concat('%', :q, '%'))
-                   or c like concat('%', :q, '%'))
-            order by
-              case
-                when :q is null or :q = '' then 0
-                when lower(p.sku) like lower(concat(:q, '%')) then 0
-                when lower(p.descripcion) like lower(concat(:q, '%')) then 1
-                else 2
-              end,
-              p.sku asc
-            """)
-    Page<ProductoCache> buscar(@Param("q") String q, Pageable pageable);
-
-    /**
-     * Variante con filtros usada por la pantalla de listado de productos.
-     * `q` matchea contra SKU, descripción o cualquiera de los códigos de barra
-     * (contains, case-insensitive).
-     * `soloDeshabilitados=true` deja solo `habilitado=false` (NULL no entra).
-     * `soloSinStock=true` deja stock null, 0 o negativo (DUX a veces devuelve
-     * stock negativo cuando hubo movimientos no reflejados — sigue siendo "sin stock vendible").
-     *
-     * Orden por relevancia (startsWith antes que contains) seguido del
-     * {@link Pageable} sort (que viene de la columna que clickea el operador
-     * en la tabla). Si la query está vacía, la relevancia colapsa al grupo 0
-     * y solo aplica el sort de la columna.
-     */
-    @Query("""
-            select distinct p from ProductoCache p
-            left join p.codigosBarra c
-            where (:q is null or :q = ''
-                   or lower(p.sku) like lower(concat('%', :q, '%'))
-                   or lower(p.descripcion) like lower(concat('%', :q, '%'))
-                   or c like concat('%', :q, '%'))
-              and (:soloDeshabilitados = false or p.habilitado = false)
-              and (:soloSinStock = false or p.stockTotal is null or p.stockTotal <= 0)
-            order by
-              case
-                when :q is null or :q = '' then 0
-                when lower(p.sku) like lower(concat(:q, '%')) then 0
-                when lower(p.descripcion) like lower(concat(:q, '%')) then 1
-                else 2
-              end
-            """)
-    Page<ProductoCache> buscarConFiltros(
-            @Param("q") String q,
-            @Param("soloDeshabilitados") boolean soloDeshabilitados,
-            @Param("soloSinStock") boolean soloSinStock,
-            Pageable pageable
-    );
+    // La búsqueda por texto + filtros vive en {@link ProductoCacheSpecs} +
+    // {@code findAll(Specification, Pageable)} de JpaSpecificationExecutor.
+    // La spec tokeniza el query y matchea cada token contra SKU/desc/EAN, lo
+    // que permite que "pan azul" devuelva "PANERA AZUL CHICA" (cosa que un
+    // LIKE '%pan azul%' no lograba).
 }

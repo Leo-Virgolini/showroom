@@ -169,3 +169,26 @@ textarea,
   --p-progressbar-background: rgba(255, 255, 255, 0.3);
   --p-progressbar-value-background: #ffffff;
 }
+
+// =====================================================================
+// p-card: refuerzo visual sobre el fondo crema de las pantallas operativas
+// (bg-orange-50/60). Con la sombra default de PrimeNG las cards se fundían
+// con el fondo. Borde primary tenue + shadow medio dan el efecto "card
+// flotando" sin perder la identidad cálida del branding KT. Global porque
+// queremos consistencia en showroom / pedidos / productos / etiquetas /
+// configuración. Las cards del visor usan <div> con clases Tailwind propias,
+// así que no se ven afectadas.
+// =====================================================================
+.p-card {
+  border: 1px solid color-mix(in oklab, var(--p-primary-200) 60%, transparent);
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.08),
+    0 2px 4px -2px rgb(0 0 0 / 0.06);
+}
+
+.app-dark .p-card {
+  border-color: color-mix(in oklab, var(--p-surface-700) 70%, transparent);
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.3),
+    0 2px 4px -2px rgb(0 0 0 / 0.2);
+}
