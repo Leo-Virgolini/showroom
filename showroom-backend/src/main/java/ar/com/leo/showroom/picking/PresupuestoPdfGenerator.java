@@ -36,7 +36,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -374,11 +379,11 @@ public class PresupuestoPdfGenerator {
     // =====================================================
 
     /**
-     * Carga la imagen del producto recortando los bordes blancos. Misma lógica
-     * que el {@code java-pdf-catalog-generator} original: detecta el bounding
-     * box de píxeles con R/G/B &lt; 240, agrega 50px de margen vertical y
-     * reencodea como PNG. Sin esto, las imágenes de productos con mucho fondo
-     * blanco salen chicas y centradas — recortando se aprovecha mejor la celda.
+     * Carga la imagen del producto recortando los bordes blancos. Detecta el
+     * bounding box de píxeles con R/G/B &lt; 240, agrega 50px de margen vertical
+     * y reencodea como <b>JPEG con calidad 0.85</b> — un PDF con 20 fotos puede
+     * pasar de ~6 MB (PNG) a ~1.5 MB (JPEG) sin pérdida visual perceptible, lo
+     * que evita timeouts SMTP al mandar el adjunto por mail.
      *
      * <p>Si {@code ImageIO} no puede leer el formato (ej. webp animado),
      * carga el archivo tal cual sin recortar — iText soporta más formatos
@@ -402,13 +407,42 @@ public class PresupuestoPdfGenerator {
                 log.warn("Imagen sin contenido visible (toda blanca): {}", file.getName());
                 return fallback != null ? new Image(fallback) : null;
             }
-            try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-                ImageIO.write(recortada, "png", baos);
-                return new Image(ImageDataFactory.create(baos.toByteArray()));
-            }
+            byte[] jpeg = encodeJpeg(recortada, 0.85f);
+            return new Image(ImageDataFactory.create(jpeg));
         } catch (Exception e) {
             log.warn("Error procesando imagen {}: {}", file.getName(), e.getMessage());
             return fallback != null ? new Image(fallback) : null;
+        }
+    }
+
+    /**
+     * Encodea un {@link BufferedImage} a JPEG con la calidad indicada (0.0–1.0).
+     * Aplana el alfa contra fondo blanco antes de escribir — JPEG no soporta
+     * transparencia y sin esto las zonas alpha quedarían negras.
+     */
+    private static byte[] encodeJpeg(BufferedImage src, float quality) throws java.io.IOException {
+        BufferedImage rgb;
+        if (src.getType() == BufferedImage.TYPE_INT_RGB) {
+            rgb = src;
+        } else {
+            rgb = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = rgb.createGraphics();
+            g.setColor(java.awt.Color.WHITE);
+            g.fillRect(0, 0, src.getWidth(), src.getHeight());
+            g.drawImage(src, 0, 0, null);
+            g.dispose();
+        }
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+        param.setCompressionQuality(quality);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+            writer.setOutput(ios);
+            writer.write(null, new IIOImage(rgb, null, null), param);
+            return baos.toByteArray();
+        } finally {
+            writer.dispose();
         }
     }
 
