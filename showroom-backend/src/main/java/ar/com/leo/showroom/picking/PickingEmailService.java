@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.Optional;
@@ -279,7 +280,7 @@ public class PickingEmailService {
             // auto-descargar el .xlsx en el browser del operador.
             if (pickitExternoService.motivoNoConfigurado().isEmpty()) {
                 try {
-                    java.nio.file.Path pickitPath = pickitExternoService.generar(pedido);
+                    Path pickitPath = pickitExternoService.generar(pedido);
                     eventService.publish("pickit-externo",
                             PickitExternoEvent.generated(pedido.getId(), pickitPath.toString()));
                 } catch (Exception ex) {

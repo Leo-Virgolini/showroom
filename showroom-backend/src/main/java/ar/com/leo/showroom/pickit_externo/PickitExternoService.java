@@ -19,7 +19,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -223,8 +226,8 @@ public class PickitExternoService {
         return resultado;
     }
 
-    private static void drenar(java.io.InputStream is, StringBuilder dest) {
-        try (var reader = new java.io.BufferedReader(new java.io.InputStreamReader(is))) {
+    private static void drenar(InputStream is, StringBuilder dest) {
+        try (var reader = new BufferedReader(new InputStreamReader(is))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 dest.append(line).append('\n');

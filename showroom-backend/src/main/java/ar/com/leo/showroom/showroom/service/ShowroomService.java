@@ -32,6 +32,7 @@ import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
+import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
@@ -169,13 +170,12 @@ public class ShowroomService {
     }
 
     /** Configuración runtime del pickit externo (paths del jar + Excels auxiliares + output dir). */
-    public ar.com.leo.showroom.showroom.dto.PickitConfigDTO getPickitConfig() {
+    public PickitConfigDTO getPickitConfig() {
         return configuracionService.getPickitConfig();
     }
 
     /** Persiste la config del pickit externo. Valida que los paths estén presentes si enabled=true. */
-    public ar.com.leo.showroom.showroom.dto.PickitConfigDTO savePickitConfig(
-            ar.com.leo.showroom.showroom.dto.PickitConfigDTO cfg) {
+    public PickitConfigDTO savePickitConfig(PickitConfigDTO cfg) {
         return configuracionService.savePickitConfig(cfg);
     }
 
