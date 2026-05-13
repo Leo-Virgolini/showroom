@@ -202,13 +202,6 @@ export class ShowroomService {
     return this.http.get<PedidoDetalle>(`${this.base}/pedidos/${id}`);
   }
 
-  descargarExcelPedido(id: number): Observable<HttpResponse<Blob>> {
-    return this.http.get(`${this.base}/pedidos/${id}/excel`, {
-      observe: 'response',
-      responseType: 'blob',
-    });
-  }
-
   descargarPdfPedido(id: number): Observable<HttpResponse<Blob>> {
     return this.http.get(`${this.base}/pedidos/${id}/pdf`, {
       observe: 'response',

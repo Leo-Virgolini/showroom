@@ -10,7 +10,7 @@
         <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
           <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Configuración</span>
           <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
-            Descuentos y horarios
+            Ajustes del sistema
           </span>
         </div>
       </div>
@@ -253,7 +253,7 @@
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
-          Después de cada pedido confirmado en DUX, el sistema envía un email con la planilla XLSX (SKU + cantidad) y el presupuesto PDF al destinatario configurado.
+          Después de cada pedido confirmado en DUX, el sistema envía un email con el presupuesto PDF al destinatario configurado.
         </div>
         <div class="text-xs text-muted-color">
           Podés poner uno o varios mails separados por coma. Si lo dejás vacío, el envío queda deshabilitado.
@@ -320,6 +320,21 @@
           deben empezar con <code>/app/pickit/...</code>.
         </div>
       </div>
+
+      @if (pickitConfig().hostPath) {
+        <div class="mb-3 p-3 rounded-lg bg-orange-50 dark:bg-surface-800 border border-orange-200 dark:border-surface-700 text-sm">
+          <div class="flex items-start gap-2">
+            <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+            <div class="flex-1 min-w-0">
+              <div class="text-muted-color">
+                <code>/app/pickit/</code> dentro del container ≡
+                <code class="font-mono break-all">{{ pickitConfig().hostPath }}</code>
+                en el host.
+              </div>
+            </div>
+          </div>
+        </div>
+      }
 
       <h3 class="text-base font-semibold m-0 mb-3">Configuración del pickit externo</h3>
 

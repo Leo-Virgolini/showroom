@@ -26,7 +26,11 @@ public class CorsConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/api/**")
                         .allowedOriginPatterns("http://*:*", "https://*:*")
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        // Incluye PATCH — sin esto, el navegador rechaza la
+                        // preflight OPTIONS para PATCH /carrito/items/{sku}
+                        // y todo update de cantidad cae con 403 antes de
+                        // siquiera llegar al controller.
+                        .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                         .allowedHeaders("*")
                         .allowCredentials(true);
             }

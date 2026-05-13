@@ -12,7 +12,6 @@ import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
-import ar.com.leo.showroom.picking.PickingExcelGenerator;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
@@ -68,7 +67,6 @@ public class ShowroomController {
     private final ProductoCacheRepository productoCacheRepository;
     private final UbicacionService ubicacionService;
     private final PedidoShowroomRepository pedidoRepository;
-    private final PickingExcelGenerator excelGenerator;
     private final PresupuestoPdfGenerator pdfGenerator;
     private final PickingEmailService pickingEmailService;
     private final PickitExternoService pickitExternoService;
@@ -264,22 +262,6 @@ public class ShowroomController {
     }
 
     /**
-     * Descarga el XLSX de picking (SKU + cantidad) — el mismo que se manda por email.
-     */
-    @GetMapping("/pedidos/{id}/excel")
-    public ResponseEntity<byte[]> descargarExcelPedido(@PathVariable Long id) {
-        PedidoShowroom pedido = pedidoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
-        byte[] body = excelGenerator.generar(pedido);
-        return ResponseEntity.ok()
-                .contentType(XLSX)
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + excelGenerator.nombreArchivo(pedido) + "\"")
-                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
-                .body(body);
-    }
-
-    /**
      * Descarga el presupuesto PDF (look-and-feel KT GASTRO) — el mismo que se manda por email.
      */
     @GetMapping("/pedidos/{id}/pdf")
@@ -312,7 +294,7 @@ public class ShowroomController {
     }
 
     /**
-     * Re-envía manualmente el email de picking (XLSX + PDF) para un pedido ya
+     * Re-envía manualmente el email del presupuesto (PDF) para un pedido ya
      * existente. El envío es async — la respuesta HTTP solo confirma que se
      * encoló; el resultado real llega vía SSE picking-email (toast en el frontend).
      */

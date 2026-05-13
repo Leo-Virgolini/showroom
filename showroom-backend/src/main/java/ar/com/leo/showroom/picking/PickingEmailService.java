@@ -26,11 +26,16 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Envía el XLSX de picking + presupuesto PDF por email al destinatario
- * configurado desde la pantalla /configuracion (tabla {@code configuracion},
- * clave {@code picking.email-to}). Se invoca async después de cada pedido
- * exitoso para no bloquear la respuesta al frontend, y también se puede
- * disparar manualmente desde el endpoint `POST /pedidos/{id}/email`.
+ * Envía el presupuesto PDF por email al destinatario configurado desde la
+ * pantalla /configuracion (tabla {@code configuracion}, clave
+ * {@code picking.email-to}). Se invoca async después de cada pedido exitoso
+ * para no bloquear la respuesta al frontend, y también se puede disparar
+ * manualmente desde el endpoint `POST /pedidos/{id}/email`.
+ *
+ * <p>Tras mandar el mail, si la integración pickit está habilitada, dispara
+ * la generación del pickit externo para que el operador reciba el .xlsx via
+ * SSE en su browser (no se adjunta al mail — es para el operador, no para
+ * el destinatario del PDF).</p>
  *
  * Si {@code showroom.picking.email-enabled=false} o falta destinatario,
  * loguea un warn y no manda nada (no rompe el flujo del pedido). El
@@ -253,11 +258,9 @@ public class PickingEmailService {
 
             helper.setText(plain.toString(), htmlText);
 
-            // El email lleva SOLO el presupuesto PDF — el XLSX local de picking
-            // y el pickit externo ya no se adjuntan (eran para el operador, no
-            // para el destinatario del mail). El XLSX local sigue disponible
-            // vía GET /pedidos/{id}/excel; el pickit externo se sigue generando
-            // y se descarga automáticamente en el browser del operador.
+            // El email lleva SOLO el presupuesto PDF — el pickit externo no se
+            // adjunta (es para el operador, no para el destinatario del mail);
+            // se sigue generando aparte y descargándose en el browser via SSE.
             int pdfBytes = 0;
             try {
                 byte[] pdf = pdfGenerator.generar(pedido);

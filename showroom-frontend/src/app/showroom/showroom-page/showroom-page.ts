@@ -14,7 +14,8 @@ import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { EMPTY, Subject, Subscription } from 'rxjs';
+import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -52,8 +53,8 @@ interface DatosCliente {
   nroDoc: number | null;
   /** Nombre y apellido (o razón social) del cliente. Se manda a DUX en el campo
    * `nombre` del payload de /pedido/nuevopedido y se muestra en la carátula del
-   * PDF de presupuesto, en el XLSX de picking y en la columna Cliente del
-   * listado. Opcional: si queda vacío, la columna Cliente muestra "—". */
+   * PDF de presupuesto y en la columna Cliente del listado. Opcional: si queda
+   * vacío, la columna Cliente muestra "—". */
   nombre: string;
   telefono: string;
   email: string;
@@ -179,8 +180,14 @@ export class ShowroomPage implements AfterViewInit {
   /** Estado del carrito. Vive en el backend (single source of truth) y se
    *  hidrata en el constructor + se sincroniza vía SSE `carrito-updated`.
    *  Las mutaciones siempre van por HTTP — nunca se modifica este signal a
-   *  mano, salvo la asignación inicial al hidratar. */
+   *  mano, salvo la asignación inicial al hidratar y los updates optimistas
+   *  de cantidad (que después se reconcilian con el state del backend). */
   readonly carrito = signal<CarritoItem[]>([]);
+  /** Updates de cantidad — debounceadas por SKU para que clickear +/- rápido
+   *  no dispare un PATCH por click. El último valor por SKU dentro del
+   *  intervalo es el que viaja al backend. La suscripción se arma en el
+   *  constructor. */
+  private readonly cantidadUpdates$ = new Subject<{ sku: string; cantidad: number }>();
   readonly refrescando = signal(false);
   /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
    *  que es para el carrito completo. */
@@ -488,6 +495,43 @@ export class ShowroomPage implements AfterViewInit {
           this.mostrarToastStockTrasSync(previo, state.items);
         }
       });
+
+    // Updates de cantidad del carrito — agrupadas por SKU, con debounce.
+    // Clickear +/- rápido sobre el mismo item colapsa en UN solo PATCH con
+    // el valor final. switchMap descarta in-flights stale si llega un valor
+    // nuevo después del debounce. Si el backend recortó al stock, el toast
+    // avisa y el carrito se reconcilia con el state real.
+    this.cantidadUpdates$
+      .pipe(
+        groupBy((u) => u.sku),
+        mergeMap((porSku) =>
+          porSku.pipe(
+            debounceTime(250),
+            switchMap((u) =>
+              this.api.actualizarCantidadItemCarrito(u.sku, u.cantidad).pipe(
+                tap((state) => {
+                  const item = state.items.find((it) => it.sku === u.sku);
+                  if (item && item.cantidad < u.cantidad) {
+                    this.toast.add({
+                      severity: 'warn',
+                      summary: 'Cantidad ajustada al stock',
+                      detail: `${u.sku}: tope ${item.cantidad} unidades.`,
+                      life: 3500,
+                    });
+                  }
+                  this.carrito.set(state.items);
+                }),
+                catchError((err) => {
+                  toastError(this.toast, 'Carrito', err, 'No se pudo actualizar la cantidad.');
+                  return EMPTY;
+                }),
+              ),
+            ),
+          ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe();
 
     if (typeof window === 'undefined') return;
 
@@ -868,22 +912,12 @@ export class ShowroomPage implements AfterViewInit {
   actualizarCantidad(sku: string, cantidad: number): void {
     // Mínimo 1 — para eliminar el item está la X dedicada al lado.
     const c = Math.max(1, cantidad ?? 1);
-    this.api.actualizarCantidadItemCarrito(sku, c).subscribe({
-      next: (state) => {
-        const item = state.items.find((it) => it.sku === sku);
-        // Si el backend recortó al stock, mostrar toast para que se note.
-        if (item && item.cantidad < c) {
-          this.toast.add({
-            severity: 'warn',
-            summary: 'Cantidad ajustada al stock',
-            detail: `${sku}: tope ${item.cantidad} unidades.`,
-            life: 3500,
-          });
-        }
-        this.carrito.set(state.items);
-      },
-      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo actualizar la cantidad.'),
-    });
+    // Update local optimista: la UI (cant. total, subtotal, etc.) responde
+    // instantáneo aunque el PATCH al backend se debouncee 250ms.
+    this.carrito.set(
+      this.carrito().map((it) => (it.sku === sku ? { ...it, cantidad: c } : it)),
+    );
+    this.cantidadUpdates$.next({ sku, cantidad: c });
   }
 
   eliminarDelCarrito(sku: string): void {

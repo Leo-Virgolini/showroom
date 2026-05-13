@@ -5,6 +5,7 @@ import ar.com.leo.showroom.config.repository.ConfiguracionRepository;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +42,16 @@ public class ConfiguracionService {
     private static final Pattern EMAIL_LIKE = Pattern.compile("^[^@\\s,]+@[^@\\s,]+\\.[^@\\s,]+$");
 
     private final ConfiguracionRepository repository;
+
+    /**
+     * Path del HOST mapeado al volumen {@code /app/pickit} del container (lo
+     * setea docker-compose desde {@code PICKIT_HOST_PATH} del {@code .env}).
+     * Se expone read-only en {@link PickitConfigDTO#hostPath()} para que la
+     * pantalla de configuración pueda mostrarle al operador a qué carpeta del
+     * host equivale el path del container que está escribiendo.
+     */
+    @Value("${showroom.pickit.host-path:}")
+    private String pickitHostPath;
 
     /**
      * Devuelve el destinatario configurado en BD, o cadena vacía si no hay
@@ -90,7 +101,8 @@ public class ConfiguracionService {
                 leer(CLAVE_PICKIT_JAR_PATH),
                 leer(CLAVE_PICKIT_STOCK_FILE),
                 leer(CLAVE_PICKIT_COMBOS_FILE),
-                leer(CLAVE_PICKIT_OUTPUT_DIR));
+                leer(CLAVE_PICKIT_OUTPUT_DIR),
+                pickitHostPath == null ? "" : pickitHostPath);
     }
 
     /**

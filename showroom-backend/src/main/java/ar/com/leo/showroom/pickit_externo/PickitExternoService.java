@@ -25,6 +25,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -223,7 +224,30 @@ public class PickitExternoService {
             throw new PickitExternoException("El CLI dijo que generó " + pathOutput
                     + " pero el archivo no existe");
         }
-        return resultado;
+        return renombrarConPrefijoShowroom(resultado);
+    }
+
+    /**
+     * Renombra el .xlsx generado por el CLI para anteponerle {@code SHOWROOM-}
+     * (si todavía no lo tiene). Así la operadora identifica rápido los archivos
+     * que vienen del showroom dentro del outputDir compartido.
+     *
+     * <p>Si el destino ya existe, se sobreescribe (REPLACE_EXISTING). Si el
+     * rename falla, logueamos y devolvemos el path original — no rompemos la
+     * generación por un detalle cosmético.
+     */
+    private Path renombrarConPrefijoShowroom(Path original) {
+        String nombre = original.getFileName().toString();
+        if (nombre.toUpperCase(java.util.Locale.ROOT).startsWith("SHOWROOM")) {
+            return original;
+        }
+        Path destino = original.resolveSibling("SHOWROOM-" + nombre);
+        try {
+            return Files.move(original, destino, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            log.warn("No se pudo renombrar {} → {}: {}", original, destino, e.getMessage());
+            return original;
+        }
     }
 
     private static void drenar(InputStream is, StringBuilder dest) {

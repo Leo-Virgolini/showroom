@@ -94,6 +94,12 @@ services:
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
 
+      # ---- Pickit externo ----
+      # Path del host mapeado al volumen /app/pickit. Solo informativo: la pantalla
+      # /configuracion lo muestra para que el operador sepa a qué carpeta del host
+      # equivale el path del container que ingresa.
+      SHOWROOM_PICKIT_HOST_PATH: ${PICKIT_HOST_PATH:-}
+
       TZ: America/Argentina/Buenos_Aires
     volumes:
       # Tokens DUX — ruta del HOST configurable en .env (ej. el dir del super-master).

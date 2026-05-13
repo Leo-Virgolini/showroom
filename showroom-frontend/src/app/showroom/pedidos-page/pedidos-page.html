@@ -207,10 +207,10 @@
                   [text]="true"
                   [rounded]="true"
                   size="small"
-                  [loading]="estaDescargandoExcel(p.id)"
-                  (onClick)="descargarExcel(p)"
-                  ariaLabel="Descargar Excel de picking"
-                  pTooltip="Descargar Excel de picking"
+                  [loading]="estaGenerandoPickit(p.id)"
+                  (onClick)="regenerarPickitExterno(p)"
+                  ariaLabel="Generar Excel pickit"
+                  pTooltip="Generar Excel pickit (programa externo)"
                   tooltipPosition="top"
                 />
                 <p-button
@@ -234,19 +234,7 @@
                   [loading]="estaEnviandoEmail(p.id)"
                   (onClick)="reenviarEmail(p)"
                   ariaLabel="Reenviar email de picking"
-                  pTooltip="Reenviar email (XLSX + PDF)"
-                  tooltipPosition="top"
-                />
-                <p-button
-                  icon="pi pi-cog"
-                  severity="warn"
-                  [text]="true"
-                  [rounded]="true"
-                  size="small"
-                  [loading]="estaGenerandoPickit(p.id)"
-                  (onClick)="regenerarPickitExterno(p)"
-                  ariaLabel="Generar pickit externo"
-                  pTooltip="Generar Excel pickit (programa externo)"
+                  pTooltip="Reenviar email (PDF)"
                   tooltipPosition="top"
                 />
                 @if (puedeAnular(p)) {

@@ -580,7 +580,7 @@ public class ShowroomService {
                 pedido.getItems().size();
                 pedido.getApellidoRazonSocial();
 
-                // Mandar el XLSX + PDF presupuesto por email — async, no bloquea la
+                // Mandar el presupuesto PDF por email — async, no bloquea la
                 // respuesta. Si falla (SMTP roto, config faltante, etc.), solo se
                 // loguea el error: el pedido ya está en DUX, no se revierte.
                 pickingEmailService.enviarAsync(pedido);

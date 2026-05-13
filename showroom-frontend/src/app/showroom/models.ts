@@ -108,6 +108,10 @@ export interface PickitConfig {
   stockFile: string;
   combosFile: string;
   outputDir: string;
+  /** Path del host mapeado al volumen `/app/pickit` (read-only — lo provee el
+   *  backend desde la env `SHOWROOM_PICKIT_HOST_PATH` del docker-compose).
+   *  Cadena vacía si la integración no está montada. */
+  hostPath?: string;
 }
 
 /** SSE emitido tras intentar generar el pickit externo (auto post-DUX o manual). */

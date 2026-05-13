@@ -87,8 +87,7 @@ export class PedidosPage {
   readonly detalles = signal<Record<number, PedidoDetalle>>({});
   readonly cargandoDetalle = signal<Set<number>>(new Set());
 
-  /** IDs de pedido cuyo Excel/PDF se está descargando — para deshabilitar el botón. */
-  readonly descargandoExcel = signal<Set<number>>(new Set());
+  /** IDs de pedido cuyo PDF se está descargando — para deshabilitar el botón. */
   readonly descargandoPdf = signal<Set<number>>(new Set());
   readonly enviandoEmail = signal<Set<number>>(new Set());
   readonly generandoPickit = signal<Set<number>>(new Set());
@@ -297,10 +296,6 @@ export class PedidosPage {
 
   trackById = (_: number, it: PedidoListItem) => it.id;
 
-  estaDescargandoExcel(id: number): boolean {
-    return this.descargandoExcel().has(id);
-  }
-
   estaDescargandoPdf(id: number): boolean {
     return this.descargandoPdf().has(id);
   }
@@ -416,21 +411,6 @@ export class PedidosPage {
     });
   }
 
-  descargarExcel(p: PedidoListItem): void {
-    if (this.estaDescargandoExcel(p.id)) return;
-    this.marcarDescarga(this.descargandoExcel, p.id, true);
-    this.api.descargarExcelPedido(p.id).subscribe({
-      next: (resp) => {
-        this.marcarDescarga(this.descargandoExcel, p.id, false);
-        this.dispararDescarga(resp, `pedido-${p.id}.xlsx`);
-      },
-      error: (err) => {
-        this.marcarDescarga(this.descargandoExcel, p.id, false);
-        toastError(this.toast, 'Excel', err, 'No se pudo generar el Excel');
-      },
-    });
-  }
-
   descargarPdf(p: PedidoListItem): void {
     if (this.estaDescargandoPdf(p.id)) return;
     this.marcarDescarga(this.descargandoPdf, p.id, true);
@@ -446,7 +426,7 @@ export class PedidosPage {
     });
   }
 
-  private marcarDescarga(sig: typeof this.descargandoExcel, id: number, on: boolean): void {
+  private marcarDescarga(sig: typeof this.descargandoPdf, id: number, on: boolean): void {
     const next = new Set(sig());
     if (on) next.add(id); else next.delete(id);
     sig.set(next);

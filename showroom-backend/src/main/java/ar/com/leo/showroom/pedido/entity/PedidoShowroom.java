@@ -112,7 +112,7 @@ public class PedidoShowroom {
     private List<PedidoShowroomItem> items = new ArrayList<>();
 
     /**
-     * Nombre del cliente real para mostrar en PDF, XLSX, email y nombre de archivo.
+     * Nombre del cliente real para mostrar en PDF, email y nombre de archivo.
      * Prioriza `nombre` (donde el operador carga el nombre y apellido / razón
      * social real del cliente) y cae a `apellidoRazonSocial` solo si no hay
      * nombre — en pedidos del showroom ese fallback va a ser el placeholder
