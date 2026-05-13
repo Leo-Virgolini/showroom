@@ -318,7 +318,9 @@ public class ShowroomController {
      */
     @PostMapping("/pedidos/{id}/email")
     public ResponseEntity<Map<String, Object>> reenviarEmailPedido(@PathVariable Long id) {
-        PedidoShowroom pedido = pedidoRepository.findById(id)
+        // findByIdWithItems hidrata los items en la misma query — los necesita
+        // el thread @Async, donde la sesión Hibernate ya está cerrada.
+        PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
         return pickingEmailService.motivoNoConfigurado()
                 .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
@@ -339,7 +341,9 @@ public class ShowroomController {
      */
     @PostMapping("/pedidos/{id}/pickit-externo")
     public ResponseEntity<Map<String, Object>> regenerarPickitExterno(@PathVariable Long id) {
-        PedidoShowroom pedido = pedidoRepository.findById(id)
+        // findByIdWithItems hidrata los items en la misma query — los necesita
+        // el thread @Async para escribir el .xlsx de input al programa pickit.
+        PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
         return pickitExternoService.motivoNoConfigurado()
                 .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity

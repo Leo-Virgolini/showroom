@@ -310,8 +310,9 @@
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
           Integración con el programa Java <strong>pickit-y-etiquetas</strong> (jar nativo en el host).
-          Tras cada pedido OK, el backend genera el Excel de pickit con la misma lógica que tu programa,
-          lo deja en la carpeta de salida y lo adjunta al email de picking.
+          Tras cada pedido OK, el backend genera el Excel de pickit con la misma lógica que tu programa
+          y lo deja en la carpeta de salida. Además, se descarga automáticamente en el browser del
+          operador al momento de generarse.
         </div>
         <div class="text-xs text-muted-color">
           Los paths se interpretan <strong>dentro del container Docker</strong> del backend.

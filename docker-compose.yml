@@ -106,14 +106,15 @@ services:
       # sin tener que entrar al contenedor.
       - "./logs:/app/logs"
       # Integración con el programa externo pickit-y-etiquetas (jar Java desktop).
-      # `PICKIT_HOST_PATH` apunta a una carpeta del host que contenga:
+      # `PICKIT_HOST_PATH` (en .env) apunta a una carpeta del host que contenga:
       #   - el .jar (compilado con mvn package)
       #   - Stock.xlsx y Combos.xlsx
       #   - subcarpeta de salida (típicamente "Pickits y Carros")
-      # En la pantalla /configuracion, los paths se ingresan como
-      # `/app/pickit/...` (paths del container, no del host). Si no se usa la
-      # integración, dejar la variable vacía en .env y comentar este volumen.
-      - "${PICKIT_HOST_PATH:-./pickit-host}:/app/pickit"
+      # En la pantalla /configuracion los paths se ingresan como `/app/pickit/...`
+      # (paths del container, no del host). Si no usás la integración, comentá
+      # esta línea Y borrá `PICKIT_HOST_PATH` del .env — sino docker compose up
+      # falla con "required variable PICKIT_HOST_PATH is missing".
+      - "${PICKIT_HOST_PATH}:/app/pickit"
     ports:
       - "8081:8081"
     networks:

@@ -9,10 +9,21 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Optional;
 
 public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, Long> {
 
     Page<PedidoShowroom> findAllByOrderByCreadoAtDesc(Pageable pageable);
+
+    /**
+     * Carga el pedido junto con sus items en una sola query (JOIN FETCH).
+     * Indispensable cuando vamos a pasar la entidad a un método {@code @Async}
+     * que va a iterar los items — en otro thread la sesión Hibernate ya está
+     * cerrada y un {@code findById} normal tira
+     * {@code LazyInitializationException} al tocar {@code getItems()}.
+     */
+    @Query("select p from PedidoShowroom p left join fetch p.items where p.id = :id")
+    Optional<PedidoShowroom> findByIdWithItems(@Param("id") Long id);
 
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.
