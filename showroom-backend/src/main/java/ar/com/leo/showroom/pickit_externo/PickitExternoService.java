@@ -133,9 +133,14 @@ public class PickitExternoService {
      * cuando email está deshabilitado. El disparo manual desde la pantalla de
      * pedidos sigue chequeando vía {@link #motivoNoConfigurado()} en el
      * controller, así que ese path retorna 503 antes de llegar acá.
+     *
+     * @param clientId id de la pestaña/PC que originó el pedido (header
+     *                 {@code X-Client-Id}). Se propaga al evento SSE para que
+     *                 solo esa PC auto-descargue el archivo generado. Puede
+     *                 ser null — en ese caso nadie auto-descarga.
      */
     @Async
-    public void generarAsync(PedidoShowroom pedido) {
+    public void generarAsync(PedidoShowroom pedido, String clientId) {
         if (motivoNoConfigurado().isPresent()) {
             log.debug("Pickit externo no configurado — pedido {} no se procesa.", pedido.getId());
             return;
@@ -144,11 +149,11 @@ public class PickitExternoService {
             Path resultado = generar(pedido);
             log.info("Pickit externo pedido {} OK: {}", pedido.getId(), resultado);
             eventService.publish("pickit-externo",
-                    PickitExternoEvent.generated(pedido.getId(), resultado.toString()));
+                    PickitExternoEvent.generated(pedido.getId(), resultado.toString(), clientId));
         } catch (PickitExternoException e) {
             log.warn("Pickit externo pedido {} falló: {}", pedido.getId(), e.getMessage());
             eventService.publish("pickit-externo",
-                    PickitExternoEvent.failed(pedido.getId(), e.getMessage()));
+                    PickitExternoEvent.failed(pedido.getId(), e.getMessage(), clientId));
         }
     }
 

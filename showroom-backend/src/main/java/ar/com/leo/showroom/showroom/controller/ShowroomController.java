@@ -322,7 +322,9 @@ public class ShowroomController {
      * 503 si la integración no está configurada (jar faltante, paths incompletos).
      */
     @PostMapping("/pedidos/{id}/pickit-externo")
-    public ResponseEntity<Map<String, Object>> regenerarPickitExterno(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> regenerarPickitExterno(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
         // findByIdWithItems hidrata los items en la misma query — los necesita
         // el thread @Async para escribir el .xlsx de input al programa pickit.
         PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
@@ -332,7 +334,7 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    pickitExternoService.generarAsync(pedido);
+                    pickitExternoService.generarAsync(pedido, clientId);
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Pickit externo encolado — el toast confirmará el path generado.",
                             "pedidoId", pedido.getId()));
@@ -371,11 +373,17 @@ public class ShowroomController {
 
     /**
      * Crea un pedido en DUX a partir del carrito.
+     *
+     * <p>El header {@code X-Client-Id} identifica la pestaña/PC del operador
+     * que disparó la creación. Se propaga al evento SSE del pickit externo
+     * para que solo esa PC auto-descargue el .xlsx generado (las otras
+     * pantallas igual ven el toast informativo).
      */
     @PostMapping("/pedido-dux")
     public ResponseEntity<CrearPedidoResponseDTO> crearPedido(
-            @RequestBody @Valid CrearPedidoRequestDTO request) {
-        CrearPedidoResponseDTO response = service.crearPedido(request);
+            @RequestBody @Valid CrearPedidoRequestDTO request,
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
+        CrearPedidoResponseDTO response = service.crearPedido(request, clientId);
         HttpStatus status = response.estado() == EstadoPedido.ENVIADO
                 ? HttpStatus.CREATED
                 : HttpStatus.ACCEPTED; // 202 si quedó local pero DUX falló

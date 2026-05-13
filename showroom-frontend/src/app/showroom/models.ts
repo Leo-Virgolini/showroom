@@ -120,6 +120,10 @@ export interface PickitExternoEvent {
   pedidoId: number;
   outputPath: string | null;
   error: string | null;
+  /** ID de la pestaña/PC que originó el pedido (header X-Client-Id). Solo esa
+   *  PC auto-descarga el .xlsx; las demás muestran únicamente el toast. Null
+   *  si la request no incluyó el header (clientes viejos). */
+  clientId: string | null;
 }
 
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast

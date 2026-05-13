@@ -22,6 +22,7 @@ import { BackendStatusService } from './showroom/backend-status.service';
 import { PwaInstallService } from './showroom/pwa-install.service';
 import { ShowroomService } from './showroom/showroom.service';
 import { SyncStateService } from './showroom/sync-state.service';
+import { ClientIdService } from './showroom/client-id.service';
 import { toastError } from './showroom/toast.utils';
 
 @Component({
@@ -41,6 +42,7 @@ export class App {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
+  private readonly clientIdService = inject(ClientIdService);
 
   /** True cuando la ruta activa es /visor — la pantalla del visor del cliente
    *  no debe mostrar overlays operativos (banner de sync, botón de instalar PWA)
@@ -246,21 +248,27 @@ export class App {
       });
 
     // Toast del pickit externo (programa pickit-y-etiquetas). Igual que el
-    // email: lo ven todos los clientes operativos, no el visor. Cuando termina
-    // OK, el browser dispara la descarga automática del .xlsx.
+    // email: lo ven todos los clientes operativos, no el visor. La AUTO-DESCARGA
+    // del .xlsx solo la dispara la pestaña que originó el pedido (matcheada via
+    // X-Client-Id); las demás muestran el toast informativo sin descargar.
     this.backendStatus.pickitExternoEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((e) => {
         if (this.esVistaVisor()) return;
         const ref = `pedido #${e.pedidoId}`;
+        const esOrigen = e.clientId != null && e.clientId === this.clientIdService.get();
         if (e.estado === 'GENERATED' && e.outputPath) {
           this.toast.add({
             severity: 'success',
             summary: 'Pickit externo generado',
-            detail: `${ref}: descargando ${this.nombreArchivo(e.outputPath)}…`,
+            detail: esOrigen
+              ? `${ref}: descargando ${this.nombreArchivo(e.outputPath)}…`
+              : `Generado para ${ref}.`,
             life: 5000,
           });
-          this.descargarPickitExterno(e.outputPath);
+          if (esOrigen) {
+            this.descargarPickitExterno(e.outputPath);
+          }
         } else if (e.estado === 'GENERATED') {
           this.toast.add({
             severity: 'success',

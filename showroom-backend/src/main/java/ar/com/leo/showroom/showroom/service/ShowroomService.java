@@ -487,7 +487,7 @@ public class ShowroomService {
     }
 
     @Transactional
-    public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request) {
+    public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId) {
         // Si todos los items vienen con el mismo descuento (típico — el frontend manda
         // el descuento global), lo guardamos a nivel pedido también para que la pantalla
         // de listado lo muestre sin tener que iterar items.
@@ -590,7 +590,7 @@ public class ShowroomService {
                 // antes de que llegue el toast del mail. Si alguno falla solo se
                 // loguea — el pedido ya está en DUX, no se revierte.
                 pickingEmailService.enviarAsync(pedido);
-                pickitExternoService.generarAsync(pedido);
+                pickitExternoService.generarAsync(pedido, clientId);
 
                 return new CrearPedidoResponseDTO(
                         pedido.getId(),
