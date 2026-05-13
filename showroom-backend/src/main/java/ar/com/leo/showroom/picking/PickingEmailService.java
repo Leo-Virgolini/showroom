@@ -5,10 +5,8 @@ import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickingEmailEvent;
-import ar.com.leo.showroom.events.PickitExternoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
-import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.nio.file.Path;
 import java.text.NumberFormat;
 import java.util.Locale;
 import java.util.Optional;
@@ -32,10 +29,9 @@ import java.util.Optional;
  * para no bloquear la respuesta al frontend, y también se puede disparar
  * manualmente desde el endpoint `POST /pedidos/{id}/email`.
  *
- * <p>Tras mandar el mail, si la integración pickit está habilitada, dispara
- * la generación del pickit externo para que el operador reciba el .xlsx via
- * SSE en su browser (no se adjunta al mail — es para el operador, no para
- * el destinatario del PDF).</p>
+ * <p>La generación del pickit externo es independiente — la dispara
+ * {@code ShowroomService.crearPedido} en paralelo con este envío para que el
+ * operador reciba el .xlsx en su browser sin esperar a que termine el SMTP.</p>
  *
  * Si {@code showroom.picking.email-enabled=false} o falta destinatario,
  * loguea un warn y no manda nada (no rompe el flujo del pedido). El
@@ -62,7 +58,6 @@ public class PickingEmailService {
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
     private final ConfiguracionService configuracionService;
-    private final PickitExternoService pickitExternoService;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean enabled;
@@ -83,15 +78,13 @@ public class PickingEmailService {
             SyncEventService eventService,
             ProvinciaRepository provinciaRepository,
             LocalidadRepository localidadRepository,
-            ConfiguracionService configuracionService,
-            PickitExternoService pickitExternoService) {
+            ConfiguracionService configuracionService) {
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
         this.configuracionService = configuracionService;
-        this.pickitExternoService = pickitExternoService;
     }
 
     /**
@@ -276,22 +269,6 @@ public class PickingEmailService {
             log.info("Picking email enviado a {} para pedido {}", emailTo, pedido.getId());
             eventService.publish("picking-email",
                     PickingEmailEvent.sent(pedido.getId(), cuitDe(pedido)));
-
-            // Después de mandar el mail (el camino crítico ya terminó OK),
-            // generamos el pickit externo si la integración está habilitada.
-            // Esto dispara el SSE pickit-externo que el frontend usa para
-            // auto-descargar el .xlsx en el browser del operador.
-            if (pickitExternoService.motivoNoConfigurado().isEmpty()) {
-                try {
-                    Path pickitPath = pickitExternoService.generar(pedido);
-                    eventService.publish("pickit-externo",
-                            PickitExternoEvent.generated(pedido.getId(), pickitPath.toString()));
-                } catch (Exception ex) {
-                    log.warn("Pickit externo falló para pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
-                    eventService.publish("pickit-externo",
-                            PickitExternoEvent.failed(pedido.getId(), ex.getMessage()));
-                }
-            }
         } catch (Exception e) {
             // No tirar la excepción — el pedido ya está creado en DUX, no podemos
             // revertirlo si el email falla. Solo logueamos y notificamos al frontend.

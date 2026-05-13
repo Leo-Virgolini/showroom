@@ -22,6 +22,7 @@ import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
+import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
@@ -75,6 +76,7 @@ public class ShowroomService {
     private final ObjectMapper objectMapper;
     private final DuxProperties duxProperties;
     private final PickingEmailService pickingEmailService;
+    private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
@@ -580,10 +582,15 @@ public class ShowroomService {
                 pedido.getItems().size();
                 pedido.getApellidoRazonSocial();
 
-                // Mandar el presupuesto PDF por email — async, no bloquea la
-                // respuesta. Si falla (SMTP roto, config faltante, etc.), solo se
-                // loguea el error: el pedido ya está en DUX, no se revierte.
+                // Mandar el presupuesto PDF por email + generar el pickit externo
+                // en PARALELO — son dos @Async independientes que corren en threads
+                // distintos del pool. El pickit (jar local, ~3-5s) suele terminar
+                // bastante antes que el SMTP (~5-30s por el peso del PDF), así
+                // que el operador ve el toast + auto-descarga del .xlsx mucho
+                // antes de que llegue el toast del mail. Si alguno falla solo se
+                // loguea — el pedido ya está en DUX, no se revierte.
                 pickingEmailService.enviarAsync(pedido);
+                pickitExternoService.generarAsync(pedido);
 
                 return new CrearPedidoResponseDTO(
                         pedido.getId(),

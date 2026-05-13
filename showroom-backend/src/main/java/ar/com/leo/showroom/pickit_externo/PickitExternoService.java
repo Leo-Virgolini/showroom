@@ -127,9 +127,19 @@ public class PickitExternoService {
      * Async post-DUX OK: ejecuta {@link #generar(PedidoShowroom)} en background
      * y publica el resultado via SSE para que el frontend muestre un toast.
      * No tira excepción — los errores se logean y se mandan como evento FAILED.
+     *
+     * <p>Si la integración no está configurada, retorna silenciosamente (no
+     * dispara FAILED) — mismo patrón que {@code PickingEmailService.enviarAsync}
+     * cuando email está deshabilitado. El disparo manual desde la pantalla de
+     * pedidos sigue chequeando vía {@link #motivoNoConfigurado()} en el
+     * controller, así que ese path retorna 503 antes de llegar acá.
      */
     @Async
     public void generarAsync(PedidoShowroom pedido) {
+        if (motivoNoConfigurado().isPresent()) {
+            log.debug("Pickit externo no configurado — pedido {} no se procesa.", pedido.getId());
+            return;
+        }
         try {
             Path resultado = generar(pedido);
             log.info("Pickit externo pedido {} OK: {}", pedido.getId(), resultado);
