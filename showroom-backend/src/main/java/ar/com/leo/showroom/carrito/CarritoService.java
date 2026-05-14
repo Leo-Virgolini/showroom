@@ -4,6 +4,7 @@ import ar.com.leo.showroom.catalogo.entity.ProductoCache;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.events.SesionCerradaEvent;
 import ar.com.leo.showroom.events.SyncCatalogoCompletadoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarResponseDTO;
@@ -256,6 +257,27 @@ public class CarritoService {
      * <p>Si no hay items en el carrito, no hacemos nada — evitar broadcast
      * innecesario que disparía un toast vacío en el frontend.
      */
+    /**
+     * Listener para {@link SesionCerradaEvent}: vacía el carrito cuando la
+     * sesión de atención termina sin pedido (cancelada manualmente o abandonada
+     * al iniciar otra). Sin esto, el siguiente cliente heredaría los items del
+     * anterior. Idempotente: si el carrito ya está vacío, no hace ruido.
+     */
+    @EventListener
+    public void onSesionCerrada(SesionCerradaEvent event) {
+        lock.lock();
+        try {
+            if (items.isEmpty()) return;
+            log.info("Carrito vaciado: sesión {} ({}) {} con {} item(s) en carrito",
+                    event.sesionId(), event.nombreCliente(),
+                    event.motivo().name().toLowerCase(), items.size());
+            items.clear();
+            broadcast(snapshot(CarritoStateDTO.Origen.SISTEMA));
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @EventListener
     public void onSyncCatalogoCompletado(SyncCatalogoCompletadoEvent event) {
         lock.lock();

@@ -69,6 +69,11 @@ export class VisorPage {
   private repeatTimeout?: ReturnType<typeof setTimeout>;
   private repeatInterval?: ReturnType<typeof setInterval>;
 
+  /** Último id de sesión visto vía SSE — sirve para detectar cuando la sesión
+   *  cambia (cancel/abandon/nueva) y limpiar el ultimoScan, distinguiéndolo
+   *  de los eventos de "mismo id" que dispara cada scan. */
+  private previousSesionId: number | null = null;
+
   /** Escalas ordenadas asc por umbralMin — orden natural para mostrarlas
    *  como "comprá más para llegar al próximo descuento". */
   readonly escalasOrdenadas = computed(() =>
@@ -108,13 +113,27 @@ export class VisorPage {
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
     this.api.obtenerSesionActiva().subscribe({
-      next: (s) => this.nombreCliente.set(s.id != null ? s.nombre : null),
+      next: (s) => {
+        this.nombreCliente.set(s.id != null ? s.nombre : null);
+        this.previousSesionId = s.id ?? null;
+      },
       error: () => { /* sin sesión activa, queda en null y se muestra el header genérico */ },
     });
     this.backendStatus.sesionEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((s: SesionShowroom) => {
         this.nombreCliente.set(s.id != null ? s.nombre : null);
+        // Cuando la sesión cambia (cancelada, abandonada o nueva), el producto
+        // que ve el cliente anterior ya no es relevante — limpiamos el visor
+        // para que el próximo cliente arranque con la pantalla "esperando…"
+        // en vez de ver el producto del anterior. Detectamos transición por
+        // cambio de id; los eventos de "mismo id" (registrarScan dispara uno
+        // por cada scan) NO se consideran cambio.
+        const currentId = s.id ?? null;
+        if (currentId !== this.previousSesionId) {
+          this.ultimoScan.set(null);
+          this.previousSesionId = currentId;
+        }
       });
 
     // Cada vez que cambia el producto, reseteamos la cantidad a 1.

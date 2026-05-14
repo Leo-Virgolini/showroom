@@ -2,6 +2,7 @@ package ar.com.leo.showroom.sesion.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.events.SesionCerradaEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
@@ -17,6 +18,7 @@ import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -63,6 +65,10 @@ public class SesionShowroomService {
     private final SyncEventService eventService;
     private final ImagenLocalService imagenLocalService;
     private final PedidoShowroomRepository pedidoRepository;
+    /** Para publicar {@link SesionCerradaEvent} cuando se abandona/cancela una
+     *  sesión. {@code CarritoService} lo escucha y vacía el carrito — así
+     *  evitamos el acoplamiento directo y el ciclo de dependencias. */
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * Inicia una sesión nueva con el nombre del cliente. Si había una activa
@@ -80,6 +86,11 @@ public class SesionShowroomService {
         repository.findActiva().ifPresent(activa -> {
             activa.setFinalizadaAt(Instant.now());
             repository.save(activa);
+            // El carrito es global — sin vaciar, el cliente nuevo hereda items
+            // del anterior que no compró nada. Lo hace CarritoService al recibir
+            // el evento.
+            applicationEventPublisher.publishEvent(new SesionCerradaEvent(
+                    activa.getId(), activa.getNombre(), SesionCerradaEvent.Motivo.ABANDONADA));
             log.info("Sesión {} ({}) abandonada al iniciar una nueva", activa.getId(), activa.getNombre());
         });
 
@@ -109,6 +120,11 @@ public class SesionShowroomService {
         SesionShowroom s = activa.get();
         s.setFinalizadaAt(Instant.now());
         repository.save(s);
+        // El carrito es global — al cerrar la atención al cliente, queda vacío
+        // para que el próximo cliente arranque limpio. Lo hace CarritoService
+        // al recibir el evento.
+        applicationEventPublisher.publishEvent(new SesionCerradaEvent(
+                s.getId(), s.getNombre(), SesionCerradaEvent.Motivo.CANCELADA));
         log.info("Sesión {} ({}) cancelada manualmente", s.getId(), s.getNombre());
         eventService.publish(EVENTO_SESION, SesionShowroomDTO.inactiva());
         return SesionShowroomDTO.inactiva();
