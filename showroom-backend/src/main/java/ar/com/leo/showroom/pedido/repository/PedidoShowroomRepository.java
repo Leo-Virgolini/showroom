@@ -33,17 +33,26 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
     @Query("select p.id, p.estado from PedidoShowroom p where p.id in :ids")
     List<Object[]> findEstadosByIds(@Param("ids") Collection<Long> ids);
 
+    /** SKUs incluidos en un pedido — usado por /historial para marcar qué items
+     *  escaneados de la sesión terminaron efectivamente comprados. Solo SKUs,
+     *  no se hidrata la entidad entera. */
+    @Query("select i.sku from PedidoShowroomItem i where i.pedido.id = :pedidoId")
+    List<String> findSkusByPedidoId(@Param("pedidoId") Long pedidoId);
+
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.
      * `q` matchea como substring case-insensitive contra nro_doc (CUIT),
      * apellido_razon_social (placeholder fijo en pedidos del showroom) o
-     * nombre y apellido / razón social real del cliente (`nombre`). El orden
+     * nombre y apellido / razón social real del cliente (`nombre`). El filtro
+     * {@code id} permite el deep-link desde /historial — cuando viene presente,
+     * la lista colapsa al pedido específico que el operador clickeó. El orden
      * lo provee el {@link Pageable} (Spring concatena el ORDER BY automáticamente)
      * — así la tabla puede ordenar por cualquier columna. El default lo decide el caller.
      */
     @Query("""
             select p from PedidoShowroom p
-            where (:q is null or :q = ''
+            where (:id is null or p.id = :id)
+              and (:q is null or :q = ''
                    or cast(p.nroDoc as string) like concat('%', :q, '%')
                    or lower(p.apellidoRazonSocial) like concat('%', lower(:q), '%')
                    or lower(p.nombre) like concat('%', lower(:q), '%'))
@@ -52,6 +61,7 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
               and (:hasta is null or p.creadoAt <= :hasta)
             """)
     Page<PedidoShowroom> buscar(
+            @Param("id") Long id,
             @Param("q") String q,
             @Param("estado") EstadoPedido estado,
             @Param("desde") Instant desde,

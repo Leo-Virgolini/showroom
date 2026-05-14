@@ -142,7 +142,7 @@ public class PickingEmailService {
             String detalle = UserMessages.traducir(ex,
                     "No se pudo generar el PDF de follow-up.");
             eventService.publish("picking-email",
-                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), detalle));
+                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), emailCliente, detalle));
             return;
         }
         if (pdf == null) {
@@ -206,7 +206,7 @@ public class PickingEmailService {
             mailSender.send(mime);
             log.info("Email enviado a {} para pedido {}", emailCliente, pedido.getId());
             eventService.publish("picking-email",
-                    PickingEmailEvent.sent(pedido.getId(), cuitDe(pedido)));
+                    PickingEmailEvent.sent(pedido.getId(), cuitDe(pedido), emailCliente));
         } catch (Exception e) {
             // No tirar la excepción — el pedido ya está creado en DUX, no podemos
             // revertirlo si el email falla. Solo logueamos y notificamos al frontend.
@@ -214,7 +214,7 @@ public class PickingEmailService {
             String detalle = UserMessages.traducir(e,
                     "No se pudo enviar el email. Revisar logs del backend para más detalle.");
             eventService.publish("picking-email",
-                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), detalle));
+                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), emailCliente, detalle));
         }
     }
 

@@ -62,6 +62,13 @@ export class VisorPage {
   /** True mientras la request al backend está en vuelo (evita doble-tap). */
   readonly enviandoAgregar = signal(false);
 
+  /** Handles del auto-repeat al mantener presionado +/− — replica el
+   *  comportamiento del stepper de PrimeNG sin abrir teclado virtual en mobile.
+   *  Delay inicial 500ms, luego incrementa cada 60ms (acelera levemente al
+   *  pasar de 20 ticks). */
+  private repeatTimeout?: ReturnType<typeof setTimeout>;
+  private repeatInterval?: ReturnType<typeof setInterval>;
+
   /** Escalas ordenadas asc por umbralMin — orden natural para mostrarlas
    *  como "comprá más para llegar al próximo descuento". */
   readonly escalasOrdenadas = computed(() =>
@@ -115,6 +122,34 @@ export class VisorPage {
       this.ultimoScan();
       this.cantidad.set(1);
     });
+
+    this.destroyRef.onDestroy(() => this.detenerStep());
+  }
+
+  /** Dispara un step inmediato y arranca el auto-repeat tras 500ms si el
+   *  usuario sigue presionando. Llamado desde (pointerdown) en los botones. */
+  iniciarStep(delta: 1 | -1): void {
+    this.aplicarStep(delta);
+    this.detenerStep();
+    this.repeatTimeout = setTimeout(() => {
+      this.repeatInterval = setInterval(() => this.aplicarStep(delta), 60);
+    }, 500);
+  }
+
+  /** Frena el auto-repeat. Llamado desde pointerup/pointerleave/pointercancel. */
+  detenerStep(): void {
+    if (this.repeatTimeout) { clearTimeout(this.repeatTimeout); this.repeatTimeout = undefined; }
+    if (this.repeatInterval) { clearInterval(this.repeatInterval); this.repeatInterval = undefined; }
+  }
+
+  private aplicarStep(delta: 1 | -1): void {
+    const max = this.maxCantidad();
+    const proximo = Math.max(1, Math.min(max, this.cantidad() + delta));
+    if (proximo === this.cantidad()) {
+      this.detenerStep();
+      return;
+    }
+    this.cantidad.set(proximo);
   }
 
   /** Disparado por el botón "Agregar al carrito". Envía sku + cantidad al

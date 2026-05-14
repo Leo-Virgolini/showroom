@@ -221,8 +221,8 @@
                   size="small"
                   [loading]="estaDescargandoPdf(p.id)"
                   (onClick)="descargarPdf(p)"
-                  ariaLabel="Descargar presupuesto PDF"
-                  pTooltip="Descargar presupuesto PDF"
+                  ariaLabel="Descargar PDF de productos vistos pero no comprados"
+                  pTooltip="Descargar PDF de productos vistos pero no comprados"
                   tooltipPosition="top"
                 />
                 <p-button
@@ -233,8 +233,8 @@
                   size="small"
                   [loading]="estaEnviandoEmail(p.id)"
                   (onClick)="reenviarEmail(p)"
-                  ariaLabel="Reenviar email de picking"
-                  pTooltip="Reenviar email (PDF)"
+                  ariaLabel="Reenviar al cliente el email con el PDF de productos vistos"
+                  pTooltip="Reenviar al cliente el email con el PDF de productos vistos"
                   tooltipPosition="top"
                 />
                 @if (puedeAnular(p)) {

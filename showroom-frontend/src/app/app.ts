@@ -228,12 +228,19 @@ export class App {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((e) => {
         if (this.esVistaVisor()) return;
-        const ref = e.cuit ? `CUIT ${e.cuit}` : `pedido #${e.pedidoId}`;
+        // Preferimos el email del cliente — es lo que identifica al destinatario
+        // de un vistazo. Si no vino (pedidos viejos del SSE, edge cases), caemos
+        // al CUIT y al pedidoId como referencia mínima.
+        const ref = e.email
+          ? e.email
+          : e.cuit
+            ? `CUIT ${e.cuit}`
+            : `pedido #${e.pedidoId}`;
         if (e.estado === 'SENT') {
           this.toast.add({
             severity: 'success',
             summary: 'Email de picking enviado',
-            detail: `Adjuntos despachados (${ref}).`,
+            detail: `Adjuntos despachados a ${ref}.`,
             life: 5000,
           });
         } else {
@@ -242,7 +249,7 @@ export class App {
             summary: 'Falló el envío del email de picking',
             detail: e.error
               ? `${ref}: ${e.error}`
-              : `No se pudo enviar (${ref}). Revisar logs del backend.`,
+              : `No se pudo enviar a ${ref}. Revisar logs del backend.`,
             life: 10000,
           });
         }

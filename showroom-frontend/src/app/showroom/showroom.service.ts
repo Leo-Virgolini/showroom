@@ -183,6 +183,7 @@ export class ShowroomService {
     let params = new HttpParams()
       .set('page', opts.page ?? 0)
       .set('size', opts.size ?? 50);
+    if (opts.id != null) params = params.set('id', opts.id);
     if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
     if (opts.estado) params = params.set('estado', opts.estado);
     if (opts.desde) params = params.set('desde', opts.desde);

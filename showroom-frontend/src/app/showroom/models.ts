@@ -111,6 +111,10 @@ export interface SesionScanItem {
   porcIva: number | null;
   imagenUrl: string | null;
   escaneadoAt: string;
+  /** True si el SKU terminó incluido en el pedido asociado a la sesión.
+   *  Solo significativo cuando la sesión tiene pedidoId — en abandonadas
+   *  siempre es false. */
+  compradoEnPedido: boolean;
 }
 
 export interface SesionDetalle {
@@ -155,6 +159,9 @@ export interface PickingEmailEvent {
   estado: PickingEmailEstado;
   pedidoId: number;
   cuit?: string | null;
+  /** Destinatario al que se intentó/efectivamente despachó el mail. Se usa en
+   *  el toast para identificar al cliente de un vistazo. */
+  email?: string | null;
   error?: string | null;
 }
 
@@ -371,6 +378,9 @@ export interface HorarioSync {
 }
 
 export interface ListarPedidosParams {
+  /** Si viene, la lista colapsa a ese pedido — usado por el deep-link desde
+   *  /historial para llevar al usuario directo al pedido clickeado. */
+  id?: number;
   q?: string;
   estado?: EstadoPedido;
   desde?: string;

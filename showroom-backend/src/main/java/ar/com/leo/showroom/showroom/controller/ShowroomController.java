@@ -292,6 +292,7 @@ public class ShowroomController {
      */
     @GetMapping("/pedidos")
     public PedidoListPageDTO listarPedidos(
+            @RequestParam(value = "id", required = false) Long id,
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "estado", required = false) EstadoPedido estado,
             @RequestParam(value = "desde", required = false) Instant desde,
@@ -300,7 +301,7 @@ public class ShowroomController {
             @RequestParam(value = "size", defaultValue = "50") int size,
             @RequestParam(value = "sortField", required = false) String sortField,
             @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        return service.listarPedidos(q, estado, desde, hasta, page, size, sortField, sortOrder);
+        return service.listarPedidos(id, q, estado, desde, hasta, page, size, sortField, sortOrder);
     }
 
     /**

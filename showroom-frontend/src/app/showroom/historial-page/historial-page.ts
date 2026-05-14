@@ -221,41 +221,6 @@ export class HistorialPage {
     return { label: 'ABANDONADA', severity: 'secondary' };
   }
 
-  /** Botón "Reenviar email" en cada fila — solo visible si la sesión se
-   *  asoció a un pedido. Reusa el endpoint existente del pedido. */
-  readonly reenviandoEmail = signal<Set<number>>(new Set());
-
-  estaReenviandoEmail(pedidoId: number): boolean {
-    return this.reenviandoEmail().has(pedidoId);
-  }
-
-  reenviarEmail(pedidoId: number, event: Event): void {
-    event.stopPropagation();
-    if (this.estaReenviandoEmail(pedidoId)) return;
-    const next = new Set(this.reenviandoEmail());
-    next.add(pedidoId);
-    this.reenviandoEmail.set(next);
-    this.api.reenviarEmailPedido(pedidoId).subscribe({
-      next: () => {
-        const s = new Set(this.reenviandoEmail());
-        s.delete(pedidoId);
-        this.reenviandoEmail.set(s);
-        this.toast.add({
-          severity: 'info',
-          summary: 'Email encolado',
-          detail: 'Generando PDF y enviando…',
-          life: 3000,
-        });
-      },
-      error: (err) => {
-        const s = new Set(this.reenviandoEmail());
-        s.delete(pedidoId);
-        this.reenviandoEmail.set(s);
-        toastError(this.toast, 'Email', err, 'No se pudo encolar el envío');
-      },
-    });
-  }
-
   /** Saca el IVA del precio para mostrarlo s/IVA, igual que en el detalle de pedidos. */
   precioSinIva(precioConIva: number | null, porcIva: number | null): number | null {
     if (precioConIva == null) return null;

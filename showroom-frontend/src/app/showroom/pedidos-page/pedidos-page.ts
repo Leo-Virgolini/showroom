@@ -10,7 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
@@ -70,11 +70,15 @@ export class PedidosPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
 
   readonly busqueda = signal('');
   readonly estado = signal<EstadoPedido | null>(null);
   readonly desde = signal<Date | null>(null);
   readonly hasta = signal<Date | null>(null);
+  /** Cuando la ruta trae {@code ?id=X} (deep-link desde /historial), filtramos
+   *  la lista a ese pedido y la auto-expandimos. Null = listado normal. */
+  readonly pedidoIdFiltro = signal<number | null>(null);
 
   readonly cargando = signal(false);
   readonly pedidos = signal<PedidoListItem[]>([]);
@@ -115,6 +119,7 @@ export class PedidosPage {
 
   readonly hayFiltros = computed(
     () =>
+      this.pedidoIdFiltro() !== null ||
       this.busqueda().trim().length > 0 ||
       this.estado() !== null ||
       this.desde() !== null ||
@@ -132,12 +137,26 @@ export class PedidosPage {
       });
 
     effect(() => {
+      this.pedidoIdFiltro();
       this.busqueda();
       this.estado();
       this.desde();
       this.hasta();
       this.filtroTrigger$.next();
     });
+
+    // Deep-link desde /historial: ?id=123 → filtrar a ese pedido y auto-expandir.
+    // queryParamMap se evalúa una sola vez al montar (suficiente — la pantalla
+    // no se re-navega a sí misma con distinto id en el mismo ciclo de vida).
+    const idParam = this.route.snapshot.queryParamMap.get('id');
+    if (idParam) {
+      const n = Number(idParam);
+      if (Number.isFinite(n) && n > 0) {
+        this.pedidoIdFiltro.set(n);
+        this.expanded.set({ [n]: true });
+        this.cargarDetalle(n);
+      }
+    }
   }
 
   onLazyLoad(event: TableLazyLoadEvent): void {
@@ -164,6 +183,7 @@ export class PedidosPage {
     const hasta = this.hasta();
     this.api
       .listarPedidos({
+        id: this.pedidoIdFiltro() ?? undefined,
         q: this.busqueda(),
         estado: this.estado() ?? undefined,
         desde: desde ? desde.toISOString() : undefined,
@@ -179,8 +199,10 @@ export class PedidosPage {
           this.pedidos.set(resp.items);
           this.total.set(resp.total);
           // Al cambiar la página, colapsar las filas expandidas (los detalles ya
-          // cacheados siguen sirviendo si el usuario re-expande).
-          this.expanded.set({});
+          // cacheados siguen sirviendo si el usuario re-expande). Excepción: si
+          // venimos de un deep-link {@code ?id=X}, mantenemos esa fila expandida.
+          const filtro = this.pedidoIdFiltro();
+          this.expanded.set(filtro != null ? { [filtro]: true } : {});
         },
         error: (err) => {
           this.cargando.set(false);
@@ -197,6 +219,7 @@ export class PedidosPage {
   }
 
   limpiarFiltros(): void {
+    this.pedidoIdFiltro.set(null);
     this.busqueda.set('');
     this.estado.set(null);
     this.desde.set(null);

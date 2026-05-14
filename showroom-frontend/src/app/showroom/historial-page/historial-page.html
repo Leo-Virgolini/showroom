@@ -83,7 +83,6 @@
             <th class="text-center" style="width: 12rem">Estado</th>
             <th class="text-center" style="width: 8rem">Escaneados</th>
             <th class="text-center" style="width: 8rem">Pedido</th>
-            <th class="text-center" style="width: 4rem"></th>
           </tr>
         </ng-template>
 
@@ -106,27 +105,20 @@
             <td class="text-center tabular-nums">{{ s.cantidadEscaneados }}</td>
             <td class="text-center">
               @if (s.pedidoId != null) {
-              <a [routerLink]="['/pedidos']" [queryParams]="{ q: s.pedidoId }" class="font-mono text-sm text-primary hover:underline">
+              <a [routerLink]="['/pedidos']" [queryParams]="{ id: s.pedidoId }"
+                class="font-mono text-sm text-primary hover:underline"
+                pTooltip="Ver el pedido" tooltipPosition="left">
                 #{{ s.pedidoId }}
               </a>
               } @else {
               <span class="text-muted-color text-xs">—</span>
               }
             </td>
-            <td class="text-center">
-              @if (s.pedidoId != null) {
-                <p-button icon="pi pi-envelope" severity="info" [text]="true" [rounded]="true" size="small"
-                  [loading]="estaReenviandoEmail(s.pedidoId)"
-                  (onClick)="reenviarEmail(s.pedidoId, $event)"
-                  pTooltip="Reenviar email al cliente con el PDF de productos vistos"
-                  tooltipPosition="left" ariaLabel="Reenviar email" />
-              }
-            </td>
           </tr>
 
           @if (estaExpandido(s.id)) {
           <tr class="bg-surface-50 dark:bg-surface-900">
-            <td colspan="7" class="p-4">
+            <td colspan="6" class="p-4">
               @if (estaCargandoDetalle(s.id)) {
               <!-- Skeleton placeholder con el shape aproximado del detalle
                    (cabecera + tabla de items). -->
@@ -162,13 +154,16 @@
                     <th style="width: 4rem"></th>
                     <th style="width: 9rem">SKU</th>
                     <th>Producto</th>
+                    @if (det.pedidoId != null) {
+                    <th class="text-center" style="width: 7rem">Comprado</th>
+                    }
                     <th class="text-right" style="width: 9rem">Precio s/IVA</th>
                     <th class="text-right" style="width: 9rem">Precio c/IVA</th>
                     <th style="width: 10rem">Escaneado</th>
                   </tr>
                 </ng-template>
                 <ng-template #body let-it>
-                  <tr>
+                  <tr [class.opacity-60]="det.pedidoId != null && !it.compradoEnPedido">
                     <td>
                       @if (it.imagenUrl) {
                       <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
@@ -181,6 +176,17 @@
                     </td>
                     <td class="font-mono text-sm">{{ it.sku }}</td>
                     <td>{{ it.descripcion ?? '—' }}</td>
+                    @if (det.pedidoId != null) {
+                    <td class="text-center">
+                      @if (it.compradoEnPedido) {
+                      <i class="pi pi-check-circle text-green-600 dark:text-green-400" pTooltip="Incluido en el pedido"
+                        tooltipPosition="top"></i>
+                      } @else {
+                      <span class="text-muted-color text-xs" pTooltip="Escaneado pero no comprado"
+                        tooltipPosition="top">—</span>
+                      }
+                    </td>
+                    }
                     <td class="text-right tabular-nums text-muted-color">
                       @if (precioSinIva(it.precioConIva, it.porcIva); as p) {
                       {{ p | currency:'ARS':'symbol':'1.0-0' }}
@@ -204,7 +210,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="7" class="text-center py-12 text-muted-color">
+            <td colspan="6" class="text-center py-12 text-muted-color">
               <i class="pi pi-history text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
               Ninguna sesión coincide con los filtros.

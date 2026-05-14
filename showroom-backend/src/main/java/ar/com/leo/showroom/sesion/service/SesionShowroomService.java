@@ -24,8 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -219,14 +221,22 @@ public class SesionShowroomService {
         return new SesionListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
     }
 
-    /** Detalle completo con items, para la vista expandida en /historial. */
+    /** Detalle completo con items, para la vista expandida en /historial.
+     *
+     *  <p>Si la sesión está asociada a un pedido, marca cada item con
+     *  {@code compradoEnPedido} cruzando los SKUs escaneados contra los SKUs del
+     *  pedido — distingue "vi pero no compré" de "compré". Una query extra
+     *  liviana (solo SKUs) cuando hay pedido. */
     @Transactional
     public SesionDetalleDTO obtenerDetalle(Long id) {
         SesionShowroom s = repository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
+        Set<String> skusComprados = s.getPedidoId() == null
+                ? Collections.emptySet()
+                : new HashSet<>(pedidoRepository.findSkusByPedidoId(s.getPedidoId()));
         List<SesionScanItemDTO> itemDtos = s.getItems().stream()
                 .sorted(Comparator.comparing(SesionScanItem::getEscaneadoAt))
-                .map(this::toItemDTO)
+                .map(it -> toItemDTO(it, skusComprados.contains(it.getSku())))
                 .toList();
         return new SesionDetalleDTO(
                 s.getId(), s.getNombre(), s.getIniciadaAt(), s.getFinalizadaAt(),
@@ -260,7 +270,7 @@ public class SesionShowroomService {
         );
     }
 
-    private SesionScanItemDTO toItemDTO(SesionScanItem it) {
+    private SesionScanItemDTO toItemDTO(SesionScanItem it, boolean compradoEnPedido) {
         return new SesionScanItemDTO(
                 it.getId(),
                 it.getSku(),
@@ -270,7 +280,8 @@ public class SesionShowroomService {
                 imagenLocalService.buscar(it.getSku()).isPresent()
                         ? "/api/showroom/productos/" + it.getSku() + "/imagen"
                         : null,
-                it.getEscaneadoAt()
+                it.getEscaneadoAt(),
+                compradoEnPedido
         );
     }
 }

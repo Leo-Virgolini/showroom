@@ -305,6 +305,7 @@ public class ShowroomService {
      * fechas, y ordenar por cualquier columna whitelisted.
      */
     public PedidoListPageDTO listarPedidos(
+            Long id,
             String q,
             EstadoPedido estado,
             Instant desde,
@@ -323,6 +324,7 @@ public class ShowroomService {
                 : Sort.Direction.DESC;
         Sort sort = Sort.by(direccion, campo);
         Page<PedidoShowroom> resultado = pedidoRepository.buscar(
+                id,
                 q == null ? null : q.trim(),
                 estado,
                 desde,

@@ -21,6 +21,77 @@
   </p-toolbar>
 
   <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
+    <!-- ============================================================
+         Usuarios (CRUD)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Operadores del showroom con acceso a la app. Cualquier usuario activo puede iniciar sesión.
+        </div>
+        <div class="text-xs text-muted-color">
+          Si un usuario está deshabilitado, el login le falla aunque la contraseña sea correcta.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-semibold m-0">Usuarios</h3>
+        <p-button
+          icon="pi pi-plus"
+          label="Nuevo usuario"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="abrirDialogCrearUsuario()"
+        />
+      </div>
+
+      <p-table
+        [value]="usuarios()"
+        [loading]="cargandoUsuarios()"
+        [rowTrackBy]="trackByUsuarioId"
+        class="p-datatable-sm"
+      >
+        <ng-template #header>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th style="width: 6rem" class="text-center">Activo</th>
+            <th style="width: 12rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-u>
+          <tr>
+            <td class="font-mono">{{ u.username }}</td>
+            <td>{{ u.nombre || '—' }}</td>
+            <td class="text-center">
+              @if (u.activo) {
+                <i class="pi pi-check-circle text-emerald-600 dark:text-emerald-400"></i>
+              } @else {
+                <i class="pi pi-ban text-red-600 dark:text-red-400"></i>
+              }
+            </td>
+            <td class="text-right">
+              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
+                (onClick)="abrirDialogEditarUsuario(u)" pTooltip="Editar (incluye cambio de contraseña)" tooltipPosition="left" />
+              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+                (onClick)="eliminarUsuario(u)" pTooltip="Eliminar" tooltipPosition="left" />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="4" class="text-center py-12 text-muted-color">
+              <i class="pi pi-users text-3xl opacity-50 block mb-2"></i>
+              No hay usuarios cargados.
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
@@ -320,77 +391,6 @@
           [loading]="guardandoPickit()"
           [disabled]="!hayCambiosPickit()" />
       </div>
-    </p-card>
-
-    <!-- ============================================================
-         Usuarios (CRUD)
-         ============================================================ -->
-    <p-card>
-      <div class="flex flex-col gap-2 mb-4">
-        <div class="text-sm text-surface-700 dark:text-surface-200">
-          Operadores del showroom con acceso a la app. Cualquier usuario activo puede iniciar sesión.
-        </div>
-        <div class="text-xs text-muted-color">
-          Si un usuario está deshabilitado, el login le falla aunque la contraseña sea correcta.
-        </div>
-      </div>
-
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-base font-semibold m-0">Usuarios</h3>
-        <p-button
-          icon="pi pi-plus"
-          label="Nuevo usuario"
-          size="small"
-          severity="secondary"
-          [outlined]="true"
-          (onClick)="abrirDialogCrearUsuario()"
-        />
-      </div>
-
-      <p-table
-        [value]="usuarios()"
-        [loading]="cargandoUsuarios()"
-        [rowTrackBy]="trackByUsuarioId"
-        class="p-datatable-sm"
-      >
-        <ng-template #header>
-          <tr>
-            <th>Usuario</th>
-            <th>Nombre</th>
-            <th style="width: 6rem" class="text-center">Activo</th>
-            <th style="width: 12rem"></th>
-          </tr>
-        </ng-template>
-
-        <ng-template #body let-u>
-          <tr>
-            <td class="font-mono">{{ u.username }}</td>
-            <td>{{ u.nombre || '—' }}</td>
-            <td class="text-center">
-              @if (u.activo) {
-                <i class="pi pi-check-circle text-emerald-600 dark:text-emerald-400"></i>
-              } @else {
-                <i class="pi pi-ban text-red-600 dark:text-red-400"></i>
-              }
-            </td>
-            <td class="text-right">
-              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
-                (onClick)="abrirDialogEditarUsuario(u)" pTooltip="Editar (incluye cambio de contraseña)" tooltipPosition="left" />
-              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
-                (onClick)="eliminarUsuario(u)" pTooltip="Eliminar" tooltipPosition="left" />
-            </td>
-          </tr>
-        </ng-template>
-
-        <ng-template #emptymessage>
-          <tr>
-            <td colspan="4" class="text-center py-12 text-muted-color">
-              <i class="pi pi-users text-3xl opacity-50 block mb-2"></i>
-              No hay usuarios cargados.
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
     </p-card>
 
   </main>

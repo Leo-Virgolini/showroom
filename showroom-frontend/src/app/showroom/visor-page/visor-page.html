@@ -139,11 +139,11 @@
           <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color text-center">
             Cantidad
           </div>
-          <!-- Stepper custom (no p-inputNumber) — el componente de PrimeNG hace
-               focus en el input interno al tocar +/-, lo que en mobile abre
-               el teclado virtual. Acá usamos botones puros + un span con la
-               cantidad; el cliente nunca necesita tipear (el max lo da el
-               stock), así que evitamos el input por completo. -->
+          <!-- Stepper custom — el cliente nunca necesita tipear (el max lo da
+               el stock), así que evitamos el input por completo: no abre teclado
+               virtual en mobile. Auto-repeat al mantener presionado replicado
+               vía pointerdown/up (ver iniciarStep/detenerStep en el .ts).
+               Touch-action: none evita el scroll mientras se mantiene apretado. -->
           <div class="flex items-center justify-center gap-2">
             <button
               pButton
@@ -152,8 +152,11 @@
               severity="secondary"
               [outlined]="true"
               [disabled]="cantidad() <= 1"
-              (click)="cantidad.set(cantidad() - 1)"
-              class="!h-14 !w-14 !rounded-full"
+              (pointerdown)="iniciarStep(-1)"
+              (pointerup)="detenerStep()"
+              (pointerleave)="detenerStep()"
+              (pointercancel)="detenerStep()"
+              class="!h-14 !w-14 !rounded-full touch-none"
               aria-label="Restar uno"></button>
             <div class="w-20 text-center text-2xl font-bold tabular-nums select-none">
               {{ cantidad() }}
@@ -165,8 +168,11 @@
               severity="secondary"
               [outlined]="true"
               [disabled]="cantidad() >= maxCantidad()"
-              (click)="cantidad.set(cantidad() + 1)"
-              class="!h-14 !w-14 !rounded-full"
+              (pointerdown)="iniciarStep(1)"
+              (pointerup)="detenerStep()"
+              (pointerleave)="detenerStep()"
+              (pointercancel)="detenerStep()"
+              class="!h-14 !w-14 !rounded-full touch-none"
               aria-label="Sumar uno"></button>
           </div>
           <button
