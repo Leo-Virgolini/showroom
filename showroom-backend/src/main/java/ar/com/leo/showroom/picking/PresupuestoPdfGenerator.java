@@ -218,8 +218,8 @@ public class PresupuestoPdfGenerator {
             logoImg.setMarginBottom(20);
         }
 
-        // Título: nombre completo del cliente en naranja KT (o "PRESUPUESTO" como fallback).
-        String tituloTexto = safe(pedido.getNombreCompleto(), "PRESUPUESTO");
+        // Título: nombre completo del cliente en naranja KT (o "CLIENTE" como fallback).
+        String tituloTexto = safe(pedido.getNombreCompleto(), "CLIENTE");
         Paragraph titulo = new Paragraph(tituloTexto)
                 .simulateBold()
                 .setFontSize(36)
@@ -253,7 +253,7 @@ public class PresupuestoPdfGenerator {
                 .setBorderRadius(new BorderRadius(15f))
                 .setBorder(new SolidBorder(GRIS_LINEA, 2f))
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
-                .add(new Paragraph("PRESUPUESTO")
+                .add(new Paragraph("PRODUCTOS DE INTERÉS")
                         .simulateBold()
                         .setPadding(10)
                         .setFontSize(23)
@@ -610,7 +610,7 @@ public class PresupuestoPdfGenerator {
     }
 
     private static String formatPesos(BigDecimal v) {
-        if (v == null) return "—";
+        if (v == null || v.signum() == 0) return "-";
         return PESO_FMT.format(v.doubleValue());
     }
 
