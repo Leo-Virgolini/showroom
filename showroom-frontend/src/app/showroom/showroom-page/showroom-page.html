@@ -25,11 +25,11 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '44rem' }" [breakpoints]="{ '640px': '95vw' }"
+<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
   [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true">
-  <div class="flex flex-col items-center gap-4 py-2 px-1">
-    <div class="flex flex-col items-center gap-2">
-      <div class="text-2xl font-bold text-[#202124] dark:text-surface-0 text-center">
+  <div class="flex flex-col items-center gap-3 py-1 px-1">
+    <div class="flex flex-col items-center gap-1">
+      <div class="text-xl sm:text-2xl font-bold text-[#202124] dark:text-surface-0 text-center">
         ¡Gracias por tu compra!
       </div>
       <p class="m-0 text-sm text-surface-700 dark:text-surface-200 text-center max-w-xs">
@@ -37,11 +37,12 @@
       </p>
     </div>
 
-    <!-- Imagen al ancho casi completo del dialog — un QR escanea cómodo a
-         30 cm de distancia cuando mide ≥10 cm en pantalla, por eso evitamos
-         max-width chico acá. -->
+    <!-- Tope vertical con max-h para que el modal nunca exceda el viewport
+         (caso típico: notebooks 1080p con scaling 125–150% donde el alto
+         efectivo es ~700–800 px). object-contain mantiene la proporción del
+         QR para que siga siendo escaneable. -->
     <img src="opinion-google.png" alt="QR para reseña en Google"
-      class="w-full rounded-xl shadow-sm" />
+      class="w-full max-h-[60vh] object-contain rounded-xl shadow-sm" />
   </div>
   <ng-template #footer>
     <p-button label="Listo" icon="pi pi-check" severity="secondary" [outlined]="true"
