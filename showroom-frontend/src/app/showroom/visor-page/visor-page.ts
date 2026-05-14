@@ -23,10 +23,12 @@ import { ShowroomService } from '../showroom.service';
  * vendedor mientras camina por el showroom; secundariamente el cliente
  * puede mirarla también.
  *
- * <p>Sin buscador, sin botones, sin carrito — sólo lectura. Cada vez que se
- * escanea un producto desde la pantalla principal, el backend publica un
- * evento SSE {@code scan-visor} y esta página se actualiza en tiempo real.
- * Si el visor se conecta antes del primer scan, queda en "esperando…".
+ * <p>Cada vez que se escanea un producto desde la pantalla principal, el
+ * backend publica un evento SSE {@code scan-visor} y esta página se
+ * actualiza en tiempo real. Si el visor se conecta antes del primer scan,
+ * queda en "esperando…". Además del modo lectura, expone un stepper +
+ * botón "Agregar al carrito" para que el operador (o el cliente con su
+ * teléfono) sume el producto al carrito server-side sin volver al puesto.
  */
 @Component({
   selector: 'app-visor-page',
@@ -189,13 +191,6 @@ export class VisorPage {
     return this.escalasOrdenadas().some(
       (e) => e.umbralMin > escala.umbralMin && precio >= e.umbralMin,
     );
-  }
-
-  /** Mejor escalón "alcanzado" — el de mayor umbral para el cual el precio
-   *  ya califica. Devuelve null si ninguno aplica. */
-  mejorAplicable(precio: number): EscalaDescuento | null {
-    const aplicables = this.escalasOrdenadas().filter((e) => precio >= e.umbralMin);
-    return aplicables.length > 0 ? aplicables[aplicables.length - 1] : null;
   }
 
   /**
