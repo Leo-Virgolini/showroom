@@ -10,6 +10,7 @@ import { provideHttpClient, withFetch, withInterceptors, withXsrfConfiguration }
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
 import localeEsArExtra from '@angular/common/locales/extra/es-AR';
+import { ConfirmationService } from 'primeng/api';
 import { providePrimeNG } from 'primeng/config';
 import { definePreset } from '@primeuix/themes';
 import Aura from '@primeuix/themes/aura';
@@ -53,6 +54,11 @@ export const appConfig: ApplicationConfig = {
   providers: [
     { provide: LOCALE_ID, useValue: 'es-AR' },
     { provide: DEFAULT_CURRENCY_CODE, useValue: 'ARS' },
+    // Servicio global para confirmaciones. Se usa con el componente
+    // <p-confirmDialog> declarado en app.html — cada llamada a
+    // confirmationService.confirm({...}) abre el mismo dialog reutilizable
+    // en vez de tener que componer un <p-dialog> por cada caso.
+    ConfirmationService,
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
     provideHttpClient(

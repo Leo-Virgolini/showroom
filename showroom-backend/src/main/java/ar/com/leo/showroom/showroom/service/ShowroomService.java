@@ -23,6 +23,7 @@ import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
+import ar.com.leo.showroom.sesion.service.SesionShowroomService;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
@@ -77,6 +78,7 @@ public class ShowroomService {
     private final DuxProperties duxProperties;
     private final PickingEmailService pickingEmailService;
     private final PickitExternoService pickitExternoService;
+    private final SesionShowroomService sesionShowroomService;
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
@@ -159,16 +161,6 @@ public class ShowroomService {
         return horarioSyncService.reemplazar(nuevos).stream()
                 .map(h -> new HorarioSyncDTO(h.getHora(), h.getMinuto()))
                 .toList();
-    }
-
-    /** Destinatario actual del email de picking (DB o default de properties). */
-    public String getEmailPicking() {
-        return configuracionService.getEmailPickingTo();
-    }
-
-    /** Persiste el destinatario del email de picking. Devuelve el valor efectivo. */
-    public String setEmailPicking(String email) {
-        return configuracionService.setEmailPickingTo(email);
     }
 
     /** Configuración runtime del pickit externo (paths del jar + Excels auxiliares + output dir). */
@@ -582,13 +574,19 @@ public class ShowroomService {
                 pedido.getItems().size();
                 pedido.getApellidoRazonSocial();
 
-                // Mandar el presupuesto PDF por email + generar el pickit externo
-                // en PARALELO — son dos @Async independientes que corren en threads
-                // distintos del pool. El pickit (jar local, ~3-5s) suele terminar
-                // bastante antes que el SMTP (~5-30s por el peso del PDF), así
-                // que el operador ve el toast + auto-descarga del .xlsx mucho
-                // antes de que llegue el toast del mail. Si alguno falla solo se
-                // loguea — el pedido ya está en DUX, no se revierte.
+                // Finalizar la sesión de atención asociada (si la hay) y
+                // asociarla al pedido recién creado. Esto deja la sesión
+                // marcada como "completada" y permite al email service
+                // resolverla vía pedidoId al armar el PDF de follow-up.
+                sesionShowroomService.finalizarConPedido(pedido.getId());
+
+                // Mandar el PDF de follow-up al cliente + generar el pickit
+                // externo en PARALELO — son dos @Async independientes que corren
+                // en threads distintos del pool. El pickit (jar local, ~3-5s)
+                // suele terminar bastante antes que el SMTP (~5-30s por el peso
+                // del PDF), así que el operador ve el toast + auto-descarga del
+                // .xlsx mucho antes de que llegue el toast del mail. Si alguno
+                // falla solo se loguea — el pedido ya está en DUX, no se revierte.
                 pickingEmailService.enviarAsync(pedido);
                 pickitExternoService.generarAsync(pedido, clientId);
 

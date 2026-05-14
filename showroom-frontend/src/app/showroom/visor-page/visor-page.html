@@ -1,8 +1,25 @@
 <div class="min-h-screen bg-gradient-to-b from-orange-50/50 to-white dark:from-surface-950 dark:to-surface-900 flex flex-col">
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
 
-  <header class="px-4 pt-4 pb-2 flex items-center justify-center">
+  <header class="px-4 pt-4 pb-2 flex flex-col items-center gap-2">
     <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+    @if (nombreCliente(); as nombre) {
+      <!-- Pill compacto centrado — usa inline-flex para encogerse al contenido
+           y dejar al header (flex-col items-center) hacer el centering.
+           Wrap intermedio con `items-baseline` para que "ATENDIENDO A"
+           (mayúsculas, sin descenders) y "Leo" (mixta) compartan baseline
+           visual. El ícono va aparte porque no tiene baseline real → se
+           centra por items-center del wrapper externo. -->
+      <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full">
+        <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 inline-flex items-center gap-2">
+          <i class="pi pi-user text-[#FF861C] text-base"></i>
+          <span class="inline-flex items-baseline gap-2">
+            <span class="text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Atendiendo a</span>
+            <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0 truncate">{{ nombre }}</span>
+          </span>
+        </div>
+      </div>
+    }
   </header>
 
   @if (ultimoScan(); as r) {
@@ -172,10 +189,18 @@
           <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
         </div>
         <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
-          Esperando producto…
+          @if (nombreCliente()) {
+            ¡Bienvenido/a, {{ nombreCliente() }}!
+          } @else {
+            Esperando producto…
+          }
         </div>
         <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
-          Cuando se escanee un código en el showroom, vas a ver el producto acá.
+          @if (nombreCliente()) {
+            En cuanto escaneemos un producto, lo vas a ver acá con su precio.
+          } @else {
+            Cuando se escanee un código en el showroom, vas a ver el producto acá.
+          }
         </div>
       </div>
 

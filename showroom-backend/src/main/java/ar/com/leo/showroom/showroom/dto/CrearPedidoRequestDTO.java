@@ -38,6 +38,7 @@ public record CrearPedidoRequestDTO(
         String codigoCliente,
         String telefono,
 
+        @NotBlank(message = "email requerido — se usa para mandar al cliente el PDF con los productos vistos")
         @Email(message = "email inválido")
         String email,
 

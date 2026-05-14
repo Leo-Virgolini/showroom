@@ -149,6 +149,46 @@ textarea,
   --p-button-primary-active-border-color: #7f1d1d;
 }
 
+// Azul medio — para listados de catálogo (Productos). Distinto del
+// naranja/verde de la marca pero suficientemente oscuro para mantener
+// contraste contra el fondo crema de la toolbar.
+.btn-kt-azul {
+  --p-button-primary-background: #1d4ed8;
+  --p-button-primary-border-color: #1d4ed8;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #1e3a8a;
+  --p-button-primary-hover-border-color: #1e3a8a;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #1e2f6e;
+  --p-button-primary-active-border-color: #1e2f6e;
+}
+
+// Teal — para "Pedidos". Combina con el verde brand pero no se confunde
+// con él. Tono más profesional / corporativo.
+.btn-kt-teal {
+  --p-button-primary-background: #0d9488;
+  --p-button-primary-border-color: #0d9488;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #0f766e;
+  --p-button-primary-hover-border-color: #0f766e;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #115e59;
+  --p-button-primary-active-border-color: #115e59;
+}
+
+// Violeta — para "Historial". Tono frío distinto del resto de la paleta
+// KT (cálida) para marcar que es una vista de auditoría/lookup.
+.btn-kt-violeta {
+  --p-button-primary-background: #7c3aed;
+  --p-button-primary-border-color: #7c3aed;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #6d28d9;
+  --p-button-primary-hover-border-color: #6d28d9;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #5b21b6;
+  --p-button-primary-active-border-color: #5b21b6;
+}
+
 // Tag más grande — para estados destacados (stock disponible / sin stock).
 // Usamos `transform: scale` en lugar de override de padding/font-size para no
 // pelearnos con el styling interno de Aura (cuyas reglas de severity tienen

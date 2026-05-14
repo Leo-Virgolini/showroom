@@ -6,6 +6,7 @@ import {
   PickingEmailEvent,
   PickitExternoEvent,
   ScanResult,
+  SesionShowroom,
   SyncEvent,
 } from './models';
 
@@ -47,6 +48,9 @@ export class BackendStatusService {
   /** Estado completo del carrito tras cualquier mutación (operador o visor).
    *  Es el único canal de sincronización del carrito entre pantallas. */
   readonly carritoEvents$ = new Subject<CarritoState>();
+  /** Estado de la sesión de atención al cliente. Se emite al iniciar/cancelar/
+   *  registrar scan/finalizar. Cuando no hay activa, todos los campos son null. */
+  readonly sesionEvents$ = new Subject<SesionShowroom>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
@@ -185,6 +189,14 @@ export class BackendStatusService {
     src.addEventListener('carrito-updated', (e: MessageEvent) => {
       try {
         this.carritoEvents$.next(JSON.parse(e.data) as CarritoState);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('sesion-updated', (e: MessageEvent) => {
+      try {
+        this.sesionEvents$.next(JSON.parse(e.data) as SesionShowroom);
       } catch {
         /* payload malformado, ignoramos */
       }

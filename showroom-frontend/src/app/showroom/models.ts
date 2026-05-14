@@ -90,6 +90,65 @@ export interface SyncEvent {
   mensaje?: string;
 }
 
+/** Sesión de atención al cliente. Una sesión agrupa todos los scans entre
+ *  que el operador clickea "Nuevo cliente" y cierra el pedido. Hay una sola
+ *  activa a la vez (global, como el carrito). Cuando no hay activa, los
+ *  campos son null y `cantidadEscaneados=0`. */
+export interface SesionShowroom {
+  id: number | null;
+  nombre: string | null;
+  iniciadaAt: string | null;
+  finalizadaAt: string | null;
+  pedidoId: number | null;
+  cantidadEscaneados: number;
+}
+
+export interface SesionScanItem {
+  id: number;
+  sku: string;
+  descripcion: string | null;
+  precioConIva: number | null;
+  porcIva: number | null;
+  imagenUrl: string | null;
+  escaneadoAt: string;
+}
+
+export interface SesionDetalle {
+  id: number;
+  nombre: string;
+  iniciadaAt: string;
+  finalizadaAt: string | null;
+  pedidoId: number | null;
+  items: SesionScanItem[];
+}
+
+export interface SesionListItem {
+  id: number;
+  nombre: string;
+  iniciadaAt: string;
+  finalizadaAt: string | null;
+  pedidoId: number | null;
+  /** Estado del pedido asociado (null si no hay pedido). Permite distinguir
+   *  COMPLETADA pero luego ANULADA del flujo normal completado. */
+  estadoPedido: EstadoPedido | null;
+  cantidadEscaneados: number;
+}
+
+export interface SesionListPage {
+  items: SesionListItem[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface ListarSesionesParams {
+  q?: string;
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  size?: number;
+}
+
 export type PickingEmailEstado = 'SENT' | 'FAILED';
 
 export interface PickingEmailEvent {

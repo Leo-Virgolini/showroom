@@ -3,10 +3,11 @@ package ar.com.leo.showroom.picking;
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.common.exception.UserMessages;
-import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickingEmailEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.sesion.entity.SesionShowroom;
+import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,7 +58,7 @@ public class PickingEmailService {
     private final SyncEventService eventService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
-    private final ConfiguracionService configuracionService;
+    private final SesionShowroomRepository sesionRepository;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean enabled;
@@ -78,29 +79,32 @@ public class PickingEmailService {
             SyncEventService eventService,
             ProvinciaRepository provinciaRepository,
             LocalidadRepository localidadRepository,
-            ConfiguracionService configuracionService) {
+            SesionShowroomRepository sesionRepository) {
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
-        this.configuracionService = configuracionService;
+        this.sesionRepository = sesionRepository;
     }
 
     /**
-     * Devuelve el motivo por el cual el envío de email no es posible, o vacío si
-     * está todo configurado. Lo usa el controller para responder al disparo
-     * manual con un mensaje claro en lugar de fallar silenciosamente.
+     * Devuelve el motivo por el cual el envío de email no es posible (a nivel
+     * sistema), o vacío si está todo configurado. Lo usa el controller para
+     * responder al disparo manual con un mensaje claro en lugar de fallar
+     * silenciosamente.
+     *
+     * <p>NOTA: el destinatario sale ahora del {@code pedido.email} (cliente),
+     * no de una config global. La validación del email por pedido se hace
+     * dentro de {@link #enviarAsync(PedidoShowroom)} y no es chequeable acá
+     * (no tenemos contexto del pedido).
      */
     public Optional<String> motivoNoConfigurado() {
         if (!enabled) {
-            return Optional.of("Picking email deshabilitado en config (showroom.picking.email-enabled=false)");
+            return Optional.of("Envío de email deshabilitado en config (showroom.picking.email-enabled=false)");
         }
         if (mailSender == null) {
             return Optional.of("JavaMailSender no configurado (revisar spring.mail.* en application.properties)");
-        }
-        if (!StringUtils.hasText(configuracionService.getEmailPickingTo())) {
-            return Optional.of("Falta destinatario — configuralo en la pantalla de Configuración");
         }
         return Optional.empty();
     }
@@ -108,16 +112,41 @@ public class PickingEmailService {
     @Async
     public void enviarAsync(PedidoShowroom pedido) {
         if (!enabled) {
-            log.debug("Picking email deshabilitado (showroom.picking.email-enabled=false). Pedido {} no se envía.", pedido.getId());
+            log.debug("Email deshabilitado (showroom.picking.email-enabled=false). Pedido {} no se envía.", pedido.getId());
             return;
         }
         if (mailSender == null) {
-            log.warn("Picking email enabled pero JavaMailSender no está configurado (revisar spring.mail.* en application.properties).");
+            log.warn("Email enabled pero JavaMailSender no está configurado (revisar spring.mail.* en application.properties).");
             return;
         }
-        String emailTo = configuracionService.getEmailPickingTo();
-        if (!StringUtils.hasText(emailTo)) {
-            log.warn("Picking email enabled pero no hay destinatario configurado. Pedido {} no se envía.", pedido.getId());
+        String emailCliente = pedido.getEmail();
+        if (!StringUtils.hasText(emailCliente)) {
+            log.warn("Pedido {} sin email del cliente — no se manda el follow-up.", pedido.getId());
+            return;
+        }
+
+        // El PDF que se manda al cliente es el "scan history" — productos que
+        // miró pero no compró. Si no hay sesión asociada (operador no inició
+        // una) o no quedan items luego de filtrar lo comprado, no hay nada que
+        // mandar.
+        Optional<SesionShowroom> sesionOpt = sesionRepository.findByPedidoIdWithItems(pedido.getId());
+        if (sesionOpt.isEmpty()) {
+            log.info("Pedido {} sin sesión asociada — no se manda email de follow-up.", pedido.getId());
+            return;
+        }
+        byte[] pdf;
+        try {
+            pdf = pdfGenerator.generarHistorial(sesionOpt.get(), pedido);
+        } catch (Exception ex) {
+            log.warn("No se pudo generar el PDF de historial para pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
+            String detalle = UserMessages.traducir(ex,
+                    "No se pudo generar el PDF de follow-up.");
+            eventService.publish("picking-email",
+                    PickingEmailEvent.failed(pedido.getId(), cuitDe(pedido), detalle));
+            return;
+        }
+        if (pdf == null) {
+            log.info("Pedido {} — el cliente compró todo lo que vio, no hay items extra para mandar.", pedido.getId());
             return;
         }
 
@@ -129,150 +158,59 @@ public class PickingEmailService {
             if (StringUtils.hasText(from)) {
                 helper.setFrom(from);
             }
-            helper.setTo(emailTo.split("\\s*,\\s*"));
-            String identificador = pedido.getNroDoc() != null
-                    ? "CUIT " + pedido.getNroDoc()
-                    : "#" + pedido.getId();
-            helper.setSubject("Picking pedido showroom " + identificador
-                    + " - " + pedido.getItems().size() + " items");
+            helper.setTo(emailCliente.split("\\s*,\\s*"));
+            String nombreCliente = vacioOPlaceholder(pedido.getNombreCompleto());
+            helper.setSubject("KT GASTRO — Productos que viste en el showroom");
 
-            String idLocal = String.valueOf(pedido.getId());
-            String razonSocial = vacioOPlaceholder(pedido.getNombreCompleto());
-            String cuit = pedido.getNroDoc() != null ? String.valueOf(pedido.getNroDoc()) : "—";
-            String emailCliente = vacioOPlaceholder(pedido.getEmail());
-            String telefono = vacioOPlaceholder(pedido.getTelefono());
-            String domicilio = vacioOPlaceholder(pedido.getDomicilio());
-            String provincia = vacioOPlaceholder(resolverProvinciaNombre(pedido.getCodigoProvincia()));
-            String localidad = vacioOPlaceholder(resolverLocalidadNombre(pedido.getIdLocalidad()));
-            String items = String.valueOf(pedido.getItems().size());
+            // Cuerpo del email — corto y client-facing. El PDF tiene el detalle.
+            String plain = """
+                    Hola %s,
 
-            BigDecimal totalSinIvaBruto = pedido.getTotalSinIva();
-            BigDecimal totalConIvaBruto = pedido.getTotal();
-            BigDecimal descPct = pedido.getDescuentoPorcentaje();
-            BigDecimal totalSinIvaFinal = aplicarDescuento(totalSinIvaBruto, descPct);
-            BigDecimal totalConIvaFinal = aplicarDescuento(totalConIvaBruto, descPct);
-            BigDecimal ahorro = (totalSinIvaBruto != null && totalSinIvaFinal != null)
-                    ? totalSinIvaBruto.subtract(totalSinIvaFinal)
-                    : null;
-            boolean hayDescuento = descPct != null && descPct.signum() > 0 && ahorro != null;
+                    Gracias por tu visita al showroom de KT GASTRO. En este email
+                    te dejamos un PDF con los productos que estuviste mirando y que
+                    todavía no te llevaste — para que los tengas a mano si querés
+                    consultarlos más adelante.
 
-            String subtotalSinIva = formatPesos(totalSinIvaBruto);
-            String totalSinIva = formatPesos(totalSinIvaFinal);
-            String totalConIva = formatPesos(totalConIvaFinal);
-            String descuentoLinea = hayDescuento
-                    ? formatPorcentaje(descPct) + "% (−" + formatPesos(ahorro) + ")"
-                    : null;
-            String observaciones = pedido.getObservaciones();
-            boolean hayObservaciones = observaciones != null && !observaciones.isBlank();
+                    Cualquier consulta, estamos a disposición.
 
-            // ----- Texto plano -----
-            StringBuilder plain = new StringBuilder()
-                    .append("Pedido del showroom listo para picking.\n\n")
-                    .append("=== CLIENTE ===\n")
-                    .append("Razón social: ").append(razonSocial).append('\n')
-                    .append("CUIT: ").append(cuit).append('\n')
-                    .append("Email: ").append(emailCliente).append('\n')
-                    .append("Teléfono: ").append(telefono).append('\n')
-                    .append("Domicilio (entrega): ").append(domicilio).append('\n')
-                    .append("Provincia: ").append(provincia).append('\n')
-                    .append("Localidad: ").append(localidad).append('\n')
-                    .append('\n')
-                    .append("=== PEDIDO ===\n")
-                    .append("ID local: ").append(idLocal).append('\n')
-                    .append("Items: ").append(items).append('\n')
-                    .append("Subtotal (s/IVA): ").append(subtotalSinIva).append('\n');
-            if (hayDescuento) {
-                plain.append("Descuento: ").append(descuentoLinea).append('\n');
-            }
-            plain.append("Total final (s/IVA): ").append(totalSinIva).append('\n')
-                    .append("Total final (c/IVA): ").append(totalConIva).append('\n');
-            if (hayObservaciones) {
-                plain.append('\n')
-                        .append("Observaciones:\n")
-                        .append(observaciones).append('\n');
-            }
-            plain.append('\n')
-                    .append("Adjunto:\n")
-                    .append(" - PDF: presupuesto para mandarle al cliente.\n");
-
-            // ----- HTML: dos tablas (Cliente + Pedido) -----
-            StringBuilder filasCliente = new StringBuilder();
-            filasCliente.append(filaHtml("Razón social", razonSocial));
-            filasCliente.append(filaHtml("CUIT", cuit));
-            filasCliente.append(filaHtml("Email", emailCliente));
-            filasCliente.append(filaHtml("Teléfono", telefono));
-            filasCliente.append(filaHtml("Domicilio (entrega)", domicilio));
-            filasCliente.append(filaHtml("Provincia", provincia));
-            filasCliente.append(filaHtml("Localidad", localidad));
-
-            StringBuilder filasPedido = new StringBuilder();
-            filasPedido.append(filaHtml("ID local", idLocal));
-            filasPedido.append(filaHtml("Items", items));
-            filasPedido.append(filaHtml("Subtotal (s/IVA)", subtotalSinIva));
-            if (hayDescuento) {
-                filasPedido.append(filaHtml("Descuento",
-                        "<span style=\"color:#107A57;\">" + descuentoLinea + "</span>"));
-            }
-            filasPedido.append(filaHtml("Total final (s/IVA)",
-                    "<span style=\"color:#FF861C;\">" + totalSinIva + "</span>"));
-            filasPedido.append(filaHtml("Total final (c/IVA)", totalConIva));
-
-            String observacionesHtml = hayObservaciones
-                    ? """
-                    <h3 style="color: #5a5a5a; margin: 20px 0 6px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Observaciones</h3>
-                    <p style="margin: 0 0 16px 0; padding: 10px; background: #f5f5f5; border-left: 3px solid #FF861C; font-size: 14px; white-space: pre-wrap;">%s</p>
-                    """.formatted(escapeHtml(observaciones))
-                    : "";
+                    Saludos,
+                    Equipo KT GASTRO
+                    """.formatted(nombreCliente);
 
             String htmlText = """
                     <div style="font-family: Arial, Helvetica, sans-serif; color: #2d2d2d; max-width: 600px;">
-                      <h2 style="color: #FF861C; margin: 0 0 16px 0; font-size: 18px;">
-                        Pedido del showroom listo para picking
+                      <h2 style="color: #FF861C; margin: 0 0 16px 0; font-size: 20px;">
+                        ¡Gracias por tu visita, %s!
                       </h2>
-
-                      <h3 style="color: #5a5a5a; margin: 0 0 6px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Cliente</h3>
-                      <table style="border-collapse: collapse; margin: 0 0 20px 0; font-size: 14px;">
-                        %s
-                      </table>
-
-                      <h3 style="color: #5a5a5a; margin: 0 0 6px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Pedido</h3>
-                      <table style="border-collapse: collapse; margin: 0 0 20px 0; font-size: 14px;">
-                        %s
-                      </table>
-
-                      %s
-
-                      <p style="margin: 0 0 6px 0; font-size: 14px;"><strong>Adjunto</strong></p>
-                      <ul style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6;">
-                        <li><strong>PDF</strong> — presupuesto para mandarle al cliente.</li>
-                      </ul>
+                      <p style="font-size: 14px; line-height: 1.6;">
+                        Te dejamos un <strong>PDF con los productos que estuviste mirando</strong>
+                        en el showroom y que todavía no te llevaste — para que los tengas
+                        a mano si querés consultarlos más adelante.
+                      </p>
+                      <p style="font-size: 14px; line-height: 1.6;">
+                        Cualquier consulta, estamos a disposición.
+                      </p>
+                      <p style="font-size: 14px; color: #5a5a5a; margin-top: 24px;">
+                        Saludos,<br>
+                        <strong style="color: #FF861C;">Equipo KT GASTRO</strong>
+                      </p>
                     </div>
-                    """.formatted(filasCliente.toString(), filasPedido.toString(), observacionesHtml);
+                    """.formatted(escapeHtml(nombreCliente));
 
-            helper.setText(plain.toString(), htmlText);
+            helper.setText(plain, htmlText);
 
-            // El email lleva SOLO el presupuesto PDF — el pickit externo no se
-            // adjunta (es para el operador, no para el destinatario del mail);
-            // se sigue generando aparte y descargándose en el browser via SSE.
-            int pdfBytes = 0;
-            try {
-                byte[] pdf = pdfGenerator.generar(pedido);
-                pdfBytes = pdf.length;
-                String nombrePdf = pdfGenerator.nombreArchivo(pedido);
-                helper.addAttachment(nombrePdf, new ByteArrayResource(pdf));
-            } catch (Exception ex) {
-                log.warn("No se pudo adjuntar presupuesto PDF al pedido {}: {}", pedido.getId(), ex.getMessage(), ex);
-            }
+            String nombrePdf = pdfGenerator.nombreArchivo(pedido);
+            helper.addAttachment(nombrePdf, new ByteArrayResource(pdf));
 
-            log.info("Picking email pedido {} — enviando PDF={}KB", pedido.getId(), pdfBytes / 1024);
+            log.info("Email pedido {} — enviando a {} PDF={}KB", pedido.getId(), emailCliente, pdf.length / 1024);
             mailSender.send(mime);
-            log.info("Picking email enviado a {} para pedido {}", emailTo, pedido.getId());
+            log.info("Email enviado a {} para pedido {}", emailCliente, pedido.getId());
             eventService.publish("picking-email",
                     PickingEmailEvent.sent(pedido.getId(), cuitDe(pedido)));
         } catch (Exception e) {
             // No tirar la excepción — el pedido ya está creado en DUX, no podemos
             // revertirlo si el email falla. Solo logueamos y notificamos al frontend.
-            log.error("Falló envío de picking email para pedido {}: {}", pedido.getId(), e.getMessage(), e);
+            log.error("Falló envío de email para pedido {}: {}", pedido.getId(), e.getMessage(), e);
             String detalle = UserMessages.traducir(e,
                     "No se pudo enviar el email. Revisar logs del backend para más detalle.");
             eventService.publish("picking-email",

@@ -14,6 +14,13 @@ import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
+import ar.com.leo.showroom.sesion.dto.IniciarSesionRequestDTO;
+import ar.com.leo.showroom.sesion.dto.SesionDetalleDTO;
+import ar.com.leo.showroom.sesion.dto.SesionListPageDTO;
+import ar.com.leo.showroom.sesion.dto.SesionShowroomDTO;
+import ar.com.leo.showroom.sesion.entity.SesionShowroom;
+import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
+import ar.com.leo.showroom.sesion.service.SesionShowroomService;
 import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CantidadRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarRequestDTO;
@@ -28,7 +35,6 @@ import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
-import ar.com.leo.showroom.showroom.dto.PickingEmailConfigDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
@@ -72,6 +78,8 @@ public class ShowroomController {
     private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final VisorService visorService;
+    private final SesionShowroomService sesionShowroomService;
+    private final SesionShowroomRepository sesionRepository;
 
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -88,6 +96,9 @@ public class ShowroomController {
     public ScanResultDTO scan(@PathVariable String sku) {
         ScanResultDTO result = service.scan(sku);
         visorService.publicarScan(result);
+        // Registrar en la sesión activa si la hay. No bloquea el flujo si
+        // no hay sesión (operador no inició una) — el registro es best-effort.
+        sesionShowroomService.registrarScan(result);
         return result;
     }
 
@@ -106,6 +117,45 @@ public class ShowroomController {
     @PostMapping("/visor/agregar-carrito")
     public CarritoAgregarResponseDTO visorAgregarAlCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
         return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR);
+    }
+
+    // =====================================================
+    // Sesión de atención al cliente — agrupa scans para el historial.
+    // =====================================================
+
+    /** Inicia una sesión nueva cerrando la anterior si existía. */
+    @PostMapping("/sesion/iniciar")
+    public SesionShowroomDTO iniciarSesion(@RequestBody @Valid IniciarSesionRequestDTO body) {
+        return sesionShowroomService.iniciar(body.nombre());
+    }
+
+    /** Cancela la sesión activa (operador descartó al cliente sin pedido). */
+    @PostMapping("/sesion/cancelar")
+    public SesionShowroomDTO cancelarSesion() {
+        return sesionShowroomService.cancelar();
+    }
+
+    /** Estado actual: la sesión activa o un placeholder inactivo. */
+    @GetMapping("/sesion/activa")
+    public SesionShowroomDTO sesionActiva() {
+        return sesionShowroomService.obtenerActiva();
+    }
+
+    /** Listado paginado para la página /historial. */
+    @GetMapping("/sesiones")
+    public SesionListPageDTO listarSesiones(
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "desde", required = false) Instant desde,
+            @RequestParam(value = "hasta", required = false) Instant hasta,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
+        return sesionShowroomService.listar(q, desde, hasta, page, size);
+    }
+
+    /** Detalle expandido con los items escaneados. */
+    @GetMapping("/sesiones/{id}")
+    public SesionDetalleDTO obtenerSesion(@PathVariable Long id) {
+        return sesionShowroomService.obtenerDetalle(id);
     }
 
     // =====================================================
@@ -262,13 +312,28 @@ public class ShowroomController {
     }
 
     /**
-     * Descarga el presupuesto PDF (look-and-feel KT GASTRO) — el mismo que se manda por email.
+     * Descarga el PDF que recibió el cliente por email — productos que vio
+     * durante la sesión pero NO compró (look-and-feel KT GASTRO).
+     *
+     * <p>404 si:
+     * <ul>
+     *   <li>el pedido no existe;</li>
+     *   <li>el pedido no tiene sesión asociada (operador no inició una);</li>
+     *   <li>el cliente compró todo lo que vio (no hay items extra).</li>
+     * </ul>
      */
     @GetMapping("/pedidos/{id}/pdf")
     public ResponseEntity<byte[]> descargarPdfPedido(@PathVariable Long id) {
-        PedidoShowroom pedido = pedidoRepository.findById(id)
+        PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
-        byte[] body = pdfGenerator.generar(pedido);
+        SesionShowroom sesion = sesionRepository.findByPedidoIdWithItems(id)
+                .orElseThrow(() -> new NotFoundException(
+                        "Este pedido no tiene sesión asociada — no hay PDF de follow-up para descargar."));
+        byte[] body = pdfGenerator.generarHistorial(sesion, pedido);
+        if (body == null) {
+            throw new NotFoundException(
+                    "El cliente compró todo lo que vio — no hay PDF de productos extra.");
+        }
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -521,26 +586,6 @@ public class ShowroomController {
     public List<HorarioSyncDTO> actualizarHorariosSync(
             @RequestBody List<HorarioSyncDTO> nuevos) {
         return service.reemplazarHorariosSync(nuevos);
-    }
-
-    /**
-     * Destinatario del email de picking. Acepta uno o varios mails separados
-     * por coma. Persiste en BD — los cambios se aplican en el próximo envío
-     * sin reiniciar el backend.
-     */
-    @GetMapping("/config/picking-email")
-    public PickingEmailConfigDTO obtenerEmailPicking() {
-        return new PickingEmailConfigDTO(service.getEmailPicking());
-    }
-
-    /**
-     * Actualiza el destinatario del email de picking. Pasar email vacío vuelve
-     * al default de application.properties (deshabilita el envío si tampoco
-     * hay default). 400 si el formato es inválido.
-     */
-    @PutMapping("/config/picking-email")
-    public PickingEmailConfigDTO actualizarEmailPicking(@RequestBody PickingEmailConfigDTO body) {
-        return new PickingEmailConfigDTO(service.setEmailPicking(body.email()));
     }
 
     /**

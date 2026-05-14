@@ -4,6 +4,12 @@
      visor usan `key: 'visor'` al hacer `toast.add(...)`. -->
 <p-toast position="top-center" key="visor" />
 
+<!-- ConfirmDialog global — cualquier componente que inyecte ConfirmationService
+     y llame .confirm({...}) abre este dialog reutilizable. Evita declarar un
+     <p-dialog> custom por cada confirmación. -->
+<p-confirmDialog rejectButtonProps='{ "label": "Cancelar", "severity": "secondary", "outlined": true }'
+                 acceptButtonProps='{ "label": "Aceptar", "icon": "pi pi-check" }' />
+
 @if (syncState.syncEnCurso() && !esVistaVisor()) {
   <div
     class="sticky top-0 z-50 text-white shadow-md transition-colors duration-500 bg-gradient-to-r {{ bannerClass() }}"

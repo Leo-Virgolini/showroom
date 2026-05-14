@@ -3,6 +3,8 @@ package ar.com.leo.showroom.picking;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
+import ar.com.leo.showroom.sesion.entity.SesionScanItem;
+import ar.com.leo.showroom.sesion.entity.SesionShowroom;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.Color;
@@ -40,8 +42,10 @@ import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
+import javax.imageio.plugins.jpeg.JPEGImageWriteParam;
 import javax.imageio.stream.ImageOutputStream;
 import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -50,6 +54,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -67,6 +72,18 @@ import java.util.Optional;
 public class PresupuestoPdfGenerator {
 
     private static final int PRODUCTOS_POR_PAGINA = 4;
+
+    /** DPI objetivo para las imágenes de productos embebidas. El catalog
+     *  generator usa el mismo valor — 400 DPI es alto pero da margen para
+     *  zoom sin pixelado, y combinado con resize bicúbico mantiene archivos
+     *  livianos. Una imagen original de 3000×3000 a 400 DPI en una celda de
+     *  140 pt se redimensiona a ~778×778 (≈4× reducción lineal, ~16× en bytes). */
+    private static final float TARGET_DPI = 400f;
+
+    /** Calidad JPEG de las imágenes de productos. 0.85 es buen balance:
+     *  imperceptible para fotos típicas, ~3× más liviano que PNG. El catalog
+     *  usa 0.95 pero ese PDF es para impresión; este es para email/pantalla. */
+    private static final float JPEG_QUALITY = 0.85f;
 
     // Tema KT (colores extraídos de KitchenToolsTheme del catalog generator).
     private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
@@ -95,6 +112,46 @@ public class PresupuestoPdfGenerator {
     private final ImagenLocalService imagenLocalService;
 
     public byte[] generar(PedidoShowroom pedido) {
+        // PDF de los items COMPRADOS (a partir del pedido). Aplica el descuento
+        // global a cada precio. Usado por el endpoint GET /pedidos/{id}/pdf.
+        List<ItemView> views = pedido.getItems().stream()
+                .map(PresupuestoPdfGenerator::fromPedidoItem)
+                .toList();
+        return generarConItems(pedido, views, pedido.getDescuentoPorcentaje());
+    }
+
+    /**
+     * PDF del historial de scans para un pedido: lo que el cliente VIO durante
+     * la sesión, EXCLUYENDO lo que realmente compró. Misma portada y mismo
+     * layout de items que el presupuesto — solo cambia la lista origen.
+     *
+     * <p>Usado por el email post-pedido: al cliente le llega el catálogo de
+     * "productos vistos pero no comprados" como follow-up.
+     *
+     * @param sesion sesión asociada al pedido (con scans persistidos).
+     * @param pedido pedido en DUX (para la portada: nombre + cuit + fecha).
+     * @return null si no quedan items luego de filtrar lo comprado (no hay
+     *         qué mandar) — el caller decide si saltea el email.
+     */
+    public byte[] generarHistorial(SesionShowroom sesion, PedidoShowroom pedido) {
+        java.util.Set<String> skusComprados = pedido.getItems().stream()
+                .map(PedidoShowroomItem::getSku)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        List<ItemView> views = sesion.getItems().stream()
+                .filter(it -> !skusComprados.contains(it.getSku()))
+                .map(PresupuestoPdfGenerator::fromSesionItem)
+                .toList();
+        if (views.isEmpty()) {
+            return null;
+        }
+        // El cliente vio precios SIN descuento aplicado (el descuento es del
+        // carrito completo, no por item) → no propagamos descuentoPorcentaje.
+        return generarConItems(pedido, views, null);
+    }
+
+    /** Pipeline común: portada con datos del pedido + N páginas con los items. */
+    private byte[] generarConItems(PedidoShowroom pedido, List<ItemView> items, java.math.BigDecimal descuentoGlobal) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
              PdfWriter writer = new PdfWriter(out);
              PdfDocument pdfDoc = new PdfDocument(writer);
@@ -114,18 +171,28 @@ public class PresupuestoPdfGenerator {
             // PORTADA
             agregarPortada(doc, pedido, logoKT);
 
-            // PÁGINAS DE PRODUCTOS (4 por página). El cliente pidió que el PDF
-            // sea solo: CÓDIGO | NOMBRE | PRECIO s/IVA | FOTO. Sin total ni
-            // resumen final.
+            // PÁGINAS DE PRODUCTOS (4 por página).
             doc.add(new AreaBreak());
-            agregarPaginasProductos(doc, pedido, sinImagen);
+            agregarPaginasProductos(doc, items, descuentoGlobal, sinImagen);
 
             doc.close();
             return out.toByteArray();
         } catch (Exception e) {
-            log.error("Error generando presupuesto PDF para pedido {}: {}", pedido.getId(), e.getMessage(), e);
-            throw new RuntimeException("Error generando presupuesto PDF", e);
+            log.error("Error generando PDF para pedido {}: {}", pedido.getId(), e.getMessage(), e);
+            throw new RuntimeException("Error generando PDF", e);
         }
+    }
+
+    /** Vista de un item para renderizar — solo los campos que necesita el block.
+     *  Permite reusar el mismo template para PedidoShowroomItem y SesionScanItem. */
+    private record ItemView(String sku, String descripcion, java.math.BigDecimal precioConIva, java.math.BigDecimal porcIva) {}
+
+    private static ItemView fromPedidoItem(PedidoShowroomItem it) {
+        return new ItemView(it.getSku(), it.getDescripcion(), it.getPrecioUnitario(), it.getPorcIva());
+    }
+
+    private static ItemView fromSesionItem(SesionScanItem it) {
+        return new ItemView(it.getSku(), it.getDescripcion(), it.getPrecioConIva(), it.getPorcIva());
     }
 
     public String nombreArchivo(PedidoShowroom pedido) {
@@ -227,10 +294,8 @@ public class PresupuestoPdfGenerator {
     // PRODUCTOS — 4 por página
     // =====================================================
 
-    private void agregarPaginasProductos(Document doc, PedidoShowroom pedido, ImageData sinImagen) {
-        var items = pedido.getItems();
-        BigDecimal descuentoGlobal = pedido.getDescuentoPorcentaje();
-
+    private void agregarPaginasProductos(Document doc, List<ItemView> items,
+                                         BigDecimal descuentoGlobal, ImageData sinImagen) {
         // Calcular la altura de cada bloque para que entren PRODUCTOS_POR_PAGINA
         // bien distribuidos en el alto útil de la página. Margen extra de ~60pt
         // para separadores entre items y el footer (logo + número de página).
@@ -267,7 +332,7 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    private Table buildItemBlock(PedidoShowroomItem it, BigDecimal descuentoGlobal,
+    private Table buildItemBlock(ItemView it, BigDecimal descuentoGlobal,
                                  ImageData sinImagenData,
                                  boolean imagenIzquierda, float bloqueHeight) {
         // Layout horizontal 50/50: imagen y card alternan lado según el índice.
@@ -287,7 +352,7 @@ public class PresupuestoPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
                 .setPadding(4);
-        Image img = cargarImagenProducto(it.getSku(), sinImagenData);
+        Image img = cargarImagenProducto(it.sku(), sinImagenData, imgSize);
         if (img != null) {
             img.setHorizontalAlignment(HorizontalAlignment.CENTER).setAutoScale(false);
             img.scaleToFit(imgSize, imgSize);
@@ -302,7 +367,7 @@ public class PresupuestoPdfGenerator {
                 .setMargin(0);
 
         // SKU como pill naranja, ancho completo, centrado.
-        Paragraph sku = new Paragraph(safe(it.getSku(), "—"))
+        Paragraph sku = new Paragraph(safe(it.sku(), "—"))
                 .simulateBold()
                 .setFontSize(11)
                 .setFontColor(KT_AZUL_CODIGO_TEXTO)
@@ -316,7 +381,7 @@ public class PresupuestoPdfGenerator {
         card.add(buildLineaSeparadora());
 
         // Nombre del producto centrado, bold, en marrón KT (paleta del tema).
-        Paragraph nombre = new Paragraph(safe(it.getDescripcion(), "—"))
+        Paragraph nombre = new Paragraph(safe(it.descripcion(), "—"))
                 .simulateBold()
                 .setFontSize(11)
                 .setFontColor(KT_MARRON)
@@ -331,7 +396,7 @@ public class PresupuestoPdfGenerator {
         // Etiqueta sutil en gris para que no compita con el valor; valor en
         // naranja KT para que destaque y combine con el resto del tema.
         BigDecimal precioSinIvaFinal = aplicarDescuento(
-                sinIva(it.getPrecioUnitario(), it.getPorcIva()),
+                sinIva(it.precioConIva(), it.porcIva()),
                 descuentoGlobal);
         Paragraph precioEtiqueta = new Paragraph("PRECIO")
                 .setFontSize(8)
@@ -379,18 +444,28 @@ public class PresupuestoPdfGenerator {
     // =====================================================
 
     /**
-     * Carga la imagen del producto recortando los bordes blancos. Detecta el
-     * bounding box de píxeles con R/G/B &lt; 240, agrega 50px de margen vertical
-     * y reencodea como <b>JPEG con calidad 0.85</b> — un PDF con 20 fotos puede
-     * pasar de ~6 MB (PNG) a ~1.5 MB (JPEG) sin pérdida visual perceptible, lo
-     * que evita timeouts SMTP al mandar el adjunto por mail.
+     * Carga la imagen del producto y la prepara para embeber en el PDF:
+     * <ol>
+     *   <li>Recorta los bordes blancos (R/G/B &gt;= 240) con 50px de margen
+     *       vertical extra — aprovecha mejor la celda cuando la foto tiene
+     *       mucho fondo blanco.</li>
+     *   <li>Redimensiona con interpolación bicúbica a {@code displaySizePt × TARGET_DPI / 72}
+     *       — embebir 3000×3000 px para mostrar a 140 pt es 16× más bytes de
+     *       lo que el PDF puede mostrar. Esto es donde más se gana en tamaño.</li>
+     *   <li>Encodea como JPEG con Huffman tables optimizadas — ~10–15% extra
+     *       de compresión a misma calidad visual.</li>
+     * </ol>
+     * Receta portada del {@code java-pdf-catalog-generator} (proyecto hermano).
      *
      * <p>Si {@code ImageIO} no puede leer el formato (ej. webp animado),
      * carga el archivo tal cual sin recortar — iText soporta más formatos
      * que ImageIO. Si la imagen es completamente blanca o falla el procesado,
      * cae al fallback (SINIMAGEN).
+     *
+     * @param displaySizePt tamaño máximo de la imagen en puntos PDF — define el
+     *                      target en píxeles vía {@link #TARGET_DPI}.
      */
-    private Image cargarImagenProducto(String sku, ImageData fallback) {
+    private Image cargarImagenProducto(String sku, ImageData fallback, float displaySizePt) {
         Optional<File> fileOpt = imagenLocalService.buscar(sku);
         if (fileOpt.isEmpty()) {
             return fallback != null ? new Image(fallback) : null;
@@ -407,7 +482,9 @@ public class PresupuestoPdfGenerator {
                 log.warn("Imagen sin contenido visible (toda blanca): {}", file.getName());
                 return fallback != null ? new Image(fallback) : null;
             }
-            byte[] jpeg = encodeJpeg(recortada, 0.85f);
+            int targetPx = Math.max(1, Math.round(displaySizePt * TARGET_DPI / 72f));
+            BufferedImage preparada = redimensionarParaJpeg(recortada, targetPx);
+            byte[] jpeg = encodeJpeg(preparada, JPEG_QUALITY);
             return new Image(ImageDataFactory.create(jpeg));
         } catch (Exception e) {
             log.warn("Error procesando imagen {}: {}", file.getName(), e.getMessage());
@@ -416,30 +493,56 @@ public class PresupuestoPdfGenerator {
     }
 
     /**
-     * Encodea un {@link BufferedImage} a JPEG con la calidad indicada (0.0–1.0).
-     * Aplana el alfa contra fondo blanco antes de escribir — JPEG no soporta
-     * transparencia y sin esto las zonas alpha quedarían negras.
+     * Reduce la imagen a {@code maxDim} píxeles en su dimensión más larga
+     * (manteniendo aspect ratio) y la aplana contra fondo blanco para que
+     * sea válida como JPEG. Usa interpolación bicúbica + antialiasing para
+     * mantener nitidez en el downscale.
+     *
+     * <p>Si la imagen ya es ≤ maxDim en ambos lados, igual se copia a un
+     * {@code TYPE_INT_RGB} (necesario para JPEG; aplana el alpha).
      */
-    private static byte[] encodeJpeg(BufferedImage src, float quality) throws java.io.IOException {
-        BufferedImage rgb;
-        if (src.getType() == BufferedImage.TYPE_INT_RGB) {
-            rgb = src;
+    private static BufferedImage redimensionarParaJpeg(BufferedImage src, int maxDim) {
+        int w = src.getWidth();
+        int h = src.getHeight();
+        int largest = Math.max(w, h);
+        int targetW, targetH;
+        if (largest > maxDim) {
+            double scale = (double) maxDim / largest;
+            targetW = Math.max(1, (int) Math.round(w * scale));
+            targetH = Math.max(1, (int) Math.round(h * scale));
         } else {
-            rgb = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_RGB);
-            Graphics2D g = rgb.createGraphics();
-            g.setColor(java.awt.Color.WHITE);
-            g.fillRect(0, 0, src.getWidth(), src.getHeight());
-            g.drawImage(src, 0, 0, null);
-            g.dispose();
+            targetW = w;
+            targetH = h;
         }
+        BufferedImage out = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(java.awt.Color.WHITE);
+        g.fillRect(0, 0, targetW, targetH);
+        g.drawImage(src, 0, 0, targetW, targetH, null);
+        g.dispose();
+        return out;
+    }
+
+    /**
+     * Encodea un {@link BufferedImage} a JPEG con la calidad indicada y Huffman
+     * tables optimizadas. El input debe ser {@code TYPE_INT_RGB} (sin alpha) —
+     * {@link #redimensionarParaJpeg} se encarga de la conversión.
+     */
+    private static byte[] encodeJpeg(BufferedImage img, float quality) throws java.io.IOException {
         ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
-        ImageWriteParam param = writer.getDefaultWriteParam();
-        param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-        param.setCompressionQuality(quality);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
             writer.setOutput(ios);
-            writer.write(null, new IIOImage(rgb, null, null), param);
+            ImageWriteParam param = writer.getDefaultWriteParam();
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(quality);
+            if (param instanceof JPEGImageWriteParam) {
+                ((JPEGImageWriteParam) param).setOptimizeHuffmanTables(true);
+            }
+            writer.write(null, new IIOImage(img, null, null), param);
             return baos.toByteArray();
         } finally {
             writer.dispose();

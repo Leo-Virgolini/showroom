@@ -25,9 +25,9 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
+<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '44rem' }" [breakpoints]="{ '640px': '95vw' }"
   [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true">
-  <div class="flex flex-col items-center gap-4 py-4 px-2">
+  <div class="flex flex-col items-center gap-4 py-2 px-1">
     <div class="flex flex-col items-center gap-2">
       <div class="text-2xl font-bold text-[#202124] dark:text-surface-0 text-center">
         ¡Gracias por tu compra!
@@ -37,11 +37,15 @@
       </p>
     </div>
 
-    <img src="opinion-google.png" alt="QR para reseña en Google" class="w-full max-w-sm rounded-xl shadow-sm" />
+    <!-- Imagen al ancho casi completo del dialog — un QR escanea cómodo a
+         30 cm de distancia cuando mide ≥10 cm en pantalla, por eso evitamos
+         max-width chico acá. -->
+    <img src="opinion-google.png" alt="QR para reseña en Google"
+      class="w-full rounded-xl shadow-sm" />
   </div>
   <ng-template #footer>
     <p-button label="Listo" icon="pi pi-check" severity="secondary" [outlined]="true"
-      (onClick)="mostrarDialogReview.set(false)" class="w-full" />
+      (onClick)="cerrarReviewYContinuar()" class="w-full" />
   </ng-template>
 </p-dialog>
 
@@ -73,6 +77,40 @@
   </ng-template>
 </p-dialog>
 
+<p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()">
+  <div class="flex flex-col gap-3">
+    @if (haySesionActiva()) {
+    <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
+      <i class="pi pi-info-circle text-amber-700 dark:text-amber-300"></i>
+      <span class="text-amber-900 dark:text-amber-200 ml-1">
+        Ya hay una sesión activa con <strong>{{ sesionActiva().nombre }}</strong>. Iniciar una nueva la cierra.
+      </span>
+    </div>
+    }
+    <div class="text-sm text-surface-700 dark:text-surface-200">
+      Cargá el nombre del cliente. Cada scan a partir de ahora queda guardado en su historial — al cerrar el pedido se le manda por email un PDF con los productos que vio y no compró.
+    </div>
+    <div class="flex flex-col gap-1.5">
+      <label for="dlgNuevoClienteNombre" class="text-sm font-medium text-muted-color">
+        Nombre del cliente <span class="text-red-500">*</span>
+      </label>
+      <input pInputText id="dlgNuevoClienteNombre" type="text" autofocus
+        [ngModel]="nombreNuevoCliente()" (ngModelChange)="nombreNuevoCliente.set($event)"
+        (keydown.enter)="confirmarNuevoCliente()"
+        placeholder="Ej: María Pérez" maxlength="150" class="w-full"
+        [disabled]="iniciandoSesion()" />
+    </div>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogoNuevoCliente.set(false)" [disabled]="iniciandoSesion()" />
+    <p-button label="Iniciar sesión" icon="pi pi-check"
+      (onClick)="confirmarNuevoCliente()" [loading]="iniciandoSesion()" />
+  </ng-template>
+</p-dialog>
+
 <div class="page-container flex flex-col bg-orange-50/60 dark:bg-surface-950">
   <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient del PDF) -->
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
@@ -91,24 +129,66 @@
     </ng-template>
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <!-- ===== Cliente / sesión actual (estado + iniciar) ===== -->
+        @if (haySesionActiva()) {
+        <!-- Chip de sesión activa con avatar (iniciales del cliente) +
+             overlayBadge con el contador de scans. Click anywhere abre el
+             confirm de finalizar sesión (la X refuerza visualmente). -->
+        <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="mr-1">
+          <div
+            class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
+            [pTooltip]="'Sesión activa — ' + sesionActiva().cantidadEscaneados + ' scan(s) registrados. Click para finalizar.'"
+            tooltipPosition="bottom"
+            (click)="confirmarCancelarSesion()">
+            <p-avatar [label]="inicialesCliente()" shape="circle" size="normal"
+              class="!bg-emerald-600 !text-white !text-xs !w-7 !h-7" />
+            <span class="text-sm font-semibold">
+              <span class="hidden md:inline">Atendiendo: </span>{{ sesionActiva().nombre }}
+            </span>
+            <i class="pi pi-times-circle text-base" aria-label="Finalizar sesión"></i>
+          </div>
+        </p-overlayBadge>
+        }
+        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
+          class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
+          [pTooltip]="haySesionActiva() ? 'Cerrar la sesión actual e iniciar otra' : 'Iniciar sesión para registrar los scans del cliente'"
+          tooltipPosition="bottom" />
+
+        <!-- ===== Consultas / listados del operador ===== -->
+        <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-teal" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
+        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''" ariaLabel="Historial de escaneos" class="btn-kt-violeta" routerLink="/historial" pTooltip="Ver historial de sesiones de atención" tooltipPosition="bottom" />
+        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-azul" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
+
+        <!-- ===== Herramientas de catálogo / cliente ===== -->
+        <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
+        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron" (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
+
+        <!-- ===== Administración / sistema ===== -->
         @if (health()?.ultimaSincronizacionAt; as fecha) {
         <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'medium' : undefined : 'es-AR') ?? ''"
           tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
         }
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
           [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
-        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-marron" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
-        <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-verde" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
-        <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
-        <p-button icon="pi pi-mobile" ariaLabel="Abrir visor en celular" class="btn-kt-marron" (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
         <p-button icon="pi pi-cog" ariaLabel="Configuración" class="btn-kt-gris" routerLink="/configuracion" pTooltip="Descuentos y horarios de sincronización" tooltipPosition="bottom" />
         <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo" (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />
       </div>
     </ng-template>
   </p-toolbar>
 
-  <main class="flex-1 min-h-0 grid gap-4 p-3 sm:p-4 lg:p-6 grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px] lg:grid-rows-1">
-    <section class="flex flex-col min-h-0">
+  <main class="flex-1 min-h-0 flex">
+    <!-- Splitter redimensionable entre scan + carrito. El usuario ajusta el
+         tamaño y lo persistimos en localStorage (stateKey). En mobile cae a
+         layout vertical → cada panel apilado, con divider horizontal. -->
+    <p-splitter
+      class="flex-1 min-h-0 w-full !border-0 !bg-transparent showroom-splitter"
+      [panelSizes]="[65, 35]"
+      [minSizes]="[35, 25]"
+      stateKey="showroom-main-splitter"
+      stateStorage="local"
+      [layout]="screenLg() ? 'horizontal' : 'vertical'">
+      <ng-template #panel>
+    <section class="flex flex-col min-h-0 h-full p-3 sm:p-4 lg:p-6">
       <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex items-center gap-2">
@@ -138,7 +218,10 @@
           <p class="text-muted-color text-sm">Buscando producto…</p>
         </div>
         } @else if (ultimoScan(); as r) {
-        <div class="flex flex-col gap-4 flex-1">
+        <div class="scan-stack flex flex-col gap-4 flex-1 min-h-0">
+          <!-- Contenido scroll-able cuando la altura no alcanza (notebooks 1080p
+               con scaling alto). El CTA "Agregar al carrito" queda fijo abajo. -->
+          <div class="scan-body flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
           <!-- ENCABEZADO: imagen (si hay) + título + tags de estado -->
           <div
             class="flex justify-between items-start gap-4 flex-wrap p-4 rounded-lg border border-primary-200 dark:border-primary-900 bg-gradient-to-br from-primary-50 via-surface-50 to-surface-50 dark:from-primary-950/40 dark:via-surface-900 dark:to-surface-900 shadow-sm">
@@ -254,6 +337,8 @@
           </div>
           }
           }
+          </div>
+          <!-- fin scan-body — el CTA queda fijo abajo del card -->
 
           <!-- AGREGAR AL CARRITO -->
           <div class="flex gap-3 items-center flex-wrap mt-auto pt-2">
@@ -367,8 +452,10 @@
         }
       </p-card>
     </section>
+      </ng-template>
 
-    <aside class="flex flex-col min-h-0">
+      <ng-template #panel>
+    <aside class="flex flex-col min-h-0 h-full p-3 sm:p-4 lg:p-6">
       <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex justify-between items-center w-full gap-2">
@@ -476,14 +563,21 @@
           }
 
           @if (proximoEscalon() != null && faltaParaProximo() != null) {
-          <div class="flex items-baseline justify-between text-xs text-muted-color">
-            <span class="inline-flex items-center gap-1.5">
-              <i class="pi pi-arrow-up text-[0.65rem]"></i>
-              Para {{ proximoEscalon() }}% off
-            </span>
-            <span class="tabular-nums">
-              faltan {{ faltaParaProximo() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
+          <div class="flex flex-col gap-1">
+            <div class="flex items-baseline justify-between text-xs text-muted-color">
+              <span class="inline-flex items-center gap-1.5">
+                <i class="pi pi-arrow-up text-[0.65rem]"></i>
+                Para {{ proximoEscalon() }}% off
+              </span>
+              <span class="tabular-nums">
+                faltan {{ faltaParaProximo() | currency:'ARS':'symbol':'1.0-0' }}
+              </span>
+            </div>
+            <!-- Visualización del progreso hacia el próximo escalón. El meter
+                 muestra cuánto del subtotal se acumuló dentro del umbral. -->
+            @if (meterProximoEscalon(); as meta) {
+            <p-meterGroup [value]="meta.items" [max]="meta.max" class="meter-discount" />
+            }
           </div>
           }
 
@@ -510,6 +604,8 @@
         }
       </p-card>
     </aside>
+      </ng-template>
+    </p-splitter>
   </main>
 
   <footer
@@ -632,12 +728,17 @@
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Email</label>
+        <label class="text-sm font-medium text-muted-color">
+          Email <span class="text-red-500">*</span>
+        </label>
         <p-iconfield iconPosition="left">
           <p-inputicon><i class="pi pi-envelope"></i></p-inputicon>
           <p-autoComplete [ngModel]="cliente().email" (ngModelChange)="actualizarCliente('email', $event)" [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
             [forceSelection]="false" [delay]="0" placeholder="cliente@gmail.com" inputStyleClass="w-full pl-10" class="w-full" />
         </p-iconfield>
+        @if (cliente().email && !emailValido(cliente().email)) {
+        <span class="text-xs text-red-600 dark:text-red-400">Formato de email inválido.</span>
+        }
       </div>
 
       <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">

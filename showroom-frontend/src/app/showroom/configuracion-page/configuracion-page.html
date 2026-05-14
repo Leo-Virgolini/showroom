@@ -43,25 +43,23 @@
         />
       </div>
 
-      <p-table
-        [value]="filas()"
-        [loading]="cargando()"
-        [rowTrackBy]="trackByIndex"
-        class="p-datatable-sm"
-      >
-        <ng-template #header>
-          <tr>
-            <th style="width: 5rem" class="text-center">#</th>
-            <th>Umbral mínimo (subtotal sin IVA)</th>
-            <th style="width: 14rem">Porcentaje</th>
-            <th style="width: 5rem"></th>
-          </tr>
-        </ng-template>
-
-        <ng-template #body let-fila let-i="rowIndex">
-          <tr>
-            <td class="text-center text-muted-color font-mono">{{ i + 1 }}</td>
-            <td>
+      @if (filas().length === 0) {
+        <div class="text-center py-12 text-muted-color border border-dashed border-surface-300 dark:border-surface-700 rounded-lg">
+          <i class="pi pi-percentage text-3xl opacity-50 block mb-2"></i>
+          No hay escalones configurados — los descuentos no se aplican.
+          <div class="mt-3">
+            <p-button
+              icon="pi pi-plus"
+              label="Agregar el primero"
+              size="small"
+              (onClick)="agregarFila()"
+            />
+          </div>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+          @for (fila of filas(); track $index; let i = $index) {
+            <div class="flex items-center gap-1.5 p-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900">
               <p-inputnumber
                 [ngModel]="fila.umbralMin"
                 (ngModelChange)="actualizarUmbral(i, $event)"
@@ -70,12 +68,11 @@
                 locale="es-AR"
                 [min]="0"
                 [maxFractionDigits]="2"
-                placeholder="Ej: 399.999"
-                class="w-full max-w-[14rem]"
+                placeholder="Umbral"
+                class="flex-1 min-w-0"
                 inputStyleClass="w-full"
               />
-            </td>
-            <td>
+              <i class="pi pi-arrow-right text-xs text-muted-color shrink-0" aria-hidden="true"></i>
               <p-inputnumber
                 [ngModel]="fila.porcentaje"
                 (ngModelChange)="actualizarPorcentaje(i, $event)"
@@ -83,12 +80,10 @@
                 [min]="0"
                 [max]="100"
                 [maxFractionDigits]="2"
-                placeholder="Ej: 5"
-                class="w-full max-w-[8rem]"
-                inputStyleClass="w-full"
+                placeholder="%"
+                class="w-20 shrink-0"
+                inputStyleClass="w-full text-center"
               />
-            </td>
-            <td class="text-center">
               <p-button
                 icon="pi pi-trash"
                 severity="danger"
@@ -97,29 +92,12 @@
                 size="small"
                 (onClick)="eliminarFila(i)"
                 pTooltip="Eliminar escalón"
-                tooltipPosition="left"
+                tooltipPosition="top"
               />
-            </td>
-          </tr>
-        </ng-template>
-
-        <ng-template #emptymessage>
-          <tr>
-            <td colspan="4" class="text-center py-12 text-muted-color">
-              <i class="pi pi-percentage text-3xl opacity-50 block mb-2"></i>
-              No hay escalones configurados — los descuentos no se aplican.
-              <div class="mt-3">
-                <p-button
-                  icon="pi pi-plus"
-                  label="Agregar el primero"
-                  size="small"
-                  (onClick)="agregarFila()"
-                />
-              </div>
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
+            </div>
+          }
+        </div>
+      }
 
       <div class="flex justify-end gap-2 mt-4">
         @if (hayCambios()) {
@@ -164,24 +142,23 @@
         />
       </div>
 
-      <p-table
-        [value]="horarios()"
-        [loading]="cargandoHorarios()"
-        [rowTrackBy]="trackByIndex"
-        class="p-datatable-sm"
-      >
-        <ng-template #header>
-          <tr>
-            <th style="width: 5rem" class="text-center">#</th>
-            <th>Hora del día (zona AR)</th>
-            <th style="width: 5rem"></th>
-          </tr>
-        </ng-template>
-
-        <ng-template #body let-fila let-i="rowIndex">
-          <tr>
-            <td class="text-center text-muted-color font-mono">{{ i + 1 }}</td>
-            <td>
+      @if (horarios().length === 0) {
+        <div class="text-center py-12 text-muted-color border border-dashed border-surface-300 dark:border-surface-700 rounded-lg">
+          <i class="pi pi-clock text-3xl opacity-50 block mb-2"></i>
+          No hay horarios configurados — la sincronización automática está deshabilitada.
+          <div class="mt-3">
+            <p-button
+              icon="pi pi-plus"
+              label="Agregar el primero"
+              size="small"
+              (onClick)="agregarHorario()"
+            />
+          </div>
+        </div>
+      } @else {
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+          @for (fila of horarios(); track $index; let i = $index) {
+            <div class="flex items-center gap-1 p-1.5 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900">
               <p-datepicker
                 [ngModel]="fila.tiempo"
                 (ngModelChange)="actualizarTiempo(i, $event)"
@@ -190,13 +167,11 @@
                 iconDisplay="input"
                 hourFormat="24"
                 [stepMinute]="5"
-                placeholder="Elegí la hora"
+                placeholder="HH:mm"
                 appendTo="body"
-                class="w-full max-w-[16rem]"
-                inputStyleClass="w-full"
+                class="flex-1 min-w-0"
+                inputStyleClass="w-full text-center"
               />
-            </td>
-            <td class="text-center">
               <p-button
                 icon="pi pi-trash"
                 severity="danger"
@@ -204,30 +179,13 @@
                 [rounded]="true"
                 size="small"
                 (onClick)="eliminarHorario(i)"
-                pTooltip="Eliminar horario"
-                tooltipPosition="left"
+                pTooltip="Eliminar"
+                tooltipPosition="top"
               />
-            </td>
-          </tr>
-        </ng-template>
-
-        <ng-template #emptymessage>
-          <tr>
-            <td colspan="3" class="text-center py-12 text-muted-color">
-              <i class="pi pi-clock text-3xl opacity-50 block mb-2"></i>
-              No hay horarios configurados — la sincronización automática está deshabilitada.
-              <div class="mt-3">
-                <p-button
-                  icon="pi pi-plus"
-                  label="Agregar el primero"
-                  size="small"
-                  (onClick)="agregarHorario()"
-                />
-              </div>
-            </td>
-          </tr>
-        </ng-template>
-      </p-table>
+            </div>
+          }
+        </div>
+      }
 
       <div class="flex justify-end gap-2 mt-4">
         @if (hayCambiosHorarios()) {
@@ -246,59 +204,6 @@
           (onClick)="guardarHorarios()"
           [loading]="guardandoHorarios()"
           [disabled]="!hayCambiosHorarios()"
-        />
-      </div>
-    </p-card>
-
-    <p-card>
-      <div class="flex flex-col gap-2 mb-4">
-        <div class="text-sm text-surface-700 dark:text-surface-200">
-          Después de cada pedido confirmado en DUX, el sistema envía un email con el presupuesto PDF al destinatario configurado.
-        </div>
-        <div class="text-xs text-muted-color">
-          Podés poner uno o varios mails separados por coma. Si lo dejás vacío, el envío queda deshabilitado.
-        </div>
-      </div>
-
-      <h3 class="text-base font-semibold m-0 mb-3">Destinatario del picking y presupuesto</h3>
-
-      <div class="flex flex-col gap-2 max-w-xl">
-        <label for="emailPicking" class="text-sm font-medium text-muted-color">
-          Email
-        </label>
-        <p-iconfield class="w-full">
-          <p-inputicon class="pi pi-envelope" />
-          <input
-            pInputText
-            id="emailPicking"
-            type="email"
-            [ngModel]="emailPicking()"
-            (ngModelChange)="emailPicking.set($event)"
-            placeholder="picking@kitchentools.com.ar"
-            autocomplete="email"
-            class="w-full"
-            [disabled]="cargandoEmail() || guardandoEmail()"
-          />
-        </p-iconfield>
-      </div>
-
-      <div class="flex justify-end gap-2 mt-4">
-        @if (hayCambiosEmail()) {
-          <p-button
-            label="Descartar cambios"
-            severity="secondary"
-            [outlined]="true"
-            icon="pi pi-undo"
-            (onClick)="descartarCambiosEmail()"
-            [disabled]="guardandoEmail()"
-          />
-        }
-        <p-button
-          label="Guardar"
-          icon="pi pi-check"
-          (onClick)="guardarEmail()"
-          [loading]="guardandoEmail()"
-          [disabled]="!hayCambiosEmail()"
         />
       </div>
     </p-card>

@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, Long> {
@@ -24,6 +26,12 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
      */
     @Query("select p from PedidoShowroom p left join fetch p.items where p.id = :id")
     Optional<PedidoShowroom> findByIdWithItems(@Param("id") Long id);
+
+    /** Estado del pedido por id, en bulk — usado por /historial para etiquetar
+     *  las sesiones completadas cuyo pedido fue luego anulado. Una sola query
+     *  para todos los ids de la página → evita N+1. */
+    @Query("select p.id, p.estado from PedidoShowroom p where p.id in :ids")
+    List<Object[]> findEstadosByIds(@Param("ids") Collection<Long> ids);
 
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.

@@ -73,6 +73,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
                         // El visor puede agregar al carrito del operador (público).
                         .requestMatchers(HttpMethod.POST, "/api/showroom/visor/agregar-carrito").permitAll()
+                        // El visor también necesita leer el nombre del cliente
+                        // de la sesión activa para mostrar el saludo personalizado.
+                        .requestMatchers(HttpMethod.GET, "/api/showroom/sesion/activa").permitAll()
                         // Healthcheck — el container Docker hace curl /health
                         // para saber si está UP. Sin esto, queda "starting" para
                         // siempre porque el endpoint responde 401 sin sesión.

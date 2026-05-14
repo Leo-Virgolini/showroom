@@ -42,24 +42,118 @@
 }
 
 // Modo "panel dashboard" (cada sección con su propio scroll interno) solo en
-// pantallas anchas Y razonablemente altas. Sin esto, en monitores chicos /
-// browsers con zoom alto, el `h-screen + overflow-hidden` bloquearía el
-// scroll del body y dejaría contenido inalcanzable.
+// pantallas anchas. Antes pedíamos también `min-height: 600px` como red de
+// seguridad para no atrapar contenido en monitores muy chicos, pero ahora
+// las dos zonas con potencial overflow vertical (`.scan-body` y el `<ul>`
+// del carrito) tienen `overflow-y-auto` propio → el contenido nunca queda
+// inalcanzable aunque el viewport sea muy bajo.
 //
-// El umbral de altura es 600px para incluir notebooks 1920x1080 con scaling
-// Windows 125-150% (viewport efectivo ~640-770px). Sin esto, en esas máquinas
-// el grid `lg:grid-rows-1` empareja la altura de ambas columnas y un carrito
-// con muchos items arrastra hacia abajo a la columna izquierda, dejando el
-// botón "Agregar al carrito" fuera del viewport.
+// Esto resuelve un caso real reportado: notebooks 1920×1080 con scaling
+// Windows 150% + chrome del browser dejan ~580px efectivos. Con el umbral
+// de 600 anterior, el dashboard mode se desactivaba, la página crecía
+// libre y "Agregar al carrito" quedaba debajo del viewport cuando el
+// carrito tenía varios items.
 .page-container {
   min-height: 100vh;
 }
 
-@media (min-width: 1024px) and (min-height: 600px) {
+@media (min-width: 1024px) {
   .page-container {
     height: 100vh;
     overflow: hidden;
   }
+}
+
+// Modo compacto para notebooks 1920×1080 con scaling Windows 125–150%, que
+// dejan ~720–820px de viewport efectivo. Sin esto el panel de "Escanear
+// muestra" no entra entero (imagen grande + tags + precio + N tiles de
+// ahorro), y el CTA "Agregar al carrito" termina recortado. El umbral 820px
+// captura scaling 125% (864) con algo de margen — para 150% (720) es
+// imprescindible.
+//
+// Aplica solo en pantallas anchas (≥ 1024px) donde la layout dashboard
+// (page-container con `height: 100vh; overflow: hidden`) está activa.
+// El scan-body además tiene `overflow-y-auto` como red de seguridad — si
+// aún con la compresión no entra todo, scrollea dentro del card en lugar
+// de recortar el CTA.
+@media (min-width: 1024px) and (max-height: 820px) {
+  // Recortar el padding de los paneles del splitter (antes estaba en `main`,
+  // pero ahora main no tiene padding; el splitter renderiza dos paneles que
+  // contienen <section> y <aside> con padding propio).
+  .showroom-splitter section,
+  .showroom-splitter aside {
+    padding: 0.5rem !important;
+  }
+
+  // Footer más fino — el texto se mantiene legible.
+  footer {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  // Toolbar más compacta.
+  :host ::ng-deep p-toolbar .p-toolbar {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+  }
+  :host ::ng-deep p-toolbar img {
+    height: 2.5rem !important;
+  }
+
+  // p-card-body con menos padding interior (PrimeNG default ~24px).
+  :host ::ng-deep .p-card-body {
+    padding: 0.75rem !important;
+  }
+
+  .scan-stack {
+    gap: 0.625rem;
+  }
+
+  .scan-body {
+    gap: 0.625rem;
+
+    // Padding más chico en cada tarjeta interna (header + banner + precio + escalas).
+    > div {
+      padding: 0.625rem !important;
+    }
+
+    // Caja del precio principal (tiene p-5/sm:p-6 inline).
+    .rounded-xl.border-2 {
+      padding: 0.75rem !important;
+    }
+
+    // Tipografía del precio principal — bajar ~30%.
+    .text-4xl,
+    .sm\:text-5xl {
+      font-size: 2rem !important;
+      line-height: 1 !important;
+    }
+
+    // Símbolo $ del precio.
+    .text-2xl.sm\:text-3xl,
+    .text-3xl {
+      font-size: 1.5rem !important;
+    }
+
+    // Grid de tiles de ahorro — menos separación.
+    .grid {
+      gap: 0.5rem !important;
+    }
+  }
+
+  // Imagen del producto escaneado — achicar para que entre.
+  :host ::ng-deep .scan-body p-image img {
+    width: 6.5rem !important;
+    height: 6.5rem !important;
+  }
+}
+
+// Meter de progreso hacia el próximo descuento — ocultamos la label list
+// que p-meterGroup renderiza por default ("● Acumulado (70%)"), porque el
+// texto "faltan $X para Y% off" ya está justo arriba del bar y duplica info.
+:host ::ng-deep .meter-discount .p-metergroup-label-list {
+  display: none;
 }
 
 // Item del carrito que supera el stock disponible — fondo rojo claro y borde

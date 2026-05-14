@@ -24,6 +24,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
+import { SkeletonModule } from 'primeng/skeleton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
@@ -55,6 +56,7 @@ import { toastError } from '../toast.utils';
     InputTextModule,
     ProgressSpinnerModule,
     SelectModule,
+    SkeletonModule,
     TableModule,
     TagModule,
     TextareaModule,

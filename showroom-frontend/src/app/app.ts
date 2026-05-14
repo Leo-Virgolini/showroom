@@ -12,6 +12,7 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ProgressBarModule } from 'primeng/progressbar';
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ToastModule } from 'primeng/toast';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -28,7 +29,7 @@ import { toastError } from './showroom/toast.utils';
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, RouterOutlet, ButtonModule, ProgressBarModule, ProgressSpinnerModule, ToastModule, TooltipModule],
+  imports: [CommonModule, RouterOutlet, ButtonModule, ConfirmDialogModule, ProgressBarModule, ProgressSpinnerModule, ToastModule, TooltipModule],
   providers: [MessageService],
   templateUrl: './app.html',
   styleUrl: './app.scss',

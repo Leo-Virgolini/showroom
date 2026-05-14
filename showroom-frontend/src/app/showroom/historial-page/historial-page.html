@@ -1,0 +1,220 @@
+<div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-3">
+        <a routerLink="/" aria-label="Volver al inicio" pTooltip="Volver al inicio" tooltipPosition="bottom"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        </a>
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
+          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Historial de escaneos</span>
+          <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
+            Sesiones de atención al cliente
+          </span>
+        </div>
+      </div>
+    </ng-template>
+    <ng-template #end>
+      <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom" label="Volver" class="btn-volver" routerLink="/" />
+    </ng-template>
+  </p-toolbar>
+
+  <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
+    <p-card>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Cliente
+          </label>
+          <!-- inputGroup con addon a la izquierda — alternativa a iconfield
+               cuando se quiere un look más "estructurado" tipo form bancario.
+               Visual: ícono en cajita conectada al input. -->
+          <p-inputGroup>
+            <p-inputGroupAddon>
+              <i class="pi pi-search"></i>
+            </p-inputGroupAddon>
+            <input pInputText type="text" placeholder="Buscar por nombre…"
+              [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)" class="w-full" />
+            @if (busqueda()) {
+            <p-inputGroupAddon class="cursor-pointer hover:bg-surface-100 dark:hover:bg-surface-800"
+              (click)="busqueda.set('')" pTooltip="Limpiar búsqueda" tooltipPosition="top">
+              <i class="pi pi-times text-muted-color"></i>
+            </p-inputGroupAddon>
+            }
+          </p-inputGroup>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Desde
+          </label>
+          <p-datepicker [ngModel]="desde()" (ngModelChange)="desde.set($event)" dateFormat="dd/mm/yy"
+            [showIcon]="true" [showButtonBar]="true" placeholder="—" class="w-full" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Hasta
+          </label>
+          <p-datepicker [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" dateFormat="dd/mm/yy"
+            [showIcon]="true" [showButtonBar]="true" placeholder="—" class="w-full" />
+        </div>
+      </div>
+      @if (hayFiltros()) {
+      <div class="flex justify-end mt-3">
+        <p-button icon="pi pi-filter-slash" label="Limpiar filtros" severity="secondary" [outlined]="true"
+          size="small" (onClick)="limpiarFiltros()" />
+      </div>
+      }
+    </p-card>
+
+    <p-card>
+      <p-table [value]="sesiones()" [lazy]="true" [paginator]="true" [totalRecords]="total()" [rows]="pageSize()"
+        [first]="first()" [rowsPerPageOptions]="[25, 50, 100]" [loading]="cargando()" [rowTrackBy]="trackById"
+        (onLazyLoad)="onLazyLoad($event)"
+        currentPageReportTemplate="Mostrando {first} - {last} de {totalRecords}" [showCurrentPageReport]="true"
+        class="p-datatable-sm">
+        <ng-template #header>
+          <tr>
+            <th style="width: 3rem"></th>
+            <th style="width: 11rem">Inicio</th>
+            <th>Cliente</th>
+            <th class="text-center" style="width: 12rem">Estado</th>
+            <th class="text-center" style="width: 8rem">Escaneados</th>
+            <th class="text-center" style="width: 8rem">Pedido</th>
+            <th class="text-center" style="width: 4rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-s>
+          <tr [class.bg-surface-50]="estaExpandido(s.id)" [class.dark:bg-surface-800]="estaExpandido(s.id)">
+            <td>
+              <p-button [icon]="estaExpandido(s.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+                severity="secondary" [text]="true" [rounded]="true" size="small" (onClick)="toggleRow(s)"
+                ariaLabel="Ver detalle" />
+            </td>
+            <td class="text-xs tabular-nums">{{ s.iniciadaAt | date: 'dd/MM/yy HH:mm' }}</td>
+            <td class="text-sm truncate max-w-[18rem]" [pTooltip]="s.nombre" tooltipPosition="top">
+              {{ s.nombre }}
+            </td>
+            <td class="text-center">
+              @if (estadoSesion(s); as e) {
+              <p-tag [severity]="e.severity" [value]="e.label" />
+              }
+            </td>
+            <td class="text-center tabular-nums">{{ s.cantidadEscaneados }}</td>
+            <td class="text-center">
+              @if (s.pedidoId != null) {
+              <a [routerLink]="['/pedidos']" [queryParams]="{ q: s.pedidoId }" class="font-mono text-sm text-primary hover:underline">
+                #{{ s.pedidoId }}
+              </a>
+              } @else {
+              <span class="text-muted-color text-xs">—</span>
+              }
+            </td>
+            <td class="text-center">
+              @if (s.pedidoId != null) {
+                <p-button icon="pi pi-envelope" severity="info" [text]="true" [rounded]="true" size="small"
+                  [loading]="estaReenviandoEmail(s.pedidoId)"
+                  (onClick)="reenviarEmail(s.pedidoId, $event)"
+                  pTooltip="Reenviar email al cliente con el PDF de productos vistos"
+                  tooltipPosition="left" ariaLabel="Reenviar email" />
+              }
+            </td>
+          </tr>
+
+          @if (estaExpandido(s.id)) {
+          <tr class="bg-surface-50 dark:bg-surface-900">
+            <td colspan="7" class="p-4">
+              @if (estaCargandoDetalle(s.id)) {
+              <!-- Skeleton placeholder con el shape aproximado del detalle
+                   (cabecera + tabla de items). -->
+              <div class="flex flex-col gap-3">
+                <p-skeleton width="50%" height="0.9rem" />
+                <div class="flex flex-col gap-2">
+                  <p-skeleton width="100%" height="2.5rem" />
+                  <p-skeleton width="100%" height="2.5rem" />
+                  <p-skeleton width="100%" height="2.5rem" />
+                </div>
+              </div>
+              } @else if (detalle(s.id); as det) {
+              <div class="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+                <h4 class="text-xs font-semibold uppercase text-muted-color m-0">
+                  Productos escaneados ({{ det.items.length }})
+                </h4>
+                @if (det.finalizadaAt) {
+                <span class="text-xs text-muted-color">
+                  Finalizada: {{ det.finalizadaAt | date: 'dd/MM/yy HH:mm' }}
+                </span>
+                }
+              </div>
+
+              @if (det.items.length === 0) {
+              <div class="text-center py-8 text-muted-color">
+                <i class="pi pi-search text-2xl opacity-50 block mb-1"></i>
+                No se escaneó ningún producto en esta sesión.
+              </div>
+              } @else {
+              <p-table [value]="det.items" class="p-datatable-sm">
+                <ng-template #header>
+                  <tr>
+                    <th style="width: 4rem"></th>
+                    <th style="width: 9rem">SKU</th>
+                    <th>Producto</th>
+                    <th class="text-right" style="width: 9rem">Precio s/IVA</th>
+                    <th class="text-right" style="width: 9rem">Precio c/IVA</th>
+                    <th style="width: 10rem">Escaneado</th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-it>
+                  <tr>
+                    <td>
+                      @if (it.imagenUrl) {
+                      <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
+                        imageClass="w-10 h-10 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in" />
+                      } @else {
+                      <div class="w-10 h-10 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 flex items-center justify-center">
+                        <i class="pi pi-image text-sm text-muted-color opacity-50"></i>
+                      </div>
+                      }
+                    </td>
+                    <td class="font-mono text-sm">{{ it.sku }}</td>
+                    <td>{{ it.descripcion ?? '—' }}</td>
+                    <td class="text-right tabular-nums text-muted-color">
+                      @if (precioSinIva(it.precioConIva, it.porcIva); as p) {
+                      {{ p | currency:'ARS':'symbol':'1.0-0' }}
+                      } @else { — }
+                    </td>
+                    <td class="text-right tabular-nums">
+                      {{ it.precioConIva ? (it.precioConIva | currency:'ARS':'symbol':'1.0-0') : '—' }}
+                    </td>
+                    <td class="text-xs tabular-nums text-muted-color">
+                      {{ it.escaneadoAt | date: 'dd/MM/yy HH:mm' }}
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
+              }
+              }
+            </td>
+          </tr>
+          }
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="7" class="text-center py-12 text-muted-color">
+              <i class="pi pi-history text-3xl opacity-50 block mb-2"></i>
+              @if (hayFiltros()) {
+              Ninguna sesión coincide con los filtros.
+              } @else {
+              Todavía no se inició ninguna sesión de atención.
+              }
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  </main>
+</div>

@@ -259,9 +259,25 @@
             <tr class="bg-surface-50 dark:bg-surface-900">
               <td colspan="9" class="p-4">
                 @if (estaCargandoDetalle(p.id)) {
-                  <div class="flex items-center gap-2 text-muted-color">
-                    <p-progressSpinner class="w-6 h-6" strokeWidth="4" />
-                    Cargando detalle…
+                  <!-- Skeleton placeholder con el shape aproximado del detalle
+                       (dos columnas Cliente/Pedido + lista de items). Mejor
+                       percepción de carga que un spinner intrusivo. -->
+                  <div class="flex flex-col gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div class="flex flex-col gap-2">
+                        <p-skeleton width="40%" height="0.9rem" />
+                        <p-skeleton width="100%" height="1.4rem" styleClass="!mt-2" />
+                        <p-skeleton width="90%" height="1.4rem" />
+                        <p-skeleton width="80%" height="1.4rem" />
+                      </div>
+                      <div class="flex flex-col gap-2">
+                        <p-skeleton width="40%" height="0.9rem" />
+                        <p-skeleton width="100%" height="1.4rem" styleClass="!mt-2" />
+                        <p-skeleton width="90%" height="1.4rem" />
+                        <p-skeleton width="80%" height="1.4rem" />
+                      </div>
+                    </div>
+                    <p-skeleton width="100%" height="6rem" />
                   </div>
                 } @else if (detalle(p.id); as det) {
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -11,16 +11,20 @@ import {
   EscalaDescuento,
   Health,
   HorarioSync,
-  PickitConfig,
   ListarPedidosParams,
   ListarProductosParams,
+  ListarSesionesParams,
   Localidad,
   PedidoDetalle,
   PedidoListPage,
+  PickitConfig,
   ProductoListPage,
   Provincia,
   RefreshStockRequest,
   ScanResult,
+  SesionDetalle,
+  SesionListPage,
+  SesionShowroom,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -137,16 +141,6 @@ export class ShowroomService {
     return this.http.put<HorarioSync[]>(`${this.base}/config/horarios-sync`, horarios);
   }
 
-  /** Destinatario del email de picking (uno o varios mails separados por coma). */
-  obtenerEmailPicking(): Observable<{ email: string }> {
-    return this.http.get<{ email: string }>(`${this.base}/config/picking-email`);
-  }
-
-  /** Persiste el destinatario del email de picking. Cadena vacía vuelve al default. */
-  actualizarEmailPicking(email: string): Observable<{ email: string }> {
-    return this.http.put<{ email: string }>(`${this.base}/config/picking-email`, { email });
-  }
-
   /** Config de la integración con el programa pickit-y-etiquetas. */
   obtenerPickitConfig(): Observable<PickitConfig> {
     return this.http.get<PickitConfig>(`${this.base}/config/pickit`);
@@ -222,6 +216,40 @@ export class ShowroomService {
   anularPedido(id: number, motivo?: string | null): Observable<PedidoDetalle> {
     const body = motivo && motivo.trim() ? { motivo: motivo.trim() } : {};
     return this.http.post<PedidoDetalle>(`${this.base}/pedidos/${id}/anular`, body);
+  }
+
+  // =====================================================
+  // Sesión de atención (historial de scans por cliente)
+  // =====================================================
+
+  /** Inicia una nueva sesión con el nombre del cliente. Cierra la anterior
+   *  si había una abierta. Devuelve el estado de la nueva sesión activa. */
+  iniciarSesion(nombre: string): Observable<SesionShowroom> {
+    return this.http.post<SesionShowroom>(`${this.base}/sesion/iniciar`, { nombre });
+  }
+
+  /** Cancela la sesión activa (cliente se fue sin comprar, operador descarta). */
+  cancelarSesion(): Observable<SesionShowroom> {
+    return this.http.post<SesionShowroom>(`${this.base}/sesion/cancelar`, {});
+  }
+
+  /** Estado actual de la sesión activa (o placeholder inactivo si no hay). */
+  obtenerSesionActiva(): Observable<SesionShowroom> {
+    return this.http.get<SesionShowroom>(`${this.base}/sesion/activa`);
+  }
+
+  listarSesiones(opts: ListarSesionesParams = {}): Observable<SesionListPage> {
+    let params = new HttpParams()
+      .set('page', opts.page ?? 0)
+      .set('size', opts.size ?? 50);
+    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    if (opts.desde) params = params.set('desde', opts.desde);
+    if (opts.hasta) params = params.set('hasta', opts.hasta);
+    return this.http.get<SesionListPage>(`${this.base}/sesiones`, { params });
+  }
+
+  obtenerSesion(id: number): Observable<SesionDetalle> {
+    return this.http.get<SesionDetalle>(`${this.base}/sesiones/${id}`);
   }
 
   // El stream SSE de /events lo maneja BackendStatusService — su Subject

@@ -16,20 +16,26 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
+import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
+import { OverlayBadgeModule } from 'primeng/overlaybadge';
 import { IconFieldModule } from 'primeng/iconfield';
 import { ImageModule } from 'primeng/image';
+import { InputGroupModule } from 'primeng/inputgroup';
+import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
+import { MeterGroupModule } from 'primeng/metergroup';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
+import { SplitterModule } from 'primeng/splitter';
 import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
@@ -37,7 +43,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -119,18 +125,24 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     FormsModule,
     RouterLink,
     AutoCompleteModule,
+    AvatarModule,
     ButtonModule,
     CardModule,
     CheckboxModule,
     DialogModule,
     IconFieldModule,
     ImageModule,
+    InputGroupModule,
+    InputGroupAddonModule,
     InputIconModule,
     InputMaskModule,
     InputNumberModule,
     InputTextModule,
+    MeterGroupModule,
+    OverlayBadgeModule,
     ProgressSpinnerModule,
     SelectModule,
+    SplitterModule,
     TableModule,
     TagModule,
     TextareaModule,
@@ -145,6 +157,7 @@ export class ShowroomPage implements AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toast = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly backendStatus = inject(BackendStatusService);
@@ -183,6 +196,31 @@ export class ShowroomPage implements AfterViewInit {
    *  mano, salvo la asignación inicial al hidratar y los updates optimistas
    *  de cantidad (que después se reconcilian con el state del backend). */
   readonly carrito = signal<CarritoItem[]>([]);
+  /** Sesión de atención al cliente — la mantiene el backend (global, como el
+   *  carrito) y se sincroniza vía SSE `sesion-updated`. Cuando no hay activa
+   *  todos los campos son null. */
+  readonly sesionActiva = signal<SesionShowroom>({
+    id: null, nombre: null, iniciadaAt: null, finalizadaAt: null,
+    pedidoId: null, cantidadEscaneados: 0,
+  });
+  readonly haySesionActiva = computed(() => this.sesionActiva().id != null);
+  /** Iniciales del nombre del cliente activo — máx. 2 letras para el avatar.
+   *  "María Pérez" → "MP" / "Juan" → "J" / "" → "?". */
+  readonly inicialesCliente = computed(() => {
+    const nombre = this.sesionActiva().nombre?.trim() ?? '';
+    if (!nombre) return '?';
+    return (
+      nombre
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((p) => p.charAt(0).toUpperCase())
+        .join('') || '?'
+    );
+  });
+  /** Modal "Nuevo cliente" — visible/hidden + nombre tipeado. */
+  readonly mostrarDialogoNuevoCliente = signal(false);
+  readonly nombreNuevoCliente = signal('');
+  readonly iniciandoSesion = signal(false);
   /** Updates de cantidad — debounceadas por SKU para que clickear +/- rápido
    *  no dispare un PATCH por click. El último valor por SKU dentro del
    *  intervalo es el que viaja al backend. La suscripción se arma en el
@@ -327,6 +365,22 @@ export class ShowroomPage implements AfterViewInit {
   /** % del próximo escalón al que se llegaría, null si ya está en el tope. */
   readonly proximoEscalon = computed(() => this.proximoEscalonObj()?.porcentaje ?? null);
 
+  /** Datos para el {@code p-meterGroup} del carrito: visualiza qué tan cerca
+   *  está el subtotal del próximo umbral de descuento. Null cuando ya estás
+   *  en el tope (no hay próximo escalón). */
+  readonly meterProximoEscalon = computed(() => {
+    const proximo = this.proximoEscalonObj();
+    if (!proximo) return null;
+    const sub = this.subtotalPreDescuento();
+    const acumulado = Math.min(sub, proximo.umbralMin);
+    return {
+      // Label vacío + ocultamos la label list via CSS (.meter-discount):
+      // el texto "faltan $X para 10% off" arriba del bar ya dice todo.
+      items: [{ label: '', value: acumulado, color: '#10b981' }],
+      max: proximo.umbralMin,
+    };
+  });
+
   stockSeverity(stock: number | null): 'success' | 'danger' | 'secondary' {
     if (stock == null) return 'secondary';
     return stock > 0 ? 'success' : 'danger';
@@ -423,6 +477,7 @@ export class ShowroomPage implements AfterViewInit {
     return (
       c.nroDoc != null &&
       this.cuitValido(c.nroDoc) &&
+      this.emailValido(c.email) &&
       this.carrito().length > 0 &&
       !this.hayItemsExcedidos()
     );
@@ -438,6 +493,16 @@ export class ShowroomPage implements AfterViewInit {
    *  para que vea exactamente qué se carga, y se referencia desde el payload de
    *  `crearPedido` para no duplicar el literal. */
   readonly categoriaFiscalFinal: CategoriaFiscal = 'CONSUMIDOR_FINAL';
+
+  /** Validación liviana de email — formato mínimo para que el backend lo acepte
+   *  y se pueda mandar el follow-up con el PDF de historial. Coincide con el
+   *  patrón del validador del email-picking en /configuracion. */
+  emailValido(email: string | null | undefined): boolean {
+    if (email == null) return false;
+    const trimmed = email.trim();
+    if (trimmed.length === 0) return false;
+    return /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(trimmed);
+  }
 
   /** CUIT/CUIL = 11 dígitos. No validamos el dígito verificador para no rebotar
    * a la operadora si DUX lo acepta igual. */
@@ -477,6 +542,27 @@ export class ShowroomPage implements AfterViewInit {
       next: (state) => this.carrito.set(state.items),
       error: (err) => console.warn('[carrito] no se pudo hidratar:', err),
     });
+
+    // Hidratación inicial de la sesión activa. Si había una en curso, la
+    // levantamos para pre-llenar el form y mostrar el badge en el header.
+    // Si no hay sesión activa (carga limpia / reinicio / cliente recién
+    // terminado), abrimos el modal de "Nuevo cliente" automáticamente para
+    // que el operador identifique al cliente antes de empezar a escanear.
+    this.api.obtenerSesionActiva().subscribe({
+      next: (s) => {
+        this.aplicarSesion(s);
+        if (s.id == null) {
+          this.abrirDialogoNuevoCliente();
+        }
+      },
+      error: (err) => console.warn('[sesion] no se pudo hidratar:', err),
+    });
+
+    // SSE en vivo: cualquier cambio en la sesión (iniciar/scan/finalizar)
+    // que dispare cualquier PC llega acá y refresca el estado local.
+    this.backendStatus.sesionEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((s) => this.aplicarSesion(s));
 
     // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor,
     // sync de catálogo) llega como SSE y reemplaza el estado local. Según el
@@ -1016,6 +1102,117 @@ export class ShowroomPage implements AfterViewInit {
 
   actualizarCliente<K extends keyof DatosCliente>(campo: K, valor: DatosCliente[K]): void {
     this.cliente.set({ ...this.cliente(), [campo]: valor });
+  }
+
+  // =====================================================
+  // Sesión de atención al cliente
+  // =====================================================
+
+  /** Aplica el estado de sesión recibido del backend (hidratación inicial
+   *  y SSE). Si la sesión está activa y el form todavía tiene el campo
+   *  "Nombre y apellido" vacío, lo pre-rellena con el nombre cargado. */
+  private aplicarSesion(s: SesionShowroom): void {
+    this.sesionActiva.set(s);
+    if (s.id != null && s.nombre && !this.cliente().nombre.trim()) {
+      this.actualizarCliente('nombre', s.nombre);
+    }
+  }
+
+  abrirDialogoNuevoCliente(): void {
+    this.nombreNuevoCliente.set('');
+    this.mostrarDialogoNuevoCliente.set(true);
+  }
+
+  /** Cierre del dialog post-pedido ("Gracias por tu compra"). Si después de
+   *  cerrarlo el operador no tiene sesión activa (el caso natural — el
+   *  pedido recién creado la cerró), arranca el flujo del próximo cliente
+   *  abriendo el modal de "Nuevo cliente" — mismo patrón que la carga inicial
+   *  de la página, para consistencia. */
+  cerrarReviewYContinuar(): void {
+    this.mostrarDialogReview.set(false);
+    if (!this.haySesionActiva()) {
+      this.abrirDialogoNuevoCliente();
+    }
+  }
+
+  confirmarNuevoCliente(): void {
+    const nombre = this.nombreNuevoCliente().trim();
+    if (!nombre) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Nombre requerido',
+        detail: 'Cargá el nombre del cliente para iniciar la sesión.',
+        life: 3500,
+      });
+      return;
+    }
+    this.iniciandoSesion.set(true);
+    this.api.iniciarSesion(nombre).subscribe({
+      next: (s) => {
+        this.iniciandoSesion.set(false);
+        this.mostrarDialogoNuevoCliente.set(false);
+        // Aplicamos manualmente para que el pre-fill del nombre arranque ya
+        // (sin esperar el SSE). El SSE igual va a llegar y será idempotente.
+        this.aplicarSesion(s);
+        // Pre-fill explícito del nombre del cliente en el form de pedido —
+        // pisa cualquier valor previo porque arranca cliente nuevo.
+        this.actualizarCliente('nombre', nombre);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Sesión iniciada',
+          detail: `Atendiendo a ${nombre}. Los scans quedan registrados para el follow-up.`,
+          life: 3500,
+        });
+      },
+      error: (err) => {
+        this.iniciandoSesion.set(false);
+        toastError(this.toast, 'Sesión', err, 'No se pudo iniciar la sesión.');
+      },
+    });
+  }
+
+  /** Abre el dialog de confirmación antes de cancelar — evita pérdidas
+   *  accidentales de la sesión (perdés el conteo de scans + el cliente
+   *  queda sin PDF de follow-up al cerrar el pedido). Usa el ConfirmDialog
+   *  global declarado en app.html. */
+  confirmarCancelarSesion(): void {
+    if (!this.haySesionActiva()) return;
+    const nombre = this.sesionActiva().nombre ?? '';
+    this.confirmationService.confirm({
+      header: 'Finalizar sesión',
+      message:
+        `¿Finalizar la sesión de "${nombre}"?\n\n` +
+        `Los scans registrados se conservan en el historial, pero a partir de ` +
+        `ahora los nuevos escaneos no se van a registrar hasta que inicies otra sesión.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: {
+        label: 'Finalizar sesión',
+        icon: 'pi pi-times-circle',
+        severity: 'danger',
+      },
+      rejectButtonProps: {
+        label: 'Cancelar',
+        severity: 'secondary',
+        outlined: true,
+      },
+      accept: () => this.cancelarSesionActiva(),
+    });
+  }
+
+  cancelarSesionActiva(): void {
+    if (!this.haySesionActiva()) return;
+    this.api.cancelarSesion().subscribe({
+      next: (s) => {
+        this.aplicarSesion(s);
+        this.toast.add({
+          severity: 'info',
+          summary: 'Sesión cancelada',
+          detail: 'Los próximos scans no se van a registrar hasta iniciar una nueva sesión.',
+          life: 3500,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Sesión', err, 'No se pudo cancelar la sesión.'),
+    });
   }
 
   /**

@@ -14,7 +14,7 @@ import { ButtonModule } from 'primeng/button';
 import { ImageModule } from 'primeng/image';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
-import { EscalaDescuento, ScanResult } from '../models';
+import { EscalaDescuento, ScanResult, SesionShowroom } from '../models';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -44,6 +44,10 @@ export class VisorPage {
 
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
   readonly ultimoScan = signal<ScanResult | null>(null);
+
+  /** Nombre del cliente al que se está atendiendo. Null cuando no hay sesión
+   *  activa — en ese caso el visor muestra el placeholder genérico. */
+  readonly nombreCliente = signal<string | null>(null);
 
   /** Escalones de descuento. Se cargan al iniciar y son los mismos que usa
    *  la pantalla principal. Soporta N escalas (no sólo 2). */
@@ -91,6 +95,18 @@ export class VisorPage {
     this.backendStatus.scanVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((scan) => this.ultimoScan.set(scan));
+
+    // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
+    // que el visor se actualice cuando el operador inicia/cancela sesión.
+    this.api.obtenerSesionActiva().subscribe({
+      next: (s) => this.nombreCliente.set(s.id != null ? s.nombre : null),
+      error: () => { /* sin sesión activa, queda en null y se muestra el header genérico */ },
+    });
+    this.backendStatus.sesionEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((s: SesionShowroom) => {
+        this.nombreCliente.set(s.id != null ? s.nombre : null);
+      });
 
     // Cada vez que cambia el producto, reseteamos la cantidad a 1.
     effect(() => {
