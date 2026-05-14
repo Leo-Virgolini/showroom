@@ -62,6 +62,11 @@ export interface BackendError {
 }
 
 export interface Health {
+  /** Epoch ms cuando arrancó el backend. Cambia en cada reinicio — el frontend
+   *  lo compara contra el último visto para detectar reinicio y limpiar el
+   *  estado in-memory (carrito + sesión) que perdió el server. Opcional para
+   *  ser tolerante con fallbacks de error del cliente que sintetizan un Health. */
+  bootTimeMs?: number;
   duxConfigurado: boolean;
   syncEnCurso: boolean;
   listaPrecios: string;

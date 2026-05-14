@@ -255,6 +255,24 @@ export class App {
         }
       });
 
+    // Toast cuando el backend se reinició mientras estábamos desconectados.
+    // El BackendStatusService ya se encargó de resincronizar carrito/sesión vía
+    // los Subjects existentes; este toast solo informa al operador que su
+    // estado in-memory previo (cliente atendido, items en carrito) se perdió
+    // y por eso la UI puede haber cambiado. El visor es read-only y la
+    // resincronización ya es suficiente — no necesita toast.
+    this.backendStatus.backendReiniciado$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        if (this.esVistaVisor()) return;
+        this.toast.add({
+          severity: 'warn',
+          summary: 'Backend reiniciado',
+          detail: 'Se perdió el estado en curso (cliente atendido, carrito). Estado actualizado.',
+          life: 8000,
+        });
+      });
+
     // Toast del pickit externo (programa pickit-y-etiquetas). Igual que el
     // email: lo ven todos los clientes operativos, no el visor. La AUTO-DESCARGA
     // del .xlsx solo la dispara la pestaña que originó el pedido (matcheada via

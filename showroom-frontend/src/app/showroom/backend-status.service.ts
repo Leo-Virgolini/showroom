@@ -1,8 +1,10 @@
 import { DestroyRef, Injectable, effect, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Subject } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
 import {
   CarritoState,
+  Health,
   PickingEmailEvent,
   PickitExternoEvent,
   ScanResult,
@@ -51,11 +53,23 @@ export class BackendStatusService {
   /** Estado de la sesión de atención al cliente. Se emite al iniciar/cancelar/
    *  registrar scan/finalizar. Cuando no hay activa, todos los campos son null. */
   readonly sesionEvents$ = new Subject<SesionShowroom>();
+  /** Se emite cuando se detecta que el backend reinició (cambió su bootTimeMs).
+   *  Los consumers lo usan para mostrar un toast al operador y/o resetear estado
+   *  efímero local que no tenga sentido tras un restart. */
+  readonly backendReiniciado$ = new Subject<void>();
 
   private readonly destroyRef = inject(DestroyRef);
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
   private source: EventSource | null = null;
   private healthPoll: ReturnType<typeof setInterval> | null = null;
+  /** Último bootTime visto del backend — comparamos contra el de cada /health
+   *  para detectar reinicio. Null hasta el primer health response exitoso. */
+  private lastBootTimeMs: number | null = null;
+  /** False hasta el primer onopen del SSE. Sirve para distinguir "primera
+   *  conexión" (carga inicial de la app) de "reconexión" (donde queremos
+   *  rehidratar estado por si nos perdimos eventos durante la caída). */
+  private yaConectoAlMenosUnaVez = false;
 
   constructor() {
     this.iniciarSSE();
@@ -124,6 +138,61 @@ export class BackendStatusService {
     });
   }
 
+  /**
+   * Establece el {@code lastBootTimeMs} la primera vez que conectamos al
+   * backend. Sirve de baseline para detectar reinicios en {@link rehidratarEstado}.
+   * Si el fetch falla (network/timeout), lo intentamos de nuevo en la próxima
+   * reconexión — no es crítico.
+   */
+  private fetchBootTimeBaseline(): void {
+    this.http.get<Health>('/api/showroom/health').subscribe({
+      next: (h) => { if (h.bootTimeMs != null) this.lastBootTimeMs = h.bootTimeMs; },
+      error: () => { /* silencioso, se reintenta en la próxima reconexión */ },
+    });
+  }
+
+  /**
+   * Tras una reconexión SSE, re-sincroniza el estado in-memory del backend
+   * (sesión activa + carrito) y detecta si el backend reinició mientras
+   * estábamos desconectados.
+   *
+   * <p>Estrategia: emitir los estados frescos por los Subjects existentes
+   * ({@code sesionEvents$}, {@code carritoEvents$}) — los listeners actuales
+   * de cada página se actualizan transparentemente, sin lógica especial de
+   * "este evento vino de un resync vs. de un SSE real".
+   *
+   * <p>El carrito solo se pide si hay usuario autenticado: en visor anónimo
+   * el endpoint devuelve 401 y el interceptor lo trata como ruido.
+   */
+  private rehidratarEstado(): void {
+    // 1. Health: bootTime nos dice si el backend reinició → notificamos para
+    //    que el frontend muestre toast y limpie estado fantasma.
+    this.http.get<Health>('/api/showroom/health').subscribe({
+      next: (h) => {
+        if (h.bootTimeMs == null) return;
+        if (this.lastBootTimeMs != null && h.bootTimeMs !== this.lastBootTimeMs) {
+          this.backendReiniciado$.next();
+        }
+        this.lastBootTimeMs = h.bootTimeMs;
+      },
+      error: () => { /* silencioso */ },
+    });
+
+    // 2. Sesión activa (público — sirve para operador y visor).
+    this.http.get<SesionShowroom>('/api/showroom/sesion/activa').subscribe({
+      next: (s) => this.sesionEvents$.next(s),
+      error: () => { /* silencioso */ },
+    });
+
+    // 3. Carrito (autenticado — solo si hay sesión de operador).
+    if (this.auth.currentUser()) {
+      this.http.get<CarritoState>('/api/showroom/carrito').subscribe({
+        next: (c) => this.carritoEvents$.next(c),
+        error: () => { /* silencioso, el interceptor maneja 401 */ },
+      });
+    }
+  }
+
   markDisconnected(): void {
     if (this.connected()) this.connected.set(false);
   }
@@ -141,7 +210,21 @@ export class BackendStatusService {
 
     src.onopen = () => {
       // El handshake SSE terminó OK — backend respondiendo.
+      const esReconexion = this.yaConectoAlMenosUnaVez;
+      this.yaConectoAlMenosUnaVez = true;
       this.markConnected();
+      if (esReconexion) {
+        // Reconexión tras una caída: nos podemos haber perdido eventos del
+        // carrito/sesión mientras estuvimos offline. Re-fetcheamos el estado
+        // actual y lo emitimos por los Subjects existentes para que cada
+        // consumer (operador, visor) se actualice sin lógica especial.
+        this.rehidratarEstado();
+      } else {
+        // Primera conexión: solo establecemos el baseline del bootTime para
+        // poder detectar reinicios futuros. Las páginas hacen su propio fetch
+        // inicial — no necesitamos disparar Subjects acá.
+        this.fetchBootTimeBaseline();
+      }
     };
 
     src.onerror = () => {

@@ -5,6 +5,7 @@ import ar.com.leo.showroom.catalogo.repository.ProductoCacheRepository;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.catalogo.service.UbicacionService;
+import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.dux.service.DuxClient;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -113,9 +114,18 @@ public class ShowroomController {
      * cantidad real al cliente, no la pedida.
      *
      * <p>Endpoint público (el visor no tiene sesión).
+     *
+     * <p>Rechaza con 409 si no hay sesión de atención activa: el carrito tiene
+     * sentido solo cuando el operador está atendiendo a un cliente. Sin esta
+     * validación, cualquiera con la URL del visor podría agregar items al carrito
+     * fuera del horario de atención, o cuando el operador no le inició la sesión.
      */
     @PostMapping("/visor/agregar-carrito")
     public CarritoAgregarResponseDTO visorAgregarAlCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
+        if (sesionShowroomService.obtenerActiva().id() == null) {
+            throw new ConflictException(
+                    "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
+        }
         return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR);
     }
 
@@ -603,9 +613,17 @@ public class ShowroomController {
         return service.savePickitConfig(body);
     }
 
+    /** Timestamp (epoch ms) cuando el bean se inicializó — equivale al boot del
+     *  backend porque el controller se crea una sola vez. Lo expone {@code /health}
+     *  para que el frontend detecte reinicios del backend: si llega un boot nuevo,
+     *  el estado in-memory del server (carrito + sesión) se perdió y conviene
+     *  limpiar los signals locales del cliente para no mostrar fantasmas. */
+    private final long bootTimeMs = System.currentTimeMillis();
+
     @GetMapping("/health")
     public Map<String, Object> health() {
         Map<String, Object> body = new HashMap<>();
+        body.put("bootTimeMs", bootTimeMs);
         body.put("duxConfigurado", duxClient.isConfigured());
         body.put("syncEnCurso", catalogoSync.isSyncEnCurso());
         body.put("listaPrecios", duxClient.getProperties().listaPreciosNombre());

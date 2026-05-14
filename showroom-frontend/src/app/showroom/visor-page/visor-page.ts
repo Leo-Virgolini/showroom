@@ -80,22 +80,25 @@ export class VisorPage {
     [...this.escalas()].sort((a, b) => a.umbralMin - b.umbralMin),
   );
 
-  /** Producto vendible: con precio cargado, habilitado y con stock > 0. Si no
-   *  cumple alguno, no mostramos el stepper ni el botón. */
+  /** Producto vendible: con precio cargado, habilitado y con stock confirmado
+   *  > 0. Si el stock es null (no sincronizado con DUX), tampoco permitimos
+   *  agregar desde el visor — sino el cliente podría tipear cualquier cantidad
+   *  y el backend tendría que recortarla, dando un toast confuso ("se agregó
+   *  solo X aunque pediste Y"). Mejor que el operador confirme stock manualmente. */
   readonly puedeAgregar = computed(() => {
     const r = this.ultimoScan();
     if (!r) return false;
     if (r.habilitado === false) return false;
     if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) return false;
-    if (r.stockTotal != null && r.stockTotal <= 0) return false;
+    if (r.stockTotal == null || r.stockTotal <= 0) return false;
     return true;
   });
 
-  /** Tope superior del stepper de cantidad. Si el stock es null (no
-   *  sincronizado), no limitamos — el backend valida al recibir. */
+  /** Tope superior del stepper de cantidad. Garantizado > 0 cuando se muestra
+   *  el stepper (puedeAgregar exige stock confirmado > 0). */
   readonly maxCantidad = computed(() => {
     const r = this.ultimoScan();
-    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 9999;
+    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 1;
   });
 
   constructor() {

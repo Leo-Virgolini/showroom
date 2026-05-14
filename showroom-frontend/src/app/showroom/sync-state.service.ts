@@ -69,7 +69,10 @@ export class SyncStateService {
         }
       },
       error: () =>
-        this.health.set({ duxConfigurado: false, syncEnCurso: false, listaPrecios: '—' }),
+        // bootTimeMs=0 como sentinela "no llegamos al backend" — el listener
+        // de BackendStatusService que detecta reinicios solo evalúa el dato
+        // que viene del /health real, no de este fallback.
+        this.health.set({ bootTimeMs: 0, duxConfigurado: false, syncEnCurso: false, listaPrecios: '—' }),
     });
   }
 
@@ -105,7 +108,7 @@ export class SyncStateService {
   }
 
   private patchHealth(patch: Partial<Health>): void {
-    const current = this.health() ?? { duxConfigurado: true, syncEnCurso: false, listaPrecios: '—' };
+    const current = this.health() ?? { bootTimeMs: 0, duxConfigurado: true, syncEnCurso: false, listaPrecios: '—' };
     this.health.set({ ...current, ...patch });
   }
 

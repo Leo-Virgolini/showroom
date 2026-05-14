@@ -70,6 +70,23 @@
         </div>
       }
 
+      <!-- Banner stock no confirmado (DUX no devolvió cantidad) — distinto del
+           "sin stock" porque no sabemos si hay o no. El cliente no puede sumar
+           desde acá; el operador confirma manualmente. -->
+      @if (r.stockTotal == null && r.habilitado !== false) {
+        <div class="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-3">
+          <i class="pi pi-question-circle text-amber-600 dark:text-amber-400 text-3xl shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <div class="font-bold text-amber-700 dark:text-amber-400 text-base sm:text-lg">
+              Stock por confirmar
+            </div>
+            <div class="text-sm text-amber-700/80 dark:text-amber-300/80">
+              Consultalo con el vendedor.
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- Precio principal -->
       @if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
         <div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm"
