@@ -161,7 +161,7 @@ export interface ListarSesionesParams {
   size?: number;
 }
 
-export type PickingEmailEstado = 'SENT' | 'FAILED';
+export type PickingEmailEstado = 'SENT' | 'FAILED' | 'SKIPPED';
 
 export interface PickingEmailEvent {
   estado: PickingEmailEstado;
@@ -177,7 +177,7 @@ export interface PickingEmailEvent {
   error?: string | null;
 }
 
-export type WhatsappBusinessEstado = 'SENT' | 'FAILED' | 'WINDOW_CLOSED';
+export type WhatsappBusinessEstado = 'SENT' | 'FAILED' | 'WINDOW_CLOSED' | 'SKIPPED';
 
 /** Resultado del envío del PDF por WhatsApp (Meta Cloud API). El estado
  *  {@code WINDOW_CLOSED} indica que el cliente no escribió en las últimas
@@ -320,6 +320,20 @@ export interface NotificacionesAutoConfig {
   whatsappAutoPedido: boolean;
 }
 
+/** Perfil de impresión de etiquetas (geometría + tipografía + toggles).
+ *  Compartido entre todas las PCs del showroom — el "perfil activo" lo elige
+ *  cada PC localmente (localStorage), no viene en este modelo. El {@code config}
+ *  es opaco al backend; el shape vive en el componente. */
+export interface PerfilEtiquetas {
+  /** null al crear, presente al editar / leer del backend. */
+  id: number | null;
+  nombre: string;
+  config: Record<string, unknown>;
+  /** ISO timestamp; null al crear desde el form. */
+  creadoAt: string | null;
+  actualizadoAt: string | null;
+}
+
 /** Forma de pago configurable desde /configuracion. El operador la elige en
  *  el carrito; el recargo % se aplica al total y se snapshotea en el pedido. */
 export interface FormaPago {
@@ -363,6 +377,12 @@ export interface PedidoListItem {
    *  cuando la forma de pago no aplica IVA. */
   totalSinIva: number | null;
   descuentoPorcentaje: number | null;
+  /** Snapshot del nombre de la forma de pago. Null si no se eligió. */
+  formaPagoNombre: string | null;
+  /** Snapshot del flag aplicaIva de la forma. Null si no hubo forma. */
+  formaPagoAplicaIva: boolean | null;
+  /** Snapshot de la cantidad de cuotas. Null si no hubo forma. */
+  cantidadCuotas: number | null;
   cantidadItems: number;
 }
 

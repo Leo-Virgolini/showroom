@@ -2,12 +2,20 @@ package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
+import ar.com.leo.showroom.sesion.entity.SesionShowroom;
+import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
 import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Orquesta el envío automático del PDF de follow-up tras un pedido OK con
@@ -46,6 +54,7 @@ public class PdfFollowupOrchestrator {
     private final WhatsappBusinessService whatsappService;
     private final PickingEmailService emailService;
     private final ConfiguracionService configuracionService;
+    private final SesionShowroomRepository sesionRepository;
 
     @Async
     public void enviarTrasPedido(PedidoShowroom pedido) {
@@ -54,6 +63,17 @@ public class PdfFollowupOrchestrator {
 
         if (!tieneTelefono && !tieneEmail) {
             log.info("Pedido {} sin email ni teléfono — no hay canal para mandar el PDF.",
+                    pedido.getId());
+            return;
+        }
+
+        // Pre-check: si el cliente compró TODO lo que vio, no hay PDF de
+        // follow-up que mandar. Saltamos sin intentar ningún canal — evita
+        // disparar dos toasts SKIPPED (uno por WhatsApp, otro por email).
+        // Los disparos manuales desde /pedidos NO pasan por acá: ahí cada
+        // service emite SKIPPED directamente para informar al operador.
+        if (!hayItemsExtraQueMandar(pedido)) {
+            log.info("Pedido {} — el cliente compró todo lo que vio, no hay PDF de follow-up.",
                     pedido.getId());
             return;
         }
@@ -92,5 +112,19 @@ public class PdfFollowupOrchestrator {
             }
             emailService.enviarPedidoSync(pedido);
         }
+    }
+
+    /** True si la sesión asociada tiene ítems escaneados que NO terminaron en
+     *  el pedido — es decir, hay material para el PDF de "vistos sin comprar".
+     *  False si no hay sesión asociada o si todos los scans fueron comprados. */
+    private boolean hayItemsExtraQueMandar(PedidoShowroom pedido) {
+        Optional<SesionShowroom> sesion = sesionRepository.findByPedidoIdWithItems(pedido.getId());
+        if (sesion.isEmpty()) return false;
+        Set<String> skusComprados = pedido.getItems().stream()
+                .map(PedidoShowroomItem::getSku)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return sesion.get().getItems().stream()
+                .anyMatch(it -> !skusComprados.contains(it.getSku()));
     }
 }

@@ -146,6 +146,25 @@ SKU003" class="w-full font-mono text-sm"></textarea>
         </p-table>
 
         <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-700">
+          <!-- Selector de perfil — el operador puede tener varios setups
+               (térmica chica, térmica ancha, A4) y switchear sin reconfigurar
+               todo. Cualquier cambio en los signals de abajo se persiste
+               automáticamente dentro del perfil activo. -->
+          <h4 class="m-0 mb-2 text-sm text-muted-color font-semibold inline-flex items-center gap-1.5">
+            <i class="pi pi-print text-[0.7rem]"></i>Perfil de impresión
+          </h4>
+          <div class="flex items-center gap-1 mb-3">
+            <p-select [options]="perfiles()" [ngModel]="perfilActivoId()" (ngModelChange)="cambiarPerfilActivo($event)"
+              optionLabel="nombre" optionValue="id" appendTo="body" size="small" class="flex-1 min-w-0" />
+            <p-button icon="pi pi-plus" severity="secondary" [text]="true" [rounded]="true" size="small"
+              (onClick)="abrirDialogNuevoPerfil()" pTooltip="Crear nuevo perfil con la config actual" tooltipPosition="top" />
+            <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
+              (onClick)="abrirDialogRenombrarPerfil()" pTooltip="Renombrar este perfil" tooltipPosition="top" />
+            <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
+              (onClick)="confirmarEliminarPerfil()" [disabled]="perfiles().length <= 1"
+              pTooltip="Eliminar este perfil" tooltipPosition="top" />
+          </div>
+
           <h4 class="m-0 mb-2 text-sm text-muted-color font-semibold">Tamaño de etiqueta</h4>
 
           <label class="flex flex-col gap-1 text-xs text-muted-color mb-2">
@@ -347,6 +366,35 @@ SKU003" class="w-full font-mono text-sm"></textarea>
   <ng-template #footer>
     <p-button label="Copiar lista" icon="pi pi-copy" severity="secondary" [outlined]="true" (onClick)="copiarSkusNoEncontrados()" />
     <p-button label="Cerrar" icon="pi pi-check" (onClick)="mostrarDialogNoEncontrados.set(false)" />
+  </ng-template>
+</p-dialog>
+
+<!-- Dialog para crear / renombrar perfil de impresión. Reutiliza el mismo
+     dialog para los dos modos — el modo decide el header/label y qué hace
+     {@code confirmarDialogPerfil()} al aceptar. -->
+<p-dialog [(visible)]="mostrarDialogPerfil" [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [header]="modoDialogPerfil() === 'crear' ? 'Nuevo perfil' : 'Renombrar perfil'">
+  <div class="flex flex-col gap-3">
+    <p class="text-sm text-muted-color m-0">
+      @if (modoDialogPerfil() === 'crear') {
+        Se va a guardar la configuración actual con un nombre. Después podés
+        cambiar entre perfiles desde el dropdown.
+      } @else {
+        Cambiá el nombre con el que aparece en el dropdown.
+      }
+    </p>
+    <input pInputText type="text" autofocus
+      [ngModel]="inputNombrePerfil()" (ngModelChange)="inputNombrePerfil.set($event)"
+      (keydown.enter)="confirmarDialogPerfil()"
+      placeholder="Ej: Térmica chica, A4 oficina" maxlength="80" class="w-full" />
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogPerfil.set(false)" />
+    <p-button [label]="modoDialogPerfil() === 'crear' ? 'Crear' : 'Guardar'"
+      icon="pi pi-check" (onClick)="confirmarDialogPerfil()"
+      [disabled]="!inputNombrePerfil().trim()" />
   </ng-template>
 </p-dialog>
 

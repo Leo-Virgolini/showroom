@@ -245,6 +245,15 @@ export class App {
             detail: `Adjuntos despachados a ${ref}.`,
             life: 5000,
           });
+        } else if (e.estado === 'SKIPPED') {
+          this.toast.add({
+            severity: 'info',
+            summary: 'No se mandó el email',
+            detail: e.error
+              ? `${ref}: ${e.error}`
+              : `No había PDF que mandar a ${ref}.`,
+            life: 6000,
+          });
         } else {
           this.toast.add({
             severity: 'error',
@@ -283,6 +292,15 @@ export class App {
             summary: 'WhatsApp fuera de ventana 24hs',
             detail: `${ref} no escribió en las últimas 24hs. Pedile que mande un mensaje y reintentá.`,
             life: 10000,
+          });
+        } else if (e.estado === 'SKIPPED') {
+          this.toast.add({
+            severity: 'info',
+            summary: 'No se mandó el WhatsApp',
+            detail: e.error
+              ? `${ref}: ${e.error}`
+              : `No había PDF que mandar a ${ref}.`,
+            life: 6000,
           });
         } else {
           this.toast.add({

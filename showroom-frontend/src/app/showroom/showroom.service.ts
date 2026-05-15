@@ -19,6 +19,7 @@ import {
   Localidad,
   PedidoDetalle,
   PedidoListPage,
+  PerfilEtiquetas,
   PickitConfig,
   ProductoListPage,
   Provincia,
@@ -159,6 +160,27 @@ export class ShowroomService {
   /** Soft delete — marca la forma como inactiva. Sobrevive en pedidos viejos. */
   eliminarFormaPago(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/config/formas-pago/${id}`);
+  }
+
+  // ===========================================================
+  // Perfiles de etiquetas — compartidos entre PCs.
+  // El "perfil activo" lo elige cada PC localmente (localStorage).
+  // ===========================================================
+
+  listarPerfilesEtiquetas(): Observable<PerfilEtiquetas[]> {
+    return this.http.get<PerfilEtiquetas[]>(`${this.base}/config/perfiles-etiquetas`);
+  }
+
+  crearPerfilEtiquetas(perfil: Partial<PerfilEtiquetas>): Observable<PerfilEtiquetas> {
+    return this.http.post<PerfilEtiquetas>(`${this.base}/config/perfiles-etiquetas`, perfil);
+  }
+
+  actualizarPerfilEtiquetas(id: number, perfil: Partial<PerfilEtiquetas>): Observable<PerfilEtiquetas> {
+    return this.http.put<PerfilEtiquetas>(`${this.base}/config/perfiles-etiquetas/${id}`, perfil);
+  }
+
+  eliminarPerfilEtiquetas(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/config/perfiles-etiquetas/${id}`);
   }
 
   /** Horarios diarios de sincronización automática con DUX (zona AR). */

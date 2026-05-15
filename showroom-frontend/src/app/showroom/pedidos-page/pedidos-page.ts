@@ -507,9 +507,24 @@ export class PedidosPage {
         this.marcarDescarga(this.descargandoPdf, p.id, false);
         this.dispararDescarga(resp, `pedido-${p.id}.pdf`);
       },
-      error: (err) => {
+      error: async (err) => {
         this.marcarDescarga(this.descargandoPdf, p.id, false);
-        toastError(this.toast, 'PDF', err, 'No se pudo generar el PDF');
+        // El responseType:'blob' del request hace que el body de error venga
+        // como Blob — toastError no lo puede leer. Parseamos el JSON manual
+        // y, si es un 404 "el cliente compró todo lo que vio", lo mostramos
+        // como info (es un caso esperado, no un error técnico).
+        const mensajeBackend = await leerMensajeBlob(err?.error);
+        if (err?.status === 404 && mensajeBackend) {
+          this.toast.add({
+            severity: 'info',
+            summary: 'No hay PDF para este pedido',
+            detail: mensajeBackend,
+            life: 5000,
+          });
+          return;
+        }
+        const errAdaptado = mensajeBackend ? { error: { message: mensajeBackend } } : err;
+        toastError(this.toast, 'PDF', errAdaptado, 'No se pudo generar el PDF');
       },
     });
   }
@@ -543,5 +558,20 @@ export class PedidosPage {
     if (utf8?.[1]) return decodeURIComponent(utf8[1].trim());
     const ascii = /filename="?([^";]+)"?/i.exec(contentDisposition);
     return ascii?.[1]?.trim() ?? null;
+  }
+}
+
+/** Cuando un request HTTP usa {@code responseType:'blob'}, el body de error
+ *  llega como Blob — el handler de errores no lo puede leer directo. Esta
+ *  función parsea el blob como JSON y devuelve el {@code message} del
+ *  GlobalExceptionHandler del backend, o null si no se puede parsear. */
+async function leerMensajeBlob(blob: unknown): Promise<string | null> {
+  if (!(blob instanceof Blob)) return null;
+  try {
+    const texto = await blob.text();
+    const json = JSON.parse(texto) as { message?: string };
+    return json.message ?? null;
+  } catch {
+    return null;
   }
 }

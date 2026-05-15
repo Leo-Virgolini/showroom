@@ -179,7 +179,8 @@ public class WhatsappBusinessService {
         EventFactories factories = new EventFactories(
                 t -> WhatsappBusinessEvent.sentPedido(pedido.getId(), t),
                 (t, err) -> WhatsappBusinessEvent.failedPedido(pedido.getId(), t, err),
-                t -> WhatsappBusinessEvent.windowClosedPedido(pedido.getId(), t));
+                t -> WhatsappBusinessEvent.windowClosedPedido(pedido.getId(), t),
+                (t, motivo) -> WhatsappBusinessEvent.skippedPedido(pedido.getId(), t, motivo));
 
         return enviarPdfInterno(
                 telefonoRaw,
@@ -200,7 +201,8 @@ public class WhatsappBusinessService {
         EventFactories factories = new EventFactories(
                 t -> WhatsappBusinessEvent.sentSesion(sesion.getId(), t),
                 (t, err) -> WhatsappBusinessEvent.failedSesion(sesion.getId(), t, err),
-                t -> WhatsappBusinessEvent.windowClosedSesion(sesion.getId(), t));
+                t -> WhatsappBusinessEvent.windowClosedSesion(sesion.getId(), t),
+                (t, motivo) -> WhatsappBusinessEvent.skippedSesion(sesion.getId(), t, motivo));
 
         enviarPdfInterno(
                 telefonoRaw,
@@ -271,11 +273,21 @@ public class WhatsappBusinessService {
             return false;
         }
         if (pdf == null) {
-            log.info("{} sin items extra — no hay PDF que mandar.", logContext);
+            String motivoBase = emitirSkipsComoFailed
+                    ? "La sesión no tiene items escaneados — no hay PDF que mandar."
+                    : "El cliente compró todo lo que vio — no hay PDF de productos extra para mandar.";
+            log.info("{} — {}", logContext, motivoBase);
             if (emitirSkipsComoFailed) {
+                // Path sesión-abandonada: no hay items escaneados → es un error
+                // de input del operador (debería tener algo en la sesión).
                 eventService.publish(SSE_EVENT,
-                        factories.failed.apply(telefono,
-                                "La sesión no tiene items escaneados — no hay PDF que mandar."));
+                        factories.failed.apply(telefono, motivoBase));
+            } else {
+                // Path pedido (manual desde /pedidos o auto post-pedido): no es
+                // un error, el cliente compró todo lo que vio. Emitimos SKIPPED
+                // para que el operador reciba un toast informativo.
+                eventService.publish(SSE_EVENT,
+                        factories.skipped.apply(telefono, motivoBase));
             }
             return false;
         }
@@ -329,7 +341,8 @@ public class WhatsappBusinessService {
     private record EventFactories(
             java.util.function.Function<String, WhatsappBusinessEvent> sent,
             java.util.function.BiFunction<String, String, WhatsappBusinessEvent> failed,
-            java.util.function.Function<String, WhatsappBusinessEvent> windowClosed
+            java.util.function.Function<String, WhatsappBusinessEvent> windowClosed,
+            java.util.function.BiFunction<String, String, WhatsappBusinessEvent> skipped
     ) {}
 
     /** Sube el PDF a Meta y devuelve el media_id que se usa luego para mandar

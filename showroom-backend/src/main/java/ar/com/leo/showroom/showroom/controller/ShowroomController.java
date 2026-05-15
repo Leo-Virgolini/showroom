@@ -13,6 +13,7 @@ import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.config.service.FormaPagoService;
+import ar.com.leo.showroom.config.service.PerfilEtiquetasService;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.WhatsappBusinessService;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
@@ -37,6 +38,7 @@ import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
 import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
 import ar.com.leo.showroom.showroom.dto.FormaPagoDTO;
+import ar.com.leo.showroom.showroom.dto.PerfilEtiquetasDTO;
 import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
@@ -84,6 +86,7 @@ public class ShowroomController {
     private final PickingEmailService pickingEmailService;
     private final WhatsappBusinessService whatsappBusinessService;
     private final FormaPagoService formaPagoService;
+    private final PerfilEtiquetasService perfilEtiquetasService;
     private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final VisorService visorService;
@@ -694,6 +697,36 @@ public class ShowroomController {
     @DeleteMapping("/config/formas-pago/{id}")
     public ResponseEntity<Void> eliminarFormaPago(@PathVariable Long id) {
         formaPagoService.eliminar(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // =====================================================
+    // Perfiles de etiquetas — compartidos entre PCs
+    // =====================================================
+    // El "perfil activo" lo elige cada PC localmente (localStorage); la lista
+    // de perfiles se comparte para que un setup nuevo aparezca al instante en
+    // todas las PCs del showroom.
+
+    @GetMapping("/config/perfiles-etiquetas")
+    public List<PerfilEtiquetasDTO> listarPerfilesEtiquetas() {
+        return perfilEtiquetasService.listar();
+    }
+
+    @PostMapping("/config/perfiles-etiquetas")
+    public PerfilEtiquetasDTO crearPerfilEtiquetas(@RequestBody @Valid PerfilEtiquetasDTO dto) {
+        return perfilEtiquetasService.crear(dto);
+    }
+
+    @PutMapping("/config/perfiles-etiquetas/{id}")
+    public PerfilEtiquetasDTO actualizarPerfilEtiquetas(
+            @PathVariable Long id,
+            @RequestBody @Valid PerfilEtiquetasDTO dto) {
+        return perfilEtiquetasService.actualizar(id, dto);
+    }
+
+    @DeleteMapping("/config/perfiles-etiquetas/{id}")
+    public ResponseEntity<Void> eliminarPerfilEtiquetas(@PathVariable Long id) {
+        perfilEtiquetasService.eliminar(id);
         return ResponseEntity.noContent().build();
     }
 

@@ -24,7 +24,10 @@ public record WhatsappBusinessEvent(
         String telefono,
         String error
 ) {
-    public enum Estado { SENT, FAILED, WINDOW_CLOSED }
+    /** {@code SKIPPED}: no es un error técnico — había una razón legítima para
+     *  no mandar el WhatsApp (ej: cliente compró todo lo que vio, no hay PDF).
+     *  El frontend muestra un toast informativo en vez de error. */
+    public enum Estado { SENT, FAILED, WINDOW_CLOSED, SKIPPED }
 
     public static WhatsappBusinessEvent sentPedido(Long pedidoId, String telefono) {
         return new WhatsappBusinessEvent(Estado.SENT, pedidoId, null, telefono, null);
@@ -39,6 +42,10 @@ public record WhatsappBusinessEvent(
                 "El cliente no escribió en las últimas 24hs — fuera de la ventana de WhatsApp.");
     }
 
+    public static WhatsappBusinessEvent skippedPedido(Long pedidoId, String telefono, String motivo) {
+        return new WhatsappBusinessEvent(Estado.SKIPPED, pedidoId, null, telefono, motivo);
+    }
+
     public static WhatsappBusinessEvent sentSesion(Long sesionId, String telefono) {
         return new WhatsappBusinessEvent(Estado.SENT, null, sesionId, telefono, null);
     }
@@ -50,5 +57,9 @@ public record WhatsappBusinessEvent(
     public static WhatsappBusinessEvent windowClosedSesion(Long sesionId, String telefono) {
         return new WhatsappBusinessEvent(Estado.WINDOW_CLOSED, null, sesionId, telefono,
                 "El cliente no escribió en las últimas 24hs — fuera de la ventana de WhatsApp.");
+    }
+
+    public static WhatsappBusinessEvent skippedSesion(Long sesionId, String telefono, String motivo) {
+        return new WhatsappBusinessEvent(Estado.SKIPPED, null, sesionId, telefono, motivo);
     }
 }

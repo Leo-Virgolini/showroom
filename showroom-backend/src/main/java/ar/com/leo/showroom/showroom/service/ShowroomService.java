@@ -468,6 +468,9 @@ public class ShowroomService {
                 p.getTotal(),
                 p.getTotalSinIva(),
                 p.getDescuentoPorcentaje(),
+                p.getFormaPagoNombre(),
+                p.getFormaPagoAplicaIva(),
+                p.getCantidadCuotas(),
                 cantidadItems
         );
     }

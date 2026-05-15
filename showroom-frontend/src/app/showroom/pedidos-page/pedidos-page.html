@@ -144,6 +144,7 @@
             <th class="text-center" style="width: 6rem" pSortableColumn="descuentoPorcentaje">
               Desc <p-sortIcon field="descuentoPorcentaje" />
             </th>
+            <th style="width: 9rem">Forma de pago</th>
             <th class="text-right" style="width: 11rem" pSortableColumn="totalSinIva">
               Total <p-sortIcon field="totalSinIva" />
               <div class="text-[0.65rem] font-normal text-muted-color leading-none">
@@ -185,6 +186,25 @@
                 <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
                   −{{ p.descuentoPorcentaje }}%
                 </span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-sm">
+              @if (p.formaPagoNombre) {
+                <div class="flex flex-col gap-0.5">
+                  <span class="font-medium truncate" [pTooltip]="p.formaPagoNombre" tooltipPosition="top">
+                    {{ p.formaPagoNombre }}
+                  </span>
+                  <div class="flex items-center gap-1 flex-wrap">
+                    @if (p.cantidadCuotas && p.cantidadCuotas > 1) {
+                      <span class="text-[0.65rem] text-muted-color tabular-nums">{{ p.cantidadCuotas }} cuotas</span>
+                    }
+                    @if (p.formaPagoAplicaIva === false) {
+                      <span class="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+                    }
+                  </div>
+                </div>
               } @else {
                 <span class="text-muted-color">—</span>
               }
@@ -273,7 +293,7 @@
 
           @if (estaExpandido(p.id)) {
             <tr class="bg-surface-50 dark:bg-surface-900">
-              <td colspan="9" class="p-4">
+              <td colspan="10" class="p-4">
                 @if (estaCargandoDetalle(p.id)) {
                   <!-- Skeleton placeholder con el shape aproximado del detalle
                        (dos columnas Cliente/Pedido + lista de items). Mejor
@@ -360,7 +380,7 @@
                           <dt class="text-muted-color">Sin financiación</dt>
                           <dd class="tabular-nums text-muted-color">
                             {{ det.totalSinRecargo | currency:'ARS':'symbol':'1.0-0' }}
-                            <span class="text-xs italic ml-1">antes del recargo</span>
+                            <span class="text-xs italic ml-1">c/IVA, antes del recargo — comparable contra el total c/IVA</span>
                           </dd>
                         }
                         <dt class="text-muted-color">Cliente paga</dt>

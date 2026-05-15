@@ -22,6 +22,9 @@ export const authGuard: CanActivateFn = async (_route, state) => {
     return true;
   }
 
+  // Diagnóstico de pérdida de sesión: dejá esto un par de días para ver si
+  // el guard se dispara sin un /me 401 explícito. Cuando esté resuelto, sacar.
+  console.warn('[auth-guard] currentUser=null → redirect /login. Ruta:', state.url);
   // Sin sesión → al login, recordando dónde quería ir.
   return router.createUrlTree(['/login'], {
     queryParams: { redirect: state.url },

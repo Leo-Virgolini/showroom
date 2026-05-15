@@ -36,6 +36,12 @@ public record PedidoListItemDTO(
          *  de pago no aplica IVA (el cliente pagó sin IVA). */
         BigDecimal totalSinIva,
         BigDecimal descuentoPorcentaje,
+        /** Snapshot del nombre de la forma de pago — null si no se eligió. */
+        String formaPagoNombre,
+        /** Snapshot del flag aplicaIva de la forma — null si no hubo forma. */
+        Boolean formaPagoAplicaIva,
+        /** Snapshot de la cantidad de cuotas — null si no hubo forma. */
+        Integer cantidadCuotas,
         int cantidadItems
 ) {
 }

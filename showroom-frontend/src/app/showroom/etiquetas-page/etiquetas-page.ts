@@ -6,11 +6,12 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
@@ -25,7 +26,9 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
-import { CatalogoItem, EtiquetaSeleccionada } from '../models';
+import { Subject, debounceTime } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 
@@ -71,10 +74,16 @@ const HOJAS: Record<FormatoSheet, DimensionHoja> = {
 /** Margen mínimo de impresión para formatos hoja (no aplica a térmica). */
 const MARGEN_HOJA_MM = 5;
 
-/** Configuración de impresión persistida en localStorage. Versionamos la clave
- *  para poder migrar/invalidar si en el futuro cambiamos el shape del objeto
- *  (ej. agregamos un campo nuevo con un default que no debería pisarse). */
-const STORAGE_KEY = 'showroom.etiquetas.config.v1';
+/** Legacy: config única persistida en localStorage. Migrada a backend en
+ *  cuanto se carga la primera vez (se crea un perfil "Default" con esos
+ *  valores). Tras la migración, se borra del localStorage. */
+const STORAGE_KEY_LEGACY = 'showroom.etiquetas.config.v1';
+/** Legacy: perfiles persistidos en localStorage previo al backend. Si existen
+ *  al iniciar, se migran como POSTs y luego se borra la key. */
+const STORAGE_KEY_PERFILES_LEGACY = 'showroom.etiquetas.perfiles.v1';
+/** Por PC: id del perfil que esta PC tiene activo. Independiente del backend
+ *  porque cada operador puede preferir un perfil distinto en su máquina. */
+const STORAGE_KEY_PERFIL_ACTIVO = 'showroom.etiquetas.perfilActivoId.v1';
 
 interface ConfigPersistida {
   formatoHoja: FormatoHoja;
@@ -131,18 +140,53 @@ const DEFAULTS_CONFIG: ConfigPersistida = {
   mostrarDescripcion: false,
 };
 
-/** Lee la config persistida; cae al default si no hay nada guardado, el JSON
- *  está corrupto o localStorage no está disponible (modo privado, etc).
- *  Mergea con DEFAULTS_CONFIG por si la versión guardada tiene menos campos
- *  (ej. veníamos de una build anterior sin `margenInferiorMm`). */
-function cargarConfig(): ConfigPersistida {
+/** Lee config legacy del localStorage si existe — para migrar al primer perfil
+ *  del backend la primera vez que se entra a la pantalla post-refactor. */
+function cargarConfigLegacy(): ConfigPersistida | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS_CONFIG;
+    const raw = localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<ConfigPersistida>;
     return { ...DEFAULTS_CONFIG, ...parsed };
   } catch {
-    return DEFAULTS_CONFIG;
+    return null;
+  }
+}
+
+/** Lee perfiles legacy del localStorage si existen — para migrar al backend la
+ *  primera vez post-refactor. Devuelve solo los perfiles (la elección de
+ *  perfilActivoId queda en localStorage independiente). */
+interface PerfilLegacy { id: string; nombre: string; config: ConfigPersistida; }
+function cargarPerfilesLegacy(): PerfilLegacy[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PERFILES_LEGACY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { perfiles?: PerfilLegacy[] };
+    return parsed.perfiles?.length ? parsed.perfiles : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lee el id del perfil activo de esta PC. {@code null} si no hay nada
+ *  guardado todavía (primer uso) — el componente caerá al primero de la lista. */
+function cargarPerfilActivoIdLocal(): number | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_PERFIL_ACTIVO);
+    if (!raw) return null;
+    const id = Number(raw);
+    return Number.isFinite(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarPerfilActivoIdLocal(id: number | null): void {
+  try {
+    if (id == null) localStorage.removeItem(STORAGE_KEY_PERFIL_ACTIVO);
+    else localStorage.setItem(STORAGE_KEY_PERFIL_ACTIVO, String(id));
+  } catch {
+    // Silencioso ante fallas de localStorage (quota / modo privado).
   }
 }
 
@@ -173,6 +217,7 @@ function cargarConfig(): ConfigPersistida {
 export class EtiquetasPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly busqueda = signal('');
@@ -180,11 +225,35 @@ export class EtiquetasPage {
   readonly buscando = signal(false);
   readonly seleccionadas = signal<EtiquetaSeleccionada[]>([]);
 
-  /** Config inicial leída de localStorage — los signals la usan como valor
-   *  inicial y un effect del constructor sincroniza cualquier cambio de vuelta
-   *  al storage. Defaults pensados para el rollo del cliente: 96×22 mm con
-   *  3 etiquetas de 29×19 mm por fila, márgenes 1.5/1/2/1 y separación 3. */
-  private readonly configInicial = cargarConfig();
+  /** Estado de los perfiles de impresión — fuente de verdad: backend (compartido
+   *  entre PCs). Cada perfil agrupa la config para una impresora distinta. La
+   *  lista arranca vacía y se hidrata en el constructor con un GET; el
+   *  perfil activo se elige por PC vía {@link STORAGE_KEY_PERFIL_ACTIVO}. */
+  readonly perfiles = signal<PerfilEtiquetas[]>([]);
+  readonly perfilActivoId = signal<number | null>(null);
+  readonly cargandoPerfiles = signal(true);
+
+  /** Perfil actualmente activo. Puede ser null durante la carga inicial — la
+   *  UI muestra los signals con sus valores default mientras tanto. */
+  readonly perfilActivo = computed<PerfilEtiquetas | null>(
+    () => this.perfiles().find(p => p.id === this.perfilActivoId()) ?? this.perfiles()[0] ?? null,
+  );
+
+  /** Flag para suprimir la persistencia del effect cuando estamos cargando
+   *  un perfil distinto (los signals cambian en cascada y no queremos
+   *  pisar la config del perfil que recién activamos). */
+  private cargandoPerfil = false;
+
+  /** Subject que dispara la persistencia debounceada al backend. Cualquier
+   *  cambio en los signals de config emite un void; tras 500ms sin más cambios,
+   *  se hace PUT del perfil activo. Evita martillar el backend por cada
+   *  keystroke en un input numérico. */
+  private readonly persistirSubject = new Subject<void>();
+
+  /** Config inicial = valores de fábrica. Los signals la usan como valor
+   *  inicial; cuando llega la carga del backend, {@code aplicarConfig} pisa
+   *  los signals con la config del perfil activo. */
+  private readonly configInicial: ConfigPersistida = DEFAULTS_CONFIG;
 
   readonly anchoMm = signal(this.configInicial.anchoMm);
   readonly altoMm = signal(this.configInicial.altoMm);
@@ -349,43 +418,371 @@ export class EtiquetasPage {
 
     this.destroyRef.onDestroy(() => styleEl.remove());
 
-    // Persistencia: cualquier cambio en los signals de config se serializa y
-    // guarda en localStorage. Un único effect que lee todos los signals — más
-    // eficiente que un effect por campo y garantiza atomicidad (siempre se
-    // guarda un snapshot consistente, no estados intermedios).
+    // Persistencia: cualquier cambio en los signals de config actualiza el
+    // perfil activo en memoria y dispara una emisión al subject. El
+    // suscriptor de abajo lo debouncea y hace PUT al backend.
+    //
+    // Dos defensas contra loops:
+    //  1. {@code perfiles} y {@code perfilActivoId} se leen/escriben con
+    //     {@code untracked} para que el effect NO se dispare por sus cambios —
+    //     solo por los signals de config (los que {@code snapshotConfig} lee).
+    //  2. Comparamos el snapshot con la config ya persistida en el perfil
+    //     activo. Si coinciden (caso típico: acabamos de cargar/cambiar de
+    //     perfil), no hay nada que guardar — short-circuit antes de tocar
+    //     {@code perfiles} y emitir al subject.
     effect(() => {
-      const config: ConfigPersistida = {
-        formatoHoja: this.formatoHoja(),
-        anchoMm: this.anchoMm(),
-        altoMm: this.altoMm(),
-        etiquetasPorFila: this.etiquetasPorFila(),
-        margenSuperiorMm: this.margenSuperiorMm(),
-        margenInferiorMm: this.margenInferiorMm(),
-        margenIzqMm: this.margenIzqMm(),
-        margenDerMm: this.margenDerMm(),
-        separacionMm: this.separacionMm(),
-        qrSizeMm: this.qrSizeMm(),
-        fontSkuMm: this.fontSkuMm(),
-        fontOrdenMm: this.fontOrdenMm(),
-        fontDescMm: this.fontDescMm(),
-        fontPrecioMm: this.fontPrecioMm(),
-        paddingEtiquetaMm: this.paddingEtiquetaMm(),
-        gapEtiquetaMm: this.gapEtiquetaMm(),
-        textoGapMm: this.textoGapMm(),
-        mostrarSku: this.mostrarSku(),
-        mostrarNumeroOrden: this.mostrarNumeroOrden(),
-        mostrarPrecio: this.mostrarPrecio(),
-        mostrarDescripcion: this.mostrarDescripcion(),
-      };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-      } catch {
-        // localStorage puede fallar (quota llena, modo privado en Safari).
-        // No es crítico — la sesión actual sigue funcionando con la config
-        // en memoria; solo se pierde la persistencia entre recargas.
-      }
+      const config = this.snapshotConfig();
+      const idActivo = untracked(() => this.perfilActivoId());
+      if (idActivo == null) return;
+      const perfilActual = untracked(() => this.perfiles().find(p => p.id === idActivo));
+      if (!perfilActual) return;
+      const configRecord = config as unknown as Record<string, unknown>;
+      // Comparación por JSON — barata para objetos chatos como ConfigPersistida.
+      if (JSON.stringify(perfilActual.config) === JSON.stringify(configRecord)) return;
+      untracked(() => {
+        // Update optimista en memoria — la UI ve el cambio al instante.
+        this.perfiles.set(this.perfiles().map(p =>
+          p.id === idActivo ? { ...p, config: configRecord } : p,
+        ));
+      });
+      this.persistirSubject.next();
+    });
+
+    // Debounce 500ms: si el operador está moviendo +/- en un input, esperamos
+    // a que se quede quieto antes de mandar al backend. Un único PUT con la
+    // config final en vez de N PUTs intermedios.
+    this.persistirSubject
+      .pipe(debounceTime(500), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => this.persistirPerfilActivo());
+
+    this.inicializarPerfiles();
+  }
+
+  /** Hidrata la lista de perfiles desde el backend. Migración:
+   *  <ul>
+   *    <li>Si el backend ya tiene perfiles → los carga, elige el activo desde
+   *        localStorage (o el primero) y aplica su config.</li>
+   *    <li>Si no hay perfiles en backend pero hay perfiles legacy en localStorage
+   *        → POST de cada uno y luego limpieza del legacy.</li>
+   *    <li>Si tampoco hay legacy pero hay config legacy única → POST como Default.</li>
+   *    <li>Si no hay nada → POST un perfil "Default" con valores de fábrica.</li>
+   *  </ul> */
+  private inicializarPerfiles(): void {
+    this.api.listarPerfilesEtiquetas().subscribe({
+      next: (lista) => {
+        if (lista.length > 0) {
+          this.aplicarLista(lista);
+          return;
+        }
+        // No hay perfiles en backend → migrar legacy o crear Default.
+        const perfilesLegacy = cargarPerfilesLegacy();
+        if (perfilesLegacy?.length) {
+          this.migrarPerfilesLegacy(perfilesLegacy);
+          return;
+        }
+        const configLegacy = cargarConfigLegacy();
+        this.crearPerfilInicial(configLegacy ?? DEFAULTS_CONFIG);
+      },
+      error: (err) => {
+        this.cargandoPerfiles.set(false);
+        toastError(this.toast, 'Perfiles', err, 'No se pudieron cargar los perfiles de impresión');
+      },
     });
   }
+
+  private aplicarLista(lista: PerfilEtiquetas[]): void {
+    this.perfiles.set(lista);
+    const idLocal = cargarPerfilActivoIdLocal();
+    const elegido = lista.find(p => p.id === idLocal) ?? lista[0];
+    this.perfilActivoId.set(elegido.id);
+    guardarPerfilActivoIdLocal(elegido.id);
+    this.aplicarConfig(this.normalizarConfig(elegido.config));
+    this.cargandoPerfiles.set(false);
+  }
+
+  /** Crea en backend los perfiles tomados del localStorage legacy y luego
+   *  limpia las keys legacy. Las creaciones van en paralelo (el backend
+   *  ordena por nombre asc al listar, así que el orden de POST no importa).
+   *  Cuando todas terminaron — exitosas o no — refrescamos la lista. */
+  private migrarPerfilesLegacy(legacy: PerfilLegacy[]): void {
+    let pendientes = legacy.length;
+    const finalizar = () => {
+      if (--pendientes > 0) return;
+      try { localStorage.removeItem(STORAGE_KEY_PERFILES_LEGACY); } catch { /* noop */ }
+      try { localStorage.removeItem(STORAGE_KEY_LEGACY); } catch { /* noop */ }
+      this.api.listarPerfilesEtiquetas().subscribe(lista => this.aplicarLista(lista));
+    };
+    for (const p of legacy) {
+      this.api.crearPerfilEtiquetas({
+        nombre: p.nombre,
+        config: { ...DEFAULTS_CONFIG, ...p.config } as Record<string, unknown>,
+      }).subscribe({
+        next: () => finalizar(),
+        error: (err) => {
+          console.warn('[etiquetas] migración legacy falló para un perfil:', err);
+          finalizar();
+        },
+      });
+    }
+  }
+
+  private crearPerfilInicial(config: ConfigPersistida): void {
+    this.api.crearPerfilEtiquetas({
+      nombre: 'Default',
+      config: config as unknown as Record<string, unknown>,
+    }).subscribe({
+      next: (creado) => {
+        try { localStorage.removeItem(STORAGE_KEY_LEGACY); } catch { /* noop */ }
+        this.aplicarLista([creado]);
+      },
+      error: (err) => {
+        this.cargandoPerfiles.set(false);
+        toastError(this.toast, 'Perfiles', err, 'No se pudo crear el perfil inicial');
+      },
+    });
+  }
+
+  /** PUT del perfil activo al backend con la config actual de los signals. */
+  private persistirPerfilActivo(): void {
+    const idActivo = this.perfilActivoId();
+    if (idActivo == null) return;
+    const actual = this.perfiles().find(p => p.id === idActivo);
+    if (!actual) return;
+    this.api.actualizarPerfilEtiquetas(idActivo, {
+      nombre: actual.nombre,
+      config: this.snapshotConfig() as unknown as Record<string, unknown>,
+    }).subscribe({
+      next: (actualizado) => {
+        // Refrescamos el perfil con lo que devolvió el backend (incluye
+        // actualizadoAt actualizado). Sin tocar los signals de config para
+        // no disparar otro ciclo del effect.
+        this.perfiles.set(this.perfiles().map(p => p.id === idActivo ? actualizado : p));
+      },
+      error: (err) => {
+        toastError(this.toast, 'Perfil', err, 'No se pudo guardar el perfil');
+      },
+    });
+  }
+
+  /** Defensiva: mergea con DEFAULTS_CONFIG por si la config del backend tiene
+   *  menos campos (config vieja sin algún campo nuevo). */
+  private normalizarConfig(config: Record<string, unknown>): ConfigPersistida {
+    return { ...DEFAULTS_CONFIG, ...(config as unknown as Partial<ConfigPersistida>) };
+  }
+
+  /** Snapshot de los signals de config. Centralizado para que crear/duplicar
+   *  perfiles use la misma fuente de verdad que el effect de persistencia. */
+  private snapshotConfig(): ConfigPersistida {
+    return {
+      formatoHoja: this.formatoHoja(),
+      anchoMm: this.anchoMm(),
+      altoMm: this.altoMm(),
+      etiquetasPorFila: this.etiquetasPorFila(),
+      margenSuperiorMm: this.margenSuperiorMm(),
+      margenInferiorMm: this.margenInferiorMm(),
+      margenIzqMm: this.margenIzqMm(),
+      margenDerMm: this.margenDerMm(),
+      separacionMm: this.separacionMm(),
+      qrSizeMm: this.qrSizeMm(),
+      fontSkuMm: this.fontSkuMm(),
+      fontOrdenMm: this.fontOrdenMm(),
+      fontDescMm: this.fontDescMm(),
+      fontPrecioMm: this.fontPrecioMm(),
+      paddingEtiquetaMm: this.paddingEtiquetaMm(),
+      gapEtiquetaMm: this.gapEtiquetaMm(),
+      textoGapMm: this.textoGapMm(),
+      mostrarSku: this.mostrarSku(),
+      mostrarNumeroOrden: this.mostrarNumeroOrden(),
+      mostrarPrecio: this.mostrarPrecio(),
+      mostrarDescripcion: this.mostrarDescripcion(),
+    };
+  }
+
+  /** Aplica la config de un perfil a todos los signals. Suprime la persistencia
+   *  durante la cascada de cambios para no pisar el perfil recién activado. */
+  private aplicarConfig(c: ConfigPersistida): void {
+    this.cargandoPerfil = true;
+    try {
+      this.formatoHoja.set(c.formatoHoja);
+      this.anchoMm.set(c.anchoMm);
+      this.altoMm.set(c.altoMm);
+      this.etiquetasPorFila.set(c.etiquetasPorFila);
+      this.margenSuperiorMm.set(c.margenSuperiorMm);
+      this.margenInferiorMm.set(c.margenInferiorMm);
+      this.margenIzqMm.set(c.margenIzqMm);
+      this.margenDerMm.set(c.margenDerMm);
+      this.separacionMm.set(c.separacionMm);
+      this.qrSizeMm.set(c.qrSizeMm);
+      this.fontSkuMm.set(c.fontSkuMm);
+      this.fontOrdenMm.set(c.fontOrdenMm);
+      this.fontDescMm.set(c.fontDescMm);
+      this.fontPrecioMm.set(c.fontPrecioMm);
+      this.paddingEtiquetaMm.set(c.paddingEtiquetaMm);
+      this.gapEtiquetaMm.set(c.gapEtiquetaMm);
+      this.textoGapMm.set(c.textoGapMm);
+      this.mostrarSku.set(c.mostrarSku);
+      this.mostrarNumeroOrden.set(c.mostrarNumeroOrden);
+      this.mostrarPrecio.set(c.mostrarPrecio);
+      this.mostrarDescripcion.set(c.mostrarDescripcion);
+    } finally {
+      // Liberamos el flag en un microtask para que el effect que reaccionó al
+      // cambio en cascada vea {@code true} todavía y se saltee la escritura.
+      queueMicrotask(() => { this.cargandoPerfil = false; });
+    }
+  }
+
+  // ===========================================================
+  // CRUD de perfiles de impresión (backend)
+  // ===========================================================
+
+  cambiarPerfilActivo(id: number): void {
+    const p = this.perfiles().find(x => x.id === id);
+    if (!p) return;
+    this.perfilActivoId.set(id);
+    guardarPerfilActivoIdLocal(id);
+    this.aplicarConfig(this.normalizarConfig(p.config));
+    this.toast.add({
+      severity: 'info',
+      summary: 'Perfil activo',
+      detail: `Cargada la config de "${p.nombre}".`,
+      life: 2500,
+    });
+  }
+
+  /** Crea un perfil nuevo con la config actual + activa el nuevo. Si el nombre
+   *  choca con uno existente el backend devuelve 409 y mostramos el error. */
+  crearPerfilDesdeActual(nombre: string): void {
+    const limpio = nombre.trim();
+    if (!limpio) return;
+    this.api.crearPerfilEtiquetas({
+      nombre: limpio,
+      config: this.snapshotConfig() as unknown as Record<string, unknown>,
+    }).subscribe({
+      next: (creado) => {
+        this.perfiles.set([...this.perfiles(), creado]);
+        this.perfilActivoId.set(creado.id);
+        guardarPerfilActivoIdLocal(creado.id);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Perfil creado',
+          detail: `"${creado.nombre}" guardado y activado.`,
+          life: 3000,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Crear perfil', err, 'No se pudo crear el perfil'),
+    });
+  }
+
+  renombrarPerfilActivo(nombre: string): void {
+    const limpio = nombre.trim();
+    if (!limpio) return;
+    const idActivo = this.perfilActivoId();
+    if (idActivo == null) return;
+    const actual = this.perfiles().find(p => p.id === idActivo);
+    if (!actual || actual.nombre === limpio) return;
+    this.api.actualizarPerfilEtiquetas(idActivo, {
+      nombre: limpio,
+      config: this.snapshotConfig() as unknown as Record<string, unknown>,
+    }).subscribe({
+      next: (actualizado) => {
+        this.perfiles.set(this.perfiles().map(p => p.id === idActivo ? actualizado : p));
+        this.toast.add({
+          severity: 'success',
+          summary: 'Perfil renombrado',
+          detail: `Ahora se llama "${actualizado.nombre}".`,
+          life: 2500,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Renombrar perfil', err, 'No se pudo renombrar el perfil'),
+    });
+  }
+
+  eliminarPerfilActivo(): void {
+    const perfilesActuales = this.perfiles();
+    if (perfilesActuales.length <= 1) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No se puede eliminar',
+        detail: 'Tiene que quedar al menos un perfil. Renombrá éste si querés cambiarlo.',
+        life: 4000,
+      });
+      return;
+    }
+    const idActivo = this.perfilActivoId();
+    if (idActivo == null) return;
+    const eliminado = perfilesActuales.find(p => p.id === idActivo);
+    this.api.eliminarPerfilEtiquetas(idActivo).subscribe({
+      next: () => {
+        const perfilesNuevos = perfilesActuales.filter(p => p.id !== idActivo);
+        const nuevoActivo = perfilesNuevos[0];
+        this.perfiles.set(perfilesNuevos);
+        this.perfilActivoId.set(nuevoActivo.id);
+        guardarPerfilActivoIdLocal(nuevoActivo.id);
+        this.aplicarConfig(this.normalizarConfig(nuevoActivo.config));
+        this.toast.add({
+          severity: 'success',
+          summary: 'Perfil eliminado',
+          detail: `"${eliminado?.nombre}" eliminado. Activo ahora: "${nuevoActivo.nombre}".`,
+          life: 3000,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Eliminar perfil', err, 'No se pudo eliminar el perfil'),
+    });
+  }
+
+  // Dialog reutilizable para crear/renombrar perfil. Modo decide qué hace
+  // {@code confirmarDialogPerfil} al aceptar.
+  readonly mostrarDialogPerfil = signal(false);
+  readonly modoDialogPerfil = signal<'crear' | 'renombrar'>('crear');
+  readonly inputNombrePerfil = signal('');
+
+  abrirDialogNuevoPerfil(): void {
+    this.modoDialogPerfil.set('crear');
+    this.inputNombrePerfil.set('');
+    this.mostrarDialogPerfil.set(true);
+  }
+
+  abrirDialogRenombrarPerfil(): void {
+    const actual = this.perfilActivo();
+    if (!actual) return;
+    this.modoDialogPerfil.set('renombrar');
+    this.inputNombrePerfil.set(actual.nombre);
+    this.mostrarDialogPerfil.set(true);
+  }
+
+  confirmarDialogPerfil(): void {
+    const nombre = this.inputNombrePerfil().trim();
+    if (!nombre) return;
+    if (this.modoDialogPerfil() === 'crear') {
+      this.crearPerfilDesdeActual(nombre);
+    } else {
+      this.renombrarPerfilActivo(nombre);
+    }
+    this.mostrarDialogPerfil.set(false);
+  }
+
+  confirmarEliminarPerfil(): void {
+    if (this.perfiles().length <= 1) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No se puede eliminar',
+        detail: 'Tiene que quedar al menos un perfil.',
+        life: 3500,
+      });
+      return;
+    }
+    const actual = this.perfilActivo();
+    if (!actual) return;
+    this.confirmationService.confirm({
+      header: 'Eliminar perfil',
+      message: `¿Eliminar el perfil "${actual.nombre}"? Esta acción no se puede deshacer.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: { label: 'Eliminar', icon: 'pi pi-trash', severity: 'danger' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => this.eliminarPerfilActivo(),
+    });
+  }
+
 
   private readonly qrCache = new Map<string, string>();
   readonly generandoQR = signal(false);

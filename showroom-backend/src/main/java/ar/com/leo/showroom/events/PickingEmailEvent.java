@@ -24,7 +24,10 @@ public record PickingEmailEvent(
         String email,
         String error
 ) {
-    public enum Estado { SENT, FAILED }
+    /** {@code SKIPPED}: no es un error técnico — había una razón legítima para
+     *  no mandar el email (ej: cliente compró todo lo que vio, no hay PDF). El
+     *  frontend muestra un toast informativo en vez de error. */
+    public enum Estado { SENT, FAILED, SKIPPED }
 
     public static PickingEmailEvent sentPedido(Long pedidoId, String cuit, String email) {
         return new PickingEmailEvent(Estado.SENT, pedidoId, null, cuit, email, null);
@@ -34,11 +37,19 @@ public record PickingEmailEvent(
         return new PickingEmailEvent(Estado.FAILED, pedidoId, null, cuit, email, error);
     }
 
+    public static PickingEmailEvent skippedPedido(Long pedidoId, String cuit, String email, String motivo) {
+        return new PickingEmailEvent(Estado.SKIPPED, pedidoId, null, cuit, email, motivo);
+    }
+
     public static PickingEmailEvent sentSesion(Long sesionId, String email) {
         return new PickingEmailEvent(Estado.SENT, null, sesionId, null, email, null);
     }
 
     public static PickingEmailEvent failedSesion(Long sesionId, String email, String error) {
         return new PickingEmailEvent(Estado.FAILED, null, sesionId, null, email, error);
+    }
+
+    public static PickingEmailEvent skippedSesion(Long sesionId, String email, String motivo) {
+        return new PickingEmailEvent(Estado.SKIPPED, null, sesionId, null, email, motivo);
     }
 }

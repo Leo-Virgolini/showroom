@@ -144,9 +144,14 @@ public class PickingEmailService {
                 emailCliente,
                 failedFactory);
         if (pdf == null) {
-            // Caso "no items extra" — el cliente compró todo lo que vio. No
-            // emitimos FAILED, es un skip legítimo.
-            log.info("Pedido {} — el cliente compró todo lo que vio, no hay items extra para mandar.", pedido.getId());
+            // Caso "no items extra" — el cliente compró todo lo que vio. No es
+            // un error técnico, pero igual notificamos al frontend con SKIPPED
+            // para que el operador (que tocó el botón manual) reciba un toast
+            // claro en vez de quedar esperando.
+            String motivo = "El cliente compró todo lo que vio — no hay PDF de productos extra para mandar.";
+            log.info("Pedido {} — {}", pedido.getId(), motivo);
+            eventService.publish(SSE_EVENT, PickingEmailEvent.skippedPedido(
+                    pedido.getId(), cuit, emailCliente, motivo));
             return false;
         }
 
