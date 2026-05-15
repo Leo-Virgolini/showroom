@@ -44,11 +44,11 @@ public class DuxClient {
     private static final long BASE_WAIT_MS = 5000L;
     private static final int MAX_INTENTOS_VACIOS = 3;
     private static final ZoneId ZONA_DUX = ZoneId.of("America/Argentina/Buenos_Aires");
-    // El bot de soporte de DUX confirmó que el filtro `fecha` espera SOLO la
-    // fecha (sin hora). Si se le agrega HH:mm:ss, DUX no lo respeta y termina
-    // devolviendo cualquier cosa modificada ese día — efectivamente convierte
-    // el incremental por hora en un "full sync diario".
-    private static final DateTimeFormatter DUX_FECHA = DateTimeFormatter.ofPattern("ddMMyyyy");
+    // Formato con hora — probando si DUX respeta la precisión a nivel HH:mm:ss
+    // para hacer incrementales reales por hora en vez de "todo lo del día".
+    // Si DUX ignora la parte de hora, vamos a ver que cada sync devuelve el
+    // mismo set de items (~todos los del día) y conviene volver a `ddMMyyyy`.
+    private static final DateTimeFormatter DUX_FECHA_HORA = DateTimeFormatter.ofPattern("ddMMyyyy HH:mm:ss");
 
     private final RestClient restClient;
     private final DuxProperties properties;
@@ -199,7 +199,7 @@ public class DuxClient {
 
         String fechaParam = "";
         if (desde != null) {
-            String fmt = DUX_FECHA.format(desde.atZone(ZONA_DUX));
+            String fmt = DUX_FECHA_HORA.format(desde.atZone(ZONA_DUX));
             fechaParam = "&fecha=" + URLEncoder.encode(fmt, StandardCharsets.UTF_8);
             log.info("DUX sync incremental - filtrando por fecha >= {}", fmt);
         }

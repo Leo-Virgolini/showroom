@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -149,15 +150,15 @@ public class CatalogoSyncService {
             // getUltimaSyncGlobalAt() ya cae en el MAX si sync_metadata está
             // vacío (deploy inicial sobre BD existente).
             //
-            // Sin margen: DUX filtra por día (formato ddMMyyyy), y el cursor
-            // siempre es la fecha del inicio del sync previo, que cubre toda
-            // su jornada. La transición de medianoche queda OK porque el sync
-            // post-00:00 hereda la fecha de ayer (cuando corrió el sync previo)
-            // y DUX devuelve items modificados >= esa fecha → captura el día
-            // anterior completo + el actual.
+            // Margen de 1 min para cubrir drift entre el reloj del backend y
+            // el de DUX — un item modificado justo en el borde no se pierde.
+            // Re-bajar items entre `inicio - 1min` e `inicio` no es problema
+            // (upsert idempotente).
             Instant desde = forzarCompleto
                     ? null
-                    : getUltimaSyncGlobalAt().orElse(null);
+                    : getUltimaSyncGlobalAt()
+                            .map(t -> t.minus(1, ChronoUnit.MINUTES))
+                            .orElse(null);
             if (forzarCompleto) {
                 log.info("Sync FORZADO - descargando todo el catálogo desde DUX...");
             } else if (desde == null) {

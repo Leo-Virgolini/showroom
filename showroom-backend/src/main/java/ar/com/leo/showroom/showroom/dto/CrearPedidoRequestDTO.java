@@ -52,6 +52,12 @@ public record CrearPedidoRequestDTO(
         @Size(max = 500, message = "observaciones max 500 chars")
         String observaciones,
 
+        /** Forma de pago elegida (FK opcional a forma_pago.id). Si presente,
+         *  el backend aplica el recargo % de esa forma a cada precio unitario
+         *  antes de mandar a DUX, y snapshotea nombre/recargo/cuotas en el
+         *  pedido. Si null, el pedido va sin recargo (precios base). */
+        Long formaPagoId,
+
         @NotEmpty(message = "items no puede estar vacío")
         @Valid List<Item> items
 ) {

@@ -9,7 +9,9 @@ import {
   CrearPedidoRequest,
   CrearPedidoResponse,
   EscalaDescuento,
+  FormaPago,
   Health,
+  NotificacionesAutoConfig,
   HorarioSync,
   ListarPedidosParams,
   ListarProductosParams,
@@ -131,6 +133,34 @@ export class ShowroomService {
     return this.http.put<EscalaDescuento[]>(`${this.base}/config/escalas-descuento`, escalas);
   }
 
+  // =====================================================
+  // Formas de pago — CRUD para /configuracion + listado activas para /showroom-page.
+  // El recargo % se aplica al carrito completo y se snapshotea en el pedido.
+  // =====================================================
+
+  /** Listado completo (activas + inactivas) — para /configuracion. */
+  listarFormasPagoConfig(): Observable<FormaPago[]> {
+    return this.http.get<FormaPago[]>(`${this.base}/config/formas-pago`);
+  }
+
+  /** Listado activas — para el selector del operador en el carrito. */
+  listarFormasPagoActivas(): Observable<FormaPago[]> {
+    return this.http.get<FormaPago[]>(`${this.base}/formas-pago/activas`);
+  }
+
+  crearFormaPago(forma: Partial<FormaPago>): Observable<FormaPago> {
+    return this.http.post<FormaPago>(`${this.base}/config/formas-pago`, forma);
+  }
+
+  actualizarFormaPago(id: number, forma: Partial<FormaPago>): Observable<FormaPago> {
+    return this.http.put<FormaPago>(`${this.base}/config/formas-pago/${id}`, forma);
+  }
+
+  /** Soft delete — marca la forma como inactiva. Sobrevive en pedidos viejos. */
+  eliminarFormaPago(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/config/formas-pago/${id}`);
+  }
+
   /** Horarios diarios de sincronización automática con DUX (zona AR). */
   obtenerHorariosSync(): Observable<HorarioSync[]> {
     return this.http.get<HorarioSync[]>(`${this.base}/config/horarios-sync`);
@@ -148,6 +178,16 @@ export class ShowroomService {
 
   actualizarPickitConfig(cfg: PickitConfig): Observable<PickitConfig> {
     return this.http.put<PickitConfig>(`${this.base}/config/pickit`, cfg);
+  }
+
+  /** Toggles de envío automático del PDF tras pedido (email + whatsapp).
+   *  No afectan los botones manuales — esos siguen funcionando siempre. */
+  obtenerNotificacionesAuto(): Observable<NotificacionesAutoConfig> {
+    return this.http.get<NotificacionesAutoConfig>(`${this.base}/config/notificaciones-auto`);
+  }
+
+  guardarNotificacionesAuto(cfg: NotificacionesAutoConfig): Observable<NotificacionesAutoConfig> {
+    return this.http.put<NotificacionesAutoConfig>(`${this.base}/config/notificaciones-auto`, cfg);
   }
 
   /** Regenera el pickit externo manualmente para un pedido ya existente. El
@@ -208,6 +248,31 @@ export class ShowroomService {
     return this.http.post<{ message: string; pedidoId: number }>(
       `${this.base}/pedidos/${id}/email`,
       {},
+    );
+  }
+
+  reenviarWhatsappPedido(id: number): Observable<{ message: string; pedidoId: number }> {
+    return this.http.post<{ message: string; pedidoId: number }>(
+      `${this.base}/pedidos/${id}/whatsapp`,
+      {},
+    );
+  }
+
+  /** Envía el PDF de productos vistos por email — para sesiones del historial
+   *  que terminaron SIN pedido. El operador carga el email destinatario. */
+  enviarEmailSesion(sesionId: number, email: string): Observable<{ message: string; sesionId: number }> {
+    return this.http.post<{ message: string; sesionId: number }>(
+      `${this.base}/sesiones/${sesionId}/email`,
+      { email },
+    );
+  }
+
+  /** Envía el PDF de productos vistos por WhatsApp — para sesiones del
+   *  historial que terminaron SIN pedido. El operador carga el teléfono. */
+  enviarWhatsappSesion(sesionId: number, telefono: string): Observable<{ message: string; sesionId: number }> {
+    return this.http.post<{ message: string; sesionId: number }>(
+      `${this.base}/sesiones/${sesionId}/whatsapp`,
+      { telefono },
     );
   }
 

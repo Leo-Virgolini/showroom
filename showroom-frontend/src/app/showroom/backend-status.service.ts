@@ -10,6 +10,7 @@ import {
   ScanResult,
   SesionShowroom,
   SyncEvent,
+  WhatsappBusinessEvent,
 } from './models';
 
 /**
@@ -40,6 +41,9 @@ export class BackendStatusService {
   readonly connected = signal(true);
   readonly syncEvents$ = new Subject<SyncEvent>();
   readonly pickingEmailEvents$ = new Subject<PickingEmailEvent>();
+  /** Resultado del envío del PDF por WhatsApp tras un pedido. SENT / FAILED /
+   *  WINDOW_CLOSED (este último cuando el cliente no escribió en 24hs). */
+  readonly whatsappBusinessEvents$ = new Subject<WhatsappBusinessEvent>();
   /** Resultado de la generación del pickit externo (programa pickit-y-etiquetas).
    *  Se dispara tras DUX OK (automático) o cuando el operador toca el botón
    *  manual desde /pedidos. */
@@ -248,6 +252,14 @@ export class BackendStatusService {
     src.addEventListener('picking-email', (e: MessageEvent) => {
       try {
         this.pickingEmailEvents$.next(JSON.parse(e.data) as PickingEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('whatsapp-business', (e: MessageEvent) => {
+      try {
+        this.whatsappBusinessEvents$.next(JSON.parse(e.data) as WhatsappBusinessEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

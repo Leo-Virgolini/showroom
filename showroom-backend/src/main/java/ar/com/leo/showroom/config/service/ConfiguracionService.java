@@ -2,6 +2,7 @@ package ar.com.leo.showroom.config.service;
 
 import ar.com.leo.showroom.config.entity.Configuracion;
 import ar.com.leo.showroom.config.repository.ConfiguracionRepository;
+import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,12 @@ public class ConfiguracionService {
     public static final String CLAVE_PICKIT_STOCK_FILE = "pickit.stock-file";
     public static final String CLAVE_PICKIT_COMBOS_FILE = "pickit.combos-file";
     public static final String CLAVE_PICKIT_OUTPUT_DIR = "pickit.output-dir";
+
+    /** Toggles de envío automático del PDF tras pedido OK. NO afectan los
+     *  botones manuales en /pedidos ni /historial — esos siguen disponibles
+     *  siempre que el feature a nivel sistema (env vars SMTP/Meta) esté ok. */
+    public static final String CLAVE_AUTO_EMAIL_PEDIDO = "notificaciones.email-auto-pedido";
+    public static final String CLAVE_AUTO_WHATSAPP_PEDIDO = "notificaciones.whatsapp-auto-pedido";
 
     private final ConfiguracionRepository repository;
 
@@ -85,6 +92,38 @@ public class ConfiguracionService {
         log.info("Config pickit guardada: enabled={}, jar={}, stock={}, combos={}, out={}",
                 cfg.enabled(), jar, stock, combos, out);
         return getPickitConfig();
+    }
+
+    // =====================================================================
+    // Notificaciones automáticas tras pedido (email + whatsapp)
+    // =====================================================================
+
+    /** Lee los toggles. Default {@code true} para ambos: si la fila no existe,
+     *  asumimos que el operador quiere los envíos auto activos. */
+    @Transactional(readOnly = true)
+    public NotificacionesAutoConfigDTO getNotificacionesAuto() {
+        return new NotificacionesAutoConfigDTO(
+                leerBool(CLAVE_AUTO_EMAIL_PEDIDO, true),
+                leerBool(CLAVE_AUTO_WHATSAPP_PEDIDO, true)
+        );
+    }
+
+    @Transactional
+    public NotificacionesAutoConfigDTO saveNotificacionesAuto(NotificacionesAutoConfigDTO cfg) {
+        if (cfg == null) {
+            throw new IllegalArgumentException("Config requerida");
+        }
+        guardar(CLAVE_AUTO_EMAIL_PEDIDO, cfg.emailAutoPedido() ? "true" : "false");
+        guardar(CLAVE_AUTO_WHATSAPP_PEDIDO, cfg.whatsappAutoPedido() ? "true" : "false");
+        log.info("Config notificaciones auto guardada: emailPedido={}, whatsappPedido={}",
+                cfg.emailAutoPedido(), cfg.whatsappAutoPedido());
+        return getNotificacionesAuto();
+    }
+
+    private boolean leerBool(String clave, boolean defaultSiAusente) {
+        String v = leer(clave);
+        if (v == null || v.isEmpty()) return defaultSiAusente;
+        return "true".equalsIgnoreCase(v);
     }
 
     private String leer(String clave) {

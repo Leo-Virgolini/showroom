@@ -92,6 +92,167 @@
       </p-table>
     </p-card>
 
+    <!-- ============================================================
+         Formas de pago (CRUD)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Formas de pago que el operador ofrece al armar el pedido. Cada una tiene un <strong>recargo %</strong> que se aplica al total del carrito (típico para financiación).
+        </div>
+        <div class="text-xs text-muted-color">
+          Si desactivás una forma, deja de aparecer en el selector pero los pedidos viejos que la usaron siguen mostrándola en el detalle. Los pedidos snapshotean nombre + recargo, así sobreviven a cambios futuros.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-base font-semibold m-0">Formas de pago</h3>
+        <p-button
+          icon="pi pi-plus"
+          label="Nueva forma"
+          size="small"
+          severity="secondary"
+          [outlined]="true"
+          (onClick)="abrirDialogCrearForma()"
+        />
+      </div>
+
+      <p-table
+        [value]="formasPago()"
+        [loading]="cargandoFormasPago()"
+        [rowTrackBy]="trackByFormaPagoId"
+        class="p-datatable-sm">
+        <ng-template #header>
+          <tr>
+            <th>Nombre</th>
+            <th class="text-right" style="width: 8rem">Recargo</th>
+            <th class="text-center" style="width: 6rem">Cuotas</th>
+            <th class="text-center" style="width: 6rem">IVA</th>
+            <th class="text-center" style="width: 6rem">Activo</th>
+            <th style="width: 8rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-f>
+          <tr [class.opacity-60]="!f.activo">
+            <td>{{ f.nombre }}</td>
+            <td class="text-right tabular-nums">
+              @if (f.recargoPorcentaje > 0) {
+                +{{ f.recargoPorcentaje }}%
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-center tabular-nums">{{ f.cantidadCuotas }}</td>
+            <td class="text-center">
+              @if (f.aplicaIva) {
+                <span class="text-xs font-medium text-emerald-700 dark:text-emerald-400" pTooltip="El cliente paga el precio con IVA"
+                  tooltipPosition="top">CON IVA</span>
+              } @else {
+                <span class="text-xs font-medium text-amber-700 dark:text-amber-400"
+                  pTooltip="El cliente paga sin IVA — DUX igual factura con IVA, el operador absorbe la diferencia"
+                  tooltipPosition="top">SIN IVA</span>
+              }
+            </td>
+            <td class="text-center">
+              @if (f.activo) {
+                <i class="pi pi-check-circle text-emerald-600 dark:text-emerald-400"></i>
+              } @else {
+                <i class="pi pi-ban text-red-600 dark:text-red-400"></i>
+              }
+            </td>
+            <td class="text-right">
+              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
+                (onClick)="abrirDialogEditarForma(f)" pTooltip="Editar" tooltipPosition="left" />
+              @if (f.activo) {
+                <p-button icon="pi pi-ban" severity="danger" [text]="true" [rounded]="true" size="small"
+                  (onClick)="eliminarForma(f)" pTooltip="Desactivar" tooltipPosition="left" />
+              }
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="6" class="text-center py-12 text-muted-color">
+              <i class="pi pi-credit-card text-3xl opacity-50 block mb-2"></i>
+              No hay formas de pago configuradas.
+              <div class="mt-3">
+                <p-button
+                  icon="pi pi-plus"
+                  label="Agregar la primera"
+                  size="small"
+                  (onClick)="abrirDialogCrearForma()"
+                />
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+
+    <!-- ============================================================
+         Notificaciones automáticas tras pedido (email + whatsapp)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Después de crear cada pedido, el sistema puede mandar automáticamente al cliente el <strong>PDF con los productos vistos pero no comprados</strong>. Acá controlás si los envíos automáticos están activos por canal.
+        </div>
+        <div class="text-xs text-muted-color">
+          Si los desactivás, los pedidos se siguen creando normalmente — solo no se dispara el envío automático. Los <strong>botones manuales</strong> en /pedidos y /historial siempre quedan disponibles para mandarlos a mano.
+        </div>
+      </div>
+
+      <h3 class="text-base font-semibold m-0 mb-3">Envíos automáticos</h3>
+
+      <div class="flex flex-col gap-3 max-w-2xl">
+        @if (notificacionesAuto(); as cfg) {
+        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
+          <p-checkbox
+            [ngModel]="cfg.whatsappAutoPedido"
+            (ngModelChange)="toggleNotificacionAuto('whatsappAutoPedido', $event)"
+            [binary]="true"
+            inputId="autoWhatsapp"
+            [disabled]="guardandoNotificacionesAuto()" />
+          <div class="flex flex-col gap-0.5 flex-1">
+            <span class="text-sm font-medium inline-flex items-center gap-2">
+              <i class="pi pi-whatsapp text-green-600"></i>
+              WhatsApp automático tras pedido
+            </span>
+            <span class="text-xs text-muted-color">
+              Manda el PDF al teléfono del cliente. Requiere ventana de 24hs abierta y el feature configurado a nivel sistema (env vars Meta).
+            </span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
+          <p-checkbox
+            [ngModel]="cfg.emailAutoPedido"
+            (ngModelChange)="toggleNotificacionAuto('emailAutoPedido', $event)"
+            [binary]="true"
+            inputId="autoEmail"
+            [disabled]="guardandoNotificacionesAuto()" />
+          <div class="flex flex-col gap-0.5 flex-1">
+            <span class="text-sm font-medium inline-flex items-center gap-2">
+              <i class="pi pi-envelope text-blue-600"></i>
+              Email automático tras pedido
+            </span>
+            <span class="text-xs text-muted-color">
+              Manda el PDF al email del cliente. Si tenés WhatsApp activo y llega OK, no se manda este email (fallback solo si WhatsApp falla / no hay teléfono).
+            </span>
+          </div>
+        </label>
+        } @else if (cargandoNotificacionesAuto()) {
+        <div class="text-sm text-muted-color">Cargando…</div>
+        } @else {
+        <div class="text-sm text-red-600 dark:text-red-400">
+          No se pudo cargar la config. Recargá la página.
+        </div>
+        }
+      </div>
+    </p-card>
+
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
@@ -468,6 +629,98 @@
       (onClick)="mostrarDialogUsuario.set(false)" [disabled]="guardandoUsuario()" />
     <p-button [label]="modoEdicionUsuario() === 'crear' ? 'Crear' : 'Guardar'"
       icon="pi pi-check" (onClick)="guardarUsuario()" [loading]="guardandoUsuario()" />
+  </ng-template>
+</p-dialog>
+
+<!-- Dialog: crear / editar forma de pago -->
+<p-dialog [(visible)]="mostrarDialogForma" [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [header]="modoEdicionForma() === 'crear' ? 'Nueva forma de pago' : 'Editar forma de pago'">
+  <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-1.5">
+      <label for="formNombrePago" class="text-sm font-medium text-muted-color">Nombre</label>
+      <input
+        pInputText
+        id="formNombrePago"
+        type="text"
+        [ngModel]="formNombrePago()"
+        (ngModelChange)="formNombrePago.set($event)"
+        placeholder="Ej: Efectivo, Crédito 6 cuotas"
+        class="w-full"
+        [disabled]="guardandoForma()" />
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="formRecargo" class="text-sm font-medium text-muted-color">
+        Recargo (%) — usar 0 si no hay
+      </label>
+      <p-inputnumber
+        inputId="formRecargo"
+        [ngModel]="formRecargo()"
+        (ngModelChange)="formRecargo.set($event)"
+        [min]="0"
+        [maxFractionDigits]="2"
+        suffix=" %"
+        [disabled]="guardandoForma()"
+        class="w-full"
+        inputStyleClass="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="formCuotas" class="text-sm font-medium text-muted-color">Cantidad de cuotas</label>
+      <p-inputnumber
+        inputId="formCuotas"
+        [ngModel]="formCuotas()"
+        (ngModelChange)="formCuotas.set($event)"
+        [min]="1"
+        [max]="99"
+        [disabled]="guardandoForma()"
+        class="w-full"
+        inputStyleClass="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-1.5">
+      <label for="formOrden" class="text-sm font-medium text-muted-color">
+        Orden — menor aparece primero en el dropdown del operador
+      </label>
+      <p-inputnumber
+        inputId="formOrden"
+        [ngModel]="formOrden()"
+        (ngModelChange)="formOrden.set($event)"
+        [min]="0"
+        [step]="1"
+        [showButtons]="true"
+        buttonLayout="horizontal"
+        incrementButtonIcon="pi pi-plus"
+        decrementButtonIcon="pi pi-minus"
+        [disabled]="guardandoForma()"
+        class="w-full"
+        inputStyleClass="w-full text-center" />
+    </div>
+
+    <label class="flex items-start gap-2 cursor-pointer p-2 rounded-lg border border-surface-200 dark:border-surface-700">
+      <p-checkbox [ngModel]="formAplicaIva()" (ngModelChange)="formAplicaIva.set($event)" [binary]="true" inputId="formAplicaIva"
+        [disabled]="guardandoForma()" />
+      <div class="flex flex-col gap-0.5 flex-1">
+        <span class="text-sm font-medium">Aplica IVA al precio del cliente</span>
+        <span class="text-xs text-muted-color">
+          <strong>Tildado</strong> (caso normal): el cliente paga precio con IVA. <strong>Destildado</strong> (ej: "transferencia sin IVA"): el cliente paga sin IVA — DUX igual factura con IVA y el operador absorbe la diferencia.
+        </span>
+      </div>
+    </label>
+
+    <label class="flex items-center gap-2 cursor-pointer">
+      <p-checkbox [ngModel]="formActivoPago()" (ngModelChange)="formActivoPago.set($event)" [binary]="true" inputId="formActivoPago"
+        [disabled]="guardandoForma()" />
+      <span class="text-sm">Activo (visible en el selector del operador)</span>
+    </label>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogForma.set(false)" [disabled]="guardandoForma()" />
+    <p-button [label]="modoEdicionForma() === 'crear' ? 'Crear' : 'Guardar'"
+      icon="pi pi-check" (onClick)="guardarForma()" [loading]="guardandoForma()" />
   </ng-template>
 </p-dialog>
 

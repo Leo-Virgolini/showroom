@@ -22,7 +22,7 @@ import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
-import { EscalaDescuento, HorarioSync, PickitConfig } from '../models';
+import { EscalaDescuento, FormaPago, HorarioSync, NotificacionesAutoConfig, PickitConfig } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 
@@ -169,12 +169,40 @@ export class ConfiguracionPage {
   readonly formActivo = signal(true);
   readonly mostrarFormPassword = signal(false);
 
+  // ============================================================
+  // Notificaciones automáticas tras pedido (email + whatsapp)
+  // ============================================================
+  readonly cargandoNotificacionesAuto = signal(false);
+  readonly guardandoNotificacionesAuto = signal(false);
+  /** Si null, todavía no cargó del backend — los switches se muestran disabled. */
+  readonly notificacionesAuto = signal<NotificacionesAutoConfig | null>(null);
+
+  // ============================================================
+  // Formas de pago — CRUD
+  // ============================================================
+  readonly cargandoFormasPago = signal(false);
+  readonly formasPago = signal<FormaPago[]>([]);
+
+  /** Dialog para crear/editar forma de pago. null = cerrado. */
+  readonly formaEditar = signal<FormaPago | null>(null);
+  readonly mostrarDialogForma = signal(false);
+  readonly modoEdicionForma = signal<'crear' | 'editar'>('crear');
+  readonly guardandoForma = signal(false);
+  readonly formNombrePago = signal('');
+  readonly formRecargo = signal<number | null>(0);
+  readonly formCuotas = signal<number | null>(1);
+  readonly formAplicaIva = signal(true);
+  readonly formActivoPago = signal(true);
+  readonly formOrden = signal<number | null>(0);
+
 
   constructor() {
     this.cargar();
     this.cargarHorarios();
     this.cargarPickit();
     this.cargarUsuarios();
+    this.cargarFormasPago();
+    this.cargarNotificacionesAuto();
   }
 
   // ============================================================
@@ -647,4 +675,198 @@ export class ConfiguracionPage {
 
   trackByUsuarioId = (_: number, u: Usuario) => u.id;
   trackByIndex = (i: number) => i;
+
+  // ============================================================
+  // Formas de pago — métodos
+  // ============================================================
+
+  private cargarFormasPago(): void {
+    this.cargandoFormasPago.set(true);
+    this.api.listarFormasPagoConfig().subscribe({
+      next: (lista) => {
+        this.cargandoFormasPago.set(false);
+        this.formasPago.set(lista);
+      },
+      error: (err) => {
+        this.cargandoFormasPago.set(false);
+        toastError(this.toast, 'Formas de pago', err, 'No se pudieron cargar las formas de pago');
+      },
+    });
+  }
+
+  abrirDialogCrearForma(): void {
+    this.modoEdicionForma.set('crear');
+    this.formaEditar.set(null);
+    this.formNombrePago.set('');
+    this.formRecargo.set(0);
+    this.formCuotas.set(1);
+    this.formAplicaIva.set(true);
+    this.formActivoPago.set(true);
+    const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
+    this.formOrden.set(maxOrden + 1);
+    this.mostrarDialogForma.set(true);
+  }
+
+  abrirDialogEditarForma(f: FormaPago): void {
+    this.modoEdicionForma.set('editar');
+    this.formaEditar.set(f);
+    this.formNombrePago.set(f.nombre);
+    this.formRecargo.set(f.recargoPorcentaje);
+    this.formCuotas.set(f.cantidadCuotas);
+    this.formAplicaIva.set(f.aplicaIva ?? true);
+    this.formActivoPago.set(f.activo);
+    this.formOrden.set(f.orden);
+    this.mostrarDialogForma.set(true);
+  }
+
+  guardarForma(): void {
+    const nombre = this.formNombrePago().trim();
+    const recargo = this.formRecargo() ?? 0;
+    const cuotas = this.formCuotas() ?? 1;
+    const activo = this.formActivoPago();
+    const orden = this.formOrden() ?? 0;
+
+    if (!nombre) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Datos incompletos',
+        detail: 'Cargá un nombre para la forma de pago.',
+        life: 3000,
+      });
+      return;
+    }
+    if (recargo < 0) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Recargo inválido',
+        detail: 'El recargo no puede ser negativo (usar 0 si no hay).',
+        life: 3000,
+      });
+      return;
+    }
+    if (cuotas < 1) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Cuotas inválidas',
+        detail: 'Mínimo 1 cuota.',
+        life: 3000,
+      });
+      return;
+    }
+
+    this.guardandoForma.set(true);
+    const payload: Partial<FormaPago> = {
+      nombre,
+      recargoPorcentaje: recargo,
+      cantidadCuotas: cuotas,
+      aplicaIva: this.formAplicaIva(),
+      activo,
+      orden,
+    };
+    const obs = this.modoEdicionForma() === 'crear'
+      ? this.api.crearFormaPago(payload)
+      : this.api.actualizarFormaPago(this.formaEditar()!.id, payload);
+
+    obs.subscribe({
+      next: () => {
+        this.guardandoForma.set(false);
+        this.mostrarDialogForma.set(false);
+        this.cargarFormasPago();
+        this.toast.add({
+          severity: 'success',
+          summary: this.modoEdicionForma() === 'crear' ? 'Forma de pago creada' : 'Forma de pago actualizada',
+          detail: nombre,
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoForma.set(false);
+        toastError(this.toast, 'Forma de pago', err, 'No se pudo guardar la forma de pago');
+      },
+    });
+  }
+
+  eliminarForma(f: FormaPago): void {
+    this.confirmationService.confirm({
+      header: 'Desactivar forma de pago',
+      message: `¿Desactivar "${f.nombre}"? Deja de aparecer en el selector del operador. Los pedidos viejos que la usaron preservan sus datos.`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: {
+        label: 'Desactivar',
+        icon: 'pi pi-ban',
+        severity: 'danger',
+      },
+      rejectButtonProps: {
+        label: 'Cancelar',
+        severity: 'secondary',
+        outlined: true,
+      },
+      accept: () => {
+        this.api.eliminarFormaPago(f.id).subscribe({
+          next: () => {
+            this.cargarFormasPago();
+            this.toast.add({
+              severity: 'success',
+              summary: 'Forma de pago desactivada',
+              detail: f.nombre,
+              life: 3000,
+            });
+          },
+          error: (err) => toastError(this.toast, 'Desactivar forma de pago', err, 'No se pudo desactivar'),
+        });
+      },
+    });
+  }
+
+  trackByFormaPagoId = (_: number, f: FormaPago) => f.id;
+
+  // ============================================================
+  // Notificaciones auto — métodos
+  // ============================================================
+
+  private cargarNotificacionesAuto(): void {
+    this.cargandoNotificacionesAuto.set(true);
+    this.api.obtenerNotificacionesAuto().subscribe({
+      next: (cfg) => {
+        this.cargandoNotificacionesAuto.set(false);
+        this.notificacionesAuto.set(cfg);
+      },
+      error: (err) => {
+        this.cargandoNotificacionesAuto.set(false);
+        toastError(this.toast, 'Notificaciones', err, 'No se pudo cargar la config de notificaciones');
+      },
+    });
+  }
+
+  /** Auto-save al togglear — los 2 booleans son atómicos, no necesitan
+   *  flujo de "discard changes". El toast confirma cada cambio. */
+  toggleNotificacionAuto(campo: 'emailAutoPedido' | 'whatsappAutoPedido', valor: boolean): void {
+    const actual = this.notificacionesAuto();
+    if (!actual) return; // todavía no cargó del backend
+    const nueva: NotificacionesAutoConfig = { ...actual, [campo]: valor };
+    // Update optimista — la UI responde instantáneo. Si el PUT falla, revertimos.
+    this.notificacionesAuto.set(nueva);
+    this.guardandoNotificacionesAuto.set(true);
+    this.api.guardarNotificacionesAuto(nueva).subscribe({
+      next: (cfg) => {
+        this.guardandoNotificacionesAuto.set(false);
+        this.notificacionesAuto.set(cfg);
+        const canal = campo === 'emailAutoPedido' ? 'Email' : 'WhatsApp';
+        this.toast.add({
+          severity: 'success',
+          summary: `${canal} automático ${valor ? 'activado' : 'desactivado'}`,
+          detail: valor
+            ? 'Se va a mandar tras cada pedido OK.'
+            : 'No se manda automático. El botón manual sigue disponible.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoNotificacionesAuto.set(false);
+        // Revertir optimistic.
+        this.notificacionesAuto.set(actual);
+        toastError(this.toast, 'Notificaciones', err, 'No se pudo guardar el cambio');
+      },
+    });
+  }
 }

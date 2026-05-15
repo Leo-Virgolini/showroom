@@ -8,6 +8,7 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ThreadLocalRandom;
@@ -24,7 +25,8 @@ import java.util.function.Supplier;
  *       así un pedido nunca espera la cola completa del sync.</li>
  *   <li>Si DUX igual responde 429, hace hasta 10 reintentos con backoff exponencial + jitter.</li>
  *   <li>Respeta el header Retry-After si DUX lo manda (tiene prioridad sobre el backoff calculado).</li>
- *   <li>5xx y errores de red: 3 reintentos con backoff exponencial.</li>
+ *   <li>5xx, errores de red y respuestas truncadas (Premature EOF mid-stream
+ *       cuando DUX corta chunked transfer): 3 reintentos con backoff exponencial.</li>
  *   <li>Si el rate limit persiste varios reintentos consecutivos, notifica vía un callback
  *       opcional (consumido por SyncEventService → SSE → banner global del frontend).</li>
  * </ul>
@@ -135,6 +137,18 @@ public class DuxRetryHandler {
                 throw e;
             } catch (HttpServerErrorException | ResourceAccessException e) {
                 if (++normalRetries >= MAX_RETRIES) throw e;
+                sleepCancellable(baseWaitMs * (long) Math.pow(2, normalRetries - 1), isCancelled);
+            } catch (RestClientException e) {
+                // Errores que NO son HTTP status codes ni de conexión inicial:
+                // típicamente "Premature EOF" cuando DUX corta la respuesta
+                // mid-stream (chunked transfer encoding incompleto). También
+                // cubren errores de parseo del body. Son transient en la
+                // mayoría de los casos — reintentamos como si fuera 5xx.
+                // Si el error es permanente (DUX cambió el contract de JSON),
+                // las 3 reintentos van a fallar igual y se propaga.
+                if (++normalRetries >= MAX_RETRIES) throw e;
+                log.warn("DUX {} - respuesta truncada/inválida ({}): retry {}/{}",
+                        op, e.getMessage(), normalRetries, MAX_RETRIES);
                 sleepCancellable(baseWaitMs * (long) Math.pow(2, normalRetries - 1), isCancelled);
             }
         }

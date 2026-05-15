@@ -112,12 +112,16 @@ public class PresupuestoPdfGenerator {
     private final ImagenLocalService imagenLocalService;
 
     public byte[] generar(PedidoShowroom pedido) {
-        // PDF de los items COMPRADOS (a partir del pedido). Aplica el descuento
-        // global a cada precio. Usado por el endpoint GET /pedidos/{id}/pdf.
+        // PDF de los items COMPRADOS (a partir del pedido). Usado por el endpoint
+        // GET /pedidos/{id}/pdf. El PDF muestra el precio base del producto (el
+        // mismo del scan, s/IVA), sin recargo financiero — para eso "deshacemos"
+        // el recargo y el flag aplicaIva del precio guardado.
+        boolean precioConIva = !Boolean.FALSE.equals(pedido.getFormaPagoAplicaIva());
+        BigDecimal recargoPorc = pedido.getRecargoPorcentaje();
         List<ItemView> views = pedido.getItems().stream()
-                .map(PresupuestoPdfGenerator::fromPedidoItem)
+                .map(it -> fromPedidoItem(it, precioConIva, recargoPorc))
                 .toList();
-        return generarConItems(pedido, views, pedido.getDescuentoPorcentaje());
+        return generarConItems(pedido, views);
     }
 
     /**
@@ -145,13 +149,44 @@ public class PresupuestoPdfGenerator {
         if (views.isEmpty()) {
             return null;
         }
-        // El cliente vio precios SIN descuento aplicado (el descuento es del
-        // carrito completo, no por item) → no propagamos descuentoPorcentaje.
-        return generarConItems(pedido, views, null);
+        return generarConItems(pedido, views);
+    }
+
+    /**
+     * PDF de TODOS los items escaneados durante una sesión, sin filtrar por
+     * compra — para sesiones ABANDONADAS donde el cliente miró productos pero
+     * no derivó en pedido. La portada usa el nombre y fecha de la sesión.
+     *
+     * @return null si la sesión no tiene items (no hay nada que mandar).
+     */
+    public byte[] generarHistorialSesion(SesionShowroom sesion) {
+        List<ItemView> views = sesion.getItems().stream()
+                .map(PresupuestoPdfGenerator::fromSesionItem)
+                .toList();
+        if (views.isEmpty()) {
+            return null;
+        }
+        // Stub de PedidoShowroom para reusar la portada — solo necesitamos
+        // nombre y fecha. CUIT queda null (sin pedido no hay cliente registrado).
+        PedidoShowroom stub = PedidoShowroom.builder()
+                .nombre(sesion.getNombre())
+                .creadoAt(sesion.getIniciadaAt())
+                .build();
+        return generarConItems(stub, views);
+    }
+
+    /** Filename para sesión sin pedido — usa el id de la sesión en vez del id de pedido. */
+    public String nombreArchivoSesion(SesionShowroom sesion) {
+        LocalDate fecha = sesion.getIniciadaAt() != null
+                ? sesion.getIniciadaAt().atZone(TZ_AR).toLocalDate()
+                : LocalDate.now(TZ_AR);
+        String cliente = NombreArchivoUtils.sanitizar(sesion.getNombre());
+        return "presupuesto-" + cliente + "-sesion-" + sesion.getId() + "-"
+                + fecha.format(DateTimeFormatter.ofPattern("ddMMyyyy")) + ".pdf";
     }
 
     /** Pipeline común: portada con datos del pedido + N páginas con los items. */
-    private byte[] generarConItems(PedidoShowroom pedido, List<ItemView> items, java.math.BigDecimal descuentoGlobal) {
+    private byte[] generarConItems(PedidoShowroom pedido, List<ItemView> items) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
              PdfWriter writer = new PdfWriter(out);
              PdfDocument pdfDoc = new PdfDocument(writer);
@@ -173,7 +208,7 @@ public class PresupuestoPdfGenerator {
 
             // PÁGINAS DE PRODUCTOS (4 por página).
             doc.add(new AreaBreak());
-            agregarPaginasProductos(doc, items, descuentoGlobal, sinImagen);
+            agregarPaginasProductos(doc, items, sinImagen);
 
             doc.close();
             return out.toByteArray();
@@ -187,8 +222,32 @@ public class PresupuestoPdfGenerator {
      *  Permite reusar el mismo template para PedidoShowroomItem y SesionScanItem. */
     private record ItemView(String sku, String descripcion, java.math.BigDecimal precioConIva, java.math.BigDecimal porcIva) {}
 
-    private static ItemView fromPedidoItem(PedidoShowroomItem it) {
-        return new ItemView(it.getSku(), it.getDescripcion(), it.getPrecioUnitario(), it.getPorcIva());
+    /**
+     * Reconstruye el precio base del producto (el del scan, c/IVA, sin recargo
+     * financiero) a partir del precio guardado en el pedido. Pasos:
+     *  <ul>
+     *    <li>Si {@code precioYaConIva=false} (forma "no aplica IVA"), suma IVA
+     *        para llevarlo a c/IVA.</li>
+     *    <li>Si hubo {@code recargoPorc>0}, multiplica por {@code (1 - recargo/100)}
+     *        para deshacer el recargo (el {@code precioUnitario} se calculó
+     *        dividiendo por ese mismo factor).</li>
+     *  </ul>
+     * El render del PDF aplica luego {@code sinIva()}, igual que para los items
+     * de sesión — así el cliente ve el mismo precio que vio al escanear el
+     * producto, sin descuentos de escala ni recargos.
+     */
+    private static ItemView fromPedidoItem(PedidoShowroomItem it, boolean precioYaConIva, BigDecimal recargoPorc) {
+        BigDecimal precio = it.getPrecioUnitario();
+        BigDecimal porcIva = it.getPorcIva();
+        if (precio != null && !precioYaConIva && porcIva != null && porcIva.signum() > 0) {
+            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+            precio = precio.multiply(ivaFactor);
+        }
+        if (precio != null && recargoPorc != null && recargoPorc.signum() > 0) {
+            BigDecimal factorSinRecargo = BigDecimal.ONE.subtract(recargoPorc.movePointLeft(2));
+            precio = precio.multiply(factorSinRecargo);
+        }
+        return new ItemView(it.getSku(), it.getDescripcion(), precio, porcIva);
     }
 
     private static ItemView fromSesionItem(SesionScanItem it) {
@@ -294,8 +353,7 @@ public class PresupuestoPdfGenerator {
     // PRODUCTOS — 4 por página
     // =====================================================
 
-    private void agregarPaginasProductos(Document doc, List<ItemView> items,
-                                         BigDecimal descuentoGlobal, ImageData sinImagen) {
+    private void agregarPaginasProductos(Document doc, List<ItemView> items, ImageData sinImagen) {
         // Calcular la altura de cada bloque para que entren PRODUCTOS_POR_PAGINA
         // bien distribuidos en el alto útil de la página. Margen extra de ~60pt
         // para separadores entre items y el footer (logo + número de página).
@@ -313,8 +371,7 @@ public class PresupuestoPdfGenerator {
             // Alternar la posición de la imagen según el índice — patrón del catalog
             // generator: pares (0, 2, …) imagen a la izquierda; impares a la derecha.
             boolean imagenIzquierda = (i % 2) == 0;
-            Table itemBlock = buildItemBlock(items.get(i), descuentoGlobal,
-                    sinImagen, imagenIzquierda, bloqueHeight);
+            Table itemBlock = buildItemBlock(items.get(i), sinImagen, imagenIzquierda, bloqueHeight);
             // Cada bloque entero queda en una sola página (no se parte el producto a la mitad).
             itemBlock.setKeepTogether(true);
             doc.add(itemBlock);
@@ -332,8 +389,7 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    private Table buildItemBlock(ItemView it, BigDecimal descuentoGlobal,
-                                 ImageData sinImagenData,
+    private Table buildItemBlock(ItemView it, ImageData sinImagenData,
                                  boolean imagenIzquierda, float bloqueHeight) {
         // Layout horizontal 50/50: imagen y card alternan lado según el índice.
         // setHeight fija el alto del bloque para que entren PRODUCTOS_POR_PAGINA
@@ -392,12 +448,11 @@ public class PresupuestoPdfGenerator {
         card.add(nombre);
         card.add(buildLineaSeparadora());
 
-        // Precio sin IVA con descuento global aplicado (lo que paga el cliente, neto).
+        // Precio sin IVA del producto — el mismo que se muestra al escanear,
+        // sin afectaciones por descuentos de escala ni recargos financieros.
         // Etiqueta sutil en gris para que no compita con el valor; valor en
         // naranja KT para que destaque y combine con el resto del tema.
-        BigDecimal precioSinIvaFinal = aplicarDescuento(
-                sinIva(it.precioConIva(), it.porcIva()),
-                descuentoGlobal);
+        BigDecimal precioSinIvaFinal = sinIva(it.precioConIva(), it.porcIva());
         Paragraph precioEtiqueta = new Paragraph("PRECIO")
                 .setFontSize(8)
                 .setFontColor(GRIS_OSCURO)
@@ -592,13 +647,6 @@ public class PresupuestoPdfGenerator {
             log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
             return null;
         }
-    }
-
-    private static BigDecimal aplicarDescuento(BigDecimal valor, BigDecimal porcentaje) {
-        if (valor == null) return null;
-        if (porcentaje == null || porcentaje.signum() <= 0) return valor;
-        BigDecimal factor = BigDecimal.ONE.subtract(porcentaje.movePointLeft(2));
-        return valor.multiply(factor);
     }
 
     /** Saca el IVA del precio. Si porcIva es null o 0, devuelve el mismo valor. */

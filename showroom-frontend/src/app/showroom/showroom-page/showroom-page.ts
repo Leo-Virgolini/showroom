@@ -6,6 +6,7 @@ import {
   ElementRef,
   HostListener,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -43,7 +44,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -300,6 +301,14 @@ export class ShowroomPage implements AfterViewInit {
    */
   readonly escalasDescuento = signal<EscalaDescuento[]>([]);
 
+  /** Formas de pago activas (cargadas al iniciar). El operador elige una en
+   *  el dropdown del carrito; el recargo % se aplica al total. */
+  readonly formasPagoActivas = signal<FormaPago[]>([]);
+
+  /** Forma de pago seleccionada por el operador. Null = sin financiación
+   *  (precio base, equivalente a "Efectivo 1 cuota / 0%"). */
+  readonly formaPagoSeleccionada = signal<FormaPago | null>(null);
+
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
   private readonly escalasDesc = computed(() =>
     [...this.escalasDescuento()].sort((a, b) => b.umbralMin - a.umbralMin),
@@ -334,6 +343,114 @@ export class ShowroomPage implements AfterViewInit {
   readonly totalCarrito = computed(
     () => this.subtotalPreDescuento() - this.descuentoMonto(),
   );
+
+  /** Recargo % vigente según la forma de pago elegida (0 si ninguna o si tiene 0%). */
+  readonly recargoAplicado = computed(() => {
+    const fp = this.formaPagoSeleccionada();
+    return fp ? (fp.recargoPorcentaje ?? 0) : 0;
+  });
+
+  /** Si la forma de pago elegida agrega IVA al precio que ve el cliente.
+   *  - Forma con {@code aplicaIva=true} (caso normal): cliente paga con IVA.
+   *  - Forma con {@code aplicaIva=false} (ej: "transferencia sin IVA"):
+   *    cliente paga sin IVA y el operador absorbe la diferencia.
+   *  - Sin forma elegida (todavía no decidió): mostramos el "precio efectivo"
+   *    sin IVA, igual al comportamiento histórico del carrito. */
+  readonly aplicaIvaCliente = computed(() => {
+    const fp = this.formaPagoSeleccionada();
+    return fp ? (fp.aplicaIva ?? true) : false;
+  });
+
+  /** Recargo financiero puro (sin IVA): lo que el cliente paga de más sobre
+   *  el subtotal sin IVA por elegir esta forma. Fórmula per-item:
+   *  {@code base × (1/(1-recargo/100) - 1)}. */
+  readonly recargoMontoSinIva = computed(() => {
+    const recargo = this.recargoAplicado();
+    if (recargo <= 0) return 0;
+    const descuento = this.descuentoAplicado();
+    const factorExtra = 1 / (1 - recargo / 100) - 1;
+    return this.carrito().reduce((acc, it) => {
+      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
+      return acc + baseSinIva * factorExtra * it.cantidad;
+    }, 0);
+  });
+
+  /** IVA que paga el cliente al final (sobre el subtotal con recargo aplicado).
+   *  Cero si la forma de pago es "sin IVA" (operador absorbe). */
+  readonly ivaMontoCarrito = computed(() => {
+    if (!this.aplicaIvaCliente()) return 0;
+    const recargo = this.recargoAplicado();
+    const descuento = this.descuentoAplicado();
+    const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
+    return this.carrito().reduce((acc, it) => {
+      const porcIva = it.porcIva ?? 0;
+      if (porcIva <= 0) return acc;
+      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
+      const conRecargoSinIva = baseSinIva / divisorRecargo;
+      return acc + conRecargoSinIva * (porcIva / 100) * it.cantidad;
+    }, 0);
+  });
+
+  /** Total final que el cliente paga: subtotal + recargo (sin IVA) + IVA (si la
+   *  forma aplica). Equivale a {@code base × (aplicaIva ? (1+iva/100) : 1) / (1 - recargo/100)}
+   *  per-item. */
+  readonly totalConRecargo = computed(
+    () => this.totalCarrito() + this.recargoMontoSinIva() + this.ivaMontoCarrito(),
+  );
+
+  /** Total final del carrito para una forma de pago dada — usado en el dialog
+   *  "comparativa de formas de pago" que el operador le muestra al cliente. */
+  totalParaForma(fp: FormaPago): number {
+    const recargo = fp.recargoPorcentaje ?? 0;
+    const aplicaIva = fp.aplicaIva ?? true;
+    const descuento = this.descuentoAplicado();
+    const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
+    return this.carrito().reduce((acc, it) => {
+      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
+      const conRecargoSinIva = baseSinIva / divisorRecargo;
+      const porcIva = it.porcIva ?? 0;
+      const unit = aplicaIva && porcIva > 0
+        ? conRecargoSinIva * (1 + porcIva / 100)
+        : conRecargoSinIva;
+      return acc + unit * it.cantidad;
+    }, 0);
+  }
+
+  /** Toggle del dialog que lista todas las formas con su total — para mostrar
+   *  al cliente las opciones disponibles. */
+  readonly mostrarDialogFormasPago = signal(false);
+
+  abrirDialogFormasPago(): void {
+    this.mostrarDialogFormasPago.set(true);
+  }
+
+  /** Selecciona la forma desde el dialog comparativo y lo cierra — el operador
+   *  puede elegir directamente desde ahí sin volver al select. */
+  elegirFormaDesdeDialog(fp: FormaPago): void {
+    this.seleccionarFormaPago(fp);
+    this.mostrarDialogFormasPago.set(false);
+  }
+
+  /** Forma de pago con el menor total — para el badge "MEJOR PRECIO". */
+  readonly formaMasBarata = computed(() => {
+    const formas = this.formasPagoActivas();
+    if (formas.length === 0) return null;
+    let min = formas[0];
+    let minTotal = this.totalParaForma(min);
+    for (const fp of formas.slice(1)) {
+      const t = this.totalParaForma(fp);
+      if (t < minTotal) {
+        min = fp;
+        minTotal = t;
+      }
+    }
+    return min;
+  });
+
+  /** Ícono según cantidad de cuotas: pago contado vs financiado. */
+  iconoForma(fp: FormaPago): string {
+    return fp.cantidadCuotas && fp.cantidadCuotas > 1 ? 'pi pi-credit-card' : 'pi pi-money-bill';
+  }
 
   readonly cantidadTotal = computed(() =>
     this.carrito().reduce((acc, it) => acc + it.cantidad, 0),
@@ -536,6 +653,20 @@ export class ShowroomPage implements AfterViewInit {
         console.warn('[escalas-descuento] no se pudieron cargar:', err),
     });
 
+    // Formas de pago activas — para el selector del carrito. La primera de la
+    // lista (orden asc) queda seleccionada por default — el operador la
+    // configuró como "default" desde /configuracion (p.ej. Efectivo).
+    this.api.listarFormasPagoActivas().subscribe({
+      next: (lista) => {
+        this.formasPagoActivas.set(lista);
+        if (lista.length > 0 && this.formaPagoSeleccionada() == null) {
+          this.formaPagoSeleccionada.set(lista[0]);
+        }
+      },
+      error: (err) =>
+        console.warn('[formas-pago] no se pudieron cargar:', err),
+    });
+
     // Hidratación inicial del carrito server-side. Si la pestaña recarga o se
     // abre una segunda PC, el estado se levanta del backend (sin localStorage).
     this.api.obtenerCarrito().subscribe({
@@ -574,11 +705,23 @@ export class ShowroomPage implements AfterViewInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((state) => {
         const previo = this.carrito();
-        this.carrito.set(state.items);
-        if (state.origen === 'VISOR') {
-          this.mostrarToastCambioDesdeVisor(previo, state.items);
-        } else if (state.origen === 'SISTEMA') {
-          this.mostrarToastStockTrasSync(previo, state.items);
+        // VISOR y SISTEMA representan cambios externos que el operador DEBE
+        // ver — el cliente agregó algo desde el celular, o el sync refrescó
+        // stock/precio. Aplicar state.items directo.
+        //
+        // OPERADOR es nuestro propio PATCH echando vía SSE — puede llegar con
+        // una cantidad stale si el user clickeó de nuevo entre el PATCH y la
+        // respuesta. Aplicar via merge para preservar cantidad local y evitar
+        // el rebote visible del input.
+        if (state.origen === 'OPERADOR') {
+          this.carrito.set(this.mergeRemotoRespetandoLocal(state.items));
+        } else {
+          this.carrito.set(state.items);
+          if (state.origen === 'VISOR') {
+            this.mostrarToastCambioDesdeVisor(previo, state.items);
+          } else if (state.origen === 'SISTEMA') {
+            this.mostrarToastStockTrasSync(previo, state.items);
+          }
         }
       });
 
@@ -598,14 +741,23 @@ export class ShowroomPage implements AfterViewInit {
                 tap((state) => {
                   const item = state.items.find((it) => it.sku === u.sku);
                   if (item && item.cantidad < u.cantidad) {
+                    // Recortado por stock — el server tiene menos disponible
+                    // que lo que pidió el user. Aceptamos siempre (el max del
+                    // stepper se va a actualizar al nuevo stock) y avisamos.
                     this.toast.add({
                       severity: 'warn',
                       summary: 'Cantidad ajustada al stock',
                       detail: `${u.sku}: tope ${item.cantidad} unidades.`,
                       life: 3500,
                     });
+                    this.carrito.set(state.items);
+                  } else {
+                    // No hubo recortado. Aplicar state preservando cantidad
+                    // local para items que el user puede haber tocado entre
+                    // que mandamos este PATCH y volvió la respuesta — evita
+                    // el rebote visual del input.
+                    this.carrito.set(this.mergeRemotoRespetandoLocal(state.items));
                   }
-                  this.carrito.set(state.items);
                 }),
                 catchError((err) => {
                   toastError(this.toast, 'Carrito', err, 'No se pudo actualizar la cantidad.');
@@ -633,6 +785,24 @@ export class ShowroomPage implements AfterViewInit {
     // si hay puntero fino (mouse + pistola HID conectada por USB).
     const isCoarse = window.matchMedia('(pointer: coarse)').matches;
     if (isCoarse) return;
+
+    // Refocus al scan input cuando se CIERRA cualquier dialog (transición
+    // open → closed). Sin esto, el operador queda con el focus en el botón
+    // que cerró el dialog y la pistola QR no escanea hasta clickear el input.
+    // El handler global de click NO cubre este caso porque excluye botones.
+    let dialogAbiertoPrevio = false;
+    effect(() => {
+      const algunoAbierto =
+        this.mostrarDialogoNuevoCliente() ||
+        this.mostrarConfirmacion() ||
+        this.mostrarDialogVisor() ||
+        this.mostrarDialogReview() ||
+        this.mostrarSyncDialog();
+      if (dialogAbiertoPrevio && !algunoAbierto) {
+        this.focusInput();
+      }
+      dialogAbiertoPrevio = algunoAbierto;
+    });
 
     const refocus = (e: MouseEvent) => {
       if (this.mostrarConfirmacion()) return;
@@ -673,6 +843,16 @@ export class ShowroomPage implements AfterViewInit {
 
   private focusInput(): void {
     queueMicrotask(() => this.scanInput()?.nativeElement.focus());
+  }
+
+  /** Setea la forma de pago y devuelve el foco al input del scan — así el
+   *  operador sigue escaneando sin tener que clickear de nuevo.
+   *  PrimeNG p-select retoma el focus en su propio trigger luego del
+   *  ngModelChange, así que usamos setTimeout para que nuestro focus corra
+   *  después de ese cleanup (un microtask no alcanza). */
+  seleccionarFormaPago(fp: FormaPago | null): void {
+    this.formaPagoSeleccionada.set(fp);
+    setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
   }
 
   confirmarSincronizar(): void {
@@ -1006,10 +1186,51 @@ export class ShowroomPage implements AfterViewInit {
     this.cantidadUpdates$.next({ sku, cantidad: c });
   }
 
+  /**
+   * Merge un state remoto del carrito (de la API o del SSE) con el local,
+   * preservando la cantidad LOCAL para items donde difiere de la remota.
+   *
+   * <p>Por qué: cuando el user clickea +/- rápido, hay una ventana entre que
+   * mandamos un PATCH y vuelve la respuesta donde el user puede haber clickeado
+   * de nuevo. Si pisamos la cantidad local con la del response (que es la del
+   * PATCH anterior, ya stale), la UI rebota: el input vuelve al valor viejo y
+   * después salta al nuevo cuando el siguiente PATCH responde. Lo mismo con
+   * SSE de updates concurrentes.
+   *
+   * <p>Para items con misma cantidad: traemos todos los fields del remoto
+   * (stock fresco, precio, descripción, imagen) — ese es el caso normal y la
+   * razón por la que aplicamos el state remoto.
+   *
+   * <p>Para items donde la cantidad local difiere: traemos los fields no-cantidad
+   * del remoto pero preservamos la cantidad local. El próximo PATCH va a
+   * sincronizar la cantidad correctamente con backend.
+   *
+   * <p>Items que están en remoto pero no en local: se agregan tal cual (típico:
+   * el visor o otro operador agregó un item nuevo).
+   *
+   * <p>Items en local pero no en remoto: se descartan (item eliminado en otro lado).
+   */
+  private mergeRemotoRespetandoLocal(remoteItems: CarritoItem[]): CarritoItem[] {
+    const localBySku = new Map(this.carrito().map((it) => [it.sku, it]));
+    return remoteItems.map((remote) => {
+      const local = localBySku.get(remote.sku);
+      if (local && local.cantidad !== remote.cantidad) {
+        return { ...remote, cantidad: local.cantidad };
+      }
+      return remote;
+    });
+  }
+
   eliminarDelCarrito(sku: string): void {
     this.api.eliminarItemCarrito(sku).subscribe({
-      next: (state) => this.carrito.set(state.items),
-      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo eliminar el item.'),
+      next: (state) => {
+        this.carrito.set(state.items);
+        this.focusInput();
+      },
+      error: (err) => {
+        toastError(this.toast, 'Carrito', err, 'No se pudo eliminar el item.');
+        this.focusInput();
+      },
     });
   }
 
@@ -1086,10 +1307,12 @@ export class ShowroomPage implements AfterViewInit {
             detail: `${state.items.length} items refrescados desde DUX`,
           });
         }
+        this.focusInput();
       },
       error: (err) => {
         this.refrescando.set(false);
         toastError(this.toast, 'Refrescar', err, 'No se pudo refrescar stock');
+        this.focusInput();
       },
     });
   }
@@ -1201,6 +1424,9 @@ export class ShowroomPage implements AfterViewInit {
 
   cancelarSesionActiva(): void {
     if (!this.haySesionActiva()) return;
+    // El ConfirmDialog de PrimeNG (que viene de confirmarCancelarSesion) NO
+    // tiene un signal que el effect de refocus pueda observar, así que
+    // refocusemos manualmente acá.
     this.api.cancelarSesion().subscribe({
       next: (s) => {
         this.aplicarSesion(s);
@@ -1210,8 +1436,12 @@ export class ShowroomPage implements AfterViewInit {
           detail: 'Los próximos scans no se van a registrar hasta iniciar una nueva sesión.',
           life: 3500,
         });
+        this.focusInput();
       },
-      error: (err) => toastError(this.toast, 'Sesión', err, 'No se pudo cancelar la sesión.'),
+      error: (err) => {
+        toastError(this.toast, 'Sesión', err, 'No se pudo cancelar la sesión.');
+        this.focusInput();
+      },
     });
   }
 
@@ -1448,6 +1678,10 @@ export class ShowroomPage implements AfterViewInit {
         codigoProvincia: c.codigoProvincia ?? undefined,
         idLocalidad: c.idLocalidad ?? undefined,
         observaciones: c.observaciones.trim() || undefined,
+        // Forma de pago elegida en el carrito (null si "Efectivo" / sin
+        // selección). El backend aplica el recargo % a cada precioUnitario
+        // antes de mandar a DUX.
+        formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
         items: this.carrito().map((it) => ({
           sku: it.sku,
           cantidad: it.cantidad,
@@ -1472,6 +1706,10 @@ export class ShowroomPage implements AfterViewInit {
             });
             this.vaciarCarrito();
             this.cliente.set({ ...CLIENTE_VACIO });
+            // Reset de la forma de pago al default (primera de la lista) — el
+            // próximo cliente arranca con el método configurado por el operador.
+            const formas = this.formasPagoActivas();
+            this.formaPagoSeleccionada.set(formas.length > 0 ? formas[0] : null);
             // Dialog post-pedido para que el cliente nos califique en Google
             // (la imagen incluye el QR pre-generado, ver public/opinion-google.png).
             this.mostrarDialogReview.set(true);

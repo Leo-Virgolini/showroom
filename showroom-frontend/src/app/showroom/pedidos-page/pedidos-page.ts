@@ -96,6 +96,7 @@ export class PedidosPage {
   /** IDs de pedido cuyo PDF se está descargando — para deshabilitar el botón. */
   readonly descargandoPdf = signal<Set<number>>(new Set());
   readonly enviandoEmail = signal<Set<number>>(new Set());
+  readonly enviandoWhatsapp = signal<Set<number>>(new Set());
   readonly generandoPickit = signal<Set<number>>(new Set());
   readonly anulandoPedido = signal<Set<number>>(new Set());
 
@@ -298,25 +299,61 @@ export class PedidosPage {
     return e;
   }
 
-  /** Saca el IVA del precio. Devuelve null si no hay IVA almacenado (pedidos viejos). */
-  precioSinIva(precioConIva: number | null, porcIva: number | null): number | null {
-    if (precioConIva == null) return null;
-    if (porcIva == null || porcIva === 0) return precioConIva;
-    return precioConIva / (1 + porcIva / 100);
+  /** Precio sin IVA por unidad. Considera si la forma de pago aplica IVA al
+   *  precio guardado: por default (aplicaIva true o null) el {@code precioUnitario}
+   *  ya tiene IVA y se divide; si {@code aplicaIva===false} el precio guardado
+   *  ya es sin IVA (el cliente paga sin IVA y DUX absorbe). */
+  precioSinIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
+    if (precioGuardado == null) return null;
+    if (aplicaIva === false) return precioGuardado;
+    if (porcIva == null || porcIva === 0) return precioGuardado;
+    return precioGuardado / (1 + porcIva / 100);
   }
 
-  /** Subtotal s/IVA por línea — lo que el cliente paga por ese ítem (sin descuento global). */
-  subtotalSinIva(it: { precioUnitario: number | null; porcIva: number | null; cantidad: number | null }): number | null {
-    const p = this.precioSinIva(it.precioUnitario, it.porcIva);
+  /** Precio con IVA por unidad. Default: el {@code precioUnitario} ya tiene IVA.
+   *  Si {@code aplicaIva===false}, hay que sumarle IVA porque está sin (DUX recibe con). */
+  precioConIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
+    if (precioGuardado == null) return null;
+    if (aplicaIva !== false) return precioGuardado;
+    if (porcIva == null || porcIva === 0) return precioGuardado;
+    return precioGuardado * (1 + porcIva / 100);
+  }
+
+  /** Subtotal s/IVA por línea — lo que cuenta como base para DUX en una factura con IVA. */
+  subtotalSinIva(
+    it: { precioUnitario: number | null; porcIva: number | null; cantidad: number | null },
+    aplicaIva: boolean | null,
+  ): number | null {
+    const p = this.precioSinIva(it.precioUnitario, it.porcIva, aplicaIva);
     if (p == null || it.cantidad == null) return null;
     return p * it.cantidad;
   }
 
-  /** Monto total del IVA del pedido (total con IVA - total sin IVA). Usa los campos
-   *  guardados en el pedido — null si alguno falta (pedidos viejos sin totalSinIva). */
+  /** Monto total del IVA del pedido. Cuando la forma aplica IVA usa los snapshots
+   *  guardados (total - totalSinIva). Cuando NO aplica IVA, el cliente pagó sin
+   *  IVA pero DUX igual lo facturó: lo recalculamos per-item porque
+   *  {@code total === totalSinIva} en ese caso. */
   ivaTotal(det: PedidoDetalle): number | null {
     if (det.total == null || det.totalSinIva == null) return null;
+    if (det.formaPagoAplicaIva === false) {
+      const totalDux = this.totalDux(det);
+      return totalDux != null ? totalDux - det.total : null;
+    }
     return det.total - det.totalSinIva;
+  }
+
+  /** Total c/IVA que recibió DUX. En el caso normal coincide con {@code det.total}.
+   *  En forma "sin IVA" hay que recalcularlo: el operador absorbe la diferencia. */
+  totalDux(det: PedidoDetalle): number | null {
+    if (det.formaPagoAplicaIva !== false) return det.total;
+    if (!det.items?.length) return det.total;
+    let suma = 0;
+    for (const it of det.items) {
+      const p = this.precioConIva(it.precioUnitario, it.porcIva, false);
+      if (p == null) continue;
+      suma += p * (it.cantidad ?? 0);
+    }
+    return suma;
   }
 
   trackById = (_: number, it: PedidoListItem) => it.id;
@@ -407,6 +444,32 @@ export class PedidosPage {
       error: (err) => {
         this.marcarDescarga(this.enviandoEmail, p.id, false);
         toastError(this.toast, 'Email', err, 'No se pudo encolar el envío');
+      },
+    });
+  }
+
+  estaEnviandoWhatsapp(id: number): boolean {
+    return this.enviandoWhatsapp().has(id);
+  }
+
+  reenviarWhatsapp(p: PedidoListItem): void {
+    if (this.estaEnviandoWhatsapp(p.id)) return;
+    this.marcarDescarga(this.enviandoWhatsapp, p.id, true);
+    this.api.reenviarWhatsappPedido(p.id).subscribe({
+      next: () => {
+        this.marcarDescarga(this.enviandoWhatsapp, p.id, false);
+        // El resultado real (SENT / WINDOW_CLOSED / FAILED) llega vía SSE
+        // whatsapp-business y se muestra como toast desde app.ts.
+        this.toast.add({
+          severity: 'info',
+          summary: 'WhatsApp encolado',
+          detail: 'Subiendo PDF a Meta y mandando…',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.marcarDescarga(this.enviandoWhatsapp, p.id, false);
+        toastError(this.toast, 'WhatsApp', err, 'No se pudo encolar el envío');
       },
     });
   }

@@ -229,13 +229,15 @@ export class App {
       .subscribe((e) => {
         if (this.esVistaVisor()) return;
         // Preferimos el email del cliente — es lo que identifica al destinatario
-        // de un vistazo. Si no vino (pedidos viejos del SSE, edge cases), caemos
-        // al CUIT y al pedidoId como referencia mínima.
+        // de un vistazo. Caemos al CUIT, después al pedido y por último a la
+        // sesión (envíos desde /historial sin pedido asociado).
         const ref = e.email
           ? e.email
           : e.cuit
             ? `CUIT ${e.cuit}`
-            : `pedido #${e.pedidoId}`;
+            : e.pedidoId != null
+              ? `pedido #${e.pedidoId}`
+              : `sesión #${e.sesionId}`;
         if (e.estado === 'SENT') {
           this.toast.add({
             severity: 'success',
@@ -247,6 +249,45 @@ export class App {
           this.toast.add({
             severity: 'error',
             summary: 'Falló el envío del email de picking',
+            detail: e.error
+              ? `${ref}: ${e.error}`
+              : `No se pudo enviar a ${ref}. Revisar logs del backend.`,
+            life: 10000,
+          });
+        }
+      });
+
+    // Toast del envío por WhatsApp. SENT verde, WINDOW_CLOSED amarillo
+    // (caso específico que el operador puede resolver pidiendo al cliente que
+    // le escriba), FAILED rojo. El visor es read-only para el cliente: no se
+    // muestran toasts operativos ahí.
+    this.backendStatus.whatsappBusinessEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((e) => {
+        if (this.esVistaVisor()) return;
+        const ref = e.telefono
+          ? `+${e.telefono}`
+          : e.pedidoId != null
+            ? `pedido #${e.pedidoId}`
+            : `sesión #${e.sesionId}`;
+        if (e.estado === 'SENT') {
+          this.toast.add({
+            severity: 'success',
+            summary: 'WhatsApp enviado',
+            detail: `PDF despachado a ${ref}.`,
+            life: 5000,
+          });
+        } else if (e.estado === 'WINDOW_CLOSED') {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'WhatsApp fuera de ventana 24hs',
+            detail: `${ref} no escribió en las últimas 24hs. Pedile que mande un mensaje y reintentá.`,
+            life: 10000,
+          });
+        } else {
+          this.toast.add({
+            severity: 'error',
+            summary: 'Falló el envío por WhatsApp',
             detail: e.error
               ? `${ref}: ${e.error}`
               : `No se pudo enviar a ${ref}. Revisar logs del backend.`,

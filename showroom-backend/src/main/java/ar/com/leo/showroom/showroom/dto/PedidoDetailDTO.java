@@ -32,11 +32,30 @@ public record PedidoDetailDTO(
         String idLocalidad,
         /** Nombre legible de la localidad, ya resuelto. Null si no se pudo resolver. */
         String localidadNombre,
-        /** Total CON IVA — el del comprobante DUX. */
+        /** Total que pagó el cliente. Incluye recargo si hubo financiación. Tiene
+         *  IVA cuando {@code formaPagoAplicaIva} es true/null (caso normal); está
+         *  sin IVA cuando es false (forma "sin IVA": DUX igual facturó c/IVA pero
+         *  el operador absorbió la diferencia — ver {@code items} para reconstruir
+         *  el total DUX). */
         BigDecimal total,
-        /** Total SIN IVA — lo que paga el cliente. */
+        /** Total sin IVA del pedido (recargo aplicado, IVA descontado). Cuando
+         *  {@code formaPagoAplicaIva=false} coincide con {@code total}. */
         BigDecimal totalSinIva,
         BigDecimal descuentoPorcentaje,
+        /** Forma de pago elegida (FK). Null si no se eligió. */
+        Long formaPagoId,
+        /** Snapshot del nombre — sobrevive si se desactiva/borra la forma. */
+        String formaPagoNombre,
+        /** % de recargo que se aplicó. Null si no hubo. */
+        BigDecimal recargoPorcentaje,
+        /** Cantidad de cuotas — informativo. */
+        Integer cantidadCuotas,
+        /** Snapshot del flag aplicaIva de la forma de pago al momento del pedido.
+         *  Null si no hubo forma de pago. */
+        Boolean formaPagoAplicaIva,
+        /** Total con IVA antes del recargo financiero (referencia). Null si no
+         *  hubo recargo. Útil para mostrar en UI/PDF "antes / después". */
+        BigDecimal totalSinRecargo,
         String observaciones,
         List<PedidoItemDTO> items
 ) {

@@ -41,6 +41,9 @@ export interface CrearPedidoRequest {
   idLocalidad?: string;
   referencia?: string;
   observaciones?: string;
+  /** Forma de pago elegida en el carrito. Si está, el backend aplica el
+   *  recargo % de esa forma a cada precioUnitario antes de mandar a DUX. */
+  formaPagoId?: number | null;
   items: {
     sku: string;
     cantidad: number;
@@ -162,11 +165,32 @@ export type PickingEmailEstado = 'SENT' | 'FAILED';
 
 export interface PickingEmailEvent {
   estado: PickingEmailEstado;
-  pedidoId: number;
+  /** Presente si el envío salió de un pedido OK o del botón ✉️ en /pedidos. */
+  pedidoId?: number | null;
+  /** Presente si el envío salió del botón ✉️ en /historial para sesiones
+   *  abandonadas (sin pedido). Exclusivo con pedidoId. */
+  sesionId?: number | null;
   cuit?: string | null;
   /** Destinatario al que se intentó/efectivamente despachó el mail. Se usa en
    *  el toast para identificar al cliente de un vistazo. */
   email?: string | null;
+  error?: string | null;
+}
+
+export type WhatsappBusinessEstado = 'SENT' | 'FAILED' | 'WINDOW_CLOSED';
+
+/** Resultado del envío del PDF por WhatsApp (Meta Cloud API). El estado
+ *  {@code WINDOW_CLOSED} indica que el cliente no escribió en las últimas
+ *  24hs — el operador debería pedirle un mensaje rápido y reintentar. */
+export interface WhatsappBusinessEvent {
+  estado: WhatsappBusinessEstado;
+  /** Presente si el envío salió de un pedido OK o del botón WhatsApp en /pedidos. */
+  pedidoId?: number | null;
+  /** Presente si el envío salió del botón WhatsApp en /historial para sesiones
+   *  abandonadas (sin pedido). Exclusivo con pedidoId. */
+  sesionId?: number | null;
+  /** Número normalizado al que se intentó mandar (solo dígitos, internacional). */
+  telefono?: string | null;
   error?: string | null;
 }
 
@@ -289,6 +313,30 @@ export interface Localidad {
 
 export type EstadoPedido = 'PENDIENTE' | 'ENVIADO' | 'ERROR' | 'ANULADO';
 
+/** Toggles de envío automático del PDF tras pedido OK. NO afectan los botones
+ *  manuales en /pedidos ni /historial — esos siguen disponibles siempre. */
+export interface NotificacionesAutoConfig {
+  emailAutoPedido: boolean;
+  whatsappAutoPedido: boolean;
+}
+
+/** Forma de pago configurable desde /configuracion. El operador la elige en
+ *  el carrito; el recargo % se aplica al total y se snapshotea en el pedido. */
+export interface FormaPago {
+  id: number;
+  nombre: string;
+  recargoPorcentaje: number;
+  cantidadCuotas: number;
+  /** Si la forma agrega IVA al precio que paga el cliente. Default true.
+   *  Cuando es false (ej: "transferencia sin IVA"), el operador absorbe el
+   *  IVA — DUX igual factura con IVA pero el cliente paga sin. */
+  aplicaIva: boolean;
+  activo: boolean;
+  orden: number;
+  /** ISO timestamp; null al crear desde el form. */
+  creadoAt: string | null;
+}
+
 export interface PedidoListItem {
   id: number;
   creadoAt: string;
@@ -303,9 +351,16 @@ export interface PedidoListItem {
   /** Nombre y apellido (o razón social) real del cliente. Es lo que se muestra
    *  en la columna Cliente del listado. Null si el operador no lo cargó. */
   nombre: string | null;
-  /** Total CON IVA — lo que va a DUX en el comprobante. */
+  /** Email del cliente. Si está vacío, el botón "Reenviar email" se oculta. */
+  email: string | null;
+  /** Teléfono del cliente. Si está vacío, el botón "Enviar por WhatsApp" se oculta. */
+  telefono: string | null;
+  /** Total que pagó el cliente. Tiene IVA si la forma de pago aplica IVA (caso
+   *  normal); está sin IVA si la forma no lo aplica. Ver detalle del pedido para
+   *  saber cuál es el caso. */
   total: number | null;
-  /** Total SIN IVA — lo que efectivamente paga el cliente. */
+  /** Total sin IVA del pedido (recargo aplicado). Coincide con {@code total}
+   *  cuando la forma de pago no aplica IVA. */
   totalSinIva: number | null;
   descuentoPorcentaje: number | null;
   cantidadItems: number;
@@ -353,11 +408,29 @@ export interface PedidoDetalle {
   provinciaNombre: string | null;
   idLocalidad: string | null;
   localidadNombre: string | null;
-  /** Total CON IVA — lo que va a DUX. */
+  /** Total que pagó el cliente (incluye recargo si hubo financiación). Tiene
+   *  IVA si {@code formaPagoAplicaIva} es true/null (caso normal); está sin IVA
+   *  si la forma no aplica IVA — DUX igual recibió el comprobante con IVA pero
+   *  el operador absorbió la diferencia. */
   total: number | null;
-  /** Total SIN IVA — lo que paga el cliente. */
+  /** Total sin IVA del pedido (recargo aplicado). Coincide con {@code total}
+   *  cuando {@code formaPagoAplicaIva===false}. */
   totalSinIva: number | null;
   descuentoPorcentaje: number | null;
+  /** Forma de pago elegida (FK). Null si no se eligió. */
+  formaPagoId: number | null;
+  /** Snapshot del nombre de la forma de pago — sobrevive al borrado/edición. */
+  formaPagoNombre: string | null;
+  /** % de recargo aplicado. Null si no hubo. */
+  recargoPorcentaje: number | null;
+  /** Cantidad de cuotas — informativo. */
+  cantidadCuotas: number | null;
+  /** Snapshot del flag aplicaIva de la forma. Null si no hubo forma de pago.
+   *  Cuando es false, el cliente pagó precio sin IVA y el operador absorbió
+   *  la diferencia (DUX recibió igual el comprobante con IVA). */
+  formaPagoAplicaIva: boolean | null;
+  /** Total CON IVA antes del recargo financiero. Null si no hubo recargo. */
+  totalSinRecargo: number | null;
   observaciones: string | null;
   items: PedidoItemDetalle[];
 }

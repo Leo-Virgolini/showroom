@@ -13,7 +13,9 @@ import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.entity.HorarioSync;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
+import ar.com.leo.showroom.config.entity.FormaPago;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
+import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.HorarioSyncSchedulerService;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.service.DuxClient;
@@ -21,7 +23,7 @@ import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
-import ar.com.leo.showroom.picking.PickingEmailService;
+import ar.com.leo.showroom.picking.PdfFollowupOrchestrator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.sesion.service.SesionShowroomService;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
@@ -34,6 +36,7 @@ import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
+import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
@@ -76,13 +79,14 @@ public class ShowroomService {
     private final ProductoCacheRepository productoCacheRepository;
     private final ObjectMapper objectMapper;
     private final DuxProperties duxProperties;
-    private final PickingEmailService pickingEmailService;
+    private final PdfFollowupOrchestrator pdfFollowupOrchestrator;
     private final PickitExternoService pickitExternoService;
     private final SesionShowroomService sesionShowroomService;
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
     private final EscalaDescuentoService escalaDescuentoService;
+    private final FormaPagoService formaPagoService;
     private final HorarioSyncSchedulerService horarioSyncService;
     private final ConfiguracionService configuracionService;
 
@@ -171,6 +175,15 @@ public class ShowroomService {
     /** Persiste la config del pickit externo. Valida que los paths estén presentes si enabled=true. */
     public PickitConfigDTO savePickitConfig(PickitConfigDTO cfg) {
         return configuracionService.savePickitConfig(cfg);
+    }
+
+    /** Toggles de envío automático del PDF tras pedido (email + whatsapp). */
+    public NotificacionesAutoConfigDTO getNotificacionesAuto() {
+        return configuracionService.getNotificacionesAuto();
+    }
+
+    public NotificacionesAutoConfigDTO saveNotificacionesAuto(NotificacionesAutoConfigDTO cfg) {
+        return configuracionService.saveNotificacionesAuto(cfg);
     }
 
 
@@ -379,6 +392,12 @@ public class ShowroomService {
                 p.getTotal(),
                 p.getTotalSinIva(),
                 p.getDescuentoPorcentaje(),
+                p.getFormaPagoId(),
+                p.getFormaPagoNombre(),
+                p.getRecargoPorcentaje(),
+                p.getCantidadCuotas(),
+                p.getFormaPagoAplicaIva(),
+                p.getTotalSinRecargo(),
                 p.getObservaciones(),
                 items
         );
@@ -444,6 +463,8 @@ public class ShowroomService {
                 p.getNroDoc(),
                 p.getApellidoRazonSocial(),
                 p.getNombre(),
+                p.getEmail(),
+                p.getTelefono(),
                 p.getTotal(),
                 p.getTotalSinIva(),
                 p.getDescuentoPorcentaje(),
@@ -491,6 +512,19 @@ public class ShowroomService {
                 .findFirst()
                 .orElse(null);
 
+        // Resolver forma de pago. Si formaPagoId viene, lo buscamos.
+        // 400 si la forma_pago no existe — el frontend no debería mandar ids
+        // stale; si pasa, es un bug de la UI.
+        FormaPago formaPago = null;
+        if (request.formaPagoId() != null) {
+            formaPago = formaPagoService.obtenerPorId(request.formaPagoId())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Forma de pago no encontrada: " + request.formaPagoId()));
+        }
+        BigDecimal recargoPorc = formaPago != null && formaPago.getRecargoPorcentaje() != null
+                ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
+        boolean aplicaIva = formaPago == null || !Boolean.FALSE.equals(formaPago.getAplicaIva());
+
         PedidoShowroom pedido = PedidoShowroom.builder()
                 .creadoAt(Instant.now())
                 .estado(EstadoPedido.PENDIENTE)
@@ -505,47 +539,68 @@ public class ShowroomService {
                 .codigoProvincia(request.codigoProvincia())
                 .idLocalidad(request.idLocalidad())
                 .descuentoPorcentaje(descuentoGlobal)
+                .formaPagoId(formaPago != null ? formaPago.getId() : null)
+                .formaPagoNombre(formaPago != null ? formaPago.getNombre() : null)
+                .recargoPorcentaje(formaPago != null ? recargoPorc : null)
+                .cantidadCuotas(formaPago != null ? formaPago.getCantidadCuotas() : null)
+                .formaPagoAplicaIva(formaPago != null ? aplicaIva : null)
                 .build();
 
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal totalSinIva = BigDecimal.ZERO;
+        BigDecimal totalSinRecargo = BigDecimal.ZERO;
         Map<String, ProductoCache> caches = catalogoSync.obtenerPorSkus(
                 request.items().stream().map(CrearPedidoRequestDTO.Item::sku).toList()
         );
 
         for (CrearPedidoRequestDTO.Item it : request.items()) {
             ProductoCache pc = caches.get(it.sku());
-            BigDecimal precio = it.precioUnitario() != null
+            BigDecimal precioBaseConIva = it.precioUnitario() != null
                     ? it.precioUnitario()
                     : (pc != null ? pc.getPvpKtGastroConIva() : null);
             String descripcion = pc != null ? pc.getDescripcion() : null;
             BigDecimal porcIva = pc != null ? pc.getPorcIva() : null;
+
+            // Aplicar recargo (dividir, no multiplicar) y resolver IVA según la
+            // forma. Sin formaPago: precio queda igual al base.
+            BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, formaPago);
 
             PedidoShowroomItem item = PedidoShowroomItem.builder()
                     .pedido(pedido)
                     .sku(it.sku())
                     .descripcion(descripcion)
                     .cantidad(it.cantidad())
-                    .precioUnitario(precio)
+                    .precioUnitario(precioFinal)
                     .porcIva(porcIva)
                     .build();
             pedido.getItems().add(item);
 
-            if (precio != null) {
+            if (precioFinal != null && precioBaseConIva != null) {
                 BigDecimal cant = BigDecimal.valueOf(it.cantidad());
-                total = total.add(precio.multiply(cant));
-                BigDecimal precioSinIva = calcularSinIva(precio, porcIva);
-                if (precioSinIva != null) {
-                    totalSinIva = totalSinIva.add(precioSinIva.multiply(cant));
+                total = total.add(precioFinal.multiply(cant));
+                totalSinRecargo = totalSinRecargo.add(precioBaseConIva.multiply(cant));
+                // totalSinIva del comprobante DUX: si la forma aplica IVA, el
+                // precio_final ya tiene IVA → dividimos. Si no aplica IVA, el
+                // precio_final ya es sin IVA → es directo.
+                BigDecimal precioSinIvaItem = aplicaIva
+                        ? calcularSinIva(precioFinal, porcIva)
+                        : precioFinal;
+                if (precioSinIvaItem != null) {
+                    totalSinIva = totalSinIva.add(precioSinIvaItem.multiply(cant));
                 }
             }
         }
         pedido.setTotal(total.setScale(2, RoundingMode.HALF_UP));
         pedido.setTotalSinIva(totalSinIva.setScale(2, RoundingMode.HALF_UP));
+        // Solo persistir totalSinRecargo si efectivamente hubo recargo — sino
+        // es ruido (el total ya es el sin-recargo).
+        if (formaPago != null && recargoPorc.signum() > 0) {
+            pedido.setTotalSinRecargo(totalSinRecargo.setScale(2, RoundingMode.HALF_UP));
+        }
         pedidoRepository.save(pedido);
 
         try {
-            String body = construirPayloadDux(request);
+            String body = construirPayloadDux(request, formaPago, caches);
             // No logueamos el payload entero: contiene PII del cliente (CUIT,
             // email, telefono, domicilio, observaciones) y los logs van a archivo
             // persistente (./logs/, rotacion ~500MB). Para diagnostico, el payload
@@ -583,13 +638,16 @@ public class ShowroomService {
                 sesionShowroomService.finalizarConPedido(pedido.getId());
 
                 // Mandar el PDF de follow-up al cliente + generar el pickit
-                // externo en PARALELO — son dos @Async independientes que corren
-                // en threads distintos del pool. El pickit (jar local, ~3-5s)
-                // suele terminar bastante antes que el SMTP (~5-30s por el peso
-                // del PDF), así que el operador ve el toast + auto-descarga del
-                // .xlsx mucho antes de que llegue el toast del mail. Si alguno
-                // falla solo se loguea — el pedido ya está en DUX, no se revierte.
-                pickingEmailService.enviarAsync(pedido);
+                // externo en PARALELO — dos @Async independientes que corren en
+                // threads distintos del pool. El pickit (jar local, ~3-5s) suele
+                // terminar bastante antes que SMTP/WhatsApp, así que el operador
+                // ve el toast + auto-descarga del .xlsx primero. Si alguno falla
+                // solo se loguea — el pedido ya está en DUX, no se revierte.
+                //
+                // PDF al cliente: WhatsApp primero (si tiene teléfono), email
+                // como fallback si WhatsApp no llegó (ventana 24hs cerrada,
+                // error, etc.) o no hay teléfono. Lógica en el orquestador.
+                pdfFollowupOrchestrator.enviarTrasPedido(pedido);
                 pickitExternoService.generarAsync(pedido, clientId);
 
                 return new CrearPedidoResponseDTO(
@@ -669,6 +727,73 @@ public class ShowroomService {
     }
 
     /**
+     * Precio final unitario que paga el cliente, dado el precio base con IVA
+     * del producto, su % de IVA y la forma de pago elegida.
+     *
+     * <p>Fórmula: {@code precio_efectivo / (1 - recargo/100) × (aplicaIva ? (1 + iva/100) : 1)}.
+     * El "precio efectivo" es el precio base sin IVA (lo que cobra el operador
+     * cuando no hay financiación ni IVA agregado). Sobre eso se aplica:
+     *  <ul>
+     *    <li><b>Recargo de financiación</b>: <i>dividir</i> por (1 - recargo/100)
+     *        — convención del cliente. Ej: recargo 10% → divisor 0,9 →
+     *        precio_efectivo / 0,9 ≈ +11,1%, no +10%.</li>
+     *    <li><b>IVA</b>: si la forma {@code aplicaIva}, multiplicar por (1+IVA).
+     *        Si no, el cliente paga sin IVA (caso "transferencia sin IVA":
+     *        DUX igual factura con IVA y el operador absorbe la diferencia).</li>
+     *  </ul>
+     *
+     * <p>Sin formaPago → devuelve {@code precioBaseConIva} sin tocar.
+     */
+    private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva, FormaPago formaPago) {
+        if (precioBaseConIva == null) return null;
+        if (formaPago == null) return precioBaseConIva;
+        BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
+        if (precioBaseSinIva == null) return precioBaseConIva;
+
+        BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
+                ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
+        BigDecimal precioRecargadoSinIva = recargoPorc.signum() > 0
+                ? precioBaseSinIva.divide(
+                        BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
+                        6, RoundingMode.HALF_UP)
+                : precioBaseSinIva;
+
+        boolean aplicaIva = !Boolean.FALSE.equals(formaPago.getAplicaIva());
+        if (aplicaIva && porcIva != null && porcIva.signum() > 0) {
+            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
+            return precioRecargadoSinIva.multiply(ivaFactor).setScale(4, RoundingMode.HALF_UP);
+        }
+        return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * Precio CON IVA que va al comprobante DUX. Independiente del flag
+     * {@code aplicaIva} de la forma — DUX siempre factura con IVA, sea cual
+     * sea lo que pagó el cliente. Para "transferencia sin IVA" la diferencia
+     * la absorbe el operador.
+     */
+    private BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva, FormaPago formaPago) {
+        if (precioBaseConIva == null) return null;
+        if (formaPago == null) return precioBaseConIva;
+        BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
+        if (precioBaseSinIva == null) return precioBaseConIva;
+
+        BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
+                ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
+        BigDecimal precioRecargadoSinIva = recargoPorc.signum() > 0
+                ? precioBaseSinIva.divide(
+                        BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
+                        6, RoundingMode.HALF_UP)
+                : precioBaseSinIva;
+
+        if (porcIva != null && porcIva.signum() > 0) {
+            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
+            return precioRecargadoSinIva.multiply(ivaFactor).setScale(4, RoundingMode.HALF_UP);
+        }
+        return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /**
      * Arma el JSON para POST /pedido/nuevopedido según la doc DUX:
      * https://duxsoftware.readme.io/reference/crear-pedido
      *
@@ -678,7 +803,10 @@ public class ShowroomService {
      * El schema interno de productos no está expuesto en la doc pública; usamos
      * el patrón estándar DUX (cod_item + ctd + precio_uni + descuento_porcentaje).
      */
-    private String construirPayloadDux(CrearPedidoRequestDTO request) throws Exception {
+    private String construirPayloadDux(
+            CrearPedidoRequestDTO request,
+            FormaPago formaPago,
+            Map<String, ProductoCache> caches) throws Exception {
         DuxProperties.Empresa empresa = duxProperties.empresa();
         Map<String, Object> root = new LinkedHashMap<>();
 
@@ -737,7 +865,19 @@ public class ShowroomService {
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("cod_item", it.sku());
             d.put("ctd", it.cantidad());
-            d.put("precio", it.precioUnitario() != null ? it.precioUnitario() : BigDecimal.ZERO);
+            // El precio que va a DUX es siempre CON IVA (DUX factura normal,
+            // independiente de si la forma aplica IVA al cliente o no). Se
+            // resuelve a 4 decimales — DUX acepta hasta 6 pero 4 alcanzan
+            // para montos en pesos.
+            ProductoCache pc = caches != null ? caches.get(it.sku()) : null;
+            BigDecimal precioBaseConIva = it.precioUnitario() != null
+                    ? it.precioUnitario()
+                    : (pc != null ? pc.getPvpKtGastroConIva() : BigDecimal.ZERO);
+            BigDecimal porcIva = pc != null ? pc.getPorcIva() : null;
+            BigDecimal precioDux = formaPago != null
+                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, formaPago)
+                    : precioBaseConIva;
+            d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);
             productos.add(d);
         }

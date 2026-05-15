@@ -203,7 +203,7 @@
               <i class="pi pi-qrcode text-lg"></i>
             </p-inputicon>
             <input #scanInput pInputText type="text" placeholder="Escaneá QR / código de barras, o tipeá la descripción y Enter…" [ngModel]="skuInput()" (ngModelChange)="skuInput.set($event)"
-              (keydown.enter)="onSubmitScan()" class="w-full text-xl font-mono py-3" autocomplete="off" inputmode="text" />
+              (keydown.enter)="onSubmitScan()" class="w-full text-xl font-mono py-3 scan-input-highlight" autocomplete="off" inputmode="text" />
             <p-inputicon class="!right-3">
               <kbd
                 class="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded border border-surface-200 dark:border-surface-700 bg-surface-100 dark:bg-surface-800 text-xs text-muted-color font-mono">
@@ -545,7 +545,10 @@
 
         <div class="flex flex-col gap-1.5 mt-4 pt-3 border-t border-surface-200 dark:border-surface-700">
           <div class="flex items-baseline justify-between text-sm text-muted-color">
-            <span>Subtotal</span>
+            <span class="inline-flex items-center gap-1.5">
+              <i class="pi pi-receipt text-xs"></i>
+              Subtotal
+            </span>
             <span class="tabular-nums">
               {{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
@@ -583,11 +586,96 @@
           }
 
           <div class="flex items-baseline justify-between mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold">Total</span>
-            <span class="tabular-nums font-bold text-xl text-emerald-700 dark:text-emerald-400">
+            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
+              <i class="pi pi-wallet text-xs"></i>
+              {{ recargoAplicado() > 0 ? 'Subtotal' : 'Total' }}
+            </span>
+            <span class="tabular-nums font-bold text-xl"
+              [class.text-emerald-700]="recargoAplicado() === 0"
+              [class.dark:text-emerald-400]="recargoAplicado() === 0"
+              [class.text-surface-700]="recargoAplicado() > 0"
+              [class.dark:text-surface-200]="recargoAplicado() > 0">
               {{ totalCarrito() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
+
+          <!-- Forma de pago + recargo financiero. El selector aparece siempre
+               (incluso si la lista de formas está vacía, queda como hint para
+               configurar). El breakdown del recargo solo cuando hay forma con
+               recargo > 0. -->
+          @if (formasPagoActivas().length > 0) {
+          <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-700">
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="text-xs uppercase tracking-wider text-muted-color font-semibold flex items-center gap-1.5">
+                <i class="pi pi-credit-card text-[0.65rem]"></i>
+                Forma de pago
+              </label>
+              <p-button
+                icon="pi pi-list"
+                label="Ver precios"
+                severity="info"
+                [outlined]="true"
+                size="small"
+                (onClick)="abrirDialogFormasPago()"
+                [disabled]="carrito().length === 0"
+                pTooltip="Ver todas las formas y precios — para mostrar al cliente"
+                tooltipPosition="left" />
+            </div>
+            <p-select
+              [options]="formasPagoActivas()"
+              [ngModel]="formaPagoSeleccionada()"
+              (ngModelChange)="seleccionarFormaPago($event)"
+              optionLabel="nombre"
+              class="w-full">
+              <ng-template let-fp #item>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ fp.nombre }}
+                  @if (fp.aplicaIva) {
+                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
+                  } @else {
+                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+                  }
+                </span>
+              </ng-template>
+              <ng-template let-fp #selectedItem>
+                <span class="inline-flex items-center gap-1.5">
+                  {{ fp.nombre }}
+                  @if (fp.aplicaIva) {
+                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
+                  } @else {
+                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+                  }
+                </span>
+              </ng-template>
+            </p-select>
+          </div>
+          }
+
+          @if (formaPagoSeleccionada(); as fp) {
+          @if (ivaMontoCarrito() > 0) {
+          <div class="flex items-baseline justify-between text-sm text-muted-color mt-2">
+            <span class="font-medium inline-flex items-center gap-1.5">
+              <i class="pi pi-percentage text-xs"></i>
+              IVA
+            </span>
+            <span class="tabular-nums">
+              +{{ ivaMontoCarrito() | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+          }
+          <div class="flex items-baseline justify-between mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
+            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
+              <i class="pi pi-wallet text-xs"></i>
+              Total a cobrar
+              @if (!aplicaIvaCliente()) {
+                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+              }
+            </span>
+            <span class="tabular-nums font-bold text-xl text-emerald-700 dark:text-emerald-400">
+              {{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+          }
         </div>
 
         <div class="flex flex-col items-end gap-2 mt-4">
@@ -642,7 +730,12 @@
         <div>
           <strong>{{ cantidadTotal() }}</strong> items
           ({{ carrito().length }} SKUs únicos) ·
-          <strong class="text-primary">{{ totalCarrito() | currency:'ARS':'symbol':'1.0-0' }}</strong>
+          <strong class="text-primary">{{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}</strong>
+          @if (formaPagoSeleccionada(); as fp) {
+            <span class="text-xs text-amber-700 dark:text-amber-300">
+              ({{ fp.nombre }}@if (!aplicaIvaCliente()) {, sin IVA})
+            </span>
+          }
         </div>
       </div>
     </div>
@@ -827,5 +920,80 @@
   </div>
   <ng-template #footer>
     <p-button label="Entendido" icon="pi pi-check" (onClick)="mostrarDialogExcedidos.set(false)" />
+  </ng-template>
+</p-dialog>
+
+<!-- Comparativa de formas de pago: el operador la abre desde el botón al lado
+     del select para mostrarle al cliente todas las opciones disponibles con
+     su precio total ya calculado. Cada item es clickeable y selecciona la
+     forma + cierra el dialog — el operador puede mostrarle al cliente y
+     confirmar en un solo click. -->
+<p-dialog header="Formas de pago disponibles" [(visible)]="mostrarDialogFormasPago"
+  [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '38rem' }" [breakpoints]="{ '640px': '95vw' }">
+  <p class="text-sm text-muted-color m-0 mb-3">
+    Tocá una opción para seleccionarla. El total ya incluye recargo e IVA si corresponde.
+  </p>
+  <div class="flex flex-col gap-2">
+    @for (fp of formasPagoActivas(); track fp.id) {
+      @let seleccionada = formaPagoSeleccionada()?.id === fp.id;
+      @let masBarata = formaMasBarata()?.id === fp.id;
+      <button type="button"
+        (click)="elegirFormaDesdeDialog(fp)"
+        class="flex items-center justify-between gap-3 p-3 rounded-lg border-2 text-left transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99] bg-surface-0 dark:bg-surface-900"
+        [class.border-primary]="seleccionada"
+        [class.shadow-md]="seleccionada"
+        [class.bg-primary-50]="seleccionada"
+        [class.dark:bg-primary-950]="seleccionada"
+        [class.border-surface-200]="!seleccionada"
+        [class.dark:border-surface-700]="!seleccionada"
+        [class.hover:border-primary-300]="!seleccionada"
+        [class.dark:hover:border-primary-700]="!seleccionada">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <i [class]="iconoForma(fp)" class="text-lg shrink-0"
+            [class.text-primary]="seleccionada"
+            [class.text-muted-color]="!seleccionada"></i>
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <span class="font-semibold inline-flex items-center gap-1.5 flex-wrap">
+              {{ fp.nombre }}
+              @if (fp.aplicaIva) {
+                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
+              } @else {
+                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+              }
+              @if (masBarata && formasPagoActivas().length > 1) {
+                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-600 text-white inline-flex items-center gap-1">
+                  <i class="pi pi-star-fill text-[0.55rem]"></i>
+                  MEJOR PRECIO
+                </span>
+              }
+            </span>
+            @if (fp.cantidadCuotas && fp.cantidadCuotas > 1) {
+              <span class="text-xs text-muted-color tabular-nums">
+                {{ fp.cantidadCuotas }} cuotas de
+                <strong>{{ totalParaForma(fp) / fp.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}</strong>
+              </span>
+            } @else {
+              <span class="text-xs text-muted-color">Pago único</span>
+            }
+          </div>
+        </div>
+        <div class="text-right shrink-0">
+          <div class="tabular-nums font-bold text-lg" [class.text-primary]="seleccionada" [class.text-emerald-700]="!seleccionada && masBarata" [class.dark:text-emerald-400]="!seleccionada && masBarata">
+            {{ totalParaForma(fp) | currency:'ARS':'symbol':'1.0-0' }}
+          </div>
+          @if (seleccionada) {
+            <div class="text-[0.65rem] uppercase tracking-wider text-primary font-semibold inline-flex items-center gap-1">
+              <i class="pi pi-check-circle text-[0.65rem]"></i>
+              Elegida
+            </div>
+          }
+        </div>
+      </button>
+    }
+  </div>
+  <ng-template #footer>
+    <p-button label="Cerrar" icon="pi pi-times" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogFormasPago.set(false)" />
   </ng-template>
 </p-dialog>

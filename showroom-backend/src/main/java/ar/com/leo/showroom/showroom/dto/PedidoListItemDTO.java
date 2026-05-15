@@ -23,9 +23,17 @@ public record PedidoListItemDTO(
         /** Nombre y apellido (o razón social) real del cliente. Es el campo que se
          *  muestra en la columna Cliente del listado. Null si el operador no lo cargó. */
         String nombre,
-        /** Total CON IVA — lo que se manda a DUX en el comprobante. */
+        /** Email del cliente. Se incluye en el listado (no solo el detalle) para
+         *  que el frontend decida si mostrar el botón "Reenviar email". */
+        String email,
+        /** Teléfono del cliente. Se incluye en el listado para condicionar el
+         *  botón "Enviar por WhatsApp" — si está vacío, el botón se oculta. */
+        String telefono,
+        /** Total que pagó el cliente (con o sin IVA según la forma — ver
+         *  {@code PedidoDetailDTO#formaPagoAplicaIva}). */
         BigDecimal total,
-        /** Total SIN IVA — lo que efectivamente paga el cliente en el showroom. */
+        /** Total sin IVA del pedido. Coincide con {@code total} cuando la forma
+         *  de pago no aplica IVA (el cliente pagó sin IVA). */
         BigDecimal totalSinIva,
         BigDecimal descuentoPorcentaje,
         int cantidadItems

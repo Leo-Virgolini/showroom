@@ -33,6 +33,31 @@ body {
   }
 }
 
+// Highlight enfático para el input de scan — es el control más importante de
+// la pantalla principal, el operador necesita ver de un vistazo si está
+// enfocado (¿la pistola QR va a escanear acá o no?). Anillo grueso color
+// marca + sombra externa color marca + tinte sutil de fondo.
+.scan-input-highlight:focus {
+  border-color: #FF861C !important;
+  box-shadow:
+    0 0 0 4px rgba(255, 134, 28, 0.30),
+    0 4px 16px rgba(255, 134, 28, 0.18) !important;
+  background-color: rgba(255, 134, 28, 0.04);
+  outline: none;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    background-color 0.12s ease;
+}
+
+// Cuando el input está enfocado, también resaltamos el ícono QR a la izquierda
+// y el chip "Enter" a la derecha — refuerzo visual sin necesidad de mirar
+// específicamente al input.
+.p-iconfield:has(.scan-input-highlight:focus) .p-inputicon i {
+  color: #FF861C;
+  transition: color 0.12s ease;
+}
+
 // Mejora general de tap response en táctil — quita el delay de 300ms histórico
 // y permite que los gestos se sientan inmediatos en tablets.
 html {

@@ -12,11 +12,15 @@ import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
+import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.picking.PickingEmailService;
+import ar.com.leo.showroom.picking.WhatsappBusinessService;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.sesion.dto.IniciarSesionRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionDetalleDTO;
+import ar.com.leo.showroom.sesion.dto.SesionEnvioEmailRequestDTO;
+import ar.com.leo.showroom.sesion.dto.SesionEnvioWhatsappRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionListPageDTO;
 import ar.com.leo.showroom.sesion.dto.SesionShowroomDTO;
 import ar.com.leo.showroom.sesion.entity.SesionShowroom;
@@ -32,7 +36,9 @@ import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
 import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
+import ar.com.leo.showroom.showroom.dto.FormaPagoDTO;
 import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
+import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.LocalidadDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
@@ -76,6 +82,8 @@ public class ShowroomController {
     private final PedidoShowroomRepository pedidoRepository;
     private final PresupuestoPdfGenerator pdfGenerator;
     private final PickingEmailService pickingEmailService;
+    private final WhatsappBusinessService whatsappBusinessService;
+    private final FormaPagoService formaPagoService;
     private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final VisorService visorService;
@@ -166,6 +174,55 @@ public class ShowroomController {
     @GetMapping("/sesiones/{id}")
     public SesionDetalleDTO obtenerSesion(@PathVariable Long id) {
         return sesionShowroomService.obtenerDetalle(id);
+    }
+
+    /**
+     * Envía el PDF de productos vistos por email a un cliente cuya sesión
+     * terminó SIN pedido (abandonada). El operador carga el email destinatario
+     * en un dialog del historial. Async — el resultado real (SENT/FAILED) llega
+     * vía SSE {@code picking-email}.
+     *
+     * <p>Rechaza con 503 si la integración de email no está configurada.
+     */
+    @PostMapping("/sesiones/{id}/email")
+    public ResponseEntity<Map<String, Object>> enviarEmailSesion(
+            @PathVariable Long id,
+            @RequestBody @Valid SesionEnvioEmailRequestDTO body) {
+        SesionShowroom sesion = sesionRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
+        return pickingEmailService.motivoNoConfigurado()
+                .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
+                        .status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", motivo)))
+                .orElseGet(() -> {
+                    pickingEmailService.enviarPdfSesionAsync(sesion, body.email());
+                    return ResponseEntity.accepted().body(Map.of(
+                            "message", "Envío encolado — el toast confirmará cuando salga.",
+                            "sesionId", sesion.getId()));
+                });
+    }
+
+    /**
+     * Envía el PDF de productos vistos por WhatsApp a un cliente cuya sesión
+     * terminó SIN pedido. Mismo flujo que el email pero por Meta Cloud API.
+     * Async — el resultado real llega vía SSE {@code whatsapp-business}.
+     */
+    @PostMapping("/sesiones/{id}/whatsapp")
+    public ResponseEntity<Map<String, Object>> enviarWhatsappSesion(
+            @PathVariable Long id,
+            @RequestBody @Valid SesionEnvioWhatsappRequestDTO body) {
+        SesionShowroom sesion = sesionRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
+        return whatsappBusinessService.motivoNoConfigurado()
+                .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
+                        .status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", motivo)))
+                .orElseGet(() -> {
+                    whatsappBusinessService.enviarPdfSesionAsync(sesion, body.telefono());
+                    return ResponseEntity.accepted().body(Map.of(
+                            "message", "Envío encolado — el toast confirmará cuando salga.",
+                            "sesionId", sesion.getId()));
+                });
     }
 
     // =====================================================
@@ -393,6 +450,28 @@ public class ShowroomController {
     }
 
     /**
+     * Re-envía manualmente el PDF del presupuesto por WhatsApp para un pedido
+     * ya existente. El envío es async — la respuesta solo confirma que se
+     * encoló; el resultado real (SENT / WINDOW_CLOSED / FAILED) llega vía SSE
+     * {@code whatsapp-business}.
+     */
+    @PostMapping("/pedidos/{id}/whatsapp")
+    public ResponseEntity<Map<String, Object>> reenviarWhatsappPedido(@PathVariable Long id) {
+        PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
+        return whatsappBusinessService.motivoNoConfigurado()
+                .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
+                        .status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", motivo)))
+                .orElseGet(() -> {
+                    whatsappBusinessService.enviarPdfAsync(pedido);
+                    return ResponseEntity.accepted().body(Map.of(
+                            "message", "Envío encolado — el toast confirmará cuando salga.",
+                            "pedidoId", pedido.getId()));
+                });
+    }
+
+    /**
      * Regenera el pickit externo (programa pickit-y-etiquetas) para un pedido
      * ya creado. Async — el resultado llega vía SSE {@code pickit-externo}.
      * 503 si la integración no está configurada (jar faltante, paths incompletos).
@@ -580,6 +659,45 @@ public class ShowroomController {
     }
 
     /**
+     * Listado completo de formas de pago (activas + inactivas) para la pantalla
+     * de configuración. El operador ve todas y puede activar/desactivar.
+     */
+    @GetMapping("/config/formas-pago")
+    public List<FormaPagoDTO> listarFormasPagoConfig() {
+        return formaPagoService.listarTodas().stream().map(FormaPagoService::toDTO).toList();
+    }
+
+    /**
+     * Listado solo de las formas activas — para el selector del operador en
+     * el carrito al armar un pedido. Endpoint separado del de configuración
+     * para evitar mezclar conceptos.
+     */
+    @GetMapping("/formas-pago/activas")
+    public List<FormaPagoDTO> listarFormasPagoActivas() {
+        return formaPagoService.listarActivas().stream().map(FormaPagoService::toDTO).toList();
+    }
+
+    @PostMapping("/config/formas-pago")
+    public FormaPagoDTO crearFormaPago(@RequestBody @Valid FormaPagoDTO dto) {
+        return FormaPagoService.toDTO(formaPagoService.crear(dto));
+    }
+
+    @PutMapping("/config/formas-pago/{id}")
+    public FormaPagoDTO actualizarFormaPago(
+            @PathVariable Long id,
+            @RequestBody @Valid FormaPagoDTO dto) {
+        return FormaPagoService.toDTO(formaPagoService.actualizar(id, dto));
+    }
+
+    /** Soft delete — la forma de pago queda con activo=false y deja de aparecer
+     *  en el selector del operador. Pedidos viejos preservan su snapshot. */
+    @DeleteMapping("/config/formas-pago/{id}")
+    public ResponseEntity<Void> eliminarFormaPago(@PathVariable Long id) {
+        formaPagoService.eliminar(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Horarios diarios de sincronización automática con DUX (zona AR).
      * Si la lista está vacía, no hay sync automática — solo manual.
      */
@@ -611,6 +729,22 @@ public class ShowroomController {
     @PutMapping("/config/pickit")
     public PickitConfigDTO actualizarPickitConfig(@RequestBody PickitConfigDTO body) {
         return service.savePickitConfig(body);
+    }
+
+    /**
+     * Toggles para habilitar/deshabilitar el envío automático del PDF tras
+     * pedido OK (email y/o whatsapp). Ojo: NO afectan los botones manuales en
+     * /pedidos ni /historial — esos siguen disponibles siempre que la integración
+     * a nivel sistema (env vars SMTP / Meta token) esté ok.
+     */
+    @GetMapping("/config/notificaciones-auto")
+    public NotificacionesAutoConfigDTO obtenerNotificacionesAuto() {
+        return service.getNotificacionesAuto();
+    }
+
+    @PutMapping("/config/notificaciones-auto")
+    public NotificacionesAutoConfigDTO actualizarNotificacionesAuto(@RequestBody NotificacionesAutoConfigDTO body) {
+        return service.saveNotificacionesAuto(body);
     }
 
     /** Timestamp (epoch ms) cuando el bean se inicializó — equivale al boot del

@@ -53,12 +53,16 @@ public class PedidoShowroom {
     @Column(name = "observaciones", length = 500)
     private String observaciones;
 
-    /** Total CON IVA del pedido (precio × cantidad) — es el monto que va al comprobante DUX. */
+    /** Total que pagó el cliente. Tiene IVA si {@code formaPagoAplicaIva} es
+     *  true/null (caso normal: precio del cliente y comprobante DUX coinciden);
+     *  está sin IVA si la forma "no aplica IVA" (el cliente paga sin IVA y el
+     *  operador absorbe el IVA que igual se factura en DUX). */
     @Column(name = "total", precision = 18, scale = 2)
     private BigDecimal total;
 
-    /** Total SIN IVA del pedido — lo que efectivamente paga el cliente en el showroom.
-     *  Se computa al crear el pedido sumando precio_sin_iva × cantidad por cada item. */
+    /** Total sin IVA del pedido (recargo aplicado, IVA descontado). Coincide
+     *  con {@code total} cuando la forma no aplica IVA. Se computa al crear el
+     *  pedido sumando precio_sin_iva × cantidad por cada item. */
     @Column(name = "total_sin_iva", precision = 18, scale = 2)
     private BigDecimal totalSinIva;
 
@@ -66,6 +70,40 @@ public class PedidoShowroom {
      *  en {@code escala_descuento}). Soporta decimales (ej: 5.50). */
     @Column(name = "descuento_porcentaje", precision = 5, scale = 2)
     private BigDecimal descuentoPorcentaje;
+
+    /** Forma de pago elegida (FK opcional a {@code forma_pago.id} — sin
+     *  constraint para no atar el pedido al ciclo de vida de la forma de
+     *  pago). Si se desactiva o borra una forma_pago, el pedido conserva
+     *  los snapshots de nombre/recargo/cuotas para auditoría. */
+    @Column(name = "forma_pago_id")
+    private Long formaPagoId;
+
+    /** Snapshot del nombre de la forma de pago al momento del pedido. */
+    @Column(name = "forma_pago_nombre", length = 100)
+    private String formaPagoNombre;
+
+    /** Snapshot del recargo % aplicado. Null si no se eligió forma de pago
+     *  con recargo (efectivo, débito 1 cuota, etc.). */
+    @Column(name = "recargo_porcentaje", precision = 6, scale = 2)
+    private BigDecimal recargoPorcentaje;
+
+    /** Snapshot de la cantidad de cuotas — informativo para PDF/UI. */
+    @Column(name = "cantidad_cuotas")
+    private Integer cantidadCuotas;
+
+    /** Snapshot del flag {@code aplicaIva} de la forma de pago al momento del
+     *  pedido. {@code true} (caso normal): el cliente pagó precio con IVA.
+     *  {@code false}: el cliente pagó precio sin IVA — DUX igual recibió el
+     *  comprobante con IVA y el operador absorbió la diferencia. Null en
+     *  pedidos sin forma de pago. */
+    @Column(name = "forma_pago_aplica_iva")
+    private Boolean formaPagoAplicaIva;
+
+    /** Total CON IVA antes de aplicar el recargo de financiación. Permite
+     *  desglosar en la UI/PDF "subtotal vs total con financiación". Null en
+     *  pedidos viejos sin forma de pago elegida (o equivalente al {@code total}). */
+    @Column(name = "total_sin_recargo", precision = 18, scale = 2)
+    private BigDecimal totalSinRecargo;
 
     /** Datos del cliente del pedido — copiados del payload al crear. */
     @Column(name = "apellido_razon_social", length = 100)

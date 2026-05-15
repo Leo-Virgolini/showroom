@@ -225,18 +225,34 @@
                   pTooltip="Descargar PDF de productos vistos pero no comprados"
                   tooltipPosition="top"
                 />
-                <p-button
-                  icon="pi pi-envelope"
-                  severity="info"
-                  [text]="true"
-                  [rounded]="true"
-                  size="small"
-                  [loading]="estaEnviandoEmail(p.id)"
-                  (onClick)="reenviarEmail(p)"
-                  ariaLabel="Reenviar al cliente el email con el PDF de productos vistos"
-                  pTooltip="Reenviar al cliente el email con el PDF de productos vistos"
-                  tooltipPosition="top"
-                />
+                @if (p.email) {
+                  <p-button
+                    icon="pi pi-envelope"
+                    severity="info"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    [loading]="estaEnviandoEmail(p.id)"
+                    (onClick)="reenviarEmail(p)"
+                    ariaLabel="Reenviar al cliente el email con el PDF de productos vistos"
+                    pTooltip="Reenviar al cliente el email con el PDF de productos vistos"
+                    tooltipPosition="top"
+                  />
+                }
+                @if (p.telefono) {
+                  <p-button
+                    icon="pi pi-whatsapp"
+                    severity="success"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    [loading]="estaEnviandoWhatsapp(p.id)"
+                    (onClick)="reenviarWhatsapp(p)"
+                    ariaLabel="Enviar el PDF por WhatsApp al cliente"
+                    pTooltip="Enviar el PDF por WhatsApp (requiere que el cliente haya escrito en las últimas 24hs)"
+                    tooltipPosition="top"
+                  />
+                }
                 @if (puedeAnular(p)) {
                   <p-button
                     icon="pi pi-ban"
@@ -266,13 +282,13 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div class="flex flex-col gap-2">
                         <p-skeleton width="40%" height="0.9rem" />
-                        <p-skeleton width="100%" height="1.4rem" styleClass="!mt-2" />
+                        <p-skeleton width="100%" height="1.4rem" class="!mt-2" />
                         <p-skeleton width="90%" height="1.4rem" />
                         <p-skeleton width="80%" height="1.4rem" />
                       </div>
                       <div class="flex flex-col gap-2">
                         <p-skeleton width="40%" height="0.9rem" />
-                        <p-skeleton width="100%" height="1.4rem" styleClass="!mt-2" />
+                        <p-skeleton width="100%" height="1.4rem" class="!mt-2" />
                         <p-skeleton width="90%" height="1.4rem" />
                         <p-skeleton width="80%" height="1.4rem" />
                       </div>
@@ -322,20 +338,56 @@
                             </span>
                           } @else { — }
                         </dd>
+                        @if (det.formaPagoNombre) {
+                          <dt class="text-muted-color">Forma de pago</dt>
+                          <dd>
+                            <span class="font-medium">{{ det.formaPagoNombre }}</span>
+                            @if (det.cantidadCuotas && det.cantidadCuotas > 1) {
+                              <span class="text-muted-color"> · {{ det.cantidadCuotas }} cuotas</span>
+                            }
+                            @if (det.recargoPorcentaje && det.recargoPorcentaje > 0) {
+                              <span class="text-amber-700 dark:text-amber-300 font-semibold ml-1">
+                                +{{ det.recargoPorcentaje }}%
+                              </span>
+                            }
+                            @if (det.formaPagoAplicaIva === false) {
+                              <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 ml-1"
+                                pTooltip="El cliente pagó sin IVA. DUX igual facturó con IVA y el operador absorbió la diferencia." tooltipPosition="top">SIN IVA</span>
+                            }
+                          </dd>
+                        }
+                        @if (det.totalSinRecargo != null && det.total != null) {
+                          <dt class="text-muted-color">Sin financiación</dt>
+                          <dd class="tabular-nums text-muted-color">
+                            {{ det.totalSinRecargo | currency:'ARS':'symbol':'1.0-0' }}
+                            <span class="text-xs italic ml-1">antes del recargo</span>
+                          </dd>
+                        }
                         <dt class="text-muted-color">Cliente paga</dt>
                         <dd class="tabular-nums font-bold text-base text-primary">
-                          {{ (det.totalSinIva ?? det.total) | currency:'ARS':'symbol':'1.0-0' }}
-                          <span class="text-xs font-normal text-muted-color ml-1">s/IVA</span>
+                          {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
+                          <span class="text-xs font-normal text-muted-color ml-1">
+                            {{ det.formaPagoAplicaIva === false ? 's/IVA' : 'c/IVA' }}
+                          </span>
                         </dd>
-                        @if (det.totalSinIva != null && det.total != null && det.totalSinIva !== det.total) {
-                          <dt class="text-muted-color">+ IVA</dt>
-                          <dd class="tabular-nums">
+                        @if (det.formaPagoAplicaIva === false && totalDux(det); as tDux) {
+                          <dt class="text-muted-color">+ IVA absorbido</dt>
+                          <dd class="tabular-nums text-amber-700 dark:text-amber-300">
                             {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
                           </dd>
-                          <dt class="text-muted-color">Total DUX</dt>
+                          <dt class="text-muted-color">DUX facturó</dt>
                           <dd class="tabular-nums font-semibold">
-                            {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ tDux | currency:'ARS':'symbol':'1.0-0' }}
                             <span class="text-xs font-normal text-muted-color ml-1">c/IVA</span>
+                          </dd>
+                        } @else if (det.totalSinIva != null && det.total != null && det.totalSinIva !== det.total) {
+                          <dt class="text-muted-color">Sin IVA</dt>
+                          <dd class="tabular-nums text-muted-color">
+                            {{ det.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
+                          </dd>
+                          <dt class="text-muted-color">IVA</dt>
+                          <dd class="tabular-nums">
+                            {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
                           </dd>
                         }
                       </dl>
@@ -380,15 +432,23 @@
                       <h4 class="text-xs font-semibold uppercase text-muted-color m-0">
                         Items ({{ det.items.length }})
                       </h4>
-                      @if (det.totalSinIva != null && det.total != null) {
+                      @if (det.total != null) {
                         <div class="flex items-baseline gap-3 text-xs tabular-nums">
                           <span class="text-primary font-semibold">
-                            Cliente paga (s/IVA): {{ det.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
+                            Cliente paga ({{ det.formaPagoAplicaIva === false ? 's/IVA' : 'c/IVA' }}):
+                            {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
                           </span>
-                          <span class="text-muted-color">+ IVA: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}</span>
-                          <span class="text-muted-color">
-                            DUX (c/IVA): {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
-                          </span>
+                          @if (det.formaPagoAplicaIva === false && totalDux(det); as tDux) {
+                            <span class="text-amber-700 dark:text-amber-300">
+                              + IVA absorbido: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
+                            </span>
+                            <span class="text-muted-color">
+                              DUX facturó: {{ tDux | currency:'ARS':'symbol':'1.0-0' }}
+                            </span>
+                          } @else if (det.totalSinIva != null && det.totalSinIva !== det.total) {
+                            <span class="text-muted-color">Sin IVA: {{ det.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}</span>
+                            <span class="text-muted-color">IVA: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}</span>
+                          }
                         </div>
                       }
                     </div>
@@ -420,17 +480,21 @@
                           <td>{{ it.descripcion ?? '—' }}</td>
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
                           <td class="text-right tabular-nums text-muted-color">
-                            @if (precioSinIva(it.precioUnitario, it.porcIva); as p) {
+                            @if (precioSinIva(it.precioUnitario, it.porcIva, det.formaPagoAplicaIva); as p) {
                               {{ p | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —
                             }
                           </td>
                           <td class="text-right tabular-nums">
-                            {{ it.precioUnitario | currency:'ARS':'symbol':'1.0-0' }}
+                            @if (precioConIva(it.precioUnitario, it.porcIva, det.formaPagoAplicaIva); as p) {
+                              {{ p | currency:'ARS':'symbol':'1.0-0' }}
+                            } @else {
+                              —
+                            }
                           </td>
                           <td class="text-right tabular-nums font-semibold">
-                            @if (subtotalSinIva(it); as s) {
+                            @if (subtotalSinIva(it, det.formaPagoAplicaIva); as s) {
                               {{ s | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —

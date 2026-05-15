@@ -16,6 +16,7 @@ import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
+import { DialogModule } from 'primeng/dialog';
 import { ImageModule } from 'primeng/image';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
@@ -44,6 +45,7 @@ import { toastError } from '../toast.utils';
     ButtonModule,
     CardModule,
     DatePickerModule,
+    DialogModule,
     ImageModule,
     InputGroupModule,
     InputGroupAddonModule,
@@ -226,6 +228,79 @@ export class HistorialPage {
     if (precioConIva == null) return null;
     if (porcIva == null || porcIva === 0) return precioConIva;
     return precioConIva / (1 + porcIva / 100);
+  }
+
+  // =====================================================
+  // Envío de PDF por email / WhatsApp para sesiones abandonadas (sin pedido).
+  // Para sesiones con pedido los botones viven en /pedidos.
+  // =====================================================
+
+  /** True para sesiones que terminaron sin pedido y tienen al menos 1 item.
+   *  Sin items no hay PDF que mandar; con pedido los botones existen en /pedidos. */
+  puedeEnviarPdfSesion(s: SesionListItem): boolean {
+    return s.finalizadaAt != null && s.pedidoId == null && s.cantidadEscaneados > 0;
+  }
+
+  /** Sesión que está siendo target del dialog de envío. null = dialog cerrado. */
+  readonly sesionEnvio = signal<SesionListItem | null>(null);
+  /** Modo del envío. */
+  readonly modoEnvio = signal<'email' | 'whatsapp'>('email');
+  /** Valor del input (email o telefono según modo). */
+  readonly destinatarioInput = signal('');
+  /** True mientras la request al backend está en vuelo (loading del botón). */
+  readonly enviandoSesion = signal(false);
+
+  abrirEnvioEmail(s: SesionListItem, event: Event): void {
+    event.stopPropagation();
+    if (!this.puedeEnviarPdfSesion(s)) return;
+    this.sesionEnvio.set(s);
+    this.modoEnvio.set('email');
+    this.destinatarioInput.set('');
+  }
+
+  abrirEnvioWhatsapp(s: SesionListItem, event: Event): void {
+    event.stopPropagation();
+    if (!this.puedeEnviarPdfSesion(s)) return;
+    this.sesionEnvio.set(s);
+    this.modoEnvio.set('whatsapp');
+    this.destinatarioInput.set('');
+  }
+
+  cerrarDialogEnvio(): void {
+    if (this.enviandoSesion()) return; // no cerrar mientras se manda
+    this.sesionEnvio.set(null);
+  }
+
+  confirmarEnvioSesion(): void {
+    const sesion = this.sesionEnvio();
+    const dest = this.destinatarioInput().trim();
+    if (!sesion || !dest) return;
+    this.enviandoSesion.set(true);
+    const modo = this.modoEnvio();
+    const obs = modo === 'email'
+      ? this.api.enviarEmailSesion(sesion.id, dest)
+      : this.api.enviarWhatsappSesion(sesion.id, dest);
+    obs.subscribe({
+      next: () => {
+        this.enviandoSesion.set(false);
+        this.sesionEnvio.set(null);
+        // El resultado real (SENT / FAILED / WINDOW_CLOSED) llega vía SSE
+        // picking-email o whatsapp-business (toast en app.ts).
+        this.toast.add({
+          severity: 'info',
+          summary: modo === 'email' ? 'Email encolado' : 'WhatsApp encolado',
+          detail: modo === 'email'
+            ? 'Generando PDF y enviando…'
+            : 'Subiendo PDF a Meta y mandando…',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.enviandoSesion.set(false);
+        toastError(this.toast, modo === 'email' ? 'Email' : 'WhatsApp', err,
+          'No se pudo encolar el envío');
+      },
+    });
   }
 
   trackById = (_: number, it: SesionListItem) => it.id;
