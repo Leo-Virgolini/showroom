@@ -21,6 +21,35 @@
   </p-toolbar>
 
   <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
+    <!-- Tabs para agrupar las secciones por dominio funcional. El operador
+         entra a "Usuarios" la mayoría de las veces; "Ventas" y "Sync" son
+         menos frecuentes. "Integraciones" para setup inicial del pickit. -->
+    <p-tabs value="usuarios">
+      <p-tablist>
+        <p-tab value="usuarios">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-users"></i>Usuarios
+          </span>
+        </p-tab>
+        <p-tab value="ventas">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-shopping-cart"></i>Pedidos y ventas
+          </span>
+        </p-tab>
+        <p-tab value="sync">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-sync"></i>Sincronización DUX
+          </span>
+        </p-tab>
+        <p-tab value="integraciones">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-cog"></i>Integraciones
+          </span>
+        </p-tab>
+      </p-tablist>
+      <p-tabpanels>
+
+      <p-tabpanel value="usuarios">
     <!-- ============================================================
          Usuarios (CRUD)
          ============================================================ -->
@@ -91,7 +120,10 @@
         </ng-template>
       </p-table>
     </p-card>
+      </p-tabpanel>
 
+      <p-tabpanel value="ventas">
+        <div class="flex flex-col gap-4">
     <!-- ============================================================
          Formas de pago (CRUD)
          ============================================================ -->
@@ -192,67 +224,8 @@
     </p-card>
 
     <!-- ============================================================
-         Notificaciones automáticas tras pedido (email + whatsapp)
+         Escalones de descuento por subtotal
          ============================================================ -->
-    <p-card>
-      <div class="flex flex-col gap-2 mb-4">
-        <div class="text-sm text-surface-700 dark:text-surface-200">
-          Después de crear cada pedido, el sistema puede mandar automáticamente al cliente el <strong>PDF con los productos vistos pero no comprados</strong>. Acá controlás si los envíos automáticos están activos por canal.
-        </div>
-        <div class="text-xs text-muted-color">
-          Si los desactivás, los pedidos se siguen creando normalmente — solo no se dispara el envío automático. Los <strong>botones manuales</strong> en /pedidos y /historial siempre quedan disponibles para mandarlos a mano.
-        </div>
-      </div>
-
-      <h3 class="text-base font-semibold m-0 mb-3">Envíos automáticos</h3>
-
-      <div class="flex flex-col gap-3 max-w-2xl">
-        @if (notificacionesAuto(); as cfg) {
-        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
-          <p-checkbox
-            [ngModel]="cfg.whatsappAutoPedido"
-            (ngModelChange)="toggleNotificacionAuto('whatsappAutoPedido', $event)"
-            [binary]="true"
-            inputId="autoWhatsapp"
-            [disabled]="guardandoNotificacionesAuto()" />
-          <div class="flex flex-col gap-0.5 flex-1">
-            <span class="text-sm font-medium inline-flex items-center gap-2">
-              <i class="pi pi-whatsapp text-green-600"></i>
-              WhatsApp automático tras pedido
-            </span>
-            <span class="text-xs text-muted-color">
-              Manda el PDF al teléfono del cliente. Requiere ventana de 24hs abierta y el feature configurado a nivel sistema (env vars Meta).
-            </span>
-          </div>
-        </label>
-
-        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
-          <p-checkbox
-            [ngModel]="cfg.emailAutoPedido"
-            (ngModelChange)="toggleNotificacionAuto('emailAutoPedido', $event)"
-            [binary]="true"
-            inputId="autoEmail"
-            [disabled]="guardandoNotificacionesAuto()" />
-          <div class="flex flex-col gap-0.5 flex-1">
-            <span class="text-sm font-medium inline-flex items-center gap-2">
-              <i class="pi pi-envelope text-blue-600"></i>
-              Email automático tras pedido
-            </span>
-            <span class="text-xs text-muted-color">
-              Manda el PDF al email del cliente. Si tenés WhatsApp activo y llega OK, no se manda este email (fallback solo si WhatsApp falla / no hay teléfono).
-            </span>
-          </div>
-        </label>
-        } @else if (cargandoNotificacionesAuto()) {
-        <div class="text-sm text-muted-color">Cargando…</div>
-        } @else {
-        <div class="text-sm text-red-600 dark:text-red-400">
-          No se pudo cargar la config. Recargá la página.
-        </div>
-        }
-      </div>
-    </p-card>
-
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
@@ -352,6 +325,109 @@
       </div>
     </p-card>
 
+    <!-- ============================================================
+         Notificaciones automáticas tras pedido (email + whatsapp)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Después de crear cada pedido, el sistema puede mandar automáticamente al cliente el <strong>PDF con los productos vistos pero no comprados</strong>. Acá controlás si los envíos automáticos están activos por canal.
+        </div>
+        <div class="text-xs text-muted-color">
+          Si los desactivás, los pedidos se siguen creando normalmente — solo no se dispara el envío automático. Los <strong>botones manuales</strong> en /pedidos y /historial siempre quedan disponibles para mandarlos a mano.
+        </div>
+      </div>
+
+      <h3 class="text-base font-semibold m-0 mb-3">Envíos automáticos</h3>
+
+      <div class="flex flex-col gap-3 max-w-2xl">
+        @if (notificacionesAuto(); as cfg) {
+        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
+          <p-checkbox
+            [ngModel]="cfg.whatsappAutoPedido"
+            (ngModelChange)="toggleNotificacionAuto('whatsappAutoPedido', $event)"
+            [binary]="true"
+            inputId="autoWhatsapp"
+            [disabled]="guardandoNotificacionesAuto()" />
+          <div class="flex flex-col gap-0.5 flex-1">
+            <span class="text-sm font-medium inline-flex items-center gap-2">
+              <i class="pi pi-whatsapp text-green-600"></i>
+              WhatsApp automático tras pedido
+            </span>
+            <span class="text-xs text-muted-color">
+              Manda el PDF al teléfono del cliente. Requiere ventana de 24hs abierta y el feature configurado a nivel sistema (env vars Meta).
+            </span>
+          </div>
+        </label>
+
+        <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors">
+          <p-checkbox
+            [ngModel]="cfg.emailAutoPedido"
+            (ngModelChange)="toggleNotificacionAuto('emailAutoPedido', $event)"
+            [binary]="true"
+            inputId="autoEmail"
+            [disabled]="guardandoNotificacionesAuto()" />
+          <div class="flex flex-col gap-0.5 flex-1">
+            <span class="text-sm font-medium inline-flex items-center gap-2">
+              <i class="pi pi-envelope text-blue-600"></i>
+              Email automático tras pedido
+            </span>
+            <span class="text-xs text-muted-color">
+              Manda el PDF al email del cliente. Si tenés WhatsApp activo y llega OK, no se manda este email (fallback solo si WhatsApp falla / no hay teléfono).
+            </span>
+          </div>
+        </label>
+        } @else if (cargandoNotificacionesAuto()) {
+        <div class="text-sm text-muted-color">Cargando…</div>
+        } @else {
+        <div class="text-sm text-red-600 dark:text-red-400">
+          No se pudo cargar la config. Recargá la página.
+        </div>
+        }
+      </div>
+    </p-card>
+        </div>
+      </p-tabpanel>
+
+      <p-tabpanel value="sync">
+        <div class="flex flex-col gap-4">
+
+    <!-- ============================================================
+         Toggle global: habilitar / pausar sync automática
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Pausá la sincronización automática con DUX sin perder los horarios configurados. Útil cuando DUX está caído o cuando hacés mantenimiento y no querés que se dispare la sync.
+        </div>
+        <div class="text-xs text-muted-color">
+          Mientras está pausada, los horarios siguen guardados pero los disparos se saltean. La sync manual (botón de la pantalla principal) sigue funcionando normalmente.
+        </div>
+      </div>
+
+      <label class="flex items-start gap-3 p-3 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-900 transition-colors max-w-2xl">
+        <p-toggleswitch
+          [ngModel]="syncAutoHabilitada() ?? true"
+          (ngModelChange)="toggleSyncAuto($event)"
+          [disabled]="cargandoSyncAuto() || guardandoSyncAuto() || syncAutoHabilitada() === null" />
+        <div class="flex flex-col gap-0.5 flex-1">
+          <span class="text-sm font-medium inline-flex items-center gap-2">
+            <i class="pi pi-sync text-[#FF861C]"></i>
+            Sincronización automática con DUX
+          </span>
+          <span class="text-xs text-muted-color">
+            @if (syncAutoHabilitada() === null) {
+              Cargando…
+            } @else if (syncAutoHabilitada()) {
+              <strong class="text-emerald-700 dark:text-emerald-400">Habilitada</strong> — los horarios programados disparan normalmente.
+            } @else {
+              <strong class="text-amber-700 dark:text-amber-400">Pausada</strong> — los disparos programados se saltean.
+            }
+          </span>
+        </div>
+      </label>
+    </p-card>
+
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
@@ -439,7 +515,10 @@
         />
       </div>
     </p-card>
+        </div>
+      </p-tabpanel>
 
+      <p-tabpanel value="integraciones">
     <!-- ============================================================
          Pickit externo (programa pickit-y-etiquetas)
          ============================================================ -->
@@ -553,7 +632,10 @@
           [disabled]="!hayCambiosPickit()" />
       </div>
     </p-card>
+      </p-tabpanel>
 
+      </p-tabpanels>
+    </p-tabs>
   </main>
 </div>
 

@@ -36,6 +36,12 @@ public class ConfiguracionService {
     public static final String CLAVE_AUTO_EMAIL_PEDIDO = "notificaciones.email-auto-pedido";
     public static final String CLAVE_AUTO_WHATSAPP_PEDIDO = "notificaciones.whatsapp-auto-pedido";
 
+    /** Habilita/deshabilita la sincronización automática con DUX. Cuando es
+     *  false los disparos programados (horarios) se saltean sin ejecutar — el
+     *  operador puede dejar configurados sus horarios y solo pausar la sync
+     *  con un toggle (ej: mientras DUX está caído). Default true. */
+    public static final String CLAVE_SYNC_AUTO_HABILITADA = "sync.auto-habilitada";
+
     private final ConfiguracionRepository repository;
 
     /**
@@ -124,6 +130,24 @@ public class ConfiguracionService {
         String v = leer(clave);
         if (v == null || v.isEmpty()) return defaultSiAusente;
         return "true".equalsIgnoreCase(v);
+    }
+
+    // =====================================================================
+    // Sincronización automática con DUX (toggle global)
+    // =====================================================================
+
+    /** Default {@code true}: si la fila no existe (primera vez), asumimos que
+     *  el operador quiere la sync auto activa. */
+    @Transactional(readOnly = true)
+    public boolean isSyncAutoHabilitada() {
+        return leerBool(CLAVE_SYNC_AUTO_HABILITADA, true);
+    }
+
+    @Transactional
+    public boolean setSyncAutoHabilitada(boolean habilitada) {
+        guardar(CLAVE_SYNC_AUTO_HABILITADA, habilitada ? "true" : "false");
+        log.info("Sync automática DUX {}", habilitada ? "HABILITADA" : "DESHABILITADA");
+        return habilitada;
     }
 
     private String leer(String clave) {

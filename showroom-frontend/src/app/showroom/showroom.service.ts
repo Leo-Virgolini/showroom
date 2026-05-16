@@ -140,6 +140,16 @@ export class ShowroomService {
   // El recargo % se aplica al carrito completo y se snapshotea en el pedido.
   // =====================================================
 
+  /** Toggle global de sync automática con DUX. {@code false} pausa los
+   *  disparos de los horarios programados sin borrarlos. */
+  obtenerSyncAuto(): Observable<{ habilitada: boolean }> {
+    return this.http.get<{ habilitada: boolean }>(`${this.base}/config/sync-auto`);
+  }
+
+  guardarSyncAuto(habilitada: boolean): Observable<{ habilitada: boolean }> {
+    return this.http.put<{ habilitada: boolean }>(`${this.base}/config/sync-auto`, { habilitada });
+  }
+
   /** Listado completo (activas + inactivas) — para /configuracion. */
   listarFormasPagoConfig(): Observable<FormaPago[]> {
     return this.http.get<FormaPago[]>(`${this.base}/config/formas-pago`);

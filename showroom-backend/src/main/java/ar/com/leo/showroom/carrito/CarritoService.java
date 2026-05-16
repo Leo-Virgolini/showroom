@@ -246,18 +246,6 @@ public class CarritoService {
     }
 
     /**
-     * Aplica al carrito el stock fresco del cache después de un sync global del
-     * catálogo. Preserva precios (igual que {@code refrescarStock} manual). Si
-     * algún item queda con cantidad > stock nuevo, el frontend lo detecta vía
-     * el computed {@code hayItemsExcedidos()} y muestra alerta — pero además
-     * nosotros mandamos el SSE con origen {@code SISTEMA} para que el caller
-     * sepa que el cambio vino del sync (no de un operador) y pueda mostrar un
-     * toast diferenciado.
-     *
-     * <p>Si no hay items en el carrito, no hacemos nada — evitar broadcast
-     * innecesario que disparía un toast vacío en el frontend.
-     */
-    /**
      * Listener para {@link SesionCerradaEvent}: vacía el carrito cuando la
      * sesión de atención termina sin pedido (cancelada manualmente o abandonada
      * al iniciar otra). Sin esto, el siguiente cliente heredaría los items del

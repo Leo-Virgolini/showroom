@@ -21,7 +21,7 @@ import java.util.Optional;
  *
  * El índice se reconstruye:
  *  - Al startup (PostConstruct).
- *  - On-demand vía {@code POST /api/showroom/imagenes/reindex} cuando el cliente
+ *  - On-demand vía {@code POST /api/showroom/admin/imagenes/reindex} cuando el cliente
  *    sube imágenes nuevas (no hay refresh periódico — la carpeta cambia poco).
  */
 @Slf4j

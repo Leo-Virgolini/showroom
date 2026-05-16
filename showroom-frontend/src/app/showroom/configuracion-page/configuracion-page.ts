@@ -19,6 +19,8 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
+import { TabsModule } from 'primeng/tabs';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
@@ -65,6 +67,8 @@ interface FilaHorario {
     InputNumberModule,
     InputTextModule,
     TableModule,
+    TabsModule,
+    ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
   ],
@@ -178,6 +182,14 @@ export class ConfiguracionPage {
   readonly notificacionesAuto = signal<NotificacionesAutoConfig | null>(null);
 
   // ============================================================
+  // Toggle global de sync automática con DUX
+  // ============================================================
+  readonly cargandoSyncAuto = signal(false);
+  readonly guardandoSyncAuto = signal(false);
+  /** Si null, todavía no cargó. Default a `true` desde el backend. */
+  readonly syncAutoHabilitada = signal<boolean | null>(null);
+
+  // ============================================================
   // Formas de pago — CRUD
   // ============================================================
   readonly cargandoFormasPago = signal(false);
@@ -203,6 +215,52 @@ export class ConfiguracionPage {
     this.cargarUsuarios();
     this.cargarFormasPago();
     this.cargarNotificacionesAuto();
+    this.cargarSyncAuto();
+  }
+
+  // ============================================================
+  // Sync auto — métodos
+  // ============================================================
+
+  private cargarSyncAuto(): void {
+    this.cargandoSyncAuto.set(true);
+    this.api.obtenerSyncAuto().subscribe({
+      next: (cfg) => {
+        this.cargandoSyncAuto.set(false);
+        this.syncAutoHabilitada.set(cfg.habilitada);
+      },
+      error: (err) => {
+        this.cargandoSyncAuto.set(false);
+        toastError(this.toast, 'Sync automática', err, 'No se pudo cargar el estado de la sync automática');
+      },
+    });
+  }
+
+  toggleSyncAuto(valor: boolean): void {
+    const previo = this.syncAutoHabilitada();
+    // Update optimista — el switch responde instantáneo.
+    this.syncAutoHabilitada.set(valor);
+    this.guardandoSyncAuto.set(true);
+    this.api.guardarSyncAuto(valor).subscribe({
+      next: (cfg) => {
+        this.guardandoSyncAuto.set(false);
+        this.syncAutoHabilitada.set(cfg.habilitada);
+        this.toast.add({
+          severity: 'success',
+          summary: `Sync automática ${valor ? 'habilitada' : 'pausada'}`,
+          detail: valor
+            ? 'Los horarios programados van a disparar normalmente.'
+            : 'Los horarios siguen configurados pero no se van a ejecutar hasta reactivar.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoSyncAuto.set(false);
+        // Revertir optimistic.
+        this.syncAutoHabilitada.set(previo);
+        toastError(this.toast, 'Sync automática', err, 'No se pudo guardar el cambio');
+      },
+    });
   }
 
   // ============================================================

@@ -310,7 +310,7 @@ public class ShowroomController {
      * Reindexa la carpeta de imágenes inmediatamente. Disparar después de subir
      * imágenes nuevas para que aparezcan sin reiniciar el backend.
      */
-    @PostMapping("/imagenes/reindex")
+    @PostMapping("/admin/imagenes/reindex")
     public Map<String, Object> reindexarImagenes() {
         imagenLocalService.recargarIndice();
         return Map.of(
@@ -644,9 +644,9 @@ public class ShowroomController {
     /**
      * Debug: GET crudo a cualquier path de DUX usando los tokens del backend.
      * Devuelve la respuesta tal cual la manda DUX. Útil para explorar endpoints
-     * sin exponer el token en curl. Ej: `GET /api/showroom/debug/dux-get?path=/percepcionesImpuestos`.
+     * sin exponer el token en curl. Ej: `GET /api/showroom/admin/dux-get?path=/percepcionesImpuestos`.
      */
-    @GetMapping(value = "/debug/dux-get", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping(value = "/admin/dux-get", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<String> debugDuxGet(@RequestParam("path") String path) {
         String body = duxClient.rawGet(path);
         return ResponseEntity.ok(body);
@@ -791,6 +791,22 @@ public class ShowroomController {
     @PutMapping("/config/notificaciones-auto")
     public NotificacionesAutoConfigDTO actualizarNotificacionesAuto(@RequestBody NotificacionesAutoConfigDTO body) {
         return service.saveNotificacionesAuto(body);
+    }
+
+    /**
+     * Toggle global de sincronización automática con DUX. Cuando es false los
+     * disparos de los horarios programados se saltean (los horarios no se borran,
+     * solo se pausa). Útil para pausar la sync cuando DUX está caído.
+     */
+    @GetMapping("/config/sync-auto")
+    public Map<String, Boolean> obtenerSyncAuto() {
+        return Map.of("habilitada", service.isSyncAutoHabilitada());
+    }
+
+    @PutMapping("/config/sync-auto")
+    public Map<String, Boolean> actualizarSyncAuto(@RequestBody Map<String, Boolean> body) {
+        boolean habilitada = Boolean.TRUE.equals(body.get("habilitada"));
+        return Map.of("habilitada", service.setSyncAutoHabilitada(habilitada));
     }
 
     /** Timestamp (epoch ms) cuando el bean se inicializó — equivale al boot del

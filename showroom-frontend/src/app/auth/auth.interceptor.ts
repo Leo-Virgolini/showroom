@@ -29,10 +29,6 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         const url = req.url;
         const esEndpointAuth = url.endsWith('/api/auth/login') || url.endsWith('/api/auth/me');
         if (!esEndpointAuth) {
-          // Diagnóstico de pérdida de sesión: dejá esto un par de días para
-          // poder identificar QUÉ request fue el primero que devolvió 401 y
-          // en qué ruta del frontend estábamos. Cuando esté resuelto, sacar.
-          console.warn('[auth-interceptor] 401 en', url, '→ redirect /login. Ruta actual:', router.url);
           auth.currentUser.set(null);
           // Sólo redirigir si todavía no estamos en /login o /visor (rutas públicas).
           const ruta = router.url.split('?')[0];

@@ -45,10 +45,6 @@ public class DuxRetryHandler {
     private final PriorityRateLimiter rateLimiter;
     private final RateLimitListener onRateLimited;
 
-    public DuxRetryHandler(RestClient restClient, long baseWaitMs, double permitsPerSecond) {
-        this(restClient, baseWaitMs, permitsPerSecond, null);
-    }
-
     public DuxRetryHandler(RestClient restClient, long baseWaitMs, double permitsPerSecond,
                            RateLimitListener onRateLimited) {
         this.restClient = restClient;
@@ -85,16 +81,9 @@ public class DuxRetryHandler {
                 .body(responseType));
     }
 
-    public String postJson(String uri, String token, String jsonBody) {
-        return postJson(uri, token, jsonBody, null, false);
-    }
-
-    /** Variante con cancelación cooperativa — ver {@link #get(String, String, Class, BooleanSupplier)}. */
-    public String postJson(String uri, String token, String jsonBody, BooleanSupplier isCancelled) {
-        return postJson(uri, token, jsonBody, isCancelled, false);
-    }
-
-    /** Variante con prioridad — usar {@code highPriority=true} para POST /pedido/nuevopedido. */
+    /** POST con prioridad opcional — usar {@code highPriority=true} para
+     *  POST /pedido/nuevopedido. Cancelación cooperativa via {@code isCancelled}
+     *  (null = sin cancelación). */
     public String postJson(String uri, String token, String jsonBody,
                            BooleanSupplier isCancelled, boolean highPriority) {
         return executeWithRetries("POST", isCancelled, highPriority, () -> restClient.post()

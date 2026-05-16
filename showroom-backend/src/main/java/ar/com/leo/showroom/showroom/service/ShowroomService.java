@@ -192,6 +192,17 @@ public class ShowroomService {
         return configuracionService.saveNotificacionesAuto(cfg);
     }
 
+    /** Toggle global de sync automática con DUX. Permite pausar las tareas
+     *  programadas (horarios) sin tener que borrarlas — útil cuando DUX está
+     *  caído o se va a hacer mantenimiento. */
+    public boolean isSyncAutoHabilitada() {
+        return configuracionService.isSyncAutoHabilitada();
+    }
+
+    public boolean setSyncAutoHabilitada(boolean habilitada) {
+        return configuracionService.setSyncAutoHabilitada(habilitada);
+    }
+
 
     /**
      * Búsqueda paginada en el cache local (sin tocar DUX).

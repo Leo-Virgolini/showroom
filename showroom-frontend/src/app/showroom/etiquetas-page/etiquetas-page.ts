@@ -74,13 +74,6 @@ const HOJAS: Record<FormatoSheet, DimensionHoja> = {
 /** Margen mínimo de impresión para formatos hoja (no aplica a térmica). */
 const MARGEN_HOJA_MM = 5;
 
-/** Legacy: config única persistida en localStorage. Migrada a backend en
- *  cuanto se carga la primera vez (se crea un perfil "Default" con esos
- *  valores). Tras la migración, se borra del localStorage. */
-const STORAGE_KEY_LEGACY = 'showroom.etiquetas.config.v1';
-/** Legacy: perfiles persistidos en localStorage previo al backend. Si existen
- *  al iniciar, se migran como POSTs y luego se borra la key. */
-const STORAGE_KEY_PERFILES_LEGACY = 'showroom.etiquetas.perfiles.v1';
 /** Por PC: id del perfil que esta PC tiene activo. Independiente del backend
  *  porque cada operador puede preferir un perfil distinto en su máquina. */
 const STORAGE_KEY_PERFIL_ACTIVO = 'showroom.etiquetas.perfilActivoId.v1';
@@ -139,34 +132,6 @@ const DEFAULTS_CONFIG: ConfigPersistida = {
   mostrarPrecio: false,
   mostrarDescripcion: false,
 };
-
-/** Lee config legacy del localStorage si existe — para migrar al primer perfil
- *  del backend la primera vez que se entra a la pantalla post-refactor. */
-function cargarConfigLegacy(): ConfigPersistida | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_LEGACY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ConfigPersistida>;
-    return { ...DEFAULTS_CONFIG, ...parsed };
-  } catch {
-    return null;
-  }
-}
-
-/** Lee perfiles legacy del localStorage si existen — para migrar al backend la
- *  primera vez post-refactor. Devuelve solo los perfiles (la elección de
- *  perfilActivoId queda en localStorage independiente). */
-interface PerfilLegacy { id: string; nombre: string; config: ConfigPersistida; }
-function cargarPerfilesLegacy(): PerfilLegacy[] | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PERFILES_LEGACY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { perfiles?: PerfilLegacy[] };
-    return parsed.perfiles?.length ? parsed.perfiles : null;
-  } catch {
-    return null;
-  }
-}
 
 /** Lee el id del perfil activo de esta PC. {@code null} si no hay nada
  *  guardado todavía (primer uso) — el componente caerá al primero de la lista. */
@@ -458,30 +423,18 @@ export class EtiquetasPage {
     this.inicializarPerfiles();
   }
 
-  /** Hidrata la lista de perfiles desde el backend. Migración:
-   *  <ul>
-   *    <li>Si el backend ya tiene perfiles → los carga, elige el activo desde
-   *        localStorage (o el primero) y aplica su config.</li>
-   *    <li>Si no hay perfiles en backend pero hay perfiles legacy en localStorage
-   *        → POST de cada uno y luego limpieza del legacy.</li>
-   *    <li>Si tampoco hay legacy pero hay config legacy única → POST como Default.</li>
-   *    <li>Si no hay nada → POST un perfil "Default" con valores de fábrica.</li>
-   *  </ul> */
+  /** Hidrata la lista de perfiles desde el backend. Si el backend ya tiene
+   *  perfiles los carga + aplica el activo (elegido desde localStorage, o el
+   *  primero). Si no hay ninguno todavía, crea un "Default" con valores de
+   *  fábrica para que el operador tenga algo con qué empezar. */
   private inicializarPerfiles(): void {
     this.api.listarPerfilesEtiquetas().subscribe({
       next: (lista) => {
         if (lista.length > 0) {
           this.aplicarLista(lista);
-          return;
+        } else {
+          this.crearPerfilInicial(DEFAULTS_CONFIG);
         }
-        // No hay perfiles en backend → migrar legacy o crear Default.
-        const perfilesLegacy = cargarPerfilesLegacy();
-        if (perfilesLegacy?.length) {
-          this.migrarPerfilesLegacy(perfilesLegacy);
-          return;
-        }
-        const configLegacy = cargarConfigLegacy();
-        this.crearPerfilInicial(configLegacy ?? DEFAULTS_CONFIG);
       },
       error: (err) => {
         this.cargandoPerfiles.set(false);
@@ -500,41 +453,12 @@ export class EtiquetasPage {
     this.cargandoPerfiles.set(false);
   }
 
-  /** Crea en backend los perfiles tomados del localStorage legacy y luego
-   *  limpia las keys legacy. Las creaciones van en paralelo (el backend
-   *  ordena por nombre asc al listar, así que el orden de POST no importa).
-   *  Cuando todas terminaron — exitosas o no — refrescamos la lista. */
-  private migrarPerfilesLegacy(legacy: PerfilLegacy[]): void {
-    let pendientes = legacy.length;
-    const finalizar = () => {
-      if (--pendientes > 0) return;
-      try { localStorage.removeItem(STORAGE_KEY_PERFILES_LEGACY); } catch { /* noop */ }
-      try { localStorage.removeItem(STORAGE_KEY_LEGACY); } catch { /* noop */ }
-      this.api.listarPerfilesEtiquetas().subscribe(lista => this.aplicarLista(lista));
-    };
-    for (const p of legacy) {
-      this.api.crearPerfilEtiquetas({
-        nombre: p.nombre,
-        config: { ...DEFAULTS_CONFIG, ...p.config } as Record<string, unknown>,
-      }).subscribe({
-        next: () => finalizar(),
-        error: (err) => {
-          console.warn('[etiquetas] migración legacy falló para un perfil:', err);
-          finalizar();
-        },
-      });
-    }
-  }
-
   private crearPerfilInicial(config: ConfigPersistida): void {
     this.api.crearPerfilEtiquetas({
       nombre: 'Default',
       config: config as unknown as Record<string, unknown>,
     }).subscribe({
-      next: (creado) => {
-        try { localStorage.removeItem(STORAGE_KEY_LEGACY); } catch { /* noop */ }
-        this.aplicarLista([creado]);
-      },
+      next: (creado) => this.aplicarLista([creado]),
       error: (err) => {
         this.cargandoPerfiles.set(false);
         toastError(this.toast, 'Perfiles', err, 'No se pudo crear el perfil inicial');

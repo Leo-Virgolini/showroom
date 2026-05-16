@@ -652,6 +652,17 @@
           }
 
           @if (formaPagoSeleccionada(); as fp) {
+          @if (recargoMontoSinIva() > 0) {
+          <div class="flex items-baseline justify-between text-sm text-muted-color mt-2">
+            <span class="font-medium inline-flex items-center gap-1.5">
+              <i class="pi pi-credit-card text-xs"></i>
+              Recargo financiación
+            </span>
+            <span class="tabular-nums">
+              +{{ recargoMontoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+          }
           @if (ivaMontoCarrito() > 0) {
           <div class="flex items-baseline justify-between text-sm text-muted-color mt-2">
             <span class="font-medium inline-flex items-center gap-1.5">

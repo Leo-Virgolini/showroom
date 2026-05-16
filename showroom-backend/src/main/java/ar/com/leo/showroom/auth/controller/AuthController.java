@@ -6,7 +6,6 @@ import ar.com.leo.showroom.auth.entity.Usuario;
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,39 +80,8 @@ public class AuthController {
      * el login screen o el contenido normal.
      */
     @GetMapping("/me")
-    public ResponseEntity<UsuarioActualDTO> me(HttpServletRequest request) {
+    public ResponseEntity<UsuarioActualDTO> me() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        // Diagnóstico: identificar si los 401 son por cookie ausente
-        // (browser-side) o por sesión inexistente server-side (cookie llega pero
-        // ya no matchea ninguna sesión). Loguear ambas piezas.
-        String cookieJSession = null;
-        if (request.getCookies() != null) {
-            for (var c : request.getCookies()) {
-                if ("JSESSIONID".equals(c.getName())) {
-                    cookieJSession = c.getValue();
-                    break;
-                }
-            }
-        }
-        String cookieSnippet = cookieJSession == null
-                ? "<NO COOKIE>"
-                : cookieJSession.substring(0, Math.min(8, cookieJSession.length()));
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            long edadSeg = (System.currentTimeMillis() - session.getCreationTime()) / 1000;
-            long inactivoSeg = (System.currentTimeMillis() - session.getLastAccessedTime()) / 1000;
-            log.info("[/me] cookie={} session id={} maxInactive={}s creada hace={}s ultimoAcceso hace={}s isNew={}",
-                    cookieSnippet,
-                    session.getId().substring(0, Math.min(8, session.getId().length())),
-                    session.getMaxInactiveInterval(),
-                    edadSeg, inactivoSeg, session.isNew());
-        } else {
-            // Caso clave: si cookieSnippet != "<NO COOKIE>" pero session == null,
-            // significa que el browser sí mandó cookie pero el server no la
-            // reconoce (sesión invalidada / restart silencioso / algo borró).
-            log.info("[/me] cookie={} sesión NO existe server-side (request.getSession(false) == null)",
-                    cookieSnippet);
-        }
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }

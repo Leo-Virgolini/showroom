@@ -45,6 +45,7 @@ public class HorarioSyncSchedulerService {
     private final HorarioSyncRepository repository;
     private final TaskScheduler taskScheduler;
     private final DuxClient duxClient;
+    private final ConfiguracionService configuracionService;
     /** Lazy para romper el ciclo: CatalogoSyncService → ... no lo necesita, pero
      *  Spring evalúa el grafo completo y un disparo accidental al inicio podría
      *  cargar dependencias antes de tiempo. */
@@ -66,10 +67,12 @@ public class HorarioSyncSchedulerService {
             HorarioSyncRepository repository,
             TaskScheduler taskScheduler,
             DuxClient duxClient,
+            ConfiguracionService configuracionService,
             @Lazy CatalogoSyncService catalogoSync) {
         this.repository = repository;
         this.taskScheduler = taskScheduler;
         this.duxClient = duxClient;
+        this.configuracionService = configuracionService;
         this.catalogoSync = catalogoSync;
     }
 
@@ -187,12 +190,21 @@ public class HorarioSyncSchedulerService {
     }
 
     /**
-     * Lo que cada disparo programado ejecuta. Misma lógica que el
-     * {@code @Scheduled} viejo: si DUX no está configurado, salteamos el sync.
+     * Lo que cada disparo programado ejecuta. Salteamos si:
+     *  <ul>
+     *    <li>El cliente DUX no está configurado (env vars faltantes).</li>
+     *    <li>El operador deshabilitó la sync auto desde /configuracion — útil
+     *        para pausar mientras DUX está caído sin tener que borrar los
+     *        horarios programados.</li>
+     *  </ul>
      */
     private void dispararSync() {
         if (!duxClient.isConfigured()) {
             log.info("Sync DUX salteado: cliente no configurado");
+            return;
+        }
+        if (!configuracionService.isSyncAutoHabilitada()) {
+            log.info("Sync DUX salteado: deshabilitado por el operador en /configuracion");
             return;
         }
         catalogoSync.sincronizarCatalogoCompleto();

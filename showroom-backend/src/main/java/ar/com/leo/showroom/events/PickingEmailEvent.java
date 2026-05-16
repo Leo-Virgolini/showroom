@@ -48,8 +48,4 @@ public record PickingEmailEvent(
     public static PickingEmailEvent failedSesion(Long sesionId, String email, String error) {
         return new PickingEmailEvent(Estado.FAILED, null, sesionId, null, email, error);
     }
-
-    public static PickingEmailEvent skippedSesion(Long sesionId, String email, String motivo) {
-        return new PickingEmailEvent(Estado.SKIPPED, null, sesionId, null, email, motivo);
-    }
 }
