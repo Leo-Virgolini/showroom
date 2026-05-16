@@ -69,6 +69,211 @@
       }
     </p-card>
 
+    <!-- Tabs: separamos el listado operativo de sesiones de las estadísticas.
+         Por default abre "Sesiones" porque es el uso día a día; las
+         estadísticas son para análisis ocasional. Los filtros de arriba
+         aplican a los dos tabs (la tabla y las queries de agregación). -->
+    <p-tabs value="sesiones">
+      <p-tablist>
+        <p-tab value="sesiones">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-list"></i>
+            Sesiones
+          </span>
+        </p-tab>
+        <p-tab value="estadisticas">
+          <span class="inline-flex items-center gap-2">
+            <i class="pi pi-chart-bar"></i>
+            Estadísticas
+          </span>
+        </p-tab>
+      </p-tablist>
+      <p-tabpanels>
+
+      <p-tabpanel value="estadisticas">
+        <div class="flex flex-col gap-4">
+
+    <!-- KPI grande: tasa de conversión global del showroom. Un solo número
+         que resume "cuántos clientes que entraron terminan comprando".
+         Cuando no hay sesiones cerradas en el rango, mostramos "—". -->
+    <p-card>
+      <div class="flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-8">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center shrink-0">
+            <i class="pi pi-percentage text-2xl text-emerald-700 dark:text-emerald-300"></i>
+          </div>
+          <div>
+            <div class="text-xs uppercase tracking-wider text-muted-color font-semibold">Conversión global</div>
+            <div class="text-xs text-muted-color">Sesiones que terminaron en pedido (sin anulados)</div>
+          </div>
+        </div>
+
+        @if (cargandoStats()) {
+          <p-skeleton width="14rem" height="3rem" />
+        } @else if (conversionGlobalPct() == null) {
+          <div class="text-2xl text-muted-color">Sin datos en este rango</div>
+        } @else {
+          <div class="flex items-baseline gap-3">
+            <span class="tabular-nums font-bold text-5xl text-emerald-700 dark:text-emerald-400">
+              {{ conversionGlobalPct() }}%
+            </span>
+            <span class="text-sm text-muted-color tabular-nums">
+              {{ stats()?.tasaConversion?.sesionesConPedido }} de {{ stats()?.tasaConversion?.sesionesFinalizadas }} sesiones
+            </span>
+          </div>
+        }
+      </div>
+    </p-card>
+
+    <!-- Charts: top productos más escaneados y más comprados. Respetan el
+         rango de fechas seleccionado arriba. Si no hay datos en el período
+         o todavía estamos cargando, mostramos placeholders en cada card. -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <p-card>
+        <ng-template #title>
+          <div class="flex items-center gap-2 text-base">
+            <i class="pi pi-eye text-[#FF861C]"></i>
+            <span>Top 10 productos más escaneados</span>
+          </div>
+        </ng-template>
+        <ng-template #subtitle>
+          <span class="text-xs text-muted-color">
+            Productos que más llamaron la atención de los clientes, hayan terminado o no en pedido.
+          </span>
+        </ng-template>
+        @if (cargandoStats()) {
+          <p-skeleton width="100%" height="20rem" />
+        } @else if ((stats()?.topEscaneados?.length ?? 0) === 0) {
+          <div class="text-center py-12 text-muted-color">
+            <i class="pi pi-chart-bar text-3xl opacity-50 block mb-2"></i>
+            Sin scans registrados en este rango.
+          </div>
+        } @else {
+          <div class="relative overflow-hidden" [style.height]="altoChart(stats()?.topEscaneados?.length ?? 0)">
+            <p-chart type="bar" [data]="chartEscaneadosData()" [options]="chartOptions" />
+          </div>
+          <!-- Leyenda compacta: SKU + descripción para los productos del chart.
+               El chart solo muestra el SKU como label; la descripción real va acá
+               para que el operador pueda asociar SKU ↔ producto sin abrir tooltip. -->
+          <ul class="mt-2 pt-2 border-t border-surface-200 dark:border-surface-700 flex flex-col gap-1 text-xs">
+            @for (p of stats()?.topEscaneados ?? []; track p.sku) {
+              <li class="flex items-baseline gap-2">
+                <span class="font-mono font-semibold text-[#FF861C] shrink-0">{{ p.sku }}</span>
+                <span class="text-muted-color truncate">{{ p.descripcion ?? '—' }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </p-card>
+
+      <p-card>
+        <ng-template #title>
+          <div class="flex items-center gap-2 text-base">
+            <i class="pi pi-shopping-cart text-[#7EBA00]"></i>
+            <span>Top 10 productos más comprados</span>
+          </div>
+        </ng-template>
+        <ng-template #subtitle>
+          <span class="text-xs text-muted-color">
+            Suma de unidades vendidas. No cuenta pedidos anulados.
+          </span>
+        </ng-template>
+        @if (cargandoStats()) {
+          <p-skeleton width="100%" height="20rem" />
+        } @else if ((stats()?.topComprados?.length ?? 0) === 0) {
+          <div class="text-center py-12 text-muted-color">
+            <i class="pi pi-chart-bar text-3xl opacity-50 block mb-2"></i>
+            Sin pedidos en este rango.
+          </div>
+        } @else {
+          <div class="relative overflow-hidden" [style.height]="altoChart(stats()?.topComprados?.length ?? 0)">
+            <p-chart type="bar" [data]="chartCompradosData()" [options]="chartOptions" />
+          </div>
+          <ul class="mt-2 pt-2 border-t border-surface-200 dark:border-surface-700 flex flex-col gap-1 text-xs">
+            @for (p of stats()?.topComprados ?? []; track p.sku) {
+              <li class="flex items-baseline gap-2">
+                <span class="font-mono font-semibold text-[#7EBA00] shrink-0">{{ p.sku }}</span>
+                <span class="text-muted-color truncate">{{ p.descripcion ?? '—' }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </p-card>
+    </div>
+
+    <!-- Conversión por producto: tabla con escaneados vs comprados + % visual.
+         Los SKUs con menos de 2 scans se filtran en backend (evita ruido tipo
+         "1 scan / 1 compra = 100%"). Las barras se colorean por rango:
+         verde si >50%, ámbar 20-50%, rojo <20%. -->
+    <p-card>
+      <ng-template #title>
+        <div class="flex items-center gap-2 text-base">
+          <i class="pi pi-percentage text-emerald-600"></i>
+          <span>Top productos por conversión</span>
+        </div>
+      </ng-template>
+      <ng-template #subtitle>
+        <span class="text-xs text-muted-color">
+          De cada producto: cuántas veces se escaneó vs unidades efectivamente vendidas.
+          Alta conversión = gancho. Baja = vidriera (revisar precio, oferta).
+        </span>
+      </ng-template>
+      @if (cargandoStats()) {
+        <p-skeleton width="100%" height="14rem" />
+      } @else if (topConversion().length === 0) {
+        <div class="text-center py-12 text-muted-color">
+          <i class="pi pi-chart-line text-3xl opacity-50 block mb-2"></i>
+          Sin productos con scans suficientes en este rango.
+        </div>
+      } @else {
+        <p-table [value]="topConversion()" class="p-datatable-sm">
+          <ng-template #header>
+            <tr>
+              <th style="width: 8rem">SKU</th>
+              <th>Producto</th>
+              <th class="text-center" style="width: 7rem">Escaneados</th>
+              <th class="text-center" style="width: 7rem">Comprados</th>
+              <th style="width: 14rem">Conversión</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-c>
+            <tr>
+              <td class="font-mono text-sm">{{ c.sku }}</td>
+              <td class="text-sm truncate max-w-[20rem]" [pTooltip]="c.descripcion ?? c.sku" tooltipPosition="top">
+                {{ c.descripcion ?? '—' }}
+              </td>
+              <td class="text-center tabular-nums">{{ c.escaneados }}</td>
+              <td class="text-center tabular-nums">{{ c.comprados }}</td>
+              <td>
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-2 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden">
+                    <div class="h-full rounded-full transition-all"
+                      [style.width.%]="c.porcentaje > 100 ? 100 : c.porcentaje"
+                      [class.bg-emerald-500]="c.porcentaje >= 50"
+                      [class.bg-amber-500]="c.porcentaje >= 20 && c.porcentaje < 50"
+                      [class.bg-red-500]="c.porcentaje < 20"></div>
+                  </div>
+                  <span class="text-xs tabular-nums font-semibold w-12 text-right"
+                    [class.text-emerald-700]="c.porcentaje >= 50"
+                    [class.dark:text-emerald-400]="c.porcentaje >= 50"
+                    [class.text-amber-700]="c.porcentaje >= 20 && c.porcentaje < 50"
+                    [class.dark:text-amber-400]="c.porcentaje >= 20 && c.porcentaje < 50"
+                    [class.text-red-700]="c.porcentaje < 20"
+                    [class.dark:text-red-400]="c.porcentaje < 20">
+                    {{ c.porcentaje }}%
+                  </span>
+                </div>
+              </td>
+            </tr>
+          </ng-template>
+        </p-table>
+      }
+    </p-card>
+
+        </div>
+      </p-tabpanel>
+
+      <p-tabpanel value="sesiones">
     <p-card>
       <p-table [value]="sesiones()" [lazy]="true" [paginator]="true" [totalRecords]="total()" [rows]="pageSize()"
         [first]="first()" [rowsPerPageOptions]="[25, 50, 100]" [loading]="cargando()" [rowTrackBy]="trackById"
@@ -235,6 +440,10 @@
         </ng-template>
       </p-table>
     </p-card>
+      </p-tabpanel>
+
+      </p-tabpanels>
+    </p-tabs>
   </main>
 </div>
 

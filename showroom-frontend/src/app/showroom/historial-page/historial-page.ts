@@ -15,6 +15,7 @@ import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { ChartModule } from 'primeng/chart';
 import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { ImageModule } from 'primeng/image';
@@ -24,10 +25,14 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SkeletonModule } from 'primeng/skeleton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
+import { TabsModule } from 'primeng/tabs';
 import { TagModule } from 'primeng/tag';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
+  ConversionProducto,
+  EstadisticaProducto,
+  EstadisticasHistorial,
   SesionDetalle,
   SesionListItem,
 } from '../models';
@@ -44,6 +49,7 @@ import { toastError } from '../toast.utils';
     RouterLink,
     ButtonModule,
     CardModule,
+    ChartModule,
     DatePickerModule,
     DialogModule,
     ImageModule,
@@ -53,6 +59,7 @@ import { toastError } from '../toast.utils';
     ProgressSpinnerModule,
     SkeletonModule,
     TableModule,
+    TabsModule,
     TagModule,
     ToolbarModule,
     TooltipModule,
@@ -90,12 +97,105 @@ export class HistorialPage {
 
   private readonly filtroTrigger$ = new Subject<void>();
 
+  // ============================================================
+  // Charts: top productos más escaneados / comprados
+  // ============================================================
+  readonly cargandoStats = signal(false);
+  readonly stats = signal<EstadisticasHistorial | null>(null);
+
+  /** Datasets de Chart.js para el top escaneados. Memoizado con computed —
+   *  se recalcula sólo cuando cambia {@code stats}. */
+  readonly chartEscaneadosData = computed(() => this.buildChartData(
+    this.stats()?.topEscaneados ?? [],
+    'Veces escaneado',
+    'rgba(255, 134, 28, 0.7)',  // naranja KT
+    'rgba(255, 134, 28, 1)',
+  ));
+
+  readonly chartCompradosData = computed(() => this.buildChartData(
+    this.stats()?.topComprados ?? [],
+    'Unidades vendidas',
+    'rgba(126, 186, 0, 0.7)',  // verde KT
+    'rgba(126, 186, 0, 1)',
+  ));
+
+  /** % de conversión global formateado (ej: 38.5). Null si no hay sesiones
+   *  finalizadas todavía (división por cero). */
+  readonly conversionGlobalPct = computed<number | null>(() => {
+    const t = this.stats()?.tasaConversion;
+    if (!t || t.sesionesFinalizadas === 0) return null;
+    return Math.round((t.sesionesConPedido / t.sesionesFinalizadas) * 1000) / 10;
+  });
+
+  /** Lista para la tabla de conversión por producto. */
+  readonly topConversion = computed<ConversionProducto[]>(
+    () => this.stats()?.topConversion ?? [],
+  );
+
+  /** Altura dinámica de los charts según cantidad de barras — evita el espacio
+   *  vacío grande que dejaba la altura fija cuando había pocos items. Cada
+   *  barra ocupa ~3rem (con padding), mínimo 8rem para que se vea decente
+   *  con 1-2 items + sumamos 2rem fijos para el eje X y respiro inferior. */
+  altoChart(items: number): string {
+    return `${Math.max(8, items * 3 + 2)}rem`;
+  }
+
+  /** Opciones comunes a ambos charts: barras horizontales, tooltip con
+   *  descripción del producto, escala entera (no decimales en cantidades). */
+  readonly chartOptions = {
+    indexAxis: 'y' as const,
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          title: (items: { dataIndex: number }[]) => {
+            const idx = items[0]?.dataIndex ?? -1;
+            const top = this.chartContextActual?.[idx];
+            return top ? `${top.sku} — ${top.descripcion ?? '—'}` : '';
+          },
+        },
+      },
+    },
+    scales: {
+      x: { ticks: { precision: 0 } },
+    },
+  };
+
+  /** Buffer del último array consumido por el tooltip — Chart.js no expone
+   *  el item original en el callback, así que lo mantenemos a mano. Se
+   *  actualiza en {@code buildChartData}. */
+  private chartContextActual: EstadisticaProducto[] | null = null;
+
+  private buildChartData(
+    top: EstadisticaProducto[],
+    label: string,
+    bg: string,
+    border: string,
+  ) {
+    // Guardamos el contexto para el tooltip — last write wins, ambos charts
+    // se renderizan en el mismo tick y cada uno setea su propio contexto.
+    this.chartContextActual = top;
+    return {
+      labels: top.map(p => p.sku),
+      datasets: [{
+        label,
+        data: top.map(p => p.total),
+        backgroundColor: bg,
+        borderColor: border,
+        borderWidth: 1,
+      }],
+    };
+  }
+
   constructor() {
     this.filtroTrigger$
       .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         this.first.set(0);
         this.cargar(0, this.pageSize());
+        this.cargarStats();
       });
 
     effect(() => {
@@ -103,6 +203,29 @@ export class HistorialPage {
       this.desde();
       this.hasta();
       this.filtroTrigger$.next();
+    });
+
+    this.cargarStats();
+  }
+
+  private cargarStats(): void {
+    this.cargandoStats.set(true);
+    const desde = this.desde();
+    const hasta = this.hasta();
+    this.api.obtenerEstadisticasHistorial({
+      desde: desde ? desde.toISOString() : undefined,
+      hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+      topN: 10,
+    }).subscribe({
+      next: (s) => {
+        this.cargandoStats.set(false);
+        this.stats.set(s);
+      },
+      error: (err) => {
+        this.cargandoStats.set(false);
+        // Silencioso — los charts no son críticos para la operativa del historial.
+        console.warn('[historial] no se pudieron cargar las estadísticas:', err);
+      },
     });
   }
 

@@ -2,6 +2,7 @@ package ar.com.leo.showroom.pedido.repository;
 
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -68,4 +69,39 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
             @Param("hasta") Instant hasta,
             Pageable pageable
     );
+
+    /** Top productos más comprados — agrega por SKU y suma {@code cantidad}.
+     *  Solo cuenta pedidos no anulados (= los que efectivamente se concretaron).
+     *  La descripción puede variar entre rows del mismo SKU, tomamos {@code MAX}
+     *  arbitrariamente. {@code Pageable} limita a top-N desde el caller. */
+    @Query("""
+            select new ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO(
+                i.sku, MAX(i.descripcion), CAST(SUM(i.cantidad) AS long))
+            from PedidoShowroomItem i
+            where i.pedido.estado <> ar.com.leo.showroom.pedido.entity.EstadoPedido.ANULADO
+              and (:desde is null or i.pedido.creadoAt >= :desde)
+              and (:hasta is null or i.pedido.creadoAt <= :hasta)
+            group by i.sku
+            order by SUM(i.cantidad) desc, i.sku asc
+            """)
+    List<EstadisticaProductoDTO> topComprados(
+            @Param("desde") Instant desde,
+            @Param("hasta") Instant hasta,
+            Pageable pageable);
+
+    /** Suma de unidades vendidas por SKU sin límite, para calcular la conversión
+     *  por producto contra los escaneados. Sin {@code Pageable} — el caller
+     *  arma el ranking final en Java. */
+    @Query("""
+            select new ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO(
+                i.sku, MAX(i.descripcion), CAST(SUM(i.cantidad) AS long))
+            from PedidoShowroomItem i
+            where i.pedido.estado <> ar.com.leo.showroom.pedido.entity.EstadoPedido.ANULADO
+              and (:desde is null or i.pedido.creadoAt >= :desde)
+              and (:hasta is null or i.pedido.creadoAt <= :hasta)
+            group by i.sku
+            """)
+    List<EstadisticaProductoDTO> sumarCompradosPorSku(
+            @Param("desde") Instant desde,
+            @Param("hasta") Instant hasta);
 }

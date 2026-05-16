@@ -320,6 +320,39 @@ export interface NotificacionesAutoConfig {
   whatsappAutoPedido: boolean;
 }
 
+/** Punto de un ranking de productos del historial (top escaneados / top comprados). */
+export interface EstadisticaProducto {
+  sku: string;
+  descripcion: string | null;
+  total: number;
+}
+
+/** KPI global del showroom: cuántas sesiones cerradas terminaron en pedido
+ *  (no anulado). El frontend muestra {@code sesionesConPedido / sesionesFinalizadas}
+ *  como un % grande. */
+export interface TasaConversionGlobal {
+  sesionesFinalizadas: number;
+  sesionesConPedido: number;
+}
+
+/** Conversión de un producto: escaneados vs comprados, con % ya calculado.
+ *  Identifica ganchos (alta conversión) vs vidriera (mucho mirado, poca venta). */
+export interface ConversionProducto {
+  sku: string;
+  descripcion: string | null;
+  escaneados: number;
+  comprados: number;
+  porcentaje: number;
+}
+
+/** Snapshot agregado para los charts y KPIs del historial. */
+export interface EstadisticasHistorial {
+  topEscaneados: EstadisticaProducto[];
+  topComprados: EstadisticaProducto[];
+  tasaConversion: TasaConversionGlobal;
+  topConversion: ConversionProducto[];
+}
+
 /** Perfil de impresión de etiquetas (geometría + tipografía + toggles).
  *  Compartido entre todas las PCs del showroom — el "perfil activo" lo elige
  *  cada PC localmente (localStorage), no viene en este modelo. El {@code config}

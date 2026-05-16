@@ -9,6 +9,7 @@ import {
   CrearPedidoRequest,
   CrearPedidoResponse,
   EscalaDescuento,
+  EstadisticasHistorial,
   FormaPago,
   Health,
   NotificacionesAutoConfig,
@@ -338,6 +339,16 @@ export class ShowroomService {
 
   obtenerSesion(id: number): Observable<SesionDetalle> {
     return this.http.get<SesionDetalle>(`${this.base}/sesiones/${id}`);
+  }
+
+  /** Estadísticas agregadas para los charts del historial (top escaneados / comprados). */
+  obtenerEstadisticasHistorial(opts: { desde?: string; hasta?: string; topN?: number } = {}):
+      Observable<EstadisticasHistorial> {
+    let params = new HttpParams();
+    if (opts.desde) params = params.set('desde', opts.desde);
+    if (opts.hasta) params = params.set('hasta', opts.hasta);
+    if (opts.topN != null) params = params.set('topN', opts.topN);
+    return this.http.get<EstadisticasHistorial>(`${this.base}/historial/estadisticas`, { params });
   }
 
   // El stream SSE de /events lo maneja BackendStatusService — su Subject

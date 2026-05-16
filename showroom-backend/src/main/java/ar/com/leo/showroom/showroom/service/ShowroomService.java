@@ -23,6 +23,7 @@ import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
+import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
 import ar.com.leo.showroom.picking.PdfFollowupOrchestrator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.sesion.service.SesionShowroomService;
@@ -31,6 +32,10 @@ import ar.com.leo.showroom.showroom.dto.CatalogoPageDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
 import ar.com.leo.showroom.showroom.dto.EscalaDescuentoDTO;
+import ar.com.leo.showroom.showroom.dto.ConversionProductoDTO;
+import ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO;
+import ar.com.leo.showroom.showroom.dto.EstadisticasHistorialDTO;
+import ar.com.leo.showroom.showroom.dto.TasaConversionGlobalDTO;
 import ar.com.leo.showroom.showroom.dto.HorarioSyncDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoDetailDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoItemDTO;
@@ -76,6 +81,7 @@ public class ShowroomService {
     private final CatalogoSyncService catalogoSync;
     private final DuxClient duxClient;
     private final PedidoShowroomRepository pedidoRepository;
+    private final SesionShowroomRepository sesionRepository;
     private final ProductoCacheRepository productoCacheRepository;
     private final ObjectMapper objectMapper;
     private final DuxProperties duxProperties;
@@ -348,6 +354,63 @@ public class ShowroomService {
                 .map(this::toPedidoListItem)
                 .toList();
         return new PedidoListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
+    }
+
+    /**
+     * Estadísticas para los charts del historial:
+     *  - Top N productos más escaneados (despertaron interés).
+     *  - Top N productos más comprados (concretaron en venta).
+     *
+     * <p>Excluye pedidos anulados del top-comprados — solo cuentan los que
+     * realmente se concretaron. El rango de fechas es opcional; sin él agrega
+     * sobre toda la historia.
+     *
+     * @param topN cuántos productos devolver por ranking (default 10, max 50).
+     */
+    public EstadisticasHistorialDTO obtenerEstadisticasHistorial(
+            Instant desde, Instant hasta, int topN) {
+        int limitSafe = Math.min(Math.max(topN, 1), 50);
+        Pageable limit = PageRequest.of(0, limitSafe);
+
+        // KPI global: cuántas sesiones cerradas terminaron en pedido (no anulado).
+        long finalizadas = sesionRepository.contarFinalizadas(desde, hasta);
+        long conPedido = sesionRepository.contarConPedido(desde, hasta);
+
+        // Conversión por producto: joineamos escaneados vs comprados en Java.
+        // Indexamos los comprados por SKU para lookup O(1). Filtramos productos
+        // con muy pocos scans (<2) para evitar ruido — un SKU escaneado 1 vez
+        // y comprado 1 vez da 100% pero no es informativo. Ordenamos por %
+        // descendente y luego por unidades vendidas (desempate: el que más
+        // vendió primero).
+        Map<String, Long> compradosPorSku = pedidoRepository.sumarCompradosPorSku(desde, hasta).stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        EstadisticaProductoDTO::sku,
+                        EstadisticaProductoDTO::total,
+                        (a, b) -> a));
+        final int MIN_SCANS = 2;
+        List<ConversionProductoDTO> topConversion = sesionRepository
+                .contarEscaneadosPorSku(desde, hasta).stream()
+                .filter(esc -> esc.total() >= MIN_SCANS)
+                .map(esc -> {
+                    long comprados = compradosPorSku.getOrDefault(esc.sku(), 0L);
+                    double pct = esc.total() > 0
+                            ? Math.round((comprados * 1000.0) / esc.total()) / 10.0
+                            : 0.0;
+                    return new ConversionProductoDTO(
+                            esc.sku(), esc.descripcion(), esc.total(), comprados, pct);
+                })
+                .sorted(java.util.Comparator
+                        .comparingDouble(ConversionProductoDTO::porcentaje).reversed()
+                        .thenComparingLong(ConversionProductoDTO::comprados).reversed())
+                .limit(limitSafe)
+                .toList();
+
+        return new EstadisticasHistorialDTO(
+                sesionRepository.topEscaneados(desde, hasta, limit),
+                pedidoRepository.topComprados(desde, hasta, limit),
+                new TasaConversionGlobalDTO(finalizadas, conPedido),
+                topConversion
+        );
     }
 
     public PedidoDetailDTO obtenerPedido(Long id) {

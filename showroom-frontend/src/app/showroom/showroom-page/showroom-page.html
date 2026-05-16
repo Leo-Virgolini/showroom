@@ -1,5 +1,5 @@
 <p-dialog header="Sincronizar catálogo con DUX" [(visible)]="mostrarSyncDialog" [modal]="true" [style]="{ width: '95vw', maxWidth: '34rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [draggable]="false">
+  [draggable]="false" (onHide)="focusInput()">
   <div class="flex flex-col gap-4">
     <p class="m-0 text-surface-700 dark:text-surface-200">
       Va a correr en background — podés seguir usando el sistema.
@@ -26,7 +26,7 @@
 </p-dialog>
 
 <p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true">
+  [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true" (onHide)="focusInput()">
   <div class="flex flex-col items-center gap-3 py-1 px-1">
     <div class="flex flex-col items-center gap-1">
       <div class="text-xl sm:text-2xl font-bold text-[#202124] dark:text-surface-0 text-center">
@@ -51,7 +51,7 @@
 </p-dialog>
 
 <p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '95vw', maxWidth: '72rem' }" [breakpoints]="{ '768px': '95vw' }"
-  [draggable]="false">
+  [draggable]="false" (onHide)="focusInput()">
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:divide-x md:divide-surface-200 dark:md:divide-surface-700">
 
     <!-- Sección WiFi -->
@@ -80,7 +80,7 @@
 
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()">
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="focusInput()">
   <div class="flex flex-col gap-3">
     @if (haySesionActiva()) {
     <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
@@ -144,7 +144,7 @@
             <p-avatar [label]="inicialesCliente()" shape="circle" size="normal"
               class="!bg-emerald-600 !text-white !text-xs !w-7 !h-7" />
             <span class="text-sm font-semibold">
-              <span class="hidden md:inline">Atendiendo: </span>{{ sesionActiva().nombre }}
+              <span class="hidden md:inline">Cliente: </span>{{ sesionActiva().nombre }}
             </span>
             <i class="pi pi-times-circle text-base" aria-label="Finalizar sesión"></i>
           </div>
@@ -721,7 +721,7 @@
 </div>
 
 <p-dialog header="Confirmar pedido a DUX" [(visible)]="mostrarConfirmacion" [modal]="true" [style]="{ width: '90vw', maxWidth: '60rem' }"
-  [breakpoints]="{ '1280px': '85vw', '1024px': '92vw', '640px': '96vw' }" [closable]="!enviando()" [draggable]="false">
+  [breakpoints]="{ '1280px': '85vw', '1024px': '92vw', '640px': '96vw' }" [closable]="!enviando()" [draggable]="false" (onHide)="focusInput()">
   <div class="flex flex-col gap-4">
     <div class="flex items-center gap-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-950 border border-primary-200 dark:border-primary-900">
       <i class="pi pi-shopping-cart text-2xl text-primary"></i>
@@ -878,7 +878,7 @@
      reintentar el envío. -->
 <p-dialog header="Stock insuficiente — pedido no enviado" [(visible)]="mostrarDialogExcedidos"
   [modal]="true" [draggable]="false" [closeOnEscape]="false"
-  [style]="{ width: '95vw', maxWidth: '40rem' }" [breakpoints]="{ '640px': '95vw' }">
+  [style]="{ width: '95vw', maxWidth: '40rem' }" [breakpoints]="{ '640px': '95vw' }" (onHide)="focusInput()">
   <div class="flex flex-col gap-3">
     <div class="flex items-start gap-2 text-sm">
       <i class="pi pi-exclamation-triangle text-red-500 text-xl mt-0.5"></i>
@@ -930,7 +930,7 @@
      confirmar en un solo click. -->
 <p-dialog header="Formas de pago disponibles" [(visible)]="mostrarDialogFormasPago"
   [modal]="true" [draggable]="false"
-  [style]="{ width: '95vw', maxWidth: '38rem' }" [breakpoints]="{ '640px': '95vw' }">
+  [style]="{ width: '95vw', maxWidth: '38rem' }" [breakpoints]="{ '640px': '95vw' }" (onHide)="focusInput()">
   <p class="text-sm text-muted-color m-0 mb-3">
     Tocá una opción para seleccionarla. El total ya incluye recargo e IVA si corresponde.
   </p>

@@ -841,18 +841,21 @@ export class ShowroomPage implements AfterViewInit {
     }
   }
 
-  private focusInput(): void {
-    queueMicrotask(() => this.scanInput()?.nativeElement.focus());
+  /** Devuelve el foco al input del scan. Público para poder llamarlo desde
+   *  los {@code (onHide)} de los p-dialog del template — así cualquier dialog
+   *  que se cierre deja al operador listo para seguir escaneando. Usamos
+   *  {@code setTimeout(0)} en vez de {@code queueMicrotask} porque PrimeNG
+   *  retoma el focus en su propio trigger durante el cleanup del dialog/select,
+   *  y el microtask no alcanza para correr después de eso. */
+  focusInput(): void {
+    setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
   }
 
   /** Setea la forma de pago y devuelve el foco al input del scan — así el
-   *  operador sigue escaneando sin tener que clickear de nuevo.
-   *  PrimeNG p-select retoma el focus en su propio trigger luego del
-   *  ngModelChange, así que usamos setTimeout para que nuestro focus corra
-   *  después de ese cleanup (un microtask no alcanza). */
+   *  operador sigue escaneando sin tener que clickear de nuevo. */
   seleccionarFormaPago(fp: FormaPago | null): void {
     this.formaPagoSeleccionada.set(fp);
-    setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
+    this.focusInput();
   }
 
   confirmarSincronizar(): void {
@@ -1419,6 +1422,9 @@ export class ShowroomPage implements AfterViewInit {
         outlined: true,
       },
       accept: () => this.cancelarSesionActiva(),
+      // Refocus al input también si el operador cancela el dialog — el ConfirmDialog
+      // de PrimeNG no emite (onHide), hay que cubrir ambos branches a mano.
+      reject: () => this.focusInput(),
     });
   }
 

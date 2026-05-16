@@ -23,6 +23,7 @@ import ar.com.leo.showroom.sesion.dto.SesionDetalleDTO;
 import ar.com.leo.showroom.sesion.dto.SesionEnvioEmailRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionEnvioWhatsappRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionListPageDTO;
+import ar.com.leo.showroom.showroom.dto.EstadisticasHistorialDTO;
 import ar.com.leo.showroom.sesion.dto.SesionShowroomDTO;
 import ar.com.leo.showroom.sesion.entity.SesionShowroom;
 import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
@@ -177,6 +178,18 @@ public class ShowroomController {
     @GetMapping("/sesiones/{id}")
     public SesionDetalleDTO obtenerSesion(@PathVariable Long id) {
         return sesionShowroomService.obtenerDetalle(id);
+    }
+
+    /**
+     * Estadísticas agregadas para los charts del historial: top productos más
+     * escaneados y más comprados. Filtros opcionales por rango de fechas.
+     */
+    @GetMapping("/historial/estadisticas")
+    public EstadisticasHistorialDTO estadisticasHistorial(
+            @RequestParam(value = "desde", required = false) Instant desde,
+            @RequestParam(value = "hasta", required = false) Instant hasta,
+            @RequestParam(value = "topN", defaultValue = "10") int topN) {
+        return service.obtenerEstadisticasHistorial(desde, hasta, topN);
     }
 
     /**
