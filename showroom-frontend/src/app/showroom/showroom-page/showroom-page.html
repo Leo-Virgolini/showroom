@@ -126,16 +126,10 @@
         <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
           <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Showroom</span>
         </div>
-      </div>
-    </ng-template>
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        <!-- ===== Cliente / sesión actual (estado + iniciar) ===== -->
         @if (haySesionActiva()) {
-        <!-- Chip de sesión activa con avatar (iniciales del cliente) +
-             overlayBadge con el contador de scans. Click anywhere abre el
-             confirm de finalizar sesión (la X refuerza visualmente). -->
-        <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="mr-1">
+        <!-- Chip de sesión activa: click en cualquier parte abre el confirm de
+             finalizar sesión (la X refuerza visualmente que es una acción). -->
+        <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="kt-badge-xs ml-1 sm:ml-2">
           <div
             class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
             [pTooltip]="'Sesión activa — ' + sesionActiva().cantidadEscaneados + ' scan(s) registrados. Click para finalizar.'"
@@ -150,28 +144,33 @@
           </div>
         </p-overlayBadge>
         }
+      </div>
+    </ng-template>
+    <ng-template #end>
+      <div class="inline-flex gap-2 items-center">
         <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
           class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
           [pTooltip]="haySesionActiva() ? 'Cerrar la sesión actual e iniciar otra' : 'Iniciar sesión para registrar los scans del cliente'"
           tooltipPosition="bottom" />
 
-        <!-- ===== Consultas / listados del operador ===== -->
-        <p-button icon="pi pi-receipt" [label]="screenLg() ? 'Pedidos' : ''" ariaLabel="Listado de pedidos" class="btn-kt-teal" routerLink="/pedidos" pTooltip="Ver pedidos generados" />
-        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''" ariaLabel="Historial de escaneos" class="btn-kt-violeta" routerLink="/historial" pTooltip="Ver historial de sesiones de atención" tooltipPosition="bottom" />
-        <p-button icon="pi pi-box" [label]="screenLg() ? 'Productos' : ''" ariaLabel="Listado de productos" class="btn-kt-azul" routerLink="/productos" pTooltip="Ver catálogo cacheado" />
+        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron"
+          (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)"
+          tooltipPosition="bottom" />
 
-        <!-- ===== Herramientas de catálogo / cliente ===== -->
-        <p-button icon="pi pi-tags" [label]="screenLg() ? 'Imprimir etiquetas QR' : ''" ariaLabel="Imprimir etiquetas QR" class="btn-kt-naranja-oscuro" routerLink="/etiquetas" />
-        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron" (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
-
-        <!-- ===== Administración / sistema ===== -->
         @if (health()?.ultimaSincronizacionAt; as fecha) {
         <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'medium' : undefined : 'es-AR') ?? ''"
           tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
         }
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
           [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
-        <p-button icon="pi pi-cog" ariaLabel="Configuración" class="btn-kt-gris" routerLink="/configuracion" pTooltip="Descuentos y horarios de sincronización" tooltipPosition="bottom" />
+
+        <p-menu #menuExtrasRef [model]="menuExtras" [popup]="true" appendTo="body" [pt]="{ root: { class: 'kt-menu-extras' } }" />
+        <p-button icon="pi pi-bars" [label]="screenLg() ? 'Más' : ''" ariaLabel="Más opciones"
+          class="btn-kt-naranja-oscuro"
+          (onClick)="menuExtrasRef.toggle($event)"
+          pTooltip="Pedidos, historial, productos, etiquetas, configuración"
+          tooltipPosition="bottom" />
+
         <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo" (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />
       </div>
     </ng-template>
@@ -491,7 +490,7 @@
         </div>
         <ul class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700 flex-1 overflow-y-auto min-h-0">
           @for (it of carrito(); track it.sku) {
-          <li class="py-3 flex flex-col gap-2" [class.item-excedido]="excedeStock(it)">
+          <li class="py-3 flex flex-col gap-2 px-2 -mx-2 rounded-md" [class.item-excedido]="excedeStock(it)" [attr.data-sku]="it.sku">
             <div class="flex items-start justify-between gap-2">
               <div class="flex items-start gap-2.5 min-w-0 flex-1">
                 @if (it.imagenUrl) {

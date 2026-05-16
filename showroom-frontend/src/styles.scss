@@ -257,3 +257,67 @@ textarea,
     0 4px 6px -1px rgb(0 0 0 / 0.3),
     0 2px 4px -2px rgb(0 0 0 / 0.2);
 }
+
+// p-menu con appendTo="body" → ni `class` del host ni :host ::ng-deep llegan
+// al panel. La clase la inyectamos via [pt]="{ root: { class: ... } }".
+.kt-menu-extras.p-menu {
+  --kt-menu-bg: #FFFBF5;
+  --kt-menu-fg: #3B1E09;
+  --kt-menu-border-pct: 30%;
+  --kt-menu-hover-pct: 18%;
+
+  border: 1px solid color-mix(in oklab, var(--p-primary-500) var(--kt-menu-border-pct), transparent);
+  box-shadow:
+    0 10px 25px -5px rgb(59 30 9 / 0.18),
+    0 8px 10px -6px rgb(59 30 9 / 0.12);
+  background: var(--kt-menu-bg);
+
+  .p-menu-submenu-label {
+    color: var(--kt-menu-fg);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 0.875rem 0.25rem;
+    background: transparent;
+  }
+
+  .p-menu-separator {
+    border-color: color-mix(in oklab, var(--p-primary-500) 25%, transparent);
+  }
+
+  .p-menu-item-link {
+    color: var(--kt-menu-fg);
+    border-radius: 0.375rem;
+    margin: 0 0.25rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    .p-menu-item-icon {
+      color: var(--p-primary-500);
+    }
+
+    &:hover {
+      background: color-mix(in oklab, var(--p-primary-500) var(--kt-menu-hover-pct), transparent);
+
+      .p-menu-item-icon {
+        color: var(--p-primary-700);
+      }
+    }
+  }
+}
+
+.app-dark .kt-menu-extras.p-menu {
+  --kt-menu-bg: var(--p-surface-900);
+  --kt-menu-fg: var(--p-surface-0);
+  --kt-menu-border-pct: 25%;
+  --kt-menu-hover-pct: 22%;
+}
+
+// p-overlayBadge no soporta la prop badgeSize (la doc aclara que sólo aplica al
+// p-badge standalone). Achicamos vía CSS vars del badge interno renderizado.
+.kt-badge-xs .p-badge {
+  --p-badge-min-width: 1.1rem;
+  --p-badge-height: 1.1rem;
+  --p-badge-font-size: 0.65rem;
+  --p-badge-padding: 0 0.3rem;
+}

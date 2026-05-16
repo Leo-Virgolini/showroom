@@ -17,7 +17,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
-import { ConfirmationService, MessageService } from 'primeng/api';
+import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
@@ -33,6 +33,7 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
+import { MenuModule } from 'primeng/menu';
 import { MeterGroupModule } from 'primeng/metergroup';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
@@ -139,6 +140,7 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     InputMaskModule,
     InputNumberModule,
     InputTextModule,
+    MenuModule,
     MeterGroupModule,
     OverlayBadgeModule,
     ProgressSpinnerModule,
@@ -277,6 +279,20 @@ export class ShowroomPage implements AfterViewInit {
   readonly screenLg = signal(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
+
+  readonly menuExtras: MenuItem[] = [
+    { label: 'Consultas', items: [
+      { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
+      { label: 'Historial', icon: 'pi pi-history', routerLink: '/historial' },
+      { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
+    ]},
+    { label: 'Herramientas', items: [
+      { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags', routerLink: '/etiquetas' },
+    ]},
+    { label: 'Administración', items: [
+      { label: 'Configuración', icon: 'pi pi-cog', routerLink: '/configuracion' },
+    ]},
+  ];
 
   readonly provincias = signal<Provincia[]>([]);
   readonly localidades = signal<Localidad[]>([]);
@@ -1127,11 +1143,33 @@ export class ShowroomPage implements AfterViewInit {
               : `${r.sku} x${res.cantidadAgregada}`,
             life: res.recortado ? 3500 : 1500,
           });
+          this.flashItemCarrito(r.sku);
         }
         this.focusInput();
       },
       error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo agregar al carrito.'),
     });
+  }
+
+  /** Feedback visual del scan: pulso verde KT sobre el item agregado al carrito.
+   *  Usa Web Animations API (no signals) — así re-scanear el mismo SKU re-dispara
+   *  la animación en cada llamada sin pelearse con change detection. */
+  private flashItemCarrito(sku: string): void {
+    // setTimeout 0 → esperamos al ciclo de render para que el <li> exista en
+    // DOM si es la primera vez que se agrega el sku.
+    setTimeout(() => {
+      const el = document.querySelector<HTMLElement>(`[data-sku="${CSS.escape(sku)}"]`);
+      if (!el) return;
+      el.animate(
+        [
+          { backgroundColor: 'rgba(126, 186, 0, 0.35)' },
+          { backgroundColor: 'rgba(126, 186, 0, 0.18)', offset: 0.6 },
+          { backgroundColor: 'transparent' },
+        ],
+        { duration: 700, easing: 'ease-out' },
+      );
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 0);
   }
 
   /** Toast warn cuando un sync global del catálogo dejó items del carrito con
