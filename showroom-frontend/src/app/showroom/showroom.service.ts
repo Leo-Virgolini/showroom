@@ -29,6 +29,7 @@ import {
   SesionDetalle,
   SesionListPage,
   SesionShowroom,
+  WhatsappMensajeConfig,
 } from './models';
 
 @Injectable({ providedIn: 'root' })
@@ -221,6 +222,20 @@ export class ShowroomService {
 
   guardarNotificacionesAuto(cfg: NotificacionesAutoConfig): Observable<NotificacionesAutoConfig> {
     return this.http.put<NotificacionesAutoConfig>(`${this.base}/config/notificaciones-auto`, cfg);
+  }
+
+  /** Cuerpo del mensaje (caption) del PDF en WhatsApp. Soporta {nombre} y el
+   *  formato nativo de WhatsApp (*negrita*, _itálica_, ~tachado~, `mono`).
+   *  `personalizado=false` significa que no hay mensaje configurado todavía —
+   *  el PDF se mandará sin caption hasta que se cargue uno desde /configuracion. */
+  obtenerWhatsappMensaje(): Observable<WhatsappMensajeConfig> {
+    return this.http.get<WhatsappMensajeConfig>(`${this.base}/config/whatsapp-mensaje`);
+  }
+
+  /** Guarda el mensaje. Pasar `mensaje: ''` borra la fila — el PDF se va a
+   *  mandar sin caption hasta que el operador configure uno nuevo. */
+  guardarWhatsappMensaje(cfg: WhatsappMensajeConfig): Observable<WhatsappMensajeConfig> {
+    return this.http.put<WhatsappMensajeConfig>(`${this.base}/config/whatsapp-mensaje`, cfg);
   }
 
   /** Regenera el pickit externo manualmente para un pedido ya existente. El

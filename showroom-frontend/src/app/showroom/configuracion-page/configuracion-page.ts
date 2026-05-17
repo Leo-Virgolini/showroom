@@ -20,6 +20,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
+import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -68,6 +69,7 @@ interface FilaHorario {
     InputTextModule,
     TableModule,
     TabsModule,
+    TextareaModule,
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
@@ -182,6 +184,40 @@ export class ConfiguracionPage {
   readonly notificacionesAuto = signal<NotificacionesAutoConfig | null>(null);
 
   // ============================================================
+  // Mensaje de WhatsApp (caption del PDF) — editable
+  // ============================================================
+  readonly cargandoWhatsappMensaje = signal(false);
+  readonly guardandoWhatsappMensaje = signal(false);
+  /** Texto editable en el textarea (estado local). */
+  readonly whatsappMensaje = signal('');
+  /** Snapshot del último valor cargado/guardado — para detectar cambios. */
+  private readonly whatsappMensajeOriginal = signal('');
+  /** Flag del backend: false = no hay mensaje configurado en DB (el PDF se va a
+   *  mandar sin caption). true = el operador cargó un mensaje desde esta misma
+   *  pantalla. */
+  readonly whatsappMensajePersonalizado = signal(false);
+
+  /** WhatsApp limita el caption a 1024 chars — lo usamos como hard cap del
+   *  textarea para que el operador vea el contador en vivo. */
+  static readonly WHATSAPP_CAPTION_MAX = 1024;
+  /** Alias accesible desde el template (los static no son visibles ahí). */
+  readonly MAX_CAPTION = ConfiguracionPage.WHATSAPP_CAPTION_MAX;
+
+  readonly hayCambiosWhatsappMensaje = computed(
+    () => this.whatsappMensaje() !== this.whatsappMensajeOriginal(),
+  );
+
+  /** Preview HTML del mensaje renderizado como lo va a ver el cliente en
+   *  WhatsApp. Aplica *bold* / _italic_ / ~strike~ / `mono` y reemplaza
+   *  {nombre} por un nombre de ejemplo. Es seguro: escapamos HTML primero y
+   *  recién después insertamos las tags de formato. */
+  readonly whatsappPreviewHtml = computed(() =>
+    ConfiguracionPage.renderWhatsappPreview(this.whatsappMensaje()),
+  );
+
+  readonly whatsappCaracteres = computed(() => this.whatsappMensaje().length);
+
+  // ============================================================
   // Toggle global de sync automática con DUX
   // ============================================================
   readonly cargandoSyncAuto = signal(false);
@@ -216,6 +252,148 @@ export class ConfiguracionPage {
     this.cargarFormasPago();
     this.cargarNotificacionesAuto();
     this.cargarSyncAuto();
+    this.cargarWhatsappMensaje();
+  }
+
+  // ============================================================
+  // Mensaje de WhatsApp — métodos
+  // ============================================================
+
+  private cargarWhatsappMensaje(): void {
+    this.cargandoWhatsappMensaje.set(true);
+    this.api.obtenerWhatsappMensaje().subscribe({
+      next: (cfg) => {
+        this.cargandoWhatsappMensaje.set(false);
+        this.whatsappMensaje.set(cfg.mensaje ?? '');
+        this.whatsappMensajeOriginal.set(cfg.mensaje ?? '');
+        this.whatsappMensajePersonalizado.set(cfg.personalizado);
+      },
+      error: (err) => {
+        this.cargandoWhatsappMensaje.set(false);
+        toastError(this.toast, 'Mensaje WhatsApp', err,
+          'No se pudo cargar el mensaje configurado');
+      },
+    });
+  }
+
+  descartarCambiosWhatsappMensaje(): void {
+    this.whatsappMensaje.set(this.whatsappMensajeOriginal());
+  }
+
+  guardarWhatsappMensaje(): void {
+    const mensaje = this.whatsappMensaje();
+    if (mensaje.length > ConfiguracionPage.WHATSAPP_CAPTION_MAX) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Mensaje muy largo',
+        detail: `Máximo ${ConfiguracionPage.WHATSAPP_CAPTION_MAX} caracteres (WhatsApp lo limita).`,
+        life: 4000,
+      });
+      return;
+    }
+    this.guardandoWhatsappMensaje.set(true);
+    this.api.guardarWhatsappMensaje({ mensaje, personalizado: true }).subscribe({
+      next: (cfg) => {
+        this.guardandoWhatsappMensaje.set(false);
+        this.whatsappMensaje.set(cfg.mensaje ?? '');
+        this.whatsappMensajeOriginal.set(cfg.mensaje ?? '');
+        this.whatsappMensajePersonalizado.set(cfg.personalizado);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Mensaje guardado',
+          detail: cfg.personalizado
+            ? 'Se va a usar este texto en los próximos envíos por WhatsApp.'
+            : 'No hay mensaje configurado — el PDF se va a mandar sin caption.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoWhatsappMensaje.set(false);
+        toastError(this.toast, 'Guardar mensaje', err, 'No se pudo guardar el mensaje');
+      },
+    });
+  }
+
+  /** Borra el mensaje configurado — el PDF se va a empezar a mandar sin caption
+   *  hasta que el operador configure uno nuevo. */
+  quitarWhatsappMensaje(): void {
+    this.confirmationService.confirm({
+      header: 'Quitar mensaje',
+      message: 'Se va a borrar el mensaje configurado. A partir de ahora el PDF se va a mandar sin texto en WhatsApp hasta que cargues uno nuevo. ¿Continuar?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: {
+        label: 'Quitar',
+        icon: 'pi pi-trash',
+        severity: 'danger',
+      },
+      rejectButtonProps: {
+        label: 'Cancelar',
+        severity: 'secondary',
+        outlined: true,
+      },
+      accept: () => {
+        this.guardandoWhatsappMensaje.set(true);
+        this.api.guardarWhatsappMensaje({ mensaje: '', personalizado: false }).subscribe({
+          next: (cfg) => {
+            this.guardandoWhatsappMensaje.set(false);
+            this.whatsappMensaje.set(cfg.mensaje ?? '');
+            this.whatsappMensajeOriginal.set(cfg.mensaje ?? '');
+            this.whatsappMensajePersonalizado.set(cfg.personalizado);
+            this.toast.add({
+              severity: 'success',
+              summary: 'Mensaje quitado',
+              detail: 'El PDF se va a mandar sin caption hasta que configures uno nuevo.',
+              life: 3000,
+            });
+          },
+          error: (err) => {
+            this.guardandoWhatsappMensaje.set(false);
+            toastError(this.toast, 'Quitar mensaje', err, 'No se pudo quitar el mensaje');
+          },
+        });
+      },
+    });
+  }
+
+  /** Inserta una marca de formato (negrita/itálica/etc.) envolviendo el texto
+   *  seleccionado en el textarea, o insertando un placeholder ("texto") si no
+   *  hay selección. Reutilizado por los 4 botones de formato del editor. */
+  insertarFormatoWhatsapp(simbolo: '*' | '_' | '~' | '`', textareaId: string): void {
+    const el = document.getElementById(textareaId) as HTMLTextAreaElement | null;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const texto = this.whatsappMensaje();
+    const seleccion = texto.substring(start, end);
+    const cuerpo = seleccion || 'texto';
+    const nuevo = texto.substring(0, start) + simbolo + cuerpo + simbolo + texto.substring(end);
+    this.whatsappMensaje.set(nuevo);
+    // Reposicionar la selección sobre el cuerpo del fragmento insertado, para
+    // que el operador pueda seguir tipeando arriba si quiere. setTimeout
+    // porque la signal todavía no actualizó el DOM cuando focusamos.
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + simbolo.length, start + simbolo.length + cuerpo.length);
+    }, 0);
+  }
+
+  /** Renderiza el mensaje aplicando el formato de WhatsApp para el preview.
+   *  Seguro: escapa HTML primero, recién después introduce las tags. */
+  private static renderWhatsappPreview(raw: string): string {
+    if (!raw) return '<span class="text-muted-color italic">(mensaje vacío)</span>';
+    const conNombre = raw.replace(/\{nombre\}/g, 'Juan');
+    const escaped = conNombre
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+    const formateado = escaped
+      .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+      .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+      .replace(/~([^~\n]+)~/g, '<s>$1</s>')
+      .replace(/`([^`\n]+)`/g, '<code class="px-1 py-0.5 rounded bg-black/10 dark:bg-white/10 text-[0.875em]">$1</code>');
+    return formateado.replace(/\n/g, '<br>');
   }
 
   // ============================================================

@@ -50,6 +50,7 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
+import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.VisorService;
 import jakarta.validation.Valid;
@@ -791,6 +792,22 @@ public class ShowroomController {
     @PutMapping("/config/notificaciones-auto")
     public NotificacionesAutoConfigDTO actualizarNotificacionesAuto(@RequestBody NotificacionesAutoConfigDTO body) {
         return service.saveNotificacionesAuto(body);
+    }
+
+    /**
+     * Cuerpo del mensaje (caption) que acompaña al PDF en WhatsApp. El operador
+     * lo edita desde /configuracion. Si la fila no existe en DB se devuelve el
+     * default de {@code showroom.whatsapp.mensaje-cuerpo} con
+     * {@code personalizado=false} para que la UI pueda señalarlo.
+     */
+    @GetMapping("/config/whatsapp-mensaje")
+    public WhatsappMensajeConfigDTO obtenerWhatsappMensaje() {
+        return service.getWhatsappMensaje();
+    }
+
+    @PutMapping("/config/whatsapp-mensaje")
+    public WhatsappMensajeConfigDTO actualizarWhatsappMensaje(@RequestBody WhatsappMensajeConfigDTO body) {
+        return service.saveWhatsappMensaje(body);
     }
 
     /**

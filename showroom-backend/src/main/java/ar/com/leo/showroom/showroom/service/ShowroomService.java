@@ -43,6 +43,7 @@ import ar.com.leo.showroom.showroom.dto.PedidoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.PedidoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
+import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListItemDTO;
 import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
@@ -201,6 +202,17 @@ public class ShowroomService {
 
     public boolean setSyncAutoHabilitada(boolean habilitada) {
         return configuracionService.setSyncAutoHabilitada(habilitada);
+    }
+
+    /** Cuerpo del mensaje (caption) que acompaña al PDF en WhatsApp. Editable
+     *  desde /configuracion; si no hay valor en DB se devuelve el default del
+     *  application.properties. */
+    public WhatsappMensajeConfigDTO getWhatsappMensaje() {
+        return configuracionService.getWhatsappMensaje();
+    }
+
+    public WhatsappMensajeConfigDTO saveWhatsappMensaje(WhatsappMensajeConfigDTO cfg) {
+        return configuracionService.saveWhatsappMensaje(cfg);
     }
 
 

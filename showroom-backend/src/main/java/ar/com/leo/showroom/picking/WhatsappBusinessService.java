@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.common.exception.UserMessages;
+import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.events.WhatsappBusinessEvent;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
@@ -20,6 +21,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -49,12 +51,17 @@ import java.util.Optional;
  *       Además el system user tiene que tener acceso a activos comerciales
  *       sobre la WABA (full o granular sobre el número).
  *   <li>{@code showroom.whatsapp.api-version} — versión de Graph API. Default v25.0.
- *   <li>{@code showroom.whatsapp.mensaje-cuerpo} — texto que acompaña al PDF
- *       como caption. Soporta {@code {nombre}} como placeholder del cliente.
  *   <li>{@code showroom.whatsapp.default-country-code} — prefijo internacional
  *       a anteponer si el teléfono cargado en el pedido no lo trae. Default 54
  *       (Argentina); incluye el "9" automático para móviles.
  * </ul>
+ *
+ * <p><b>Mensaje (caption del PDF):</b> NO se configura por .properties — se
+ * carga desde la pantalla {@code /configuracion} (persistido en la tabla
+ * {@code configuracion}, clave {@code whatsapp.mensaje-cuerpo}). Soporta el
+ * placeholder {@code {nombre}} y el formato nativo de WhatsApp
+ * ({@code *negrita*}, {@code _itálica_}, {@code ~tachado~}, {@code `mono`}).
+ * Si el operador no configuró ninguno, el PDF se envía sin caption.
  */
 @Slf4j
 @Service
@@ -83,6 +90,7 @@ public class WhatsappBusinessService {
     private final SesionShowroomRepository sesionRepository;
     private final SyncEventService eventService;
     private final ObjectMapper objectMapper;
+    private final ConfiguracionService configuracionService;
     private final RestClient restClient;
 
     @Value("${showroom.whatsapp.enabled:false}")
@@ -97,9 +105,6 @@ public class WhatsappBusinessService {
     @Value("${showroom.whatsapp.api-version:v25.0}")
     private String apiVersion;
 
-    @Value("${showroom.whatsapp.mensaje-cuerpo:Hola {nombre}, te dejamos un PDF con los productos que viste hoy en el showroom de KT GASTRO. ¡Gracias por tu visita!}")
-    private String mensajeCuerpo;
-
     @Value("${showroom.whatsapp.default-country-code:54}")
     private String defaultCountryCode;
 
@@ -107,11 +112,13 @@ public class WhatsappBusinessService {
             PresupuestoPdfGenerator pdfGenerator,
             SesionShowroomRepository sesionRepository,
             SyncEventService eventService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            ConfiguracionService configuracionService) {
         this.pdfGenerator = pdfGenerator;
         this.sesionRepository = sesionRepository;
         this.eventService = eventService;
         this.objectMapper = objectMapper;
+        this.configuracionService = configuracionService;
         // RestClient genérico — la base URL se compone por request porque el
         // path incluye el phone_number_id. El access_token va como Bearer header
         // en cada llamada (set en buildRestClient bajo demanda).
@@ -378,11 +385,18 @@ public class WhatsappBusinessService {
      *  Body según doc oficial Meta: messaging_product + recipient_type +
      *  to + type + document (id, caption, filename). Caption hard-cap a 1024
      *  caracteres (límite documentado) — truncamos por las dudas si el operador
-     *  configura un mensaje muy largo. */
+     *  configura un mensaje muy largo. Si el caption está vacío, lo omitimos
+     *  del payload (Meta acepta el documento sin caption). */
     private void enviarDocumento(String to, String mediaId, String caption, String filename) {
-        String captionSafe = caption != null && caption.length() > 1024
-                ? caption.substring(0, 1024)
-                : caption;
+        // Map.of no admite valores null; armamos el sub-map condicionalmente
+        // para no incluir "caption" cuando no hay texto.
+        Map<String, Object> documento = new LinkedHashMap<>();
+        documento.put("id", mediaId);
+        documento.put("filename", filename);
+        if (caption != null && !caption.isEmpty()) {
+            String captionSafe = caption.length() > 1024 ? caption.substring(0, 1024) : caption;
+            documento.put("caption", captionSafe);
+        }
         Map<String, Object> body = Map.of(
                 "messaging_product", "whatsapp",
                 "recipient_type", "individual",
@@ -391,11 +405,7 @@ public class WhatsappBusinessService {
                 // la validación.
                 "to", "+" + to,
                 "type", "document",
-                "document", Map.of(
-                        "id", mediaId,
-                        "caption", captionSafe,
-                        "filename", filename
-                )
+                "document", documento
         );
         restClient.post()
                 .uri("/{version}/{phoneId}/messages", apiVersion, phoneNumberId)
@@ -428,12 +438,19 @@ public class WhatsappBusinessService {
     }
 
     /** Renderiza el caption del PDF reemplazando {nombre} por el nombre del
-     *  cliente. Recibe directamente el string para servir a los 2 callers
+     *  cliente. El texto base se lee de {@link ConfiguracionService} en cada
+     *  envío. Si el operador todavía no configuró un mensaje desde
+     *  /configuracion, devuelve cadena vacía y el PDF se manda sin caption.
+     *  Recibe el string directo para servir a los 2 callers
      *  (pedido.nombreCompleto y sesion.nombre) sin acoplar a un tipo concreto. */
     private String renderCuerpo(String nombreClienteRaw) {
+        String cuerpo = configuracionService.getWhatsappMensajeCuerpo();
+        if (cuerpo == null || cuerpo.isEmpty()) {
+            return "";
+        }
         String nombre = nombreClienteRaw != null && !nombreClienteRaw.isBlank()
                 ? nombreClienteRaw.trim() : "";
-        return mensajeCuerpo.replace("{nombre}", nombre).trim();
+        return cuerpo.replace("{nombre}", nombre).trim();
     }
 
     /**

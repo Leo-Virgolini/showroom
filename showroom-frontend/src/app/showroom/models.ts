@@ -320,6 +320,15 @@ export interface NotificacionesAutoConfig {
   whatsappAutoPedido: boolean;
 }
 
+/** Cuerpo del mensaje (caption) que se manda junto al PDF por WhatsApp.
+ *  Editable desde /configuracion. `personalizado=false` indica que todavía no
+ *  hay mensaje configurado (mensaje viene vacío) — el PDF se va a mandar sin
+ *  caption hasta que el operador cargue uno. */
+export interface WhatsappMensajeConfig {
+  mensaje: string;
+  personalizado: boolean;
+}
+
 /** Punto de un ranking de productos del historial (top escaneados / top comprados). */
 export interface EstadisticaProducto {
   sku: string;

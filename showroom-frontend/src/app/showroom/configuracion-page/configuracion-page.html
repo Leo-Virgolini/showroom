@@ -386,6 +386,152 @@
         }
       </div>
     </p-card>
+
+    <!-- ============================================================
+         Mensaje de WhatsApp — caption del PDF
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          Texto que acompaña al PDF cuando se manda por WhatsApp al cliente (caption del documento). Se aplica tanto al envío automático tras pedido como al manual desde /pedidos y /historial. <strong>Si lo dejás vacío</strong>, el PDF se manda sin caption.
+        </div>
+        <div class="text-xs text-muted-color">
+          Soporta el formato nativo de WhatsApp: <code>*negrita*</code>, <code>_itálica_</code>, <code>~tachado~</code>, <code>`mono`</code>. Usá el placeholder <code class="font-semibold">&#123;nombre&#125;</code> donde quieras que aparezca el nombre del cliente. Máximo {{ MAX_CAPTION }} caracteres (lo limita WhatsApp).
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <h3 class="text-base font-semibold m-0">Mensaje de WhatsApp</h3>
+        @if (!whatsappMensajePersonalizado() && !cargandoWhatsappMensaje()) {
+          <span class="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
+            <i class="pi pi-info-circle"></i>
+            Sin mensaje — el PDF se mandará sin texto
+          </span>
+        } @else if (whatsappMensajePersonalizado()) {
+          <span class="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400 px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900">
+            <i class="pi pi-check-circle"></i>
+            Mensaje configurado
+          </span>
+        }
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Editor -->
+        <div class="flex flex-col gap-2">
+          <div class="flex items-center gap-1 flex-wrap">
+            <span class="text-xs text-muted-color mr-1">Insertar:</span>
+            <p-button
+              label="Negrita"
+              icon="pi pi-bold"
+              size="small"
+              severity="secondary"
+              [text]="true"
+              (onClick)="insertarFormatoWhatsapp('*', 'whatsappMensajeTextarea')"
+              pTooltip="*texto*"
+              tooltipPosition="top" />
+            <p-button
+              label="Itálica"
+              icon="pi pi-italic"
+              size="small"
+              severity="secondary"
+              [text]="true"
+              (onClick)="insertarFormatoWhatsapp('_', 'whatsappMensajeTextarea')"
+              pTooltip="_texto_"
+              tooltipPosition="top" />
+            <p-button
+              label="Tachado"
+              icon="pi pi-minus"
+              size="small"
+              severity="secondary"
+              [text]="true"
+              (onClick)="insertarFormatoWhatsapp('~', 'whatsappMensajeTextarea')"
+              pTooltip="~texto~"
+              tooltipPosition="top" />
+            <p-button
+              label="Mono"
+              icon="pi pi-code"
+              size="small"
+              severity="secondary"
+              [text]="true"
+              (onClick)="insertarFormatoWhatsapp('`', 'whatsappMensajeTextarea')"
+              pTooltip="`texto`"
+              tooltipPosition="top" />
+          </div>
+
+          <textarea
+            pTextarea
+            id="whatsappMensajeTextarea"
+            rows="10"
+            [maxlength]="MAX_CAPTION"
+            [ngModel]="whatsappMensaje()"
+            (ngModelChange)="whatsappMensaje.set($event)"
+            placeholder="Hola *{nombre}*! Te dejamos el PDF con los productos que viste hoy…"
+            class="w-full font-mono text-sm"
+            [disabled]="cargandoWhatsappMensaje() || guardandoWhatsappMensaje()">
+          </textarea>
+
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-muted-color">
+              💡 Tip: seleccioná texto y tocá un botón de formato para envolverlo.
+            </span>
+            <span
+              class="font-mono tabular-nums"
+              [class.text-muted-color]="whatsappCaracteres() < MAX_CAPTION - 100"
+              [class.text-amber-600]="whatsappCaracteres() >= MAX_CAPTION - 100 && whatsappCaracteres() < MAX_CAPTION"
+              [class.text-red-600]="whatsappCaracteres() >= MAX_CAPTION">
+              {{ whatsappCaracteres() }} / {{ MAX_CAPTION }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div class="flex flex-col gap-2">
+          <span class="text-xs font-medium text-muted-color">Vista previa (cliente "Juan")</span>
+          <div class="flex-1 p-3 rounded-xl bg-[#dcf8c6] dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 min-h-[12rem] shadow-sm relative">
+            <div class="text-sm leading-relaxed text-slate-900 dark:text-slate-100 whitespace-pre-wrap break-words"
+                 [innerHTML]="whatsappPreviewHtml()">
+            </div>
+            <div class="mt-3 pt-3 border-t border-emerald-200/70 dark:border-emerald-800/40 flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+              <i class="pi pi-file-pdf text-red-600 dark:text-red-400 text-lg"></i>
+              <span class="font-medium">presupuesto-XXXX.pdf</span>
+              <span class="text-muted-color">(adjunto)</span>
+            </div>
+          </div>
+          <span class="text-xs text-muted-color">
+            Así se ve en el chat del cliente. El nombre real reemplaza a "Juan" al enviar.
+          </span>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4 flex-wrap">
+        @if (whatsappMensajePersonalizado()) {
+          <p-button
+            label="Quitar mensaje"
+            severity="danger"
+            [outlined]="true"
+            icon="pi pi-trash"
+            (onClick)="quitarWhatsappMensaje()"
+            [disabled]="guardandoWhatsappMensaje() || cargandoWhatsappMensaje()"
+            pTooltip="Borra el mensaje. El PDF se va a mandar sin caption hasta que cargues uno nuevo."
+            tooltipPosition="top" />
+        }
+        @if (hayCambiosWhatsappMensaje()) {
+          <p-button
+            label="Descartar cambios"
+            severity="secondary"
+            [outlined]="true"
+            icon="pi pi-undo"
+            (onClick)="descartarCambiosWhatsappMensaje()"
+            [disabled]="guardandoWhatsappMensaje()" />
+        }
+        <p-button
+          label="Guardar"
+          icon="pi pi-check"
+          (onClick)="guardarWhatsappMensaje()"
+          [loading]="guardandoWhatsappMensaje()"
+          [disabled]="!hayCambiosWhatsappMensaje()" />
+      </div>
+    </p-card>
         </div>
       </p-tabpanel>
 

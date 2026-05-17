@@ -4,6 +4,7 @@ import ar.com.leo.showroom.config.entity.Configuracion;
 import ar.com.leo.showroom.config.repository.ConfiguracionRepository;
 import ar.com.leo.showroom.showroom.dto.NotificacionesAutoConfigDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
+import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,6 +43,11 @@ public class ConfiguracionService {
      *  con un toggle (ej: mientras DUX está caído). Default true. */
     public static final String CLAVE_SYNC_AUTO_HABILITADA = "sync.auto-habilitada";
 
+    /** Cuerpo del mensaje (caption) que acompaña al PDF en WhatsApp. Soporta
+     *  formato nativo de WhatsApp (*negrita*, _itálica_, ~tachado~, `mono`) y
+     *  el placeholder {nombre}. Sin valor en DB → el PDF se manda sin caption. */
+    public static final String CLAVE_WHATSAPP_MENSAJE_CUERPO = "whatsapp.mensaje-cuerpo";
+
     private final ConfiguracionRepository repository;
 
     /**
@@ -53,6 +59,7 @@ public class ConfiguracionService {
      */
     @Value("${showroom.pickit.host-path:}")
     private String pickitHostPath;
+
 
     // =====================================================================
     // Pickit externo (programa Java desktop)
@@ -148,6 +155,55 @@ public class ConfiguracionService {
         guardar(CLAVE_SYNC_AUTO_HABILITADA, habilitada ? "true" : "false");
         log.info("Sync automática DUX {}", habilitada ? "HABILITADA" : "DESHABILITADA");
         return habilitada;
+    }
+
+    // =====================================================================
+    // Mensaje de WhatsApp (caption del PDF) — editable desde /configuracion
+    // =====================================================================
+
+    /**
+     * Devuelve el mensaje que acompaña al PDF en WhatsApp. Si el operador no
+     * lo configuró desde {@code /configuracion}, devuelve cadena vacía con
+     * {@code personalizado=false}: el PDF se enviará sin caption.
+     */
+    @Transactional(readOnly = true)
+    public WhatsappMensajeConfigDTO getWhatsappMensaje() {
+        String valor = leer(CLAVE_WHATSAPP_MENSAJE_CUERPO);
+        boolean personalizado = valor != null && !valor.isEmpty();
+        return new WhatsappMensajeConfigDTO(personalizado ? valor : "", personalizado);
+    }
+
+    /**
+     * Cuerpo del mensaje que efectivamente se va a usar al enviar. Lo consume
+     * {@link ar.com.leo.showroom.picking.WhatsappBusinessService} en cada envío.
+     * Devuelve cadena vacía si el operador todavía no configuró ningún mensaje
+     * (el PDF se manda sin caption).
+     */
+    @Transactional(readOnly = true)
+    public String getWhatsappMensajeCuerpo() {
+        return leer(CLAVE_WHATSAPP_MENSAJE_CUERPO);
+    }
+
+    /**
+     * Persiste el mensaje custom. Pasar vacío borra la fila — el PDF se va a
+     * mandar sin caption hasta que se cargue uno nuevo. Cap de 1024 caracteres
+     * porque es el límite del caption de WhatsApp.
+     */
+    @Transactional
+    public WhatsappMensajeConfigDTO saveWhatsappMensaje(WhatsappMensajeConfigDTO cfg) {
+        if (cfg == null) {
+            throw new IllegalArgumentException("Config requerida");
+        }
+        String mensaje = cfg.mensaje() == null ? "" : cfg.mensaje();
+        if (mensaje.length() > 1024) {
+            throw new IllegalArgumentException(
+                    "El mensaje supera el máximo de 1024 caracteres permitido por WhatsApp.");
+        }
+        guardar(CLAVE_WHATSAPP_MENSAJE_CUERPO, mensaje);
+        log.info("Mensaje de WhatsApp {} ({} chars)",
+                mensaje.isEmpty() ? "BORRADO" : "actualizado",
+                mensaje.length());
+        return getWhatsappMensaje();
     }
 
     private String leer(String clave) {
