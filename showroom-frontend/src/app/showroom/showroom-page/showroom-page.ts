@@ -734,7 +734,7 @@ export class ShowroomPage implements AfterViewInit {
         } else {
           this.carrito.set(state.items);
           if (state.origen === 'VISOR') {
-            this.mostrarToastCambioDesdeVisor(previo, state.items);
+            this.procesarCambioDesdeVisor(previo, state.items);
           } else if (state.origen === 'SISTEMA') {
             this.mostrarToastStockTrasSync(previo, state.items);
           }
@@ -1197,15 +1197,20 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /** Toast informativo cuando un add proviene del visor (cliente en su celular).
-   *  Compara estado previo vs nuevo para decidir qué SKUs cambiaron y cuánto. */
-  private mostrarToastCambioDesdeVisor(previo: CarritoItem[], nuevo: CarritoItem[]): void {
+  /** Notifica al operador cuando un add proviene del visor (cliente en su celular):
+   *  toast informativo + mismo pulso verde sobre la fila que ya hace el flujo
+   *  local. Compara estado previo vs nuevo para decidir qué SKUs cambiaron. */
+  private procesarCambioDesdeVisor(previo: CarritoItem[], nuevo: CarritoItem[]): void {
     const prevMap = new Map(previo.map((it) => [it.sku, it.cantidad]));
     const cambios: string[] = [];
+    const skusAgregados: string[] = [];
     for (const it of nuevo) {
       const antes = prevMap.get(it.sku) ?? 0;
       const diff = it.cantidad - antes;
-      if (diff > 0) cambios.push(`${it.sku} x${diff}`);
+      if (diff > 0) {
+        cambios.push(`${it.sku} x${diff}`);
+        skusAgregados.push(it.sku);
+      }
     }
     if (cambios.length === 0) return;
     this.toast.add({
@@ -1214,6 +1219,11 @@ export class ShowroomPage implements AfterViewInit {
       detail: cambios.join(', '),
       life: 4000,
     });
+    // Sin la animación el operador veía el toast pero podía perderse cuál fila
+    // del carrito cambió — sobre todo si la lista es larga y el item ya estaba.
+    for (const sku of skusAgregados) {
+      this.flashItemCarrito(sku);
+    }
   }
 
   actualizarCantidad(sku: string, cantidad: number): void {
