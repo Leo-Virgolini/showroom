@@ -21,6 +21,7 @@ import { DialogModule } from 'primeng/dialog';
 import { ImageModule } from 'primeng/image';
 import { InputGroupModule } from 'primeng/inputgroup';
 import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
+import { InputMaskModule } from 'primeng/inputmask';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SkeletonModule } from 'primeng/skeleton';
@@ -55,6 +56,7 @@ import { toastError } from '../toast.utils';
     ImageModule,
     InputGroupModule,
     InputGroupAddonModule,
+    InputMaskModule,
     InputTextModule,
     ProgressSpinnerModule,
     SkeletonModule,
@@ -393,6 +395,11 @@ export class HistorialPage {
     if (this.enviandoSesion()) return; // no cerrar mientras se manda
     this.sesionEnvio.set(null);
   }
+
+  /** Valor digit-only para el p-inputMask del teléfono cuando el modo es whatsapp.
+   *  Limpia el signal de cualquier char que no sea dígito por si quedó algún
+   *  hyphen legado. */
+  readonly telefonoInputValue = computed(() => this.destinatarioInput().replace(/\D/g, ''));
 
   confirmarEnvioSesion(): void {
     const sesion = this.sesionEnvio();

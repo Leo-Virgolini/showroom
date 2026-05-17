@@ -467,18 +467,33 @@
       <div class="flex flex-col gap-1.5">
         <label for="envioInput" class="text-sm font-medium text-muted-color">
           @if (modoEnvio() === 'email') { Email del cliente }
-          @else { Teléfono del cliente (con código de país, ej. +54 9 11 1234-5678) }
+          @else { Teléfono del cliente (ej. 11-12345678) }
         </label>
-        <input
-          pInputText
-          id="envioInput"
-          [type]="modoEnvio() === 'email' ? 'email' : 'tel'"
-          [ngModel]="destinatarioInput()"
-          (ngModelChange)="destinatarioInput.set($event)"
-          (keydown.enter)="confirmarEnvioSesion()"
-          autocomplete="off"
-          class="w-full"
-          [disabled]="enviandoSesion()" />
+        @if (modoEnvio() === 'whatsapp') {
+          <p-inputMask
+            inputId="envioInput"
+            mask="99-99999999"
+            [unmask]="true"
+            [ngModel]="telefonoInputValue()"
+            (ngModelChange)="destinatarioInput.set($event ?? '')"
+            (onComplete)="confirmarEnvioSesion()"
+            placeholder="11-12345678"
+            class="w-full"
+            [disabled]="enviandoSesion()" />
+        } @else {
+          <input
+            pInputText
+            id="envioInput"
+            type="email"
+            inputmode="email"
+            placeholder="cliente@email.com"
+            [ngModel]="destinatarioInput()"
+            (ngModelChange)="destinatarioInput.set($event ?? '')"
+            (keydown.enter)="confirmarEnvioSesion()"
+            autocomplete="off"
+            class="w-full"
+            [disabled]="enviandoSesion()" />
+        }
       </div>
       @if (modoEnvio() === 'whatsapp') {
         <div class="text-xs text-muted-color">

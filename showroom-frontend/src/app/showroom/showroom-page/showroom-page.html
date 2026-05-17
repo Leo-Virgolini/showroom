@@ -825,10 +825,7 @@
 
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium text-muted-color">Teléfono</label>
-        <p-iconfield iconPosition="left">
-          <p-inputicon><i class="pi pi-phone"></i></p-inputicon>
-          <input pInputText type="tel" inputmode="tel" [ngModel]="cliente().telefono" (ngModelChange)="actualizarCliente('telefono', $event)" class="w-full" />
-        </p-iconfield>
+        <p-inputMask mask="99-99999999" [unmask]="true" [ngModel]="telefonoInputValue()" (ngModelChange)="onTelefonoChange($event)" placeholder="11-12345678" class="w-full" />
       </div>
 
       <div class="flex flex-col gap-1">

@@ -652,11 +652,27 @@ export class ShowroomPage implements AfterViewInit {
     return n != null ? String(n) : '';
   });
 
+  /** Valor (string) que ve el inputMask del teléfono: solo dígitos del teléfono
+   *  guardado, para que la máscara `99-99999999` aplique el guión sola. Sirve
+   *  para limpiar valores legacy que tenían guiones u otros chars antes de
+   *  migrar al inputMask. */
+  readonly telefonoInputValue = computed(() => {
+    const t = this.cliente().telefono;
+    return t ? t.replace(/\D/g, '') : '';
+  });
+
   /** Recibe el valor del inputMask con [unmask]="true" — solo dígitos. Lo convertimos
    *  a number para que el resto del flujo (validación, payload a DUX) siga igual. */
   onCuitChange(value: string | null | undefined): void {
     const digits = (value ?? '').replace(/\D/g, '');
     this.actualizarCliente('nroDoc', digits ? Number(digits) : null);
+  }
+
+  /** Recibe el valor del inputMask del teléfono con [unmask]="true" (solo dígitos).
+   *  Lo guarda tal cual en el cliente — el formato visual con guión lo provee
+   *  la máscara, no la data persistida. */
+  onTelefonoChange(value: string | null | undefined): void {
+    this.actualizarCliente('telefono', value ?? '');
   }
 
   constructor() {
