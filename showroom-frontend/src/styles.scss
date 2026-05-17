@@ -236,6 +236,16 @@ textarea,
 }
 
 // =====================================================================
+// p-dialog: el footer default de Aura viene con padding muy ajustado —
+// los botones quedan pegados al separador superior y a los bordes laterales.
+// Override de las CSS vars del componente (no `!important`) para darle aire
+// y mantener consistencia con la densidad del resto de la UI.
+// =====================================================================
+.p-dialog {
+  --p-dialog-footer-padding: 1rem 1.5rem 1.25rem 1.5rem;
+}
+
+// =====================================================================
 // p-card: refuerzo visual sobre el fondo crema de las pantallas operativas
 // (bg-orange-50/60). Con la sombra default de PrimeNG las cards se fundían
 // con el fondo. Borde primary tenue + shadow medio dan el efecto "card
