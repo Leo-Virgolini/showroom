@@ -65,18 +65,21 @@
 }
 
 // Modo compacto para notebooks 1920×1080 con scaling Windows 125–150%, que
-// dejan ~720–820px de viewport efectivo. Sin esto el panel de "Escanear
+// dejan ~720–864px de viewport efectivo. Sin esto el panel de "Escanear
 // muestra" no entra entero (imagen grande + tags + precio + N tiles de
-// ahorro), y el CTA "Agregar al carrito" termina recortado. El umbral 820px
-// captura scaling 125% (864) con algo de margen — para 150% (720) es
-// imprescindible.
+// ahorro), y el CTA "Agregar al carrito" termina recortado.
+//
+// Umbral 880px elegido para cubrir el caso canónico (notebook 1080p @ 125%
+// fullscreen → viewport 864) con algo de margen, sin pisar a las notebooks
+// 1080p @ 100% (viewport ≥1000px con chrome, 1080 sin chrome). También
+// captura 150% (720) e intermedios.
 //
 // Aplica solo en pantallas anchas (≥ 1024px) donde la layout dashboard
 // (page-container con `height: 100vh; overflow: hidden`) está activa.
 // El scan-body además tiene `overflow-y-auto` como red de seguridad — si
 // aún con la compresión no entra todo, scrollea dentro del card en lugar
 // de recortar el CTA.
-@media (min-width: 1024px) and (max-height: 820px) {
+@media (min-width: 1024px) and (max-height: 880px) {
   // Recortar el padding de los paneles del splitter (antes estaba en `main`,
   // pero ahora main no tiene padding; el splitter renderiza dos paneles que
   // contienen <section> y <aside> con padding propio).
