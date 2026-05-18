@@ -44,11 +44,9 @@ public class DuxClient {
     private static final long BASE_WAIT_MS = 5000L;
     private static final int MAX_INTENTOS_VACIOS = 3;
     private static final ZoneId ZONA_DUX = ZoneId.of("America/Argentina/Buenos_Aires");
-    // Formato con hora — probando si DUX respeta la precisión a nivel HH:mm:ss
-    // para hacer incrementales reales por hora en vez de "todo lo del día".
-    // Si DUX ignora la parte de hora, vamos a ver que cada sync devuelve el
-    // mismo set de items (~todos los del día) y conviene volver a `ddMMyyyy`.
-    private static final DateTimeFormatter DUX_FECHA_HORA = DateTimeFormatter.ofPattern("ddMMyyyy HH:mm:ss");
+    // DUX ignora la precisión de hora en el filtro `fecha` — el sync incremental
+    // termina trayendo todos los items del día igualmente. Usamos solo `ddMMyyyy`.
+    private static final DateTimeFormatter DUX_FECHA_HORA = DateTimeFormatter.ofPattern("ddMMyyyy");
 
     private final RestClient restClient;
     private final DuxProperties properties;
