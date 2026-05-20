@@ -20,11 +20,13 @@ public interface PresupuestoComercialRepository extends JpaRepository<Presupuest
      *   <li>{@code desde}/{@code hasta}: rango de creado_at; null = abierto.</li>
      *   <li>{@code id}: si viene, devuelve solo ese presupuesto (deep-link).</li>
      * </ul>
+     * Excluye registros con {@code eliminado_at} no nulo (soft-delete).
      * Ordenamiento se aplica desde el {@link Pageable}.
      */
     @Query("""
         SELECT p FROM PresupuestoComercial p
-        WHERE (:id IS NULL OR p.id = :id)
+        WHERE p.eliminadoAt IS NULL
+          AND (:id IS NULL OR p.id = :id)
           AND (:q IS NULL OR LOWER(COALESCE(p.clienteNombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                           OR LOWER(COALESCE(p.clienteEmail, ''))  LIKE LOWER(CONCAT('%', :q, '%'))
                           OR LOWER(COALESCE(p.clienteTelefono, '')) LIKE LOWER(CONCAT('%', :q, '%')))

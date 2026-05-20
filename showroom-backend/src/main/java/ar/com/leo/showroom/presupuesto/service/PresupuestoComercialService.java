@@ -120,8 +120,28 @@ public class PresupuestoComercialService {
     }
 
     public PresupuestoComercial obtener(Long id) {
-        return repository.findById(id)
+        PresupuestoComercial p = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Presupuesto comercial no encontrado: " + id));
+        if (p.getEliminadoAt() != null) {
+            throw new NotFoundException("Presupuesto comercial eliminado: " + id);
+        }
+        return p;
+    }
+
+    /**
+     * Soft-delete del presupuesto: setea {@code eliminado_at = now()}. El
+     * registro físicamente persiste pero deja de aparecer en el historial.
+     * Si el operador borra por error, se puede restaurar manualmente desde
+     * la DB con {@code UPDATE presupuesto_comercial SET eliminado_at = NULL
+     * WHERE id = ?}. No-op si ya estaba eliminado.
+     */
+    @Transactional
+    public void eliminar(Long id) {
+        PresupuestoComercial p = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Presupuesto comercial no encontrado: " + id));
+        if (p.getEliminadoAt() != null) return;
+        p.setEliminadoAt(Instant.now());
+        repository.save(p);
     }
 
     /**

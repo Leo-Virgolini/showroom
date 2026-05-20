@@ -421,6 +421,13 @@ export class ShowroomService {
     return this.http.get<PresupuestoListPage>(`${this.base}/presupuesto-comercial`, { params });
   }
 
+  /** Elimina (soft-delete) un presupuesto del historial. El registro
+   *  físicamente persiste en la DB con `eliminado_at` poblado, pero deja
+   *  de aparecer en el listado del historial. */
+  eliminarPresupuestoComercial(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/presupuesto-comercial/${id}`);
+  }
+
   /** Descarga el PDF de un presupuesto persistido (regenerado desde los
    *  JSON guardados al momento de la creación).
    *

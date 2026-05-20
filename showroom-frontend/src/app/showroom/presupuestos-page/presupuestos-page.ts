@@ -578,18 +578,27 @@ export class PresupuestosPage implements AfterViewInit {
       this.warn('Tenés que seleccionar al menos un producto para previsualizar.');
       return;
     }
+    // Truco anti-popup-blocker: abrimos la pestaña en blanco AHORA, sincrónico
+    // con el click del operador. Chrome considera esta apertura como
+    // user-initiated (no la bloquea). Cuando llega el PDF del backend, le
+    // cargamos la URL del blob a esta misma pestaña.
+    //
+    // Si abrieramos window.open() recién en el .subscribe(next), Chrome
+    // lo trata como popup automático post-async y lo bloquea.
+    const previewTab = window.open('about:blank', '_blank');
     this.generandoPreview.set(true);
     this.api.previewPresupuestoComercial(this.armarPayload()).subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
         const blob = res.body;
         if (!blob) {
+          if (previewTab) previewTab.close();
           this.warn('El backend no devolvió un PDF.');
           return;
         }
         // Bajamos el PDF a disco con un nombre legible para que el operador
         // pueda mandárselo al cliente por WhatsApp/email manual. El mismo
-        // blob lo abrimos en una pestaña nueva para que lo previsualice.
+        // blob lo abrimos en la pestaña pre-abierta para previsualizar.
         const filename = this.extraerFilename(res.headers.get('Content-Disposition'));
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -598,13 +607,9 @@ export class PresupuestosPage implements AfterViewInit {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        // Pequeño delay antes de abrir para no chocar con la descarga en
-        // algunos navegadores (Chrome bloquea el window.open inmediato si
-        // se dispara junto con un download).
-        setTimeout(() => window.open(url, '_blank'), 150);
-        // Liberar el blob URL después de un margen para que la pestaña
-        // nueva alcance a cargar el PDF — sino al cerrar/recargar este
-        // componente quedaría en memoria como leak.
+        if (previewTab) previewTab.location.href = url;
+        // 60s — la pestaña preview necesita el URL para renderizar el PDF;
+        // si lo revocamos antes, la pestaña muestra "página no encontrada".
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         this.toast.add({
           severity: 'success',
@@ -614,6 +619,7 @@ export class PresupuestosPage implements AfterViewInit {
         });
       },
       error: (err) => {
+        if (previewTab) previewTab.close();
         this.generandoPreview.set(false);
         toastError(this.toast, 'Previsualizar', err, 'No se pudo generar el PDF.');
       },

@@ -601,10 +601,15 @@ public class ShowroomController {
     public ResponseEntity<byte[]> previewPresupuesto(
             @RequestBody @Valid GenerarPresupuestoRequestDTO body) {
         PresupuestoComercialService.Resultado r = presupuestoComercialService.generarYPersistir(body);
+        // Usamos `attachment` (no `inline`) para que Chrome no bloquee la
+        // descarga como "no segura": cuando combinamos blob URL + a.click()
+        // + window.open() automático, browsers modernos consideran sospechosa
+        // la combinación si el header dice `inline`. `attachment` es explícito
+        // sobre la intención de descarga y desactiva el bloqueo.
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + r.nombreArchivo() + "\"")
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
                 .header("X-Presupuesto-Id", String.valueOf(r.presupuesto().getId()))
                 .body(r.pdf());
@@ -650,12 +655,28 @@ public class ShowroomController {
             @RequestParam(value = "modo", required = false) String modo) {
         PresupuestoComercialService.Resultado r =
                 presupuestoComercialService.regenerarPdf(id, modo);
+        // `attachment` en lugar de `inline` evita que Chrome bloquee la
+        // descarga como "no segura" — la combinación blob + a.click() +
+        // window.open() automático con header `inline` dispara el bloqueo
+        // de mixed/automated downloads en browsers modernos.
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + r.nombreArchivo() + "\"")
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
                 .body(r.pdf());
+    }
+
+    /**
+     * Soft-delete de un presupuesto. Setea {@code eliminado_at = now()} en
+     * la entity y el listado del historial deja de mostrarlo. El registro
+     * físicamente persiste — para recuperar manualmente:
+     * {@code UPDATE presupuesto_comercial SET eliminado_at = NULL WHERE id = ?}.
+     */
+    @DeleteMapping("/presupuesto-comercial/{id}")
+    public ResponseEntity<Void> eliminarPresupuesto(@PathVariable Long id) {
+        presupuestoComercialService.eliminar(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**

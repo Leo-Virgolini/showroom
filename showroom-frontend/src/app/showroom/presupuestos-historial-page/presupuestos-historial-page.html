@@ -80,7 +80,7 @@
             <th style="width: 8rem" class="text-center">
               <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
             </th>
-            <th style="width: 7rem"></th>
+            <th style="width: 10rem"></th>
           </tr>
         </ng-template>
 
@@ -127,20 +127,31 @@
               }
             </td>
             <td>
-              <!-- SplitButton: el click directo descarga la versión original
-                   (con la que se generó); el dropdown ofrece descargar
-                   "Versión agregada" o "Versión individual" del mismo
-                   presupuesto. Útil para comparar formatos o reenviar al
-                   cliente la versión que le resulte más clara. -->
-              <p-splitButton
-                [icon]="descargandoPdf().has(p.id) ? 'pi pi-spinner pi-spin' : 'pi pi-download'"
-                severity="secondary" [outlined]="true" size="small"
-                [disabled]="descargandoPdf().has(p.id)"
-                [model]="opcionesDescarga(p)"
-                appendTo="body"
-                (onClick)="descargar(p)"
-                pTooltip="Descargar PDF (click) o elegí el formato (▼)"
-                tooltipPosition="left" />
+              <div class="inline-flex gap-1 items-center">
+                <!-- SplitButton: el click directo descarga la versión original
+                     (con la que se generó); el dropdown ofrece descargar
+                     "Versión agregada" o "Versión individual" del mismo
+                     presupuesto. Útil para comparar formatos o reenviar al
+                     cliente la versión que le resulte más clara. -->
+                <p-splitButton
+                  [icon]="descargandoPdf().has(p.id) ? 'pi pi-spinner pi-spin' : 'pi pi-download'"
+                  severity="secondary" [outlined]="true" size="small"
+                  [disabled]="descargandoPdf().has(p.id)"
+                  [model]="opcionesDescarga(p)"
+                  appendTo="body"
+                  (onClick)="descargar(p)"
+                  pTooltip="Descargar PDF (click) o elegí el formato (▼)"
+                  tooltipPosition="left" />
+                <!-- Eliminación soft — confirmación con dialog antes de
+                     marcar `eliminado_at` en el backend. El registro queda
+                     en la DB pero deja de aparecer en el listado. -->
+                <p-button
+                  [icon]="eliminandoPdf().has(p.id) ? 'pi pi-spinner pi-spin' : 'pi pi-trash'"
+                  severity="danger" [outlined]="true" size="small" [rounded]="true"
+                  [disabled]="eliminandoPdf().has(p.id)"
+                  (onClick)="confirmarEliminar(p)"
+                  pTooltip="Eliminar presupuesto" tooltipPosition="left" />
+              </div>
             </td>
           </tr>
         </ng-template>

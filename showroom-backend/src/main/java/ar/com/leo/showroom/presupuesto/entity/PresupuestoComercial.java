@@ -74,4 +74,11 @@ public class PresupuestoComercial {
     /** Observaciones libres que se imprimen debajo del detalle. */
     @Column(name = "observaciones", length = 500)
     private String observaciones;
+
+    /** Timestamp de eliminación lógica (soft-delete). Cuando es null el
+     *  presupuesto es visible en el historial; cuando tiene valor, queda
+     *  oculto pero el registro físicamente persiste — permite recuperar
+     *  desde la DB si el operador borra por error. */
+    @Column(name = "eliminado_at")
+    private Instant eliminadoAt;
 }
