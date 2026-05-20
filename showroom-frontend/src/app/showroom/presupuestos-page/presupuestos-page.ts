@@ -16,7 +16,6 @@ import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
-import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
@@ -43,9 +42,14 @@ import { toastError } from '../toast.utils';
 
 /**
  * Pantalla para armar presupuestos comerciales: el operador escanea/busca
- * productos, define cantidad + descuento individual, selecciona cuáles
- * incluir (checkbox por fila), y al final genera un PDF con la estética
- * KT GASTRO que se le manda al cliente por email.
+ * productos, define cantidad + descuento individual, y al final genera un
+ * PDF con la estética KT GASTRO que se le manda al cliente por email.
+ *
+ * <p>El toggle "Cotización individual" controla el formato del PDF:
+ *   - OFF: una hoja agregada (tabla detalle + total + formas de pago globales).
+ *   - ON: una hoja por cada producto (foto + formas de pago calculadas sobre
+ *     el precio de ese ítem). Útil cuando el cliente pide cotizar varias
+ *     alternativas independientes (ej. amasadora 20L vs 30L).
  *
  * <p>NO toca DUX ni el carrito server-side — todo el estado vive en signals
  * locales hasta que se llama al endpoint que persiste la cabecera y emite
@@ -61,7 +65,6 @@ import { toastError } from '../toast.utils';
     RouterLink,
     ButtonModule,
     CardModule,
-    CheckboxModule,
     DialogModule,
     IconFieldModule,
     InputIconModule,
@@ -136,18 +139,12 @@ export class PresupuestosPage implements AfterViewInit {
   readonly observaciones = signal('');
 
   // ------------------------------------------------------------
-  // Modo alternativas — el operador tilda el switch y elige cuántas
-  // alternativas (default 2) para separar el presupuesto en N opciones.
-  // Cada ítem se asigna a una alternativa (A, B, C...) y el PDF emite
-  // una hoja por cada una con su propio detalle + formas de pago.
+  // Modo "Cotización individual" — toggle único. Cuando está ON, el PDF
+  // emite una hoja por cada ítem con foto grande + sus propias formas de
+  // pago calculadas sobre el precio de ese ítem. OFF = formato tradicional
+  // (tabla detalle + total + formas globales sobre el total agregado).
   // ------------------------------------------------------------
-  readonly modoAlternativas = signal(false);
-  /** Cantidad de alternativas cuando el modo está activo. Mínimo 2. */
-  readonly cantidadAlternativas = signal(2);
-  /** Letras "A", "B", "C"... para mostrar en los botones de asignación. */
-  readonly letrasAlternativas = computed(() =>
-    Array.from({ length: this.cantidadAlternativas() }, (_, i) =>
-      String.fromCharCode(65 + i)));
+  readonly cotizacionIndividual = signal(false);
 
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
@@ -161,24 +158,19 @@ export class PresupuestosPage implements AfterViewInit {
   readonly enviandoEmail = signal(false);
   readonly mostrarDialogEnviar = signal(false);
 
-  /** Subset filtrado: solo los seleccionados — base para totales y para
-   *  los items que efectivamente entran al PDF. Lee {@link itemsTick} para
-   *  que las mutaciones in-place (cambio de `seleccionado` sin reemplazar el
-   *  array) disparen el recompute. */
-  readonly itemsSeleccionados = computed(() => {
+  /** Todos los ítems entran al PDF — ya no hay checkbox por fila para
+   *  excluir ítems individuales. Si el operador no quiere un ítem, lo borra. */
+  readonly hayItems = computed(() => {
     this.itemsTick();
-    return this.items().filter((it) => it.seleccionado);
+    return this.items().length > 0;
   });
-
-  readonly cantSeleccionados = computed(() => this.itemsSeleccionados().length);
-  readonly haySeleccionados = computed(() => this.cantSeleccionados() > 0);
 
   /** Subtotal BRUTO sin IVA (sin ningún descuento) — precios de lista
    *  multiplicados por cantidad. Es la base para calcular el descuento
    *  efectivo total. */
   readonly subtotalBrutoSinIva = computed(() => {
     this.itemsTick();
-    return this.itemsSeleccionados().reduce((acc, it) => {
+    return this.items().reduce((acc, it) => {
       return acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
     }, 0);
   });
@@ -190,7 +182,7 @@ export class PresupuestosPage implements AfterViewInit {
    *  individuales. */
   readonly totalSinIva = computed(() => {
     this.itemsTick();
-    return this.itemsSeleccionados().reduce((acc, it) => {
+    return this.items().reduce((acc, it) => {
       const precio = it.pvpKtGastroSinIva ?? 0;
       const desc = it.descuentoPorcentaje ?? 0;
       return acc + precio * (1 - desc / 100) * it.cantidad;
@@ -201,7 +193,7 @@ export class PresupuestosPage implements AfterViewInit {
    *  formas de pago que aplican IVA. */
   readonly totalConIva = computed(() => {
     this.itemsTick();
-    return this.itemsSeleccionados().reduce((acc, it) => {
+    return this.items().reduce((acc, it) => {
       const precio = it.pvpKtGastroConIva ?? 0;
       const desc = it.descuentoPorcentaje ?? 0;
       return acc + precio * (1 - desc / 100) * it.cantidad;
@@ -254,35 +246,20 @@ export class PresupuestosPage implements AfterViewInit {
   readonly indiceMejorPrecio = computed(() => this.calcularIndiceMejorPrecio(
     this.formasPagoCalculadas()));
 
-  /** Grupos para el modo alternativas: uno por cada alternativa activa, con
-   *  sus ítems seleccionados, los totales del grupo y las formas de pago
-   *  recalculadas sobre el total del grupo. En modo single (toggle apagado)
-   *  devuelve un array vacío — la UI usa los computed globales en ese caso. */
-  readonly gruposAlternativas = computed<GrupoAlternativa[]>(() => {
+  /** En modo cotización individual: para cada ítem, calcula sus propias
+   *  formas de pago sobre el precio del ítem (cantidad × precio × (1 - desc)).
+   *  Se usa tanto en la UI (preview por producto) como en el armado del
+   *  payload al backend. Devuelve un array vacío si el modo está apagado. */
+  readonly formasPagoPorItem = computed<GrupoItem[]>(() => {
     this.itemsTick();
-    if (!this.modoAlternativas()) return [];
-    const cant = Math.max(1, this.cantidadAlternativas());
-    const seleccionados = this.itemsSeleccionados();
+    if (!this.cotizacionIndividual()) return [];
     const formasBase = this.formasPago();
-
-    const grupos: GrupoAlternativa[] = [];
-    for (let i = 0; i < cant; i++) {
-      const itemsGrupo = seleccionados.filter((it) => (it.alternativa ?? 0) === i);
-      let subtotalBrutoSinIva = 0;
-      let totalSinIva = 0;
-      let totalConIva = 0;
-      for (const it of itemsGrupo) {
-        const pSI = it.pvpKtGastroSinIva ?? 0;
-        const pCI = it.pvpKtGastroConIva ?? 0;
-        const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
-        subtotalBrutoSinIva += pSI * it.cantidad;
-        totalSinIva += pSI * factor * it.cantidad;
-        totalConIva += pCI * factor * it.cantidad;
-      }
-      const descMonto = subtotalBrutoSinIva - totalSinIva;
-      const descPorcEfectivo = subtotalBrutoSinIva > 0
-        ? (descMonto / subtotalBrutoSinIva) * 100
-        : 0;
+    return this.items().map((it) => {
+      const pSI = it.pvpKtGastroSinIva ?? 0;
+      const pCI = it.pvpKtGastroConIva ?? 0;
+      const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+      const totalSinIva = pSI * factor * it.cantidad;
+      const totalConIva = pCI * factor * it.cantidad;
       const formas: PresupuestoFormaPagoSnapshot[] = formasBase.map((f) => {
         const recargo = (f.recargoPorcentaje ?? 0) / 100;
         const aplicaIva = f.aplicaIva ?? true;
@@ -296,21 +273,16 @@ export class PresupuestosPage implements AfterViewInit {
           aplicaIva,
           precioFinal,
           descripcion: this.descripcionForma(f),
-          alternativa: i,
+          itemSku: it.sku,
         };
       });
-      grupos.push({
-        alternativa: i,
-        letra: String.fromCharCode(65 + i),
-        cantidadItems: itemsGrupo.length,
-        subtotalBrutoSinIva,
-        descuentoEfectivoPorc: descPorcEfectivo,
+      return {
+        item: it,
         totalSinIva,
         formas,
         indiceMejorPrecio: this.calcularIndiceMejorPrecio(formas),
-      });
-    }
-    return grupos;
+      };
+    });
   });
 
   private calcularIndiceMejorPrecio(formas: PresupuestoFormaPagoSnapshot[]): number {
@@ -351,6 +323,13 @@ export class PresupuestosPage implements AfterViewInit {
             summary: 'Presupuesto enviado',
             detail: `#${ev.presupuestoId} → ${ev.email}`,
             life: 6000,
+          });
+        } else if (ev.estado === 'AMBIGUO') {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Presupuesto probablemente enviado',
+            detail: `#${ev.presupuestoId} → ${ev.email}: ${ev.error ?? 'Gmail tardó en confirmar.'}`,
+            life: 10000,
           });
         } else {
           this.toast.add({
@@ -503,11 +482,6 @@ export class PresupuestosPage implements AfterViewInit {
       uid,
       cantidad: 1,
       descuentoPorcentaje: 0,
-      seleccionado: true,
-      // Por defecto los nuevos items entran a la primera alternativa — si el
-      // modo alternativas está apagado este campo es informativo (se ignora
-      // en el armado del payload).
-      alternativa: 0,
     };
     this.items.set([...actuales, nuevo]);
   }
@@ -515,10 +489,10 @@ export class PresupuestosPage implements AfterViewInit {
   // ============================================================
   // Mutaciones de items
   //
-  // Las ediciones inline (cantidad/descuento/seleccionado) MUTAN el objeto
-  // in-place y disparan `itemsTick` para que los totales se recalculen sin
-  // reemplazar el array. Si reemplazamos el array, p-table recrea el binding
-  // de cada fila y p-inputNumber pierde el foco con cada keystroke.
+  // Las ediciones inline (cantidad/descuento) MUTAN el objeto in-place y
+  // disparan `itemsTick` para que los totales se recalculen sin reemplazar
+  // el array. Si reemplazamos el array, p-table recrea el binding de cada
+  // fila y p-inputNumber pierde el foco con cada keystroke.
   // ============================================================
   actualizarCantidad(it: PresupuestoItem, valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) valor = 1;
@@ -533,45 +507,6 @@ export class PresupuestosPage implements AfterViewInit {
     this.itemsTick.update((v) => v + 1);
   }
 
-  alternarSeleccion(it: PresupuestoItem, sel: boolean): void {
-    it.seleccionado = sel;
-    this.itemsTick.update((v) => v + 1);
-  }
-
-  /** Asigna el ítem a una alternativa (0-indexed). Mutación in-place + tick
-   *  para no re-renderizar la fila y perder el foco en los inputs. */
-  asignarAlternativa(it: PresupuestoItem, alt: number): void {
-    it.alternativa = alt;
-    this.itemsTick.update((v) => v + 1);
-  }
-
-  /** Encender/apagar el modo alternativas. Cuando se apaga, todos los ítems
-   *  vuelven a la alternativa 0 para que el comportamiento al re-encender
-   *  arranque limpio. */
-  alternarModoAlternativas(activo: boolean): void {
-    this.modoAlternativas.set(activo);
-    if (!activo) {
-      for (const it of this.items()) it.alternativa = 0;
-      this.itemsTick.update((v) => v + 1);
-    }
-  }
-
-  /** Cambia la cantidad de alternativas. Si se reduce, los ítems que
-   *  estaban en alternativas eliminadas vuelven a la 0. */
-  actualizarCantidadAlternativas(cant: number): void {
-    if (!Number.isFinite(cant) || cant < 2) cant = 2;
-    if (cant > 6) cant = 6;
-    this.cantidadAlternativas.set(cant);
-    let reasignado = false;
-    for (const it of this.items()) {
-      if ((it.alternativa ?? 0) >= cant) {
-        it.alternativa = 0;
-        reasignado = true;
-      }
-    }
-    if (reasignado) this.itemsTick.update((v) => v + 1);
-  }
-
   eliminarItem(uid: string): void {
     this.items.set(this.items().filter((it) => it.uid !== uid));
   }
@@ -579,11 +514,6 @@ export class PresupuestosPage implements AfterViewInit {
   vaciar(): void {
     this.items.set([]);
     this.focusInput();
-  }
-
-  seleccionarTodos(seleccionar: boolean): void {
-    for (const it of this.items()) it.seleccionado = seleccionar;
-    this.itemsTick.update((v) => v + 1);
   }
 
   // ============================================================
@@ -612,38 +542,39 @@ export class PresupuestosPage implements AfterViewInit {
   }
 
   /** Construye el payload del backend a partir del estado actual.
-   *  En modo single (sin alternativas): items todos con alternativa=0,
-   *  formas calculadas sobre el total global.
-   *  En modo alternativas: items con su alternativa asignada, y formas
-   *  duplicadas por grupo (N formas × M alternativas), cada una con su
-   *  precioFinal recalculado sobre el subtotal del grupo. */
+   *  En modo agregado: una sola colección de formas globales (itemSku=null)
+   *  calculadas sobre el total. En modo cotización individual: una colección
+   *  por cada ítem (cada forma con su itemSku), cada precioFinal recalculado
+   *  sobre el precio del ítem específico. */
   private armarPayload(): GenerarPresupuestoRequest {
-    const modoAlt = this.modoAlternativas();
-    const items = this.itemsSeleccionados().map((it) => ({
+    const individual = this.cotizacionIndividual();
+    const items = this.items().map((it) => ({
       sku: it.sku,
       descripcion: it.descripcion,
       cantidad: it.cantidad,
       precioConIva: it.pvpKtGastroConIva ?? 0,
       porcIva: it.porcIva ?? 21,
       descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
-      alternativa: modoAlt ? (it.alternativa ?? 0) : 0,
     }));
-    const formasPago: PresupuestoFormaPagoSnapshot[] = modoAlt
-      ? this.gruposAlternativas().flatMap((g) => g.formas)
-      : this.formasPagoCalculadas().map((f) => ({ ...f, alternativa: 0 }));
+    // En modo individual: una colección de formas por cada ítem (con itemSku).
+    // En modo agregado: una única colección de formas globales (itemSku = null).
+    const formasPago: PresupuestoFormaPagoSnapshot[] = individual
+      ? this.formasPagoPorItem().flatMap((g) => g.formas)
+      : this.formasPagoCalculadas().map((f) => ({ ...f, itemSku: null }));
     return {
       clienteNombre: this.clienteNombre().trim() || null,
       clienteTelefono: this.clienteTelefono().trim() || null,
       clienteEmail: this.clienteEmail().trim() || null,
       observaciones: this.observaciones().trim() || null,
       descuentoGlobalPorcentaje: this.descuentoGlobal() || 0,
+      cotizacionIndividual: individual,
       items,
       formasPago,
     };
   }
 
   previsualizar(): void {
-    if (!this.haySeleccionados()) {
+    if (!this.hayItems()) {
       this.warn('Tenés que seleccionar al menos un producto para previsualizar.');
       return;
     }
@@ -707,7 +638,7 @@ export class PresupuestosPage implements AfterViewInit {
   }
 
   abrirDialogEnviar(): void {
-    if (!this.haySeleccionados()) {
+    if (!this.hayItems()) {
       this.warn('Tenés que seleccionar al menos un producto para enviar.');
       return;
     }
@@ -796,19 +727,13 @@ export class PresupuestosPage implements AfterViewInit {
   }
 }
 
-/** Grupo de ítems + formas de pago de una alternativa en el modo "separar".
- *  Solo se construye en {@link PresupuestosPage.gruposAlternativas}; el
- *  backend recibe items planos + formas planas (cada uno con su
- *  `alternativa`) y reagrupa por su cuenta. */
-interface GrupoAlternativa {
-  alternativa: number;
-  letra: string;
-  cantidadItems: number;
-  /** Suma de (precio s/IVA × cantidad) sin descuentos — base para el % efectivo. */
-  subtotalBrutoSinIva: number;
-  /** Porcentaje efectivo del descuento dentro del grupo. */
-  descuentoEfectivoPorc: number;
-  /** Suma de (precio s/IVA × cantidad × (1 - descuentoIndividual)) — total final del grupo. */
+/** En modo cotización individual: un ítem + sus formas de pago calculadas
+ *  sobre el precio del ítem. Solo se construye en
+ *  {@link PresupuestosPage.formasPagoPorItem}; el backend recibe items y
+ *  formas planos (cada forma con su `itemSku`) y reagrupa por su cuenta. */
+interface GrupoItem {
+  item: PresupuestoItem;
+  /** Total s/IVA del ítem (precio × cantidad × (1 - descuento)). */
   totalSinIva: number;
   formas: PresupuestoFormaPagoSnapshot[];
   indiceMejorPrecio: number;

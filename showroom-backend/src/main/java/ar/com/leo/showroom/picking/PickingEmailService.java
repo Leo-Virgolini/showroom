@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.net.SocketTimeoutException;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -137,6 +138,8 @@ public class PickingEmailService {
                 emailDest -> PickingEmailEvent.sentPedido(pedido.getId(), cuit, emailDest);
         BiFunction<String, String, PickingEmailEvent> failedFactory =
                 (emailDest, err) -> PickingEmailEvent.failedPedido(pedido.getId(), cuit, emailDest, err);
+        BiFunction<String, String, PickingEmailEvent> ambiguoFactory =
+                (emailDest, detalle) -> PickingEmailEvent.ambiguoPedido(pedido.getId(), cuit, emailDest, detalle);
 
         byte[] pdf = generarPdfSeguro(
                 () -> pdfGenerator.generarHistorial(sesion, pedido),
@@ -162,7 +165,8 @@ public class PickingEmailService {
                 pdfGenerator.nombreArchivo(pedido),
                 "pedido " + pedido.getId(),
                 sentFactory,
-                failedFactory);
+                failedFactory,
+                ambiguoFactory);
     }
 
     /**
@@ -175,6 +179,8 @@ public class PickingEmailService {
                 emailDest -> PickingEmailEvent.sentSesion(sesion.getId(), emailDest);
         BiFunction<String, String, PickingEmailEvent> failedFactory =
                 (emailDest, err) -> PickingEmailEvent.failedSesion(sesion.getId(), emailDest, err);
+        BiFunction<String, String, PickingEmailEvent> ambiguoFactory =
+                (emailDest, detalle) -> PickingEmailEvent.ambiguoSesion(sesion.getId(), emailDest, detalle);
 
         Optional<String> motivo = motivoNoConfigurado();
         if (motivo.isPresent()) {
@@ -207,7 +213,8 @@ public class PickingEmailService {
                 pdfGenerator.nombreArchivoSesion(sesion),
                 "sesión " + sesion.getId(),
                 sentFactory,
-                failedFactory);
+                failedFactory,
+                ambiguoFactory);
     }
 
     /**
@@ -233,7 +240,8 @@ public class PickingEmailService {
             String filename,
             String logContext,
             Function<String, PickingEmailEvent> sentFactory,
-            BiFunction<String, String, PickingEmailEvent> failedFactory) {
+            BiFunction<String, String, PickingEmailEvent> failedFactory,
+            BiFunction<String, String, PickingEmailEvent> ambiguoFactory) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -255,12 +263,36 @@ public class PickingEmailService {
             eventService.publish(SSE_EVENT, sentFactory.apply(destinatario));
             return true;
         } catch (Exception e) {
+            if (esReadTimeoutPostUpload(e)) {
+                // Gmail aceptó los datos pero el 250 OK no llegó antes de que la
+                // conexión se cortara. Con PDFs grandes (varios MB) el ACK final
+                // suele tardar y algún NAT/firewall intermedio cierra el socket —
+                // el mail muy probablemente quedó encolado en Gmail. No es un
+                // error técnico que requiera reintento ciego, así que lo bajamos
+                // a WARN y notificamos al operador con un toast diferente.
+                log.warn("Email {} — Read timed out esperando ACK de Gmail (PDF={}KB). "
+                        + "El mail probablemente se entregó: {}",
+                        logContext, pdf.length / 1024, e.getMessage());
+                String detalle = "Gmail tardó en confirmar el envío. El mail probablemente llegó — "
+                        + "verificá la bandeja del cliente antes de reintentar.";
+                eventService.publish(SSE_EVENT, ambiguoFactory.apply(destinatario, detalle));
+                return false;
+            }
             log.error("Falló envío de email para {}: {}", logContext, e.getMessage(), e);
             String detalle = UserMessages.traducir(e,
                     "No se pudo enviar el email. Revisar logs del backend para más detalle.");
             eventService.publish(SSE_EVENT, failedFactory.apply(destinatario, detalle));
             return false;
         }
+    }
+
+    /** True si la causa raíz es un {@link SocketTimeoutException} — típico cuando
+     *  el adjunto se subió OK pero Gmail no mandó el {@code 250 OK} a tiempo. */
+    private static boolean esReadTimeoutPostUpload(Throwable t) {
+        for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+            if (cur instanceof SocketTimeoutException) return true;
+        }
+        return false;
     }
 
     /**

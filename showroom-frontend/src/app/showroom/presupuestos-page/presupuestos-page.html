@@ -26,12 +26,12 @@
             class="btn-kt-rojo" (onClick)="vaciar()" pTooltip="Vaciar el detalle" tooltipPosition="bottom" />
         }
         <p-button icon="pi pi-download" [label]="screenLg() ? 'Descargar PDF' : ''" ariaLabel="Descargar PDF"
-          class="btn-kt-marron" [disabled]="!haySeleccionados() || generandoPreview()"
+          class="btn-kt-marron" [disabled]="!hayItems() || generandoPreview()"
           [loading]="generandoPreview()" (onClick)="previsualizar()"
           pTooltip="Descarga y abre el PDF para revisarlo o reenviarlo (no consume número)"
           tooltipPosition="bottom" />
         <p-button icon="pi pi-send" [label]="screenLg() ? 'Enviar' : ''" ariaLabel="Enviar por email"
-          class="btn-kt-naranja" [disabled]="!haySeleccionados()"
+          class="btn-kt-naranja" [disabled]="!hayItems()"
           (onClick)="abrirDialogEnviar()"
           pTooltip="Generar y enviar el presupuesto al cliente" tooltipPosition="bottom" />
 
@@ -171,46 +171,28 @@
                 @if (items().length > 0) {
                   <span class="kt-chip">
                     <i class="pi pi-check-circle text-[#7EBA00]"></i>
-                    {{ cantSeleccionados() }} de {{ items().length }}
+                    {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
                   </span>
                 }
               </div>
-              @if (items().length > 0) {
-                <div class="flex items-center gap-1">
-                  <p-button icon="pi pi-check-square" label="Todos" severity="secondary" [text]="true"
-                    size="small" (onClick)="seleccionarTodos(true)" />
-                  <p-button icon="pi pi-stop" label="Ninguno" severity="secondary" [text]="true" size="small"
-                    (onClick)="seleccionarTodos(false)" />
-                </div>
-              }
             </div>
           </ng-template>
 
-          <!-- Toggle de "Separar en alternativas" — solo visible si hay items.
-               Cuando se enciende, se habilita la columna A/B/C en cada fila
-               y el PDF se emite con una hoja por alternativa. -->
+          <!-- Toggle "Cotización individual" — solo visible si hay items.
+               Cuando se enciende, el PDF emite UNA hoja por cada producto
+               (foto + formas de pago calculadas sobre el precio del ítem).
+               Apagado = formato agregado (tabla + total + formas globales). -->
           @if (items().length > 0) {
-            <div class="mb-3 p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center justify-between gap-3 flex-wrap">
+            <div class="mb-3 p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center gap-3 flex-wrap">
               <label class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-2 cursor-pointer">
-                <p-toggleswitch [ngModel]="modoAlternativas()"
-                  (ngModelChange)="alternarModoAlternativas($event)" />
-                <i class="pi pi-clone text-[#FF861C]"></i>
-                Separar en alternativas
+                <p-toggleswitch [ngModel]="cotizacionIndividual()"
+                  (ngModelChange)="cotizacionIndividual.set($event)" />
+                <i class="pi pi-file-export text-[#FF861C]"></i>
+                Cotización individual
                 <span class="text-xs text-muted-color font-normal hidden sm:inline">
-                  (1 hoja del PDF por alternativa)
+                  (1 hoja del PDF por producto)
                 </span>
               </label>
-              @if (modoAlternativas()) {
-                <div class="flex items-center gap-2">
-                  <label class="text-xs text-muted-color">¿Cuántas?</label>
-                  <p-inputNumber [ngModel]="cantidadAlternativas()"
-                    (ngModelChange)="actualizarCantidadAlternativas($event)"
-                    [min]="2" [max]="6" [showButtons]="true" buttonLayout="horizontal"
-                    spinnerMode="horizontal"
-                    decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                    inputStyleClass="w-10 text-center" [allowEmpty]="false" />
-                </div>
-              }
             </div>
           }
 
@@ -226,14 +208,6 @@
             <p-table [value]="items()" dataKey="uid" stripedRows class="kt-table">
               <ng-template #header>
                 <tr>
-                  <th style="width: 3rem" class="text-center">
-                    <i class="pi pi-check text-[#FF861C]" pTooltip="Incluir en el PDF"></i>
-                  </th>
-                  @if (modoAlternativas()) {
-                    <th class="text-center" [style.width.rem]="3 + cantidadAlternativas() * 1.6">
-                      <i class="pi pi-clone text-[#FF861C] mr-1"></i> Alt.
-                    </th>
-                  }
                   <th style="width: 4rem"></th>
                   <th>
                     <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
@@ -255,27 +229,7 @@
               </ng-template>
 
               <ng-template #body let-it>
-                <tr [class.opacity-50]="!it.seleccionado">
-                  <td class="text-center">
-                    <p-checkbox [ngModel]="it.seleccionado" [binary]="true"
-                      (ngModelChange)="alternarSeleccion(it, $event)" />
-                  </td>
-                  @if (modoAlternativas()) {
-                    <td class="text-center">
-                      <div class="inline-flex gap-1 flex-wrap justify-center">
-                        @for (letra of letrasAlternativas(); track letra; let i = $index) {
-                          <button type="button"
-                            class="alternativa-pill"
-                            [class.activa]="(it.alternativa ?? 0) === i"
-                            (click)="asignarAlternativa(it, i)"
-                            [attr.aria-label]="'Asignar a alternativa ' + letra"
-                            [pTooltip]="'Alternativa ' + letra" tooltipPosition="top">
-                            {{ letra }}
-                          </button>
-                        }
-                      </div>
-                    </td>
-                  }
+                <tr>
                   <td>
                     @if (it.imagenUrl) {
                       <img [src]="it.imagenUrl" [alt]="it.sku"
@@ -377,34 +331,35 @@
       <!-- ============= COLUMNA DERECHA: formas de pago con sumario ============= -->
       <div class="flex flex-col gap-4">
 
-        @if (haySeleccionados()) {
-          <!-- Card común con el descuento global — siempre visible cuando hay
-               ítems, tanto en modo single como en modo alternativas. -->
+        @if (hayItems()) {
+          <!-- Card con el descuento global + formas de pago o preview por ítem.
+               El layout cambia según `cotizacionIndividual`: agregado (1 set
+               de formas sobre el total) o individual (1 set por ítem). -->
           <p-card class="kt-card kt-card-totales sticky top-3">
             <ng-template #title>
               <div class="kt-card-title">
                 <i class="pi pi-credit-card"></i>
-                @if (modoAlternativas()) {
-                  <span>Alternativas y formas de pago</span>
+                @if (cotizacionIndividual()) {
+                  <span>Vista previa por producto</span>
                 } @else {
                   <span>Formas de pago</span>
                 }
               </div>
             </ng-template>
 
-            <!-- Header de sumario: ítems + descuento global. El TOTAL solo se
-                 muestra en modo single; en modo alternativas, cada grupo
-                 muestra su propio total más abajo. -->
+            <!-- Header de sumario: ítems + descuento global. El TOTAL global
+                 solo se muestra en modo agregado; en cotización individual,
+                 cada producto muestra su propio total más abajo. -->
             <div class="flex flex-col gap-2 mb-3"
-              [class.pb-3]="!modoAlternativas()"
-              [class.border-b]="!modoAlternativas()"
-              [class.border-\[\#FF861C\]\/15]="!modoAlternativas()">
+              [class.pb-3]="!cotizacionIndividual()"
+              [class.border-b]="!cotizacionIndividual()"
+              [class.border-\[\#FF861C\]\/15]="!cotizacionIndividual()">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs text-muted-color flex items-center gap-1.5">
                   <i class="pi pi-list-check text-[#FF861C]"></i>
-                  {{ cantSeleccionados() }} {{ cantSeleccionados() === 1 ? 'ítem' : 'ítems' }}
+                  {{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}
                 </span>
-                @if (descuentoTotalMonto() > 0 && !modoAlternativas()) {
+                @if (descuentoTotalMonto() > 0 && !cotizacionIndividual()) {
                   <span class="text-xs text-muted-color text-right">
                     Subtotal: <span class="line-through">{{ subtotalBrutoSinIva() | currency }}</span>
                   </span>
@@ -429,8 +384,8 @@
                   inputStyleClass="w-16 text-center descuento-input" />
               </div>
 
-              @if (!modoAlternativas()) {
-                <!-- Total final único (modo single) -->
+              @if (!cotizacionIndividual()) {
+                <!-- Total final único (modo agregado) -->
                 <div class="flex items-center justify-between gap-2 pt-1">
                   <span class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
                     <i class="pi pi-wallet text-[#FF861C]"></i> Total
@@ -452,9 +407,9 @@
             </div>
 
             <!-- ======================
-                 MODO SINGLE: 1 lista de formas
+                 MODO AGREGADO: 1 sola lista de formas globales
                  ====================== -->
-            @if (!modoAlternativas()) {
+            @if (!cotizacionIndividual()) {
               @if (formasPago().length > 0) {
                 <div class="flex flex-col gap-2.5">
                   @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
@@ -496,84 +451,35 @@
             }
 
             <!-- ======================
-                 MODO ALTERNATIVAS: N secciones, una por grupo
+                 MODO COTIZACIÓN INDIVIDUAL: card colapsada por producto.
+                 No mostramos la lista completa de formas (el operador ya la
+                 verá en el PDF) — solo el producto + su total para que el
+                 operador valide qué se está cotizando.
                  ====================== -->
-            @if (modoAlternativas()) {
-              <div class="flex flex-col gap-4 mt-2">
-                @for (g of gruposAlternativas(); track g.alternativa) {
-                  <div class="rounded-lg border border-[#FF861C]/25 overflow-hidden">
-                    <!-- Header del grupo: letra + total -->
-                    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#FF861C]/10 border-b border-[#FF861C]/15">
-                      <div class="flex items-center gap-2">
-                        <span class="alternativa-pill activa shrink-0">{{ g.letra }}</span>
-                        <span class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
-                          Alternativa {{ g.alternativa + 1 }}
-                        </span>
-                        <span class="text-[10px] text-muted-color">
-                          ({{ g.cantidadItems }} {{ g.cantidadItems === 1 ? 'ítem' : 'ítems' }})
-                        </span>
+            @if (cotizacionIndividual()) {
+              <div class="text-xs text-muted-color mb-3 p-2 rounded-md bg-blue-50 border border-blue-200 flex items-start gap-2">
+                <i class="pi pi-info-circle text-blue-500 mt-0.5"></i>
+                <span>Se generará una hoja del PDF por cada producto, con su foto y formas de pago.</span>
+              </div>
+              <div class="flex flex-col gap-2 mt-2">
+                @for (g of formasPagoPorItem(); track g.item.uid) {
+                  <div class="rounded-lg border border-[#FF861C]/25 px-3 py-2 bg-white">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 truncate">
+                          {{ g.item.descripcion || g.item.sku }}
+                        </div>
+                        <div class="text-[10px] text-muted-color">
+                          {{ g.item.sku }} · {{ g.item.cantidad }}u
+                        </div>
                       </div>
-                      <div class="text-right leading-tight">
-                        @if (g.descuentoEfectivoPorc > 0) {
-                          <div class="text-[10px] text-muted-color line-through">
-                            {{ g.subtotalBrutoSinIva | currency }}
-                          </div>
-                        }
-                        <div class="text-base font-bold text-[#3B1E09] dark:text-surface-0">
+                      <div class="text-right leading-tight shrink-0">
+                        <div class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
                           {{ g.totalSinIva | currency }}
                         </div>
-                        @if (g.descuentoEfectivoPorc > 0) {
-                          <div class="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                            -{{ g.descuentoEfectivoPorc | number:'1.0-2' }}% off
-                          </div>
-                        } @else {
-                          <div class="text-[9px] text-muted-color">total s/IVA</div>
-                        }
+                        <div class="text-[9px] text-muted-color">total s/IVA</div>
                       </div>
                     </div>
-                    @if (g.cantidadItems === 0) {
-                      <div class="text-xs text-muted-color text-center py-3 flex items-center justify-center gap-1.5">
-                        <i class="pi pi-inbox text-[#FF861C]"></i>
-                        Sin ítems asignados — el PDF la va a omitir
-                      </div>
-                    } @else if (formasPago().length === 0) {
-                      <div class="text-xs text-muted-color text-center py-3 flex items-center justify-center gap-1.5">
-                        <i class="pi pi-info-circle text-[#FF861C]"></i>
-                        No hay formas de pago configuradas
-                      </div>
-                    } @else {
-                      <div class="flex flex-col gap-2 p-2">
-                        @for (f of g.formas; track f.id; let i = $index) {
-                          <div class="forma-pago-card"
-                            [ngClass]="'color-' + ((i % 10) + 1)"
-                            [class.es-mejor-precio]="i === g.indiceMejorPrecio">
-                            @if (i === g.indiceMejorPrecio) {
-                              <span class="badge-mejor-precio">
-                                <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
-                              </span>
-                            }
-                            <div class="flex items-center gap-1.5">
-                              <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
-                              <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
-                                {{ f.nombre }}
-                              </div>
-                            </div>
-                            @if (f.descripcion) {
-                              <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
-                            }
-                            <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
-                              {{ f.precioFinal | currency }}
-                            </div>
-                            @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-                              <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
-                                <i class="pi pi-clone text-[10px]"></i>
-                                {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency }}
-                              </div>
-                            }
-                          </div>
-                        }
-                      </div>
-                    }
                   </div>
                 }
               </div>

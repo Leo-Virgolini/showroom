@@ -25,6 +25,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -168,12 +169,20 @@ public class PresupuestoComercialService {
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas = leerJson(
                 p.getFormasPagoJson(),
                 new tools.jackson.core.type.TypeReference<List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot>>() {});
+        // El flag `cotizacionIndividual` no se persiste explícitamente en la
+        // entity — lo inferimos de los snapshots de formas de pago: si alguno
+        // trae `itemSku` poblado, el presupuesto se generó en modo individual.
+        // Esto permite regenerar el PDF idéntico al original sin guardar el
+        // flag aparte.
+        boolean individual = formas != null && formas.stream()
+                .anyMatch(f -> f.itemSku() != null);
         return new GenerarPresupuestoRequestDTO(
                 p.getClienteNombre(),
                 p.getClienteTelefono(),
                 p.getClienteEmail(),
                 p.getObservaciones(),
                 p.getDescuentoGlobalPorcentaje(),
+                individual,
                 items == null ? List.of() : items,
                 formas == null ? List.of() : formas);
     }
@@ -241,6 +250,22 @@ public class PresupuestoComercialService {
                     "presupuestoId", presupuestoId,
                     "email", destinatario));
         } catch (Exception e) {
+            if (esReadTimeoutPostUpload(e)) {
+                // Mismo caso que en PickingEmailService: Gmail aceptó los datos
+                // pero el ACK final tardó más que algún timeout intermedio. El
+                // mail muy probablemente quedó encolado — lo reportamos como
+                // ambiguo en vez de FAILED para no asustar al operador.
+                log.warn("Email presupuesto #{} — Read timed out esperando ACK de Gmail "
+                        + "(PDF={}KB). El mail probablemente se entregó: {}",
+                        presupuestoId, pdf.length / 1024, e.getMessage());
+                eventService.publish(SSE_EVENT, Map.of(
+                        "estado", "AMBIGUO",
+                        "presupuestoId", presupuestoId,
+                        "email", destinatario,
+                        "error", "Gmail tardó en confirmar el envío. El mail probablemente llegó — "
+                                + "verificá la bandeja del cliente antes de reintentar."));
+                return;
+            }
             log.error("Falló envío de email del presupuesto #{}: {}",
                     presupuestoId, e.getMessage(), e);
             String detalle = UserMessages.traducir(e,
@@ -251,6 +276,15 @@ public class PresupuestoComercialService {
                     "email", destinatario,
                     "error", detalle));
         }
+    }
+
+    /** True si la causa raíz es un {@link SocketTimeoutException} — típico cuando
+     *  el adjunto se subió OK pero Gmail no mandó el {@code 250 OK} a tiempo. */
+    private static boolean esReadTimeoutPostUpload(Throwable t) {
+        for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+            if (cur instanceof SocketTimeoutException) return true;
+        }
+        return false;
     }
 
     private PresupuestoComercial construirEntidad(GenerarPresupuestoRequestDTO datos) {

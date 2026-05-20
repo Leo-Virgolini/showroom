@@ -78,7 +78,7 @@ $kt-amarillo: #a2ab00;
 }
 
 // =====================================================
-// Chip pequeño para indicadores (e.g. "X de Y seleccionados")
+// Chip pequeño para indicadores (e.g. "3 productos")
 // =====================================================
 :host ::ng-deep .kt-chip {
   display: inline-flex;
@@ -249,45 +249,3 @@ $kt-amarillo: #a2ab00;
   border-color: rgba(255, 255, 255, 0.05);
 }
 
-// =====================================================
-// Pill A/B/C para asignar items a alternativas. La fila completa se mantiene
-// in-place al cliquear (mutación + tick) — no recrear el botón para evitar
-// blur de los inputs vecinos en la misma fila.
-// =====================================================
-.alternativa-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 999px;
-  border: 1.5px solid rgba($kt-naranja, 0.4);
-  background: white;
-  color: $kt-marron;
-  font-size: 0.7rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
-  user-select: none;
-
-  &:hover {
-    border-color: $kt-naranja;
-    background: rgba($kt-naranja, 0.08);
-  }
-
-  &:active {
-    transform: scale(0.92);
-  }
-
-  &.activa {
-    background: $kt-naranja;
-    border-color: $kt-naranja;
-    color: white;
-    box-shadow: 0 1px 3px rgba($kt-naranja, 0.4);
-  }
-}
-
-:host-context(.dark) ::ng-deep .alternativa-pill {
-  background: var(--p-surface-900);
-  color: var(--p-text-color);
-}

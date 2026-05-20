@@ -22,11 +22,22 @@ public record GenerarPresupuestoRequestDTO(
         String clienteEmail,
         String observaciones,
 
-        /** % de descuento sobre el subtotal (0..100). Se aplica al final,
-         *  después de los descuentos individuales por ítem. Null o 0 = sin
-         *  descuento global. */
+        /** % efectivo del descuento total sobre el subtotal bruto, calculado
+         *  por el frontend como {@code descTotal_$ / subtotalBruto × 100}.
+         *  SOLO informativo — los items ya traen sus descuentos individuales
+         *  aplicados, NO se reaplica como factor extra (ver feedback del
+         *  2026-05-20). Null o 0 = sin descuentos. */
         @PositiveOrZero
         BigDecimal descuentoGlobalPorcentaje,
+
+        /** Modo de cotización individual: cuando es {@code true}, el PDF emite
+         *  UNA hoja por cada ítem (con foto grande + formas de pago calculadas
+         *  sobre el precio de ESE ítem) y NO genera la hoja agregada con tabla
+         *  detalle + total + formas de pago globales. Caso típico: cliente que
+         *  pide cotización de varias alternativas (amasadora 20L vs 30L) y
+         *  necesita comparar opciones independientes. Null o false = formato
+         *  agregado tradicional. */
+        Boolean cotizacionIndividual,
 
         @NotEmpty(message = "El presupuesto debe tener al menos un ítem")
         @Valid
@@ -48,13 +59,7 @@ public record GenerarPresupuestoRequestDTO(
              *  asume 21 para los cálculos. */
             BigDecimal porcIva,
             /** % de descuento individual aplicado a este ítem (0..100). */
-            @PositiveOrZero BigDecimal descuentoPorcentaje,
-            /** Índice de alternativa al que pertenece el ítem (0-indexed). Cuando
-             *  el operador activa "Separar en alternativas", cada ítem se asigna
-             *  a una alternativa y el PDF emite una hoja por cada una con su
-             *  propio detalle + formas de pago. Null o 0 = sin separación
-             *  (comportamiento histórico). */
-            Integer alternativa
+            @PositiveOrZero BigDecimal descuentoPorcentaje
     ) {}
 
     public record FormaPagoSnapshot(
@@ -65,17 +70,20 @@ public record GenerarPresupuestoRequestDTO(
             Boolean aplicaIva,
             /** Precio FINAL que el cliente paga con esta forma — el frontend
              *  lo calcula y se lo pasa al backend para que aparezca tal cual
-             *  en el PDF (evita doble cálculo y discrepancias). */
+             *  en el PDF (evita doble cálculo y discrepancias).
+             *
+             *  En modo {@code cotizacionIndividual}, el frontend manda N×M
+             *  snapshots (N formas × M items) y este precioFinal corresponde
+             *  al precio de la forma sobre el ítem identificado por {@link #itemSku}. */
             @NotNull BigDecimal precioFinal,
             /** Texto descriptivo opcional ("3 cuotas sin interés", "26% off con remito"...). */
             String descripcion,
             /** Si la forma se factura en USD/otra moneda — solo informativo
              *  para mostrar "USD" en vez de "$". */
             String monedaSimbolo,
-            /** Índice de alternativa al que pertenece este snapshot (0-indexed).
-             *  Cuando hay alternativas, el frontend manda len(formasPago) *
-             *  len(alternativas) snapshots con su precioFinal recalculado por
-             *  grupo. Null o 0 cuando no hay separación. */
-            Integer alternativa
+            /** SKU del ítem al que corresponde este snapshot en modo
+             *  {@code cotizacionIndividual}. Null cuando es global (todos los
+             *  ítems sumados). */
+            String itemSku
     ) {}
 }

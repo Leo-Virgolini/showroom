@@ -45,10 +45,8 @@ import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -84,6 +82,16 @@ public class PresupuestoComercialPdfGenerator {
     private static final Color GRIS_MEDIO = new DeviceRgb(110, 110, 110);
     private static final Color GRIS_CLARO = new DeviceRgb(243, 244, 246);
     private static final Color GRIS_LINEA = new DeviceRgb(225, 225, 230);
+
+    /** Fondos suaves para los chips de cantidad/descuento/unitario que
+     *  aparecen en el header de cada hoja en modo cotización individual.
+     *  Tono pastel para que el texto bold (marrón / verde / azul fuerte)
+     *  tenga contraste sin competir con los precios destacados de las
+     *  cards de formas de pago. */
+    private static final Color CHIP_BG_NARANJA = new DeviceRgb(255, 234, 209);
+    private static final Color CHIP_BG_VERDE = new DeviceRgb(216, 244, 230);
+    private static final Color CHIP_BG_AZUL = new DeviceRgb(219, 234, 254);
+    private static final Color CHIP_FG_AZUL = new DeviceRgb(29, 78, 216);
 
     /** Colores únicos para los borde-top de las cards de formas de pago.
      *  10 colores bien diferenciados — si hay más formas que esto, ciclan.
@@ -135,24 +143,30 @@ public class PresupuestoComercialPdfGenerator {
             pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE,
                     new FooterHandler(pdfDoc, logoFooter));
 
-            List<Grupo> grupos = agruparPorAlternativa(datos);
-            boolean variasAlternativas = grupos.size() > 1;
-
-            for (int i = 0; i < grupos.size(); i++) {
-                Grupo g = grupos.get(i);
-                if (i > 0) doc.add(new AreaBreak());
-
+            boolean individual = Boolean.TRUE.equals(datos.cotizacionIndividual());
+            if (individual) {
+                // Modo "cotización individual": una hoja por cada ítem con su
+                // foto + sus propias formas de pago calculadas sobre el precio
+                // de ese ítem específico. NO hay hoja agregada con total ni
+                // formas globales — cada producto se evalúa por separado.
+                List<GenerarPresupuestoRequestDTO.Item> items = datos.items();
+                for (int i = 0; i < items.size(); i++) {
+                    if (i > 0) doc.add(new AreaBreak());
+                    GenerarPresupuestoRequestDTO.Item it = items.get(i);
+                    agregarHeader(doc, presupuesto, logoHeader);
+                    agregarCardCliente(doc, presupuesto);
+                    agregarHojaItem(doc, it, i + 1, items.size(), datos.formasPago(), sinImagen);
+                    if (i == 0) agregarObservaciones(doc, datos);
+                }
+            } else {
+                // Modo agregado: tabla detalle + total + formas de pago globales,
+                // todo en una sola hoja (la layout histórico).
                 agregarHeader(doc, presupuesto, logoHeader);
                 agregarCardCliente(doc, presupuesto);
-                if (variasAlternativas) {
-                    agregarTituloAlternativa(doc, i + 1, grupos.size());
-                }
-                agregarTablaDetalle(doc, g.items(), sinImagen);
-                agregarTotales(doc, g);
-                agregarFormasPago(doc, g.formas());
-                // Las observaciones son globales: solo en la primera hoja para
-                // no duplicarlas en cada alternativa.
-                if (i == 0) agregarObservaciones(doc, datos);
+                agregarTablaDetalle(doc, datos.items(), sinImagen);
+                agregarTotalesAgregado(doc, datos);
+                agregarFormasPago(doc, datos.formasPago());
+                agregarObservaciones(doc, datos);
             }
 
             doc.close();
@@ -180,78 +194,24 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     // =====================================================
-    // Agrupación por alternativa
+    // Hoja por ítem (modo cotización individual)
     //
-    // Cuando el operador activa "Separar en alternativas", cada ítem trae un
-    // `alternativa` (0-indexed). Acá agrupamos items y formas por ese índice,
-    // ordenados ascendentemente. Si nadie definió alternativas (todo nulo o
-    // todo 0), devolvemos un único grupo con TODO el contenido — comportamiento
-    // histórico equivalente al de la versión previa.
-    //
-    // El `totalSinIva` y `subtotalBrutoSinIva` del grupo se recalculan desde
-    // cero a partir de los items del grupo (no usamos `subtotalSinIva` del
-    // entity porque ese agrega todas las alternativas).
+    // Cuando el operador activa el toggle "Cotización individual" en el
+    // frontend, el PDF emite UNA hoja por cada ítem del listado con:
+    //   - Sub-título "PRODUCTO N DE M".
+    //   - Card con nombre + SKU del producto.
+    //   - Layout 2 columnas: foto a la izquierda, lista de formas de pago a
+    //     la derecha calculadas sobre el precio de ESE ítem (precioFinal
+    //     viene precalculado del frontend, filtrado por `itemSku`).
     // =====================================================
-    private List<Grupo> agruparPorAlternativa(GenerarPresupuestoRequestDTO datos) {
-        Map<Integer, List<GenerarPresupuestoRequestDTO.Item>> itemsPorAlt = new LinkedHashMap<>();
-        for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
-            int alt = it.alternativa() == null ? 0 : it.alternativa();
-            itemsPorAlt.computeIfAbsent(alt, k -> new ArrayList<>()).add(it);
-        }
-
-        Map<Integer, List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot>> formasPorAlt = new LinkedHashMap<>();
-        if (datos.formasPago() != null) {
-            for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : datos.formasPago()) {
-                int alt = f.alternativa() == null ? 0 : f.alternativa();
-                formasPorAlt.computeIfAbsent(alt, k -> new ArrayList<>()).add(f);
-            }
-        }
-
-        List<Integer> claves = new ArrayList<>(itemsPorAlt.keySet());
-        java.util.Collections.sort(claves);
-
-        // Nota: a partir del 2026-05-20 el "descuento global" del DTO es
-        // SOLO informativo (% efectivo) y NO se aplica como factor extra:
-        // los items ya traen sus descuentos individuales. Reaplicarlo
-        // duplicaba el efecto.
-        List<Grupo> grupos = new ArrayList<>(claves.size());
-        for (Integer alt : claves) {
-            List<GenerarPresupuestoRequestDTO.Item> items = itemsPorAlt.get(alt);
-            BigDecimal subtotalBrutoSinIva = BigDecimal.ZERO;
-            BigDecimal subtotalSinIva = BigDecimal.ZERO;
-            for (GenerarPresupuestoRequestDTO.Item it : items) {
-                BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
-                BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-                BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
-                BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-                BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-
-                BigDecimal totalLineaBrutoSinIva = precio.multiply(cantidad)
-                        .divide(divisor, 4, RoundingMode.HALF_UP);
-                BigDecimal precioConDesc = precio.multiply(
-                        BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-                BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
-                        .divide(divisor, 4, RoundingMode.HALF_UP);
-
-                subtotalBrutoSinIva = subtotalBrutoSinIva.add(totalLineaBrutoSinIva);
-                subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
-            }
-            BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
-            BigDecimal subtotalBruto = subtotalBrutoSinIva.setScale(2, RoundingMode.HALF_UP);
-            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas =
-                    formasPorAlt.getOrDefault(alt, List.of());
-            grupos.add(new Grupo(alt, items, formas, totalSinIva, subtotalBruto));
-        }
-        // Si por alguna razón quedaron formas con un alt que no coincide con
-        // ningún ítem (no debería pasar), las descartamos — el PDF lista solo
-        // alternativas con items.
-        return grupos;
-    }
-
-    /** Sub-título "Alternativa N de M" que aparece arriba del detalle cuando
-     *  el presupuesto está separado en varias opciones. */
-    private void agregarTituloAlternativa(Document doc, int idx, int total) {
-        Paragraph titulo = new Paragraph("ALTERNATIVA " + idx + " DE " + total)
+    private void agregarHojaItem(Document doc,
+                                 GenerarPresupuestoRequestDTO.Item item,
+                                 int idx,
+                                 int total,
+                                 List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> todasFormas,
+                                 ImageData sinImagen) {
+        // Sub-título "Producto N de M".
+        Paragraph subtitulo = new Paragraph("PRODUCTO " + idx + " DE " + total)
                 .simulateBold()
                 .setFontSize(11)
                 .setCharacterSpacing(2f)
@@ -260,25 +220,282 @@ public class PresupuestoComercialPdfGenerator {
                 .setBorderRadius(new BorderRadius(8f))
                 .setPaddings(6, 14, 6, 14)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(10)
-                .setMarginBottom(0)
+                .setMarginTop(12)
+                .setMarginBottom(8)
                 .setHorizontalAlignment(HorizontalAlignment.LEFT)
                 .setWidth(UnitValue.createPercentValue(45));
-        doc.add(titulo);
+        doc.add(subtitulo);
+
+        // Card del producto: nombre + código arriba, foto | formas de pago abajo.
+        Div card = new Div()
+                .setMarginTop(0)
+                .setBackgroundColor(ColorConstants.WHITE)
+                .setBorder(new SolidBorder(GRIS_LINEA, 1f))
+                .setBorderRadius(new BorderRadius(12f))
+                .setPadding(16)
+                .setKeepTogether(true);
+
+        // Encabezado del producto: nombre + sku + chips visuales para
+        // (cantidad / descuento) cuando aplican.
+        card.add(new Paragraph(safe(item.descripcion(), "—"))
+                .simulateBold()
+                .setFontSize(15)
+                .setFontColor(KT_MARRON)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0));
+
+        // Sub-línea solo con el código del producto — chico y discreto.
+        card.add(new Paragraph("Código: " + safe(item.sku(), "—"))
+                .setFontSize(10)
+                .setFontColor(GRIS_MEDIO)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0)
+                .setMarginBottom(8));
+
+        // Chips de cantidad + descuento + precio unitario (cuando corresponda).
+        // Van centrados debajo del código en una fila horizontal. El cliente
+        // necesita ver cuántas unidades cubre el presupuesto, si hay descuento
+        // aplicado, y cuánto sale c/u — los precios en las cards de formas
+        // de pago están totalizados por (cantidad × precio × (1 - descuento)),
+        // así que sin esta info no podría reconstruir cómo se llegó al número
+        // ni saber cuánto le saldría agregar/quitar unidades.
+        BigDecimal cant = item.cantidad();
+        BigDecimal desc = item.descuentoPorcentaje();
+        boolean tieneCant = cant != null && cant.signum() > 0;
+        boolean tieneDescuento = desc != null && desc.signum() > 0;
+        // El precio unitario sólo agrega información cuando la cantidad es > 1
+        // (si es 1, el precio unitario coincide con el total de cada forma).
+        boolean tieneUnitario = cant != null && cant.compareTo(BigDecimal.ONE) > 0;
+        if (tieneCant || tieneDescuento || tieneUnitario) {
+            int n = (tieneCant ? 1 : 0) + (tieneDescuento ? 1 : 0) + (tieneUnitario ? 1 : 0);
+            float[] cols = new float[n];
+            for (int i = 0; i < n; i++) cols[i] = 1f;
+            // Width adaptativo: 1 chip → 40%, 2 chips → 70%, 3 chips → 90%.
+            float widthPct = n == 1 ? 40f : (n == 2 ? 70f : 90f);
+            Table chips = new Table(UnitValue.createPercentArray(cols))
+                    .setWidth(UnitValue.createPercentValue(widthPct))
+                    .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                    .setBorder(Border.NO_BORDER)
+                    .setMarginBottom(10);
+            if (tieneCant) {
+                String unidades = cant.compareTo(BigDecimal.ONE) == 0 ? "unidad" : "unidades";
+                chips.addCell(chip(formatCantidad(cant) + " " + unidades,
+                        KT_MARRON, CHIP_BG_NARANJA));
+            }
+            if (tieneDescuento) {
+                chips.addCell(chip("-" + formatPorcentaje(desc) + "% descuento",
+                        VERDE_PRECIO, CHIP_BG_VERDE));
+            }
+            if (tieneUnitario) {
+                BigDecimal precioUnitSinIva = precioUnitarioSinIva(item);
+                chips.addCell(chip("P. unitario: " + formatPesos(precioUnitSinIva),
+                        CHIP_FG_AZUL, CHIP_BG_AZUL));
+            }
+            card.add(chips);
+        }
+
+        // Separador.
+        card.add(new Div().setHeight(1).setBackgroundColor(GRIS_LINEA)
+                .setMarginBottom(10));
+
+        // Grid 2 cols: foto | formas de pago.
+        Table grid = new Table(UnitValue.createPercentArray(new float[]{1.05f, 1.2f}))
+                .useAllAvailableWidth()
+                .setBorder(Border.NO_BORDER);
+
+        // Col 1: foto grande del producto.
+        Cell celdaFoto = new Cell()
+                .setBorder(new SolidBorder(GRIS_LINEA, 1f))
+                .setBorderRadius(new BorderRadius(8f))
+                .setBackgroundColor(ColorConstants.WHITE)
+                .setPadding(10)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                .setTextAlignment(TextAlignment.CENTER);
+        Image img = cargarImagenProducto(item.sku());
+        if (img == null && sinImagen != null) {
+            img = new Image(sinImagen);
+        }
+        if (img != null) {
+            img.setAutoScale(false);
+            // 200×260 da bastante espacio para que se vea el producto sin
+            // dominar la hoja; iText mantiene el aspect ratio.
+            img.scaleToFit(200f, 260f);
+            img.setHorizontalAlignment(HorizontalAlignment.CENTER);
+            celdaFoto.add(img);
+        }
+        grid.addCell(celdaFoto);
+
+        // Col 2: lista vertical de formas de pago (precalculadas para este ítem).
+        Cell celdaFormas = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setPaddingLeft(12)
+                .setVerticalAlignment(VerticalAlignment.TOP);
+
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasItem =
+                filtrarFormasDelItem(todasFormas, item.sku());
+        int indiceMejor = indiceMejorPrecio(formasItem);
+        for (int i = 0; i < formasItem.size(); i++) {
+            celdaFormas.add(buildFilaFormaPagoItem(
+                    formasItem.get(i),
+                    BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length],
+                    i == indiceMejor));
+        }
+        grid.addCell(celdaFormas);
+
+        card.add(grid);
+        doc.add(card);
     }
 
-    /** Agrupación de items + formas de pago de una alternativa, con el total
-     *  s/IVA precalculado (suma de los items del grupo, con sus descuentos
-     *  individuales aplicados — sin factor de descuento global). El
-     *  {@code subtotalBrutoSinIva} es la suma SIN descuentos: sirve para
-     *  mostrar el desglose "Subtotal | Descuento | Total" en la card del PDF. */
-    private record Grupo(
-            int alternativa,
-            List<GenerarPresupuestoRequestDTO.Item> items,
-            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas,
-            BigDecimal totalSinIva,
-            BigDecimal subtotalBrutoSinIva
-    ) {}
+    /** En modo cotización individual cada forma de pago snapshot trae el
+     *  {@code itemSku} al que pertenece. Si {@code itemSku} es null lo
+     *  consideramos global (todos los ítems). */
+    private static List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> filtrarFormasDelItem(
+            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas, String sku) {
+        if (formas == null) return List.of();
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> out = new ArrayList<>();
+        for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formas) {
+            if (f.itemSku() == null || f.itemSku().equals(sku)) out.add(f);
+        }
+        return out;
+    }
+
+    /** Card-fila horizontal: nombre + descripción a la izquierda, precio a la
+     *  derecha, con barrita lateral del color del índice y badge "Mejor precio"
+     *  cuando corresponde. Usada solo en modo cotización individual. */
+    private Div buildFilaFormaPagoItem(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f,
+                                       Color borde, boolean esMejorPrecio) {
+        Color colorBarra = esMejorPrecio ? VERDE_PRECIO : borde;
+
+        Table fila = new Table(UnitValue.createPercentArray(new float[]{0.06f, 1.6f, 1f}))
+                .useAllAvailableWidth()
+                .setBorder(Border.NO_BORDER)
+                .setBackgroundColor(GRIS_CLARO)
+                .setBorderRadius(new BorderRadius(8f))
+                .setMarginBottom(5);
+
+        // Barrita lateral con el color (esquinas redondeadas a la izquierda).
+        fila.addCell(new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setBackgroundColor(colorBarra)
+                .setBorderTopLeftRadius(new BorderRadius(8f))
+                .setBorderBottomLeftRadius(new BorderRadius(8f))
+                .setPadding(0));
+
+        // Nombre + descripción.
+        Cell info = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setPaddings(6, 8, 6, 10)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE);
+        if (esMejorPrecio) {
+            info.add(new Paragraph("MEJOR PRECIO")
+                    .simulateBold()
+                    .setFontSize(6.5f)
+                    .setCharacterSpacing(0.8f)
+                    .setFontColor(ColorConstants.WHITE)
+                    .setBackgroundColor(VERDE_PRECIO)
+                    .setBorderRadius(new BorderRadius(8f))
+                    .setPaddings(1, 6, 1, 6)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setHorizontalAlignment(HorizontalAlignment.LEFT)
+                    .setMargin(0)
+                    .setMarginBottom(2)
+                    .setWidth(60f));
+        }
+        info.add(new Paragraph(safe(f.nombre(), "—"))
+                .simulateBold()
+                .setFontSize(9)
+                .setFontColor(GRIS_OSCURO)
+                .setMargin(0));
+        if (esTextoValido(f.descripcion())) {
+            info.add(new Paragraph(f.descripcion())
+                    .setFontSize(7.5f)
+                    .setFontColor(GRIS_MEDIO)
+                    .setMargin(0)
+                    .setMarginTop(1));
+        }
+        fila.addCell(info);
+
+        // Precio.
+        Cell precioCelda = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setPaddings(6, 10, 6, 4)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setTextAlignment(TextAlignment.RIGHT);
+        String simbolo = esTextoValido(f.monedaSimbolo()) ? f.monedaSimbolo() : null;
+        String precioStr = simbolo != null
+                ? formatNumero(f.precioFinal()) + " " + simbolo
+                : formatPesos(f.precioFinal());
+        precioCelda.add(new Paragraph(precioStr)
+                .simulateBold()
+                .setFontSize(13)
+                .setFontColor(KT_MARRON)
+                .setMargin(0));
+        if (f.cantidadCuotas() != null && f.cantidadCuotas() > 1) {
+            BigDecimal cuota = f.precioFinal().divide(
+                    BigDecimal.valueOf(f.cantidadCuotas()), 2, RoundingMode.HALF_UP);
+            precioCelda.add(new Paragraph(
+                    f.cantidadCuotas() + " × " + formatPesos(cuota))
+                    .setFontSize(7.5f)
+                    .setFontColor(GRIS_MEDIO)
+                    .setMargin(0)
+                    .setMarginTop(1));
+        }
+        fila.addCell(precioCelda);
+
+        Div w = new Div();
+        w.add(fila);
+        return w;
+    }
+
+    // =====================================================
+    // Modo agregado — calcula subtotal bruto + total a partir de los items y
+    // delega en la card de totales reutilizable.
+    // =====================================================
+    private void agregarTotalesAgregado(Document doc, GenerarPresupuestoRequestDTO datos) {
+        BigDecimal subtotalBrutoSinIva = BigDecimal.ZERO;
+        BigDecimal subtotalSinIva = BigDecimal.ZERO;
+        for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
+            BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
+            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
+            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+
+            BigDecimal totalLineaBrutoSinIva = precio.multiply(cantidad)
+                    .divide(divisor, 4, RoundingMode.HALF_UP);
+            BigDecimal precioConDesc = precio.multiply(
+                    BigDecimal.ONE.subtract(desc.movePointLeft(2)));
+            BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
+                    .divide(divisor, 4, RoundingMode.HALF_UP);
+
+            subtotalBrutoSinIva = subtotalBrutoSinIva.add(totalLineaBrutoSinIva);
+            subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
+        }
+        BigDecimal subtotalBruto = subtotalBrutoSinIva.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
+
+        agregarCardTotal(doc, subtotalBruto, totalSinIva);
+
+        if (datos.formasPago() == null || datos.formasPago().isEmpty()) return;
+        int maxDesc = porcMaxDescuento(totalSinIva, datos.formasPago());
+        if (maxDesc <= 0) return;
+
+        Paragraph badge = new Paragraph(
+                "¡Podés ahorrar hasta " + maxDesc + "% — mirá las formas de pago!")
+                .simulateBold()
+                .setFontSize(10)
+                .setFontColor(ColorConstants.WHITE)
+                .setBackgroundColor(VERDE_PRECIO)
+                .setBorderRadius(new BorderRadius(20f))
+                .setPaddings(8, 14, 8, 14)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(10)
+                .setMarginBottom(2)
+                .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                .setWidth(UnitValue.createPercentValue(60));
+        doc.add(badge);
+    }
 
     // =====================================================
     // Header — letterhead KT GASTRO:
@@ -610,38 +827,6 @@ public class PresupuestoComercialPdfGenerator {
         doc.add(seccion);
     }
 
-    // =====================================================
-    // Bloque de totales — siempre muestra el "Total s/IVA" destacado
-    // (alineado a la derecha en una card gris). Si hay descuentos por línea,
-    // suma arriba el subtotal bruto + el desglose del descuento efectivo.
-    //
-    // Después, opcionalmente, el badge "¡Podés ahorrar hasta X%!" cuando
-    // alguna forma de pago tiene ahorro adicional vs el sin-recargo.
-    // =====================================================
-    private void agregarTotales(Document doc, Grupo g) {
-        agregarCardTotal(doc, g.subtotalBrutoSinIva(), g.totalSinIva());
-
-        if (g.formas() == null || g.formas().isEmpty()) return;
-        int maxDesc = porcMaxDescuento(g.totalSinIva(), g.formas());
-        if (maxDesc <= 0) return;
-
-        Paragraph badge = new Paragraph(
-                "¡Podés ahorrar hasta " + maxDesc + "% — mirá las formas de pago!")
-                .simulateBold()
-                .setFontSize(10)
-                .setFontColor(ColorConstants.WHITE)
-                .setBackgroundColor(VERDE_PRECIO)
-                .setBorderRadius(new BorderRadius(20f))
-                .setPaddings(8, 14, 8, 14)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(10)
-                .setMarginBottom(2)
-                .setHorizontalAlignment(HorizontalAlignment.CENTER)
-                .setWidth(UnitValue.createPercentValue(60));
-
-        doc.add(badge);
-    }
-
     /**
      * Card de totales alineada a la derecha. Layout:
      *   <ul>
@@ -933,6 +1118,41 @@ public class PresupuestoComercialPdfGenerator {
     // =====================================================
     // Helpers
     // =====================================================
+
+    /** Precio unitario SIN IVA con descuento individual aplicado. Coincide
+     *  con el precio "Efectivo s/IVA" de las cards de formas de pago dividido
+     *  por la cantidad — útil para que el cliente pueda calcular fácil cuánto
+     *  le sale agregar o quitar unidades. */
+    private static BigDecimal precioUnitarioSinIva(GenerarPresupuestoRequestDTO.Item item) {
+        BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
+        BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
+        BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
+        BigDecimal precioConDesc = precioConIva.multiply(
+                BigDecimal.ONE.subtract(desc.movePointLeft(2)));
+        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+        return precioConDesc.divide(divisor, 2, RoundingMode.HALF_UP);
+    }
+
+    /** Construye un chip/pill compacto para mostrar metadata del producto
+     *  (cantidad, descuento, etc.) en el header de la hoja de cotización
+     *  individual. Texto centrado en bold sobre un fondo pastel con esquinas
+     *  redondeadas tipo pill. */
+    private static Cell chip(String texto, Color colorTexto, Color colorFondo) {
+        return new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setPadding(3)
+                .setTextAlignment(TextAlignment.CENTER)
+                .add(new Paragraph(texto)
+                        .simulateBold()
+                        .setFontSize(9)
+                        .setFontColor(colorTexto)
+                        .setBackgroundColor(colorFondo)
+                        .setBorderRadius(new BorderRadius(12f))
+                        .setPaddings(3, 10, 3, 10)
+                        .setTextAlignment(TextAlignment.CENTER)
+                        .setMargin(0));
+    }
+
     private static Cell celdaHeader(String texto) {
         return new Cell()
                 .setBorder(Border.NO_BORDER)
@@ -1015,13 +1235,6 @@ public class PresupuestoComercialPdfGenerator {
             return cantidad.setScale(0, RoundingMode.UNNECESSARY).toPlainString();
         }
         return cantidad.stripTrailingZeros().toPlainString();
-    }
-
-    private static String stripTrailingZeros(BigDecimal v) {
-        if (v == null) return "0";
-        BigDecimal s = v.stripTrailingZeros();
-        if (s.scale() < 0) s = s.setScale(0, RoundingMode.UNNECESSARY);
-        return s.toPlainString();
     }
 
     /** Formatea un porcentaje con coma decimal (es-AR) redondeado a 1 decimal:

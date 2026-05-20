@@ -26,8 +26,14 @@ public record PickingEmailEvent(
 ) {
     /** {@code SKIPPED}: no es un error técnico — había una razón legítima para
      *  no mandar el email (ej: cliente compró todo lo que vio, no hay PDF). El
-     *  frontend muestra un toast informativo en vez de error. */
-    public enum Estado { SENT, FAILED, SKIPPED }
+     *  frontend muestra un toast informativo en vez de error.
+     *
+     *  <p>{@code AMBIGUO}: Gmail aceptó el adjunto pero el {@code 250 OK} no
+     *  llegó antes de que la conexión se cortara (típico con PDFs de varios MB
+     *  donde algún NAT intermedio o el propio Gmail cierran el socket antes
+     *  del ACK final). El mail muy probablemente se entregó — el operador
+     *  debería verificar en la bandeja del cliente antes de reintentar. */
+    public enum Estado { SENT, FAILED, SKIPPED, AMBIGUO }
 
     public static PickingEmailEvent sentPedido(Long pedidoId, String cuit, String email) {
         return new PickingEmailEvent(Estado.SENT, pedidoId, null, cuit, email, null);
@@ -41,11 +47,19 @@ public record PickingEmailEvent(
         return new PickingEmailEvent(Estado.SKIPPED, pedidoId, null, cuit, email, motivo);
     }
 
+    public static PickingEmailEvent ambiguoPedido(Long pedidoId, String cuit, String email, String detalle) {
+        return new PickingEmailEvent(Estado.AMBIGUO, pedidoId, null, cuit, email, detalle);
+    }
+
     public static PickingEmailEvent sentSesion(Long sesionId, String email) {
         return new PickingEmailEvent(Estado.SENT, null, sesionId, null, email, null);
     }
 
     public static PickingEmailEvent failedSesion(Long sesionId, String email, String error) {
         return new PickingEmailEvent(Estado.FAILED, null, sesionId, null, email, error);
+    }
+
+    public static PickingEmailEvent ambiguoSesion(Long sesionId, String email, String detalle) {
+        return new PickingEmailEvent(Estado.AMBIGUO, null, sesionId, null, email, detalle);
     }
 }

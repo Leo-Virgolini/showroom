@@ -161,7 +161,10 @@ export interface ListarSesionesParams {
   size?: number;
 }
 
-export type PickingEmailEstado = 'SENT' | 'FAILED' | 'SKIPPED';
+/** {@code AMBIGUO}: Gmail aceptó el adjunto pero el {@code 250 OK} no llegó
+ *  antes de que la conexión se cortara. El mail muy probablemente se entregó —
+ *  el operador debería verificar la bandeja del cliente antes de reintentar. */
+export type PickingEmailEstado = 'SENT' | 'FAILED' | 'SKIPPED' | 'AMBIGUO';
 
 export interface PickingEmailEvent {
   estado: PickingEmailEstado;
@@ -539,14 +542,6 @@ export interface PresupuestoItem extends ScanResult {
   cantidad: number;
   /** % de descuento individual aplicado al ítem (0..100). */
   descuentoPorcentaje: number;
-  /** Si está incluido en el PDF final — el operador puede destildarlo y
-   *  presupuestar solo un subconjunto sin perder los demás del listado. */
-  seleccionado: boolean;
-  /** Índice 0-based de la alternativa a la que pertenece el ítem. Cuando el
-   *  operador activa "Separar en alternativas", cada ítem se asigna a una
-   *  alternativa (A, B, C...) y el PDF emite una hoja por cada una con su
-   *  propio detalle + formas de pago. Default 0 cuando no hay separación. */
-  alternativa: number;
 }
 
 /** Snapshot de una forma de pago precalculada en el frontend. Se manda al
@@ -560,11 +555,9 @@ export interface PresupuestoFormaPagoSnapshot {
   precioFinal: number;
   descripcion?: string | null;
   monedaSimbolo?: string | null;
-  /** Índice 0-based de la alternativa a la que pertenece este snapshot.
-   *  Cuando hay varias alternativas, el frontend manda N×M snapshots
-   *  (N formas activas × M alternativas) con su precioFinal recalculado por
-   *  grupo. Default 0 sin separación. */
-  alternativa?: number | null;
+  /** SKU del ítem al que corresponde el snapshot en modo cotización individual.
+   *  Null cuando la forma es global (sumando todos los ítems). */
+  itemSku?: string | null;
 }
 
 /** Payload del POST /presupuesto-comercial/preview y /enviar (campo `presupuesto`). */
@@ -576,6 +569,11 @@ export interface GenerarPresupuestoRequest {
   /** % de descuento sobre el subtotal (0..100). Se aplica al final, después
    *  de los descuentos individuales por ítem. */
   descuentoGlobalPorcentaje?: number;
+  /** Si true, el PDF genera UNA hoja por ítem (foto + formas de pago
+   *  calculadas sobre el precio del ítem). Si false/undefined, el PDF
+   *  produce el formato agregado tradicional (tabla detalle + total +
+   *  formas globales). */
+  cotizacionIndividual?: boolean;
   items: {
     sku: string;
     descripcion?: string | null;
@@ -583,8 +581,6 @@ export interface GenerarPresupuestoRequest {
     precioConIva: number;
     porcIva?: number | null;
     descuentoPorcentaje?: number | null;
-    /** Índice 0-based de la alternativa. Default 0 cuando no hay separación. */
-    alternativa?: number | null;
   }[];
   formasPago: PresupuestoFormaPagoSnapshot[];
 }
@@ -621,7 +617,7 @@ export interface ListarPresupuestosParams {
   size?: number;
 }
 
-export type PresupuestoEmailEstado = 'SENT' | 'FAILED';
+export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';
 
 export interface PresupuestoEmailEvent {
   estado: PresupuestoEmailEstado;

@@ -120,7 +120,7 @@ public class DuxClient {
             }
             String objetivo = properties.listaPreciosNombre();
             for (JsonNode node : root) {
-                String nombre = node.path("lista_precio_venta").asText("");
+                String nombre = node.path("lista_precio_venta").asString("");
                 if (nombre.equalsIgnoreCase(objetivo)) {
                     cachedListaPrecioId = node.path("id_lista_precio_venta").asLong();
                     log.info("DUX - Lista de precios '{}' resuelta a id={}", objetivo, cachedListaPrecioId);

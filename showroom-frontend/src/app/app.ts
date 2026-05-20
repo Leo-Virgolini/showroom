@@ -254,6 +254,18 @@ export class App {
               : `No había PDF que mandar a ${ref}.`,
             life: 6000,
           });
+        } else if (e.estado === 'AMBIGUO') {
+          // Gmail aceptó el PDF pero el ACK final no llegó a tiempo (típico
+          // con adjuntos grandes). El mail muy probablemente quedó encolado —
+          // no es un error que requiera reintento ciego.
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Email probablemente enviado',
+            detail: e.error
+              ? `${ref}: ${e.error}`
+              : `Gmail tardó en confirmar el envío a ${ref}. Verificá la bandeja antes de reintentar.`,
+            life: 10000,
+          });
         } else {
           this.toast.add({
             severity: 'error',
