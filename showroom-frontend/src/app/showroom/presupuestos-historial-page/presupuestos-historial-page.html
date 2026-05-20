@@ -116,18 +116,31 @@
             </td>
             <td class="text-center">
               @if (p.descuentoGlobalPorcentaje && p.descuentoGlobalPorcentaje > 0) {
+                <!-- Redondea a 1 decimal: el % efectivo (descuento total /
+                     subtotal bruto × 100) suele dar fracciones como 8.333%
+                     cuando los ítems tienen descuentos distintos. -->
                 <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                  {{ p.descuentoGlobalPorcentaje }}%
+                  {{ p.descuentoGlobalPorcentaje | number:'1.0-1' }}%
                 </span>
               } @else {
                 <span class="text-xs text-muted-color">—</span>
               }
             </td>
             <td>
-              <p-button icon="pi pi-download" severity="secondary" [outlined]="true"
-                size="small" [rounded]="true"
-                [loading]="descargandoPdf().has(p.id)"
-                (onClick)="descargar(p)" pTooltip="Descargar PDF" tooltipPosition="left" />
+              <!-- SplitButton: el click directo descarga la versión original
+                   (con la que se generó); el dropdown ofrece descargar
+                   "Versión agregada" o "Versión individual" del mismo
+                   presupuesto. Útil para comparar formatos o reenviar al
+                   cliente la versión que le resulte más clara. -->
+              <p-splitButton
+                [icon]="descargandoPdf().has(p.id) ? 'pi pi-spinner pi-spin' : 'pi pi-download'"
+                severity="secondary" [outlined]="true" size="small"
+                [disabled]="descargandoPdf().has(p.id)"
+                [model]="opcionesDescarga(p)"
+                appendTo="body"
+                (onClick)="descargar(p)"
+                pTooltip="Descargar PDF (click) o elegí el formato (▼)"
+                tooltipPosition="left" />
             </td>
           </tr>
         </ng-template>

@@ -145,17 +145,137 @@ public class PresupuestoComercialService {
     }
 
     /**
-     * Regenera el PDF de un presupuesto persistido. No vuelve a calcular
-     * nada — se rehidratan los items y formas de pago desde los JSON
-     * guardados al momento de la creación. Así el PDF queda idéntico al
-     * que vio el cliente originalmente, aunque las formas de pago o
-     * precios actuales hayan cambiado en el sistema.
+     * Regenera el PDF de un presupuesto persistido con el modo original
+     * (inferido de las formas guardadas).
      */
     public Resultado regenerarPdf(Long id) {
+        return regenerarPdf(id, null);
+    }
+
+    /**
+     * Regenera el PDF de un presupuesto persistido, pudiendo FORZAR el modo
+     * de cotización (agregado o individual). Útil para que el operador pueda
+     * descargar AMBAS versiones del mismo presupuesto desde el historial,
+     * independientemente de cómo se generó originalmente.
+     *
+     * <p>Cuando el modo forzado difiere del original, recalculamos las
+     * formas de pago sobre los datos persistidos:
+     * <ul>
+     *   <li>Forzar AGREGADO sobre individual: deduplicamos formas por
+     *       nombre y recalculamos {@code precioFinal} sobre el subtotal
+     *       general.</li>
+     *   <li>Forzar INDIVIDUAL sobre agregado: deduplicamos formas por
+     *       nombre y replicamos por cada ítem, recalculando
+     *       {@code precioFinal} sobre el precio del ítem.</li>
+     * </ul>
+     *
+     * @param modo {@code "agregado"} / {@code "individual"} / null (= original).
+     */
+    public Resultado regenerarPdf(Long id, String modo) {
         PresupuestoComercial p = obtener(id);
         GenerarPresupuestoRequestDTO datos = rehidratarDatos(p);
+        if ("agregado".equalsIgnoreCase(modo) && Boolean.TRUE.equals(datos.cotizacionIndividual())) {
+            datos = forzarModoAgregado(datos);
+        } else if ("individual".equalsIgnoreCase(modo) && !Boolean.TRUE.equals(datos.cotizacionIndividual())) {
+            datos = forzarModoIndividual(datos);
+        }
         byte[] pdf = pdfGenerator.generar(p, datos);
         return new Resultado(p, pdf, pdfGenerator.nombreArchivo(p));
+    }
+
+    /** Convierte un DTO en modo individual al modo agregado: deduplica las
+     *  formas (todas las que comparten {@code id}/{@code nombre}/{@code
+     *  cantidadCuotas} son la misma) y recalcula {@code precioFinal} sobre
+     *  el subtotal del presupuesto. Limpia {@code itemSku} a null. */
+    private GenerarPresupuestoRequestDTO forzarModoAgregado(GenerarPresupuestoRequestDTO datos) {
+        BigDecimal subtotalSinIva = BigDecimal.ZERO;
+        BigDecimal subtotalConIva = BigDecimal.ZERO;
+        for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
+            BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
+            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal d = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
+            BigDecimal factor = BigDecimal.ONE.subtract(d.movePointLeft(2));
+            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+            BigDecimal lineaConIva = precio.multiply(factor).multiply(cantidad);
+            BigDecimal lineaSinIva = lineaConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+            subtotalConIva = subtotalConIva.add(lineaConIva);
+            subtotalSinIva = subtotalSinIva.add(lineaSinIva);
+        }
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasUnicas =
+                deduplicarFormas(datos.formasPago());
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasAgregadas = new java.util.ArrayList<>();
+        for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formasUnicas) {
+            BigDecimal recargo = f.recargoPorcentaje() == null
+                    ? BigDecimal.ZERO
+                    : f.recargoPorcentaje().movePointLeft(2);
+            boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
+            BigDecimal base = aplicaIva ? subtotalConIva : subtotalSinIva;
+            BigDecimal precioFinal = base.multiply(BigDecimal.ONE.add(recargo))
+                    .setScale(2, RoundingMode.HALF_UP);
+            formasAgregadas.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
+                    f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
+                    f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),
+                    null));
+        }
+        return new GenerarPresupuestoRequestDTO(
+                datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
+                datos.observaciones(), datos.descuentoGlobalPorcentaje(),
+                false, datos.items(), formasAgregadas);
+    }
+
+    /** Convierte un DTO en modo agregado al modo individual: deduplica las
+     *  formas y, para cada ítem, calcula su propio {@code precioFinal} por
+     *  forma sobre el precio del ítem (cantidad × precio × (1-desc)). */
+    private GenerarPresupuestoRequestDTO forzarModoIndividual(GenerarPresupuestoRequestDTO datos) {
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasUnicas =
+                deduplicarFormas(datos.formasPago());
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasIndividuales = new java.util.ArrayList<>();
+        for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
+            BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
+            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal d = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
+            BigDecimal factor = BigDecimal.ONE.subtract(d.movePointLeft(2));
+            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+            BigDecimal totalItemConIva = precio.multiply(factor).multiply(cantidad);
+            BigDecimal totalItemSinIva = totalItemConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+            for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formasUnicas) {
+                BigDecimal recargo = f.recargoPorcentaje() == null
+                        ? BigDecimal.ZERO
+                        : f.recargoPorcentaje().movePointLeft(2);
+                boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
+                BigDecimal base = aplicaIva ? totalItemConIva : totalItemSinIva;
+                BigDecimal precioFinal = base.multiply(BigDecimal.ONE.add(recargo))
+                        .setScale(2, RoundingMode.HALF_UP);
+                formasIndividuales.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
+                        f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
+                        f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),
+                        it.sku()));
+            }
+        }
+        return new GenerarPresupuestoRequestDTO(
+                datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
+                datos.observaciones(), datos.descuentoGlobalPorcentaje(),
+                true, datos.items(), formasIndividuales);
+    }
+
+    /** Deduplica formas de pago snapshot: en modo individual el JSON
+     *  guarda N × M (N forms × M items); para usar como template necesitamos
+     *  solo un snapshot por forma única. Identificamos por {@code id} si
+     *  está, sino por {@code nombre} + {@code cantidadCuotas}. */
+    private List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> deduplicarFormas(
+            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas) {
+        if (formas == null) return List.of();
+        java.util.LinkedHashMap<String, GenerarPresupuestoRequestDTO.FormaPagoSnapshot> unicas =
+                new java.util.LinkedHashMap<>();
+        for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formas) {
+            String key = f.id() != null
+                    ? "id:" + f.id()
+                    : "nm:" + f.nombre() + "/" + f.cantidadCuotas();
+            unicas.putIfAbsent(key, f);
+        }
+        return new java.util.ArrayList<>(unicas.values());
     }
 
     /** Reconstruye el DTO original a partir de los JSONs persistidos en

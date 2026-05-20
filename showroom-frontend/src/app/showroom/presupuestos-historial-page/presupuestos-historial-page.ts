@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { Subject, debounceTime } from 'rxjs';
-import { MessageService } from 'primeng/api';
+import { MenuItem, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
@@ -20,6 +20,7 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -52,6 +53,7 @@ import { toastError } from '../toast.utils';
     InputIconModule,
     InputTextModule,
     ProgressSpinnerModule,
+    SplitButtonModule,
     TableModule,
     ToolbarModule,
     TooltipModule,
@@ -142,6 +144,9 @@ export class PresupuestosHistorialPage {
       .subscribe({
         next: (res) => {
           this.cargando.set(false);
+          // Limpiamos el cache de menús del SplitButton — los presupuestos
+          // que ya no están en la página actual no necesitan referencias.
+          this.menuCache.clear();
           this.presupuestos.set(res.items);
           this.total.set(res.total);
         },
@@ -162,11 +167,15 @@ export class PresupuestosHistorialPage {
   }
 
   /** Descarga el PDF de un presupuesto: lo abre en pestaña nueva y lo
-   *  guarda a disco con su filename original. */
-  descargar(p: PresupuestoListItem): void {
+   *  guarda a disco con su filename original.
+   *
+   *  @param modo Si se especifica, fuerza la versión del PDF (agregada o
+   *    individual). Si se omite, el backend usa el modo con el que se
+   *    generó originalmente. */
+  descargar(p: PresupuestoListItem, modo?: 'agregado' | 'individual'): void {
     if (this.descargandoPdf().has(p.id)) return;
     this.descargandoPdf.update((s) => new Set([...s, p.id]));
-    this.api.descargarPdfPresupuestoComercial(p.id).subscribe({
+    this.api.descargarPdfPresupuestoComercial(p.id, modo).subscribe({
       next: (res) => {
         this.removerDescargando(p.id);
         const blob = res.body;
@@ -191,6 +200,35 @@ export class PresupuestosHistorialPage {
         toastError(this.toast, 'Descargar PDF', err, 'No se pudo descargar el PDF.');
       },
     });
+  }
+
+  /** Cache de menús del SplitButton por id de presupuesto — Angular CD llama
+   *  al binding `[model]` en cada render, así que sin cache se crean N×2
+   *  objetos MenuItem por cada ciclo. El Map se invalida cuando el listado
+   *  se recarga (presupuestos.set(...) crea una identidad nueva). */
+  private readonly menuCache = new Map<number, MenuItem[]>();
+
+  /** Items del dropdown del SplitButton de descarga — permite al operador
+   *  elegir entre la versión agregada (tabla + total) y la individual
+   *  (1 hoja por producto) del mismo presupuesto. El click directo al
+   *  botón principal descarga la versión con la que se generó originalmente. */
+  opcionesDescarga(p: PresupuestoListItem): MenuItem[] {
+    const cached = this.menuCache.get(p.id);
+    if (cached) return cached;
+    const items: MenuItem[] = [
+      {
+        label: 'Versión agregada',
+        icon: 'pi pi-list',
+        command: () => this.descargar(p, 'agregado'),
+      },
+      {
+        label: 'Versión individual',
+        icon: 'pi pi-clone',
+        command: () => this.descargar(p, 'individual'),
+      },
+    ];
+    this.menuCache.set(p.id, items);
+    return items;
   }
 
   private removerDescargando(id: number): void {

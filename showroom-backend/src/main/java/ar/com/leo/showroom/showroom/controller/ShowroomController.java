@@ -632,11 +632,24 @@ public class ShowroomController {
      * partir de los datos guardados (no se almacena el binario), así
      * cualquier mejora del layout se aplica retroactivamente. El número
      * y los datos del cliente quedan congelados al momento de la creación.
+     *
+     * <p>Query param opcional {@code modo}:
+     * <ul>
+     *   <li>{@code agregado}: fuerza el formato tradicional (tabla + total
+     *       + formas globales).</li>
+     *   <li>{@code individual}: fuerza el formato de una hoja por producto.</li>
+     *   <li>(omitido): respeta el modo con el que se generó originalmente.</li>
+     * </ul>
+     * Las formas de pago se recalculan en el service cuando hace falta
+     * cambiar de modo (porque el JSON persistido tiene un solo shape).
      */
     @GetMapping(value = "/presupuesto-comercial/{id}/pdf",
             produces = MediaType.APPLICATION_PDF_VALUE)
-    public ResponseEntity<byte[]> descargarPdfPresupuesto(@PathVariable Long id) {
-        PresupuestoComercialService.Resultado r = presupuestoComercialService.regenerarPdf(id);
+    public ResponseEntity<byte[]> descargarPdfPresupuesto(
+            @PathVariable Long id,
+            @RequestParam(value = "modo", required = false) String modo) {
+        PresupuestoComercialService.Resultado r =
+                presupuestoComercialService.regenerarPdf(id, modo);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,

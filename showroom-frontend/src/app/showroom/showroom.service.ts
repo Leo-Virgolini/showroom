@@ -422,11 +422,21 @@ export class ShowroomService {
   }
 
   /** Descarga el PDF de un presupuesto persistido (regenerado desde los
-   *  JSON guardados al momento de la creación). */
-  descargarPdfPresupuestoComercial(id: number): Observable<HttpResponse<Blob>> {
+   *  JSON guardados al momento de la creación).
+   *
+   *  @param modo Fuerza el formato del PDF:
+   *    - `'agregado'`: tabla + total + formas globales.
+   *    - `'individual'`: una hoja por cada producto.
+   *    - omitido: respeta el modo original con el que se generó. */
+  descargarPdfPresupuestoComercial(
+      id: number,
+      modo?: 'agregado' | 'individual'): Observable<HttpResponse<Blob>> {
+    let params = new HttpParams();
+    if (modo) params = params.set('modo', modo);
     return this.http.get(`${this.base}/presupuesto-comercial/${id}/pdf`, {
       observe: 'response',
       responseType: 'blob',
+      params,
     });
   }
 
