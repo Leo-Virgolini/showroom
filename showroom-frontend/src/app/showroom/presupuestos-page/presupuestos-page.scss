@@ -1,0 +1,250 @@
+:host {
+  display: block;
+}
+
+// =====================================================
+// Paleta KT GASTRO (compartida con el resto del sistema)
+// =====================================================
+$kt-naranja: #FF861C;
+$kt-verde:   #7EBA00;
+$kt-marron:  #3B1E09;
+$kt-amarillo: #a2ab00;
+
+// =====================================================
+// Cards con identidad KT (header naranja sutil + título marrón)
+// =====================================================
+:host ::ng-deep .kt-card {
+  .p-card {
+    background: white;
+    border: 1px solid rgba($kt-naranja, 0.15);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      border-color: rgba($kt-naranja, 0.35);
+    }
+  }
+
+  .p-card-title {
+    padding: 0.85rem 1rem 0.6rem;
+    margin: 0;
+    border-bottom: 1px solid rgba($kt-naranja, 0.1);
+    background: linear-gradient(
+      to right,
+      rgba($kt-naranja, 0.04),
+      transparent 60%
+    );
+  }
+
+  .p-card-body {
+    padding: 1rem;
+  }
+}
+
+// Card de Resumen — destacada con gradiente sutil naranja → verde.
+:host ::ng-deep .kt-card-totales {
+  .p-card {
+    border: 1px solid rgba($kt-naranja, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba($kt-naranja, 0.04) 0%,
+      rgba($kt-verde, 0.04) 100%
+    );
+  }
+}
+
+// =====================================================
+// Título de card: ícono naranja + texto marrón
+// =====================================================
+:host ::ng-deep .kt-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: $kt-marron;
+
+  > i {
+    color: $kt-naranja;
+    font-size: 1.05rem;
+  }
+}
+
+// Dark mode
+:host-context(.dark) ::ng-deep .kt-card-title {
+  color: var(--p-surface-0);
+}
+
+// =====================================================
+// Chip pequeño para indicadores (e.g. "X de Y seleccionados")
+// =====================================================
+:host ::ng-deep .kt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: rgba($kt-verde, 0.12);
+  color: $kt-marron;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+// =====================================================
+// Labels de inputs con ícono naranja
+// =====================================================
+:host ::ng-deep .kt-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--p-text-muted-color);
+  margin-bottom: 0.35rem;
+
+  > i {
+    color: $kt-naranja;
+    font-size: 0.75rem;
+  }
+}
+
+// =====================================================
+// Pill SKU (naranja → marrón) — consistente con el PDF
+// =====================================================
+:host ::ng-deep .kt-sku-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, $kt-naranja, #FF9A3F);
+  color: white;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  width: fit-content;
+  box-shadow: 0 1px 2px rgba($kt-naranja, 0.3);
+}
+
+// =====================================================
+// Tabla con look KT (header marrón sutil)
+// =====================================================
+:host ::ng-deep .kt-table {
+  .p-datatable-thead > tr > th {
+    background: rgba($kt-naranja, 0.05);
+    color: $kt-marron;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid rgba($kt-naranja, 0.2);
+    padding: 0.6rem 0.5rem;
+  }
+
+  .p-datatable-tbody > tr > td {
+    padding: 0.7rem 0.5rem;
+    border-bottom: 1px solid rgba($kt-naranja, 0.08);
+  }
+
+  .p-datatable-tbody > tr:hover > td {
+    background: rgba($kt-naranja, 0.03) !important;
+  }
+}
+
+:host-context(.dark) ::ng-deep .kt-table {
+  .p-datatable-thead > tr > th {
+    color: var(--p-surface-0);
+  }
+}
+
+// =====================================================
+// Input compacto del descuento
+// =====================================================
+:host ::ng-deep .descuento-input {
+  width: 4.5rem;
+}
+
+// =====================================================
+// Cards de formas de pago — barra superior coloreada,
+// consistente con el PDF generado.
+// =====================================================
+:host ::ng-deep .forma-pago-card {
+  position: relative;
+  overflow: hidden;
+  padding: 0.85rem 0.85rem 0.85rem;
+  padding-top: 1.1rem;
+  border-radius: 10px;
+  background: var(--p-surface-50);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px -2px rgba($kt-marron, 0.12);
+  }
+
+  // 10 colores únicos — sincronizado con BORDE_FORMA_PAGO en
+  // PresupuestoComercialPdfGenerator. Si hay más formas que esto, ciclan.
+  &.color-1::before  { background: #eab308; } // amarillo
+  &.color-2::before  { background: #3b82f6; } // azul
+  &.color-3::before  { background: #10b981; } // verde esmeralda
+  &.color-4::before  { background: #f97316; } // naranja
+  &.color-5::before  { background: #a855f7; } // púrpura
+  &.color-6::before  { background: #ec4899; } // rosa
+  &.color-7::before  { background: #06b6d4; } // cian
+  &.color-8::before  { background: #84cc16; } // lima
+  &.color-9::before  { background: #6366f1; } // índigo
+  &.color-10::before { background: #d97706; } // ámbar oscuro
+
+  // Resaltado de "Mejor precio" — barra superior verde (override del color
+  // rotativo asignado por índice) + halo verde alrededor. Consistente con
+  // el PDF, que pinta la barra superior en verde para la card ganadora.
+  &.es-mejor-precio {
+    box-shadow: 0 0 0 2px rgba($kt-verde, 0.5),
+                0 4px 10px -2px rgba($kt-verde, 0.25);
+
+    &::before {
+      background: $kt-verde !important;
+      height: 6px;
+    }
+  }
+}
+
+// Badge "Mejor precio" — flotante en la esquina superior derecha de la card.
+.badge-mejor-precio {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: white;
+  background: $kt-verde;
+  border-radius: 999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+:host-context(.dark) ::ng-deep .forma-pago-card {
+  background: var(--p-surface-900);
+  border-color: rgba(255, 255, 255, 0.05);
+}

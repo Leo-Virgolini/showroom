@@ -7,7 +7,9 @@ import {
   Health,
   PickingEmailEvent,
   PickitExternoEvent,
+  PresupuestoEmailEvent,
   ScanResult,
+  ScanVisorError,
   SesionShowroom,
   SyncEvent,
   WhatsappBusinessEvent,
@@ -48,9 +50,16 @@ export class BackendStatusService {
    *  Se dispara tras DUX OK (automático) o cuando el operador toca el botón
    *  manual desde /pedidos. */
   readonly pickitExternoEvents$ = new Subject<PickitExternoEvent>();
+  /** Resultado del envío del PDF de presupuesto comercial (/presupuestos).
+   *  Se dispara al tocar el botón "Enviar por email" en la pantalla. */
+  readonly presupuestoEmailEvents$ = new Subject<PresupuestoEmailEvent>();
   /** Scans publicados al visor (pantalla espejo en celular). El backend
    *  emite uno cada vez que el operador escanea desde la página principal. */
   readonly scanVisorEvents$ = new Subject<ScanResult>();
+  /** Notificación al visor cuando un scan no encuentra el producto (404).
+   *  El visor lo usa para mostrar un mensaje "código no encontrado" en lugar
+   *  de seguir mostrando el último producto válido. */
+  readonly scanVisorErrorEvents$ = new Subject<ScanVisorError>();
   /** Estado completo del carrito tras cualquier mutación (operador o visor).
    *  Es el único canal de sincronización del carrito entre pantallas. */
   readonly carritoEvents$ = new Subject<CarritoState>();
@@ -265,6 +274,14 @@ export class BackendStatusService {
       }
     });
 
+    src.addEventListener('presupuesto-comercial-email', (e: MessageEvent) => {
+      try {
+        this.presupuestoEmailEvents$.next(JSON.parse(e.data) as PresupuestoEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
     src.addEventListener('pickit-externo', (e: MessageEvent) => {
       try {
         this.pickitExternoEvents$.next(JSON.parse(e.data) as PickitExternoEvent);
@@ -276,6 +293,14 @@ export class BackendStatusService {
     src.addEventListener('scan-visor', (e: MessageEvent) => {
       try {
         this.scanVisorEvents$.next(JSON.parse(e.data) as ScanResult);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('scan-visor-error', (e: MessageEvent) => {
+      try {
+        this.scanVisorErrorEvents$.next(JSON.parse(e.data) as ScanVisorError);
       } catch {
         /* payload malformado, ignoramos */
       }

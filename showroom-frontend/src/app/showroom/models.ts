@@ -221,6 +221,14 @@ export interface PickitExternoEvent {
   clientId: string | null;
 }
 
+/** Notificación al visor cuando el operador escanea un código que no existe
+ *  ni en cache local ni en DUX. El visor muestra un mensaje en lugar del
+ *  último producto válido, para evitar que el cliente confunda el código
+ *  fallido con el producto que tenía en pantalla. */
+export interface ScanVisorError {
+  codigo: string;
+}
+
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
  *  diferenciado cuando un cliente desde /visor agrega algo. */
 export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';
@@ -515,6 +523,99 @@ export interface EscalaDescuento {
 export interface HorarioSync {
   hora: number;
   minuto: number;
+}
+
+// =====================================================
+// Presupuesto comercial (pantalla /presupuestos)
+// =====================================================
+
+/** Ítem de un presupuesto comercial — el operador lo arma en la pantalla
+ *  escaneando productos y eligiendo cantidad + descuento individual.
+ *  Estado UI puro: vive en signals del componente, no se persiste hasta que
+ *  se genera el PDF. */
+export interface PresupuestoItem extends ScanResult {
+  /** Identificador único interno — permite reordenar / borrar sin chocar SKUs duplicados. */
+  uid: string;
+  cantidad: number;
+  /** % de descuento individual aplicado al ítem (0..100). */
+  descuentoPorcentaje: number;
+  /** Si está incluido en el PDF final — el operador puede destildarlo y
+   *  presupuestar solo un subconjunto sin perder los demás del listado. */
+  seleccionado: boolean;
+}
+
+/** Snapshot de una forma de pago precalculada en el frontend. Se manda al
+ *  backend tal cual para que el PDF muestre el precio final sin doble cálculo. */
+export interface PresupuestoFormaPagoSnapshot {
+  id: number | null;
+  nombre: string;
+  recargoPorcentaje: number | null;
+  cantidadCuotas: number | null;
+  aplicaIva: boolean | null;
+  precioFinal: number;
+  descripcion?: string | null;
+  monedaSimbolo?: string | null;
+}
+
+/** Payload del POST /presupuesto-comercial/preview y /enviar (campo `presupuesto`). */
+export interface GenerarPresupuestoRequest {
+  clienteNombre?: string | null;
+  clienteTelefono?: string | null;
+  clienteEmail?: string | null;
+  observaciones?: string | null;
+  /** % de descuento sobre el subtotal (0..100). Se aplica al final, después
+   *  de los descuentos individuales por ítem. */
+  descuentoGlobalPorcentaje?: number;
+  items: {
+    sku: string;
+    descripcion?: string | null;
+    cantidad: number;
+    precioConIva: number;
+    porcIva?: number | null;
+    descuentoPorcentaje?: number | null;
+  }[];
+  formasPago: PresupuestoFormaPagoSnapshot[];
+}
+
+export interface EnviarPresupuestoRequest {
+  email: string;
+  presupuesto: GenerarPresupuestoRequest;
+}
+
+/** Ítem del listado de presupuestos guardados (pantalla /presupuestos/historial). */
+export interface PresupuestoListItem {
+  id: number;
+  creadoAt: string;
+  clienteNombre: string | null;
+  clienteTelefono: string | null;
+  clienteEmail: string | null;
+  totalSinIva: number | null;
+  descuentoGlobalPorcentaje: number | null;
+}
+
+export interface PresupuestoListPage {
+  items: PresupuestoListItem[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface ListarPresupuestosParams {
+  id?: number;
+  q?: string;
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  size?: number;
+}
+
+export type PresupuestoEmailEstado = 'SENT' | 'FAILED';
+
+export interface PresupuestoEmailEvent {
+  estado: PresupuestoEmailEstado;
+  presupuestoId: number;
+  email: string;
+  error?: string | null;
 }
 
 export interface ListarPedidosParams {

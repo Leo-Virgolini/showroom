@@ -52,6 +52,35 @@ export class SyncStateService {
       }
       prev = ahora;
     });
+
+    // Caso "banner pegado": el navegador puede mantener el EventSource con
+    // readyState=OPEN mientras la pestaña está en background (mobile lock,
+    // tab inactiva), pero descartar eventos en ese intervalo. Si el COMPLETED
+    // llegó mientras estábamos en background, el banner queda sin manera
+    // de limpiarse — `connected` nunca pasó por false, así que el effect de
+    // arriba no dispara. Cuando la pestaña vuelve a visible o vuelve la red,
+    // si hay un sync supuestamente en curso, refetcheamos el health para
+    // ver si realmente sigue corriendo en el backend.
+    if (typeof document !== 'undefined') {
+      const onVisible = () => {
+        if (document.visibilityState === 'visible' && this.syncEnCurso()) {
+          this.cargarHealthInicial();
+        }
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      this.destroyRef.onDestroy(() =>
+        document.removeEventListener('visibilitychange', onVisible),
+      );
+    }
+    if (typeof window !== 'undefined') {
+      const onOnline = () => {
+        if (this.syncEnCurso()) this.cargarHealthInicial();
+      };
+      window.addEventListener('online', onOnline);
+      this.destroyRef.onDestroy(() =>
+        window.removeEventListener('online', onOnline),
+      );
+    }
   }
 
   private cargarHealthInicial(): void {

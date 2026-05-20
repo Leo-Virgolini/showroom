@@ -1,5 +1,38 @@
-<div class="min-h-screen bg-gradient-to-b from-orange-50/50 to-white dark:from-surface-950 dark:to-surface-900 flex flex-col">
+<div class="min-h-screen bg-gradient-to-b from-orange-50/50 to-white dark:from-surface-950 dark:to-surface-900 flex flex-col relative">
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <!-- Overlay de "código no encontrado" — se muestra cuando el operador escanea
+       algo que no existe en cache ni en DUX. Lo dejamos fijo arriba para que el
+       cliente lo vea aunque haya scrolleado, pero NO tapamos el último producto
+       válido por si el error vino de un mistake del operador. -->
+  @if (codigoErrado(); as codigo) {
+    <div class="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 pointer-events-none">
+      <div class="visor-error-pop pointer-events-auto w-full max-w-md rounded-2xl border-2 border-red-500/60 bg-white dark:bg-surface-900 shadow-xl overflow-hidden">
+        <div class="bg-red-500 text-white px-4 py-2 flex items-center gap-2 font-bold text-sm">
+          <i class="pi pi-exclamation-triangle"></i>
+          <span>Producto no encontrado</span>
+          <button type="button" class="ml-auto opacity-80 hover:opacity-100"
+            aria-label="Cerrar" (click)="cerrarError()">
+            <i class="pi pi-times"></i>
+          </button>
+        </div>
+        <div class="px-4 py-3 flex items-center gap-3">
+          <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+            <i class="pi pi-times-circle text-red-600 dark:text-red-400 text-2xl"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs text-muted-color">Código escaneado</div>
+            <div class="font-mono font-bold text-base text-[#3B1E09] dark:text-surface-0 truncate">
+              {{ codigo }}
+            </div>
+            <div class="text-xs text-muted-color mt-1">
+              Pedile al vendedor que verifique el código.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 
   <header class="px-4 pt-4 pb-2 flex flex-col items-center gap-2">
     <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
@@ -42,8 +75,9 @@
         </div>
       </div>
 
-      <!-- Tags de estado -->
-      <div class="flex justify-center gap-2 flex-wrap">
+      <!-- Tags de estado — flex-wrap con gap mayor para que se separen bien
+           en mobile y nunca queden encimadas con el texto truncado. -->
+      <div class="flex justify-center gap-x-3 gap-y-2 flex-wrap mt-1">
         @if (r.habilitado === false) {
           <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
         }

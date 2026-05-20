@@ -47,6 +47,17 @@ export class VisorPage {
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
   readonly ultimoScan = signal<ScanResult | null>(null);
 
+  /** Código fallido cuando el operador escanea algo que no existe (404). Se
+   *  muestra como overlay durante {@link ERROR_VISIBLE_MS} y luego se limpia
+   *  automáticamente para volver al producto anterior o al estado "esperando".
+   *  Sin esto el visor seguiría mostrando el último producto válido y el
+   *  cliente pensaría que su código escaneó al producto que ve en pantalla. */
+  readonly codigoErrado = signal<string | null>(null);
+  private readonly ERROR_VISIBLE_MS = 6000;
+  /** Handle del timer que limpia {@link codigoErrado} — guardamos la
+   *  referencia para resetearlo si llega otro error consecutivo. */
+  private errorTimer?: ReturnType<typeof setTimeout>;
+
   /** Nombre del cliente al que se está atendiendo. Null cuando no hay sesión
    *  activa — en ese caso el visor muestra el placeholder genérico. */
   readonly nombreCliente = signal<string | null>(null);
@@ -111,7 +122,16 @@ export class VisorPage {
 
     this.backendStatus.scanVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((scan) => this.ultimoScan.set(scan));
+      .subscribe((scan) => {
+        // Un scan exitoso limpia cualquier error pendiente — el cliente
+        // ya ve el nuevo producto válido en pantalla.
+        this.limpiarError();
+        this.ultimoScan.set(scan);
+      });
+
+    this.backendStatus.scanVisorErrorEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => this.mostrarError(ev.codigo));
 
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
@@ -145,7 +165,32 @@ export class VisorPage {
       this.cantidad.set(1);
     });
 
-    this.destroyRef.onDestroy(() => this.detenerStep());
+    this.destroyRef.onDestroy(() => {
+      this.detenerStep();
+      this.limpiarError();
+    });
+  }
+
+  private mostrarError(codigo: string): void {
+    this.codigoErrado.set(codigo);
+    if (this.errorTimer) clearTimeout(this.errorTimer);
+    this.errorTimer = setTimeout(() => {
+      this.codigoErrado.set(null);
+      this.errorTimer = undefined;
+    }, this.ERROR_VISIBLE_MS);
+  }
+
+  private limpiarError(): void {
+    if (this.errorTimer) {
+      clearTimeout(this.errorTimer);
+      this.errorTimer = undefined;
+    }
+    this.codigoErrado.set(null);
+  }
+
+  /** Botón "Entendido" del overlay — cierra el error manualmente. */
+  cerrarError(): void {
+    this.limpiarError();
   }
 
   /** Dispara un step inmediato y arranca el auto-repeat tras 500ms si el

@@ -524,6 +524,43 @@ public class ShowroomService {
         return obtenerPedido(id);
     }
 
+    /**
+     * Revierte la anulación de un pedido. Restaura el estado previo deduciéndolo
+     * de los timestamps/respuesta que se conservaron al anular:
+     * <ul>
+     *   <li>{@code enviadoAt != null} → DUX había aceptado el pedido → {@link EstadoPedido#ENVIADO}.</li>
+     *   <li>{@code respuestaDux != null} → DUX había rechazado el pedido → {@link EstadoPedido#ERROR}.</li>
+     *   <li>Sino → nunca llegó a DUX → {@link EstadoPedido#PENDIENTE}.</li>
+     * </ul>
+     * Limpia {@code anuladoAt} y {@code motivoAnulacion}. 409 si el pedido no está ANULADO.
+     *
+     * <p>NO toca DUX — si el pedido estaba CARGADO_EN_DUX al anular, igual seguía
+     * existiendo del lado de DUX (la anulación local nunca lo borró allá). Revertir
+     * simplemente sincroniza el sistema con la verdad de DUX.
+     */
+    @Transactional
+    public PedidoDetailDTO reactivarPedido(Long id) {
+        PedidoShowroom p = pedidoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
+        if (p.getEstado() != EstadoPedido.ANULADO) {
+            throw new ConflictException("El pedido no está anulado — no hay nada que revertir");
+        }
+        EstadoPedido estadoOriginal;
+        if (p.getEnviadoAt() != null) {
+            estadoOriginal = EstadoPedido.ENVIADO;
+        } else if (p.getRespuestaDux() != null && !p.getRespuestaDux().isBlank()) {
+            estadoOriginal = EstadoPedido.ERROR;
+        } else {
+            estadoOriginal = EstadoPedido.PENDIENTE;
+        }
+        p.setEstado(estadoOriginal);
+        p.setAnuladoAt(null);
+        p.setMotivoAnulacion(null);
+        pedidoRepository.save(p);
+        log.info("Pedido id={} revertido a estado {}", id, estadoOriginal);
+        return obtenerPedido(id);
+    }
+
     /** Resuelve el nombre de localidad a partir del id (String en el pedido).
      *  Devuelve null si el id no es un Long válido o si no se encuentra. */
     private String resolverLocalidadNombre(String idLocalidadStr) {

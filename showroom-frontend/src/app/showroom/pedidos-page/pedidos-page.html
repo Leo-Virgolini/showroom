@@ -287,6 +287,20 @@
                     tooltipPosition="top"
                   />
                 }
+                @if (puedeReactivar(p)) {
+                  <p-button
+                    icon="pi pi-replay"
+                    severity="success"
+                    [text]="true"
+                    [rounded]="true"
+                    size="small"
+                    [loading]="estaReactivando(p.id)"
+                    (onClick)="pedirReactivar(p)"
+                    ariaLabel="Revertir anulación del pedido"
+                    pTooltip="Revertir anulación del pedido"
+                    tooltipPosition="top"
+                  />
+                }
               </div>
             </td>
           </tr>
@@ -630,6 +644,50 @@
         severity="danger"
         [loading]="estaAnulando(pedidoAAnular()?.id ?? -1)"
         (onClick)="confirmarAnulacion()"
+      />
+    </ng-template>
+  </p-dialog>
+
+  <p-dialog
+    [visible]="pedidoAReactivar() !== null"
+    (visibleChange)="$event ? null : cancelarReactivacion()"
+    [modal]="true"
+    [closable]="!estaReactivando(pedidoAReactivar()?.id ?? -1)"
+    [closeOnEscape]="!estaReactivando(pedidoAReactivar()?.id ?? -1)"
+    header="Revertir anulación"
+    [style]="{ width: '30rem', maxWidth: '95vw' }"
+  >
+    @if (pedidoAReactivar(); as p) {
+      <div class="flex flex-col gap-3 text-sm">
+        <div class="p-3 rounded-lg bg-surface-100 dark:bg-surface-800 border border-surface-300 dark:border-surface-700 text-muted-color text-xs">
+          <i class="pi pi-info-circle"></i>
+          Se va a restaurar el estado previo del pedido y se borrará la fecha y
+          el motivo de anulación. No se toca DUX.
+        </div>
+
+        <div>
+          ¿Revertir la anulación del pedido
+          <span class="font-mono font-semibold">#{{ p.id }}</span>
+          de
+          <span class="font-semibold">{{ nombreCliente(p) ?? '—' }}</span>?
+        </div>
+      </div>
+    }
+
+    <ng-template #footer>
+      <p-button
+        label="Cancelar"
+        severity="secondary"
+        [text]="true"
+        [disabled]="estaReactivando(pedidoAReactivar()?.id ?? -1)"
+        (onClick)="cancelarReactivacion()"
+      />
+      <p-button
+        label="Revertir anulación"
+        icon="pi pi-replay"
+        severity="success"
+        [loading]="estaReactivando(pedidoAReactivar()?.id ?? -1)"
+        (onClick)="confirmarReactivacion()"
       />
     </ng-template>
   </p-dialog>

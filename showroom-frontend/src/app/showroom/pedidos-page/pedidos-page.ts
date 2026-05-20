@@ -99,6 +99,7 @@ export class PedidosPage {
   readonly enviandoWhatsapp = signal<Set<number>>(new Set());
   readonly generandoPickit = signal<Set<number>>(new Set());
   readonly anulandoPedido = signal<Set<number>>(new Set());
+  readonly reactivandoPedido = signal<Set<number>>(new Set());
 
   /** Pedido que el operador eligió anular — null cuando el dialog está cerrado.
    *  Guardamos la fila completa (no solo el id) para mostrar contexto en el
@@ -106,6 +107,9 @@ export class PedidosPage {
   readonly pedidoAAnular = signal<PedidoListItem | null>(null);
   /** Texto del textarea de motivo dentro del dialog de anulación. */
   readonly motivoAnulacion = signal('');
+
+  /** Pedido que el operador eligió revertir — null cuando el dialog está cerrado. */
+  readonly pedidoAReactivar = signal<PedidoListItem | null>(null);
 
   /** Filas expandidas (row expansion del p-table). */
   readonly expanded = signal<Record<number, boolean>>({});
@@ -421,6 +425,56 @@ export class PedidosPage {
       error: (err) => {
         this.marcarDescarga(this.anulandoPedido, p.id, false);
         toastError(this.toast, 'Anular', err, 'No se pudo anular el pedido');
+      },
+    });
+  }
+
+  estaReactivando(id: number): boolean {
+    return this.reactivandoPedido().has(id);
+  }
+
+  /** Un pedido se puede revertir solo si está en estado ANULADO. */
+  puedeReactivar(p: PedidoListItem): boolean {
+    return p.estado === 'ANULADO';
+  }
+
+  /** Abre el diálogo de confirmación para revertir la anulación. */
+  pedirReactivar(p: PedidoListItem): void {
+    if (!this.puedeReactivar(p)) return;
+    this.pedidoAReactivar.set(p);
+  }
+
+  cancelarReactivacion(): void {
+    this.pedidoAReactivar.set(null);
+  }
+
+  confirmarReactivacion(): void {
+    const p = this.pedidoAReactivar();
+    if (!p) return;
+    if (this.estaReactivando(p.id)) return;
+    this.marcarDescarga(this.reactivandoPedido, p.id, true);
+    this.api.reactivarPedido(p.id).subscribe({
+      next: (det) => {
+        this.marcarDescarga(this.reactivandoPedido, p.id, false);
+        this.pedidos.set(
+          this.pedidos().map((x) =>
+            x.id === p.id
+              ? { ...x, estado: det.estado, anuladoAt: det.anuladoAt }
+              : x,
+          ),
+        );
+        this.detalles.set({ ...this.detalles(), [p.id]: det });
+        this.pedidoAReactivar.set(null);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Pedido reactivado',
+          detail: `Pedido #${p.id} restaurado a estado ${this.estadoLabel(det.estado)}.`,
+          life: 3500,
+        });
+      },
+      error: (err) => {
+        this.marcarDescarga(this.reactivandoPedido, p.id, false);
+        toastError(this.toast, 'Reactivar', err, 'No se pudo reactivar el pedido');
       },
     });
   }

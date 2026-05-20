@@ -1,0 +1,159 @@
+<div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-3">
+        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+        </a>
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
+          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+            <i class="pi pi-history text-[#FF861C]"></i> Historial de presupuestos
+          </span>
+          <span class="text-xs text-muted-color">Buscar y reenviar presupuestos generados</span>
+        </div>
+      </div>
+    </ng-template>
+
+    <ng-template #end>
+      <div class="inline-flex gap-2 items-center">
+        <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Nuevo presupuesto' : ''"
+          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
+          pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
+        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
+          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
+          pTooltip="Volver al showroom" tooltipPosition="bottom" />
+      </div>
+    </ng-template>
+  </p-toolbar>
+
+  <main class="flex-1 p-3 sm:p-4 lg:p-6">
+    <p-card>
+      <!-- Filtros -->
+      <div class="flex flex-col md:flex-row gap-3 mb-3">
+        <div class="flex-1">
+          <p-iconfield class="w-full block">
+            <p-inputicon class="pi pi-search" />
+            <input pInputText type="text" class="w-full"
+              [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+              placeholder="Buscar por nombre, email o teléfono..." />
+          </p-iconfield>
+        </div>
+        <p-datepicker [ngModel]="desde()" (ngModelChange)="desde.set($event)"
+          placeholder="Desde" dateFormat="dd/mm/yy" [showIcon]="true" [showButtonBar]="true"
+          class="w-full md:w-44" />
+        <p-datepicker [ngModel]="hasta()" (ngModelChange)="hasta.set($event)"
+          placeholder="Hasta" dateFormat="dd/mm/yy" [showIcon]="true" [showButtonBar]="true"
+          class="w-full md:w-44" />
+        @if (hayFiltros()) {
+          <p-button icon="pi pi-filter-slash" label="Limpiar filtros" severity="secondary"
+            [outlined]="true" (onClick)="limpiarFiltros()" />
+        }
+      </div>
+
+      <!-- Tabla -->
+      <p-table [value]="presupuestos()" dataKey="id"
+        [lazy]="true" (onLazyLoad)="onLazyLoad($event)"
+        [loading]="cargando()"
+        [paginator]="true"
+        [rows]="pageSize()" [totalRecords]="total()" [first]="first()"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        currentPageReportTemplate="{first} - {last} de {totalRecords}"
+        [showCurrentPageReport]="true"
+        stripedRows>
+        <ng-template #header>
+          <tr>
+            <th style="width: 6rem" class="text-center">
+              <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> #
+            </th>
+            <th style="width: 11rem">
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha
+            </th>
+            <th>
+              <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente
+            </th>
+            <th class="text-right" style="width: 10rem">
+              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total s/IVA
+            </th>
+            <th style="width: 8rem" class="text-center">
+              <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
+            </th>
+            <th style="width: 7rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-p>
+          <tr>
+            <td class="text-center font-mono font-bold text-[#FF861C]">
+              {{ p.id }}
+            </td>
+            <td class="text-sm text-surface-700 dark:text-surface-200">
+              {{ p.creadoAt | date: 'short' : undefined : 'es-AR' }}
+            </td>
+            <td>
+              <div class="flex flex-col leading-tight">
+                <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+                  {{ p.clienteNombre || '—' }}
+                </span>
+                <span class="text-xs text-muted-color flex items-center gap-2 flex-wrap">
+                  @if (p.clienteEmail) {
+                    <span class="inline-flex items-center gap-1">
+                      <i class="pi pi-envelope text-[10px]"></i> {{ p.clienteEmail }}
+                    </span>
+                  }
+                  @if (p.clienteTelefono) {
+                    <span class="inline-flex items-center gap-1">
+                      <i class="pi pi-phone text-[10px]"></i> {{ p.clienteTelefono }}
+                    </span>
+                  }
+                </span>
+              </div>
+            </td>
+            <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
+              {{ (p.totalSinIva ?? 0) | currency }}
+            </td>
+            <td class="text-center">
+              @if (p.descuentoGlobalPorcentaje && p.descuentoGlobalPorcentaje > 0) {
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                  {{ p.descuentoGlobalPorcentaje }}%
+                </span>
+              } @else {
+                <span class="text-xs text-muted-color">—</span>
+              }
+            </td>
+            <td>
+              <p-button icon="pi pi-download" severity="secondary" [outlined]="true"
+                size="small" [rounded]="true"
+                [loading]="descargandoPdf().has(p.id)"
+                (onClick)="descargar(p)" pTooltip="Descargar PDF" tooltipPosition="left" />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="6">
+              <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
+                <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
+                  <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>
+                </div>
+                <p class="m-0 text-base font-medium text-[#3B1E09] dark:text-surface-0">
+                  @if (hayFiltros()) {
+                    No hay presupuestos que coincidan con los filtros
+                  } @else {
+                    Todavía no hay presupuestos generados
+                  }
+                </p>
+                <p class="m-0 text-sm">
+                  Armá uno desde la pantalla de Presupuestos.
+                </p>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  </main>
+</div>

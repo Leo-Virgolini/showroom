@@ -73,17 +73,19 @@ public class PresupuestoPdfGenerator {
 
     private static final int PRODUCTOS_POR_PAGINA = 4;
 
-    /** DPI objetivo para las imágenes de productos embebidas. El catalog
-     *  generator usa el mismo valor — 400 DPI es alto pero da margen para
-     *  zoom sin pixelado, y combinado con resize bicúbico mantiene archivos
-     *  livianos. Una imagen original de 3000×3000 a 400 DPI en una celda de
-     *  140 pt se redimensiona a ~778×778 (≈4× reducción lineal, ~16× en bytes). */
-    private static final float TARGET_DPI = 400f;
+    /** DPI objetivo para las imágenes de productos embebidas. 200 DPI alcanza
+     *  para visualización en pantalla/mobile sin pixelado al hacer zoom medio
+     *  (a 140pt de celda → 389×389 px, vs ~186 px que se ven realmente).
+     *  El catalog generator usa 400 DPI pero ese PDF es para impresión; este
+     *  va por SMTP a Gmail, que en uploads de 18+ MB cierra el socket antes
+     *  del ACK 250 y termina en SocketTimeoutException. */
+    private static final float TARGET_DPI = 200f;
 
-    /** Calidad JPEG de las imágenes de productos. 0.85 es buen balance:
-     *  imperceptible para fotos típicas, ~3× más liviano que PNG. El catalog
-     *  usa 0.95 pero ese PDF es para impresión; este es para email/pantalla. */
-    private static final float JPEG_QUALITY = 0.85f;
+    /** Calidad JPEG de las imágenes de productos. 0.78 es imperceptible para
+     *  fotos de producto típicas (fondo blanco, pocos detalles finos) y reduce
+     *  ~25% extra de bytes vs 0.85. El catalog generator usa 0.95 pero ese
+     *  PDF es para impresión; este es para email/pantalla. */
+    private static final float JPEG_QUALITY = 0.78f;
 
     // Tema KT (colores extraídos de KitchenToolsTheme del catalog generator).
     private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);

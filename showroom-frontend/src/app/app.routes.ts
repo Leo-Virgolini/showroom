@@ -40,6 +40,19 @@ export const routes: Routes = [
       import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
   },
   {
+    path: 'presupuestos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/presupuestos-page/presupuestos-page').then((m) => m.PresupuestosPage),
+  },
+  {
+    path: 'presupuestos/historial',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/presupuestos-historial-page/presupuestos-historial-page')
+        .then((m) => m.PresupuestosHistorialPage),
+  },
+  {
     path: 'historial',
     canActivate: [authGuard],
     loadComponent: () =>

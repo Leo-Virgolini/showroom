@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 public class VisorService {
 
     public static final String EVENTO_SCAN = "scan-visor";
+    public static final String EVENTO_SCAN_ERROR = "scan-visor-error";
 
     private final SyncEventService eventService;
 
@@ -33,5 +34,17 @@ public class VisorService {
     public void publicarScan(ScanResultDTO scan) {
         if (scan == null) return;
         eventService.publish(EVENTO_SCAN, scan);
+    }
+
+    /**
+     * Publica al visor que el operador intentó escanear un código que no
+     * existe (404 en {@code /scan/{sku}}). El visor lo recibe vía SSE
+     * {@code scan-visor-error} y muestra un mensaje claro al cliente para
+     * que no se confunda con el último producto válido que sigue en pantalla.
+     */
+    public void publicarScanFallido(String codigo) {
+        if (codigo == null || codigo.isBlank()) return;
+        eventService.publish(EVENTO_SCAN_ERROR,
+                java.util.Map.of("codigo", codigo));
     }
 }

@@ -18,6 +18,9 @@ import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.WhatsappBusinessService;
 import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
+import ar.com.leo.showroom.presupuesto.dto.EnviarPresupuestoRequestDTO;
+import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
+import ar.com.leo.showroom.presupuesto.service.PresupuestoComercialService;
 import ar.com.leo.showroom.sesion.dto.IniciarSesionRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionDetalleDTO;
 import ar.com.leo.showroom.sesion.dto.SesionEnvioEmailRequestDTO;
@@ -94,6 +97,7 @@ public class ShowroomController {
     private final VisorService visorService;
     private final SesionShowroomService sesionShowroomService;
     private final SesionShowroomRepository sesionRepository;
+    private final PresupuestoComercialService presupuestoComercialService;
 
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -108,12 +112,21 @@ public class ShowroomController {
      */
     @GetMapping("/scan/{sku}")
     public ScanResultDTO scan(@PathVariable String sku) {
-        ScanResultDTO result = service.scan(sku);
-        visorService.publicarScan(result);
-        // Registrar en la sesión activa si la hay. No bloquea el flujo si
-        // no hay sesión (operador no inició una) — el registro es best-effort.
-        sesionShowroomService.registrarScan(result);
-        return result;
+        try {
+            ScanResultDTO result = service.scan(sku);
+            visorService.publicarScan(result);
+            // Registrar en la sesión activa si la hay. No bloquea el flujo si
+            // no hay sesión (operador no inició una) — el registro es best-effort.
+            sesionShowroomService.registrarScan(result);
+            return result;
+        } catch (NotFoundException e) {
+            // El código no existe ni en cache ni en DUX. Publicamos al visor
+            // para que el cliente no se confunda viendo el último producto
+            // válido en pantalla. Re-lanzamos para que el operador siga
+            // viendo el 404 + toast en su pantalla.
+            visorService.publicarScanFallido(sku);
+            throw e;
+        }
     }
 
     /**
@@ -444,6 +457,16 @@ public class ShowroomController {
     }
 
     /**
+     * Revierte la anulación de un pedido. Restaura el estado previo según los
+     * timestamps/respuesta_dux preservados al anular. 409 si el pedido no estaba
+     * en estado ANULADO.
+     */
+    @PostMapping("/pedidos/{id}/reactivar")
+    public PedidoDetailDTO reactivarPedido(@PathVariable Long id) {
+        return service.reactivarPedido(id);
+    }
+
+    /**
      * Re-envía manualmente el email del presupuesto (PDF) para un pedido ya
      * existente. El envío es async — la respuesta HTTP solo confirma que se
      * encoló; el resultado real llega vía SSE picking-email (toast en el frontend).
@@ -560,6 +583,87 @@ public class ShowroomController {
                 ? HttpStatus.CREATED
                 : HttpStatus.ACCEPTED; // 202 si quedó local pero DUX falló
         return ResponseEntity.status(status).body(response);
+    }
+
+    // =====================================================
+    // Presupuesto comercial (pantalla /presupuestos) — PDF al cliente,
+    // NO toca DUX. Persiste local con número auto-incremental.
+    // =====================================================
+
+    /**
+     * Genera el PDF de presupuesto comercial, lo persiste con número
+     * definitivo y lo devuelve para descargar. Usado por el botón
+     * "Descargar PDF" del frontend — el operador puede mandárselo manual
+     * al cliente. Cada llamada consume un número de presupuesto.
+     */
+    @PostMapping(value = "/presupuesto-comercial/preview",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> previewPresupuesto(
+            @RequestBody @Valid GenerarPresupuestoRequestDTO body) {
+        PresupuestoComercialService.Resultado r = presupuestoComercialService.generarYPersistir(body);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .header("X-Presupuesto-Id", String.valueOf(r.presupuesto().getId()))
+                .body(r.pdf());
+    }
+
+    /**
+     * Listado paginado de presupuestos comerciales guardados — para la
+     * pantalla {@code /presupuestos/historial}. Filtros opcionales por
+     * texto libre (nombre/email/teléfono), rango de fechas e id puntual
+     * (deep-link). Default: más recientes primero, 50 por página.
+     */
+    @GetMapping("/presupuesto-comercial")
+    public ar.com.leo.showroom.presupuesto.dto.PresupuestoListPageDTO listarPresupuestos(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "desde", required = false) Instant desde,
+            @RequestParam(value = "hasta", required = false) Instant hasta,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
+        return presupuestoComercialService.listar(id, q, desde, hasta, page, size);
+    }
+
+    /**
+     * Descarga el PDF de un presupuesto persistido. Regenera el PDF a
+     * partir de los datos guardados (no se almacena el binario), así
+     * cualquier mejora del layout se aplica retroactivamente. El número
+     * y los datos del cliente quedan congelados al momento de la creación.
+     */
+    @GetMapping(value = "/presupuesto-comercial/{id}/pdf",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> descargarPdfPresupuesto(@PathVariable Long id) {
+        PresupuestoComercialService.Resultado r = presupuestoComercialService.regenerarPdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .body(r.pdf());
+    }
+
+    /**
+     * Genera + persiste + dispara el envío del email al cliente. Async — el
+     * resultado real (SENT/FAILED) llega vía SSE {@code presupuesto-comercial-email}.
+     * Devuelve 202 con el número de presupuesto asignado.
+     */
+    @PostMapping("/presupuesto-comercial/enviar")
+    public ResponseEntity<Map<String, Object>> enviarPresupuesto(
+            @RequestBody @Valid EnviarPresupuestoRequestDTO body) {
+        java.util.Optional<String> motivo = presupuestoComercialService.motivoEmailNoConfigurado();
+        if (motivo.isPresent()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", motivo.get()));
+        }
+        PresupuestoComercialService.Resultado r =
+                presupuestoComercialService.generarYEnviarPorEmail(body.email(), body.presupuesto());
+        return ResponseEntity.accepted().body(Map.of(
+                "message", "Envío encolado — el toast confirmará cuando salga.",
+                "presupuestoId", r.presupuesto().getId(),
+                "email", body.email()));
     }
 
     /**

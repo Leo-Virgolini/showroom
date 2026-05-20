@@ -8,10 +8,13 @@ import {
   CatalogoPage,
   CrearPedidoRequest,
   CrearPedidoResponse,
+  EnviarPresupuestoRequest,
   EscalaDescuento,
   EstadisticasHistorial,
   FormaPago,
+  GenerarPresupuestoRequest,
   Health,
+  ListarPresupuestosParams,
   NotificacionesAutoConfig,
   HorarioSync,
   ListarPedidosParams,
@@ -22,6 +25,7 @@ import {
   PedidoListPage,
   PerfilEtiquetas,
   PickitConfig,
+  PresupuestoListPage,
   ProductoListPage,
   Provincia,
   RefreshStockRequest,
@@ -332,6 +336,13 @@ export class ShowroomService {
     return this.http.post<PedidoDetalle>(`${this.base}/pedidos/${id}/anular`, body);
   }
 
+  /** Revierte la anulación. El backend restaura el estado previo (ENVIADO /
+   *  ERROR / PENDIENTE) en función de los timestamps preservados y limpia
+   *  anuladoAt + motivoAnulacion. Devuelve el detalle actualizado. */
+  reactivarPedido(id: number): Observable<PedidoDetalle> {
+    return this.http.post<PedidoDetalle>(`${this.base}/pedidos/${id}/reactivar`, {});
+  }
+
   // =====================================================
   // Sesión de atención (historial de scans por cliente)
   // =====================================================
@@ -374,6 +385,49 @@ export class ShowroomService {
     if (opts.hasta) params = params.set('hasta', opts.hasta);
     if (opts.topN != null) params = params.set('topN', opts.topN);
     return this.http.get<EstadisticasHistorial>(`${this.base}/historial/estadisticas`, { params });
+  }
+
+  // =====================================================
+  // Presupuesto comercial — pantalla /presupuestos
+  // =====================================================
+
+  /** Genera el PDF de presupuesto y lo devuelve como blob. Persiste la
+   *  cabecera en BD (asigna número) aunque el operador no envíe email. El
+   *  header `X-Presupuesto-Id` viene con el número asignado. */
+  previewPresupuestoComercial(req: GenerarPresupuestoRequest): Observable<HttpResponse<Blob>> {
+    return this.http.post(`${this.base}/presupuesto-comercial/preview`, req, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
+  /** Genera + persiste + envía el PDF al email del cliente (async — el toast
+   *  llega vía SSE `presupuesto-comercial-email`). */
+  enviarPresupuestoComercial(req: EnviarPresupuestoRequest):
+      Observable<{ message: string; presupuestoId: number; email: string }> {
+    return this.http.post<{ message: string; presupuestoId: number; email: string }>(
+      `${this.base}/presupuesto-comercial/enviar`, req);
+  }
+
+  /** Listado paginado de presupuestos guardados con filtros opcionales. */
+  listarPresupuestosComerciales(opts: ListarPresupuestosParams = {}): Observable<PresupuestoListPage> {
+    let params = new HttpParams()
+      .set('page', opts.page ?? 0)
+      .set('size', opts.size ?? 50);
+    if (opts.id != null) params = params.set('id', opts.id);
+    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    if (opts.desde) params = params.set('desde', opts.desde);
+    if (opts.hasta) params = params.set('hasta', opts.hasta);
+    return this.http.get<PresupuestoListPage>(`${this.base}/presupuesto-comercial`, { params });
+  }
+
+  /** Descarga el PDF de un presupuesto persistido (regenerado desde los
+   *  JSON guardados al momento de la creación). */
+  descargarPdfPresupuestoComercial(id: number): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/presupuesto-comercial/${id}/pdf`, {
+      observe: 'response',
+      responseType: 'blob',
+    });
   }
 
   // El stream SSE de /events lo maneja BackendStatusService — su Subject

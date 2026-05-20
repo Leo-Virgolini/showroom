@@ -1,7 +1,29 @@
 // Misma utility que la pantalla principal — agranda el padding/font de los
 // p-tag de estado para que sean legibles desde lejos en una tablet/celular.
+// `gap` separa ícono y texto; `white-space: nowrap` evita que el texto
+// se parta a dos líneas cuando hay varios tags pegados.
 :host ::ng-deep .tag-grande .p-tag {
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.9rem;
   font-size: 0.875rem;
   font-weight: 600;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+// Overlay de "código no encontrado" — entrada animada con slide-down + fade.
+// Tailwind no tiene una utility para esto fuera de la caja; lo definimos acá
+// para mantener el efecto contenido al componente.
+.visor-error-pop {
+  animation: visorErrorPop 0.25s ease-out;
+}
+
+@keyframes visorErrorPop {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
