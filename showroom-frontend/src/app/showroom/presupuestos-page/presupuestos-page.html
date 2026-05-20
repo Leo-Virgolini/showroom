@@ -186,6 +186,34 @@
             </div>
           </ng-template>
 
+          <!-- Toggle de "Separar en alternativas" — solo visible si hay items.
+               Cuando se enciende, se habilita la columna A/B/C en cada fila
+               y el PDF se emite con una hoja por alternativa. -->
+          @if (items().length > 0) {
+            <div class="mb-3 p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center justify-between gap-3 flex-wrap">
+              <label class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-2 cursor-pointer">
+                <p-toggleswitch [ngModel]="modoAlternativas()"
+                  (ngModelChange)="alternarModoAlternativas($event)" />
+                <i class="pi pi-clone text-[#FF861C]"></i>
+                Separar en alternativas
+                <span class="text-xs text-muted-color font-normal hidden sm:inline">
+                  (1 hoja del PDF por alternativa)
+                </span>
+              </label>
+              @if (modoAlternativas()) {
+                <div class="flex items-center gap-2">
+                  <label class="text-xs text-muted-color">¿Cuántas?</label>
+                  <p-inputNumber [ngModel]="cantidadAlternativas()"
+                    (ngModelChange)="actualizarCantidadAlternativas($event)"
+                    [min]="2" [max]="6" [showButtons]="true" buttonLayout="horizontal"
+                    spinnerMode="horizontal"
+                    decrementButtonClass="!p-1" incrementButtonClass="!p-1"
+                    inputStyleClass="w-10 text-center" [allowEmpty]="false" />
+                </div>
+              }
+            </div>
+          }
+
           @if (items().length === 0) {
             <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
               <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
@@ -201,6 +229,11 @@
                   <th style="width: 3rem" class="text-center">
                     <i class="pi pi-check text-[#FF861C]" pTooltip="Incluir en el PDF"></i>
                   </th>
+                  @if (modoAlternativas()) {
+                    <th class="text-center" [style.width.rem]="3 + cantidadAlternativas() * 1.6">
+                      <i class="pi pi-clone text-[#FF861C] mr-1"></i> Alt.
+                    </th>
+                  }
                   <th style="width: 4rem"></th>
                   <th>
                     <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
@@ -227,6 +260,22 @@
                     <p-checkbox [ngModel]="it.seleccionado" [binary]="true"
                       (ngModelChange)="alternarSeleccion(it, $event)" />
                   </td>
+                  @if (modoAlternativas()) {
+                    <td class="text-center">
+                      <div class="inline-flex gap-1 flex-wrap justify-center">
+                        @for (letra of letrasAlternativas(); track letra; let i = $index) {
+                          <button type="button"
+                            class="alternativa-pill"
+                            [class.activa]="(it.alternativa ?? 0) === i"
+                            (click)="asignarAlternativa(it, i)"
+                            [attr.aria-label]="'Asignar a alternativa ' + letra"
+                            [pTooltip]="'Alternativa ' + letra" tooltipPosition="top">
+                            {{ letra }}
+                          </button>
+                        }
+                      </div>
+                    </td>
+                  }
                   <td>
                     @if (it.imagenUrl) {
                       <img [src]="it.imagenUrl" [alt]="it.sku"
@@ -329,30 +378,46 @@
       <div class="flex flex-col gap-4">
 
         @if (haySeleccionados()) {
+          <!-- Card común con el descuento global — siempre visible cuando hay
+               ítems, tanto en modo single como en modo alternativas. -->
           <p-card class="kt-card kt-card-totales sticky top-3">
             <ng-template #title>
               <div class="kt-card-title">
                 <i class="pi pi-credit-card"></i>
-                <span>Formas de pago</span>
+                @if (modoAlternativas()) {
+                  <span>Alternativas y formas de pago</span>
+                } @else {
+                  <span>Formas de pago</span>
+                }
               </div>
             </ng-template>
 
-            <!-- Header de sumario: ítems + descuento global + total s/IVA -->
-            <div class="flex flex-col gap-2 mb-3 pb-3 border-b border-[#FF861C]/15">
+            <!-- Header de sumario: ítems + descuento global. El TOTAL solo se
+                 muestra en modo single; en modo alternativas, cada grupo
+                 muestra su propio total más abajo. -->
+            <div class="flex flex-col gap-2 mb-3"
+              [class.pb-3]="!modoAlternativas()"
+              [class.border-b]="!modoAlternativas()"
+              [class.border-\[\#FF861C\]\/15]="!modoAlternativas()">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs text-muted-color flex items-center gap-1.5">
                   <i class="pi pi-list-check text-[#FF861C]"></i>
                   {{ cantSeleccionados() }} {{ cantSeleccionados() === 1 ? 'ítem' : 'ítems' }}
                 </span>
-                @if (descuentoGlobal() > 0) {
+                @if (descuentoTotalMonto() > 0 && !modoAlternativas()) {
                   <span class="text-xs text-muted-color text-right">
-                    Subtotal: <span class="line-through">{{ subtotalSinIva() | currency }}</span>
+                    Subtotal: <span class="line-through">{{ subtotalBrutoSinIva() | currency }}</span>
                   </span>
                 }
               </div>
 
-              <!-- Input de descuento global -->
-              <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/15">
+              <!-- Input de descuento global — actúa como atajo: al editarlo
+                   se COPIA el % a cada ítem (no se adiciona). Cuando los
+                   ítems tienen descuentos distintos, este input muestra el
+                   % efectivo (descuento total / subtotal bruto). -->
+              <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/15"
+                pTooltip="El % se aplica a cada ítem por igual. Si los ítems tienen descuentos distintos, este campo muestra el % efectivo."
+                tooltipPosition="left">
                 <label for="dctoGlobal" class="text-xs font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 cursor-pointer">
                   <i class="pi pi-percentage text-[#FF861C]"></i>
                   Descuento global
@@ -360,66 +425,157 @@
                 <p-inputNumber inputId="dctoGlobal" [ngModel]="descuentoGlobal()"
                   (ngModelChange)="actualizarDescuentoGlobal($event)"
                   [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
+                  [maxFractionDigits]="2"
                   inputStyleClass="w-16 text-center descuento-input" />
               </div>
 
-              <!-- Total final (con descuento global) -->
-              <div class="flex items-center justify-between gap-2 pt-1">
-                <span class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                  <i class="pi pi-wallet text-[#FF861C]"></i> Total
-                </span>
-                <div class="text-right leading-tight">
-                  <div class="text-xl font-bold text-[#3B1E09] dark:text-surface-0">
-                    {{ totalSinIva() | currency }}
-                  </div>
-                  @if (descuentoGlobal() > 0) {
-                    <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                      Ahorro: {{ descuentoGlobalMonto() | currency }}
+              @if (!modoAlternativas()) {
+                <!-- Total final único (modo single) -->
+                <div class="flex items-center justify-between gap-2 pt-1">
+                  <span class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+                    <i class="pi pi-wallet text-[#FF861C]"></i> Total
+                  </span>
+                  <div class="text-right leading-tight">
+                    <div class="text-xl font-bold text-[#3B1E09] dark:text-surface-0">
+                      {{ totalSinIva() | currency }}
                     </div>
-                  } @else {
-                    <div class="text-[10px] text-muted-color">precios sin IVA</div>
-                  }
+                    @if (descuentoTotalMonto() > 0) {
+                      <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                        Ahorro: {{ descuentoTotalMonto() | currency }}
+                      </div>
+                    } @else {
+                      <div class="text-[10px] text-muted-color">precios sin IVA</div>
+                    }
+                  </div>
                 </div>
-              </div>
+              }
             </div>
 
-            <!-- Lista de formas calculadas — cada una con su precio final -->
-            @if (formasPago().length > 0) {
-              <div class="flex flex-col gap-2.5">
-                @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
-                  <div class="forma-pago-card"
-                    [ngClass]="'color-' + ((i % 10) + 1)"
-                    [class.es-mejor-precio]="i === indiceMejorPrecio()">
-                    @if (i === indiceMejorPrecio()) {
-                      <span class="badge-mejor-precio">
-                        <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
-                      </span>
-                    }
-                    <div class="flex items-center gap-1.5">
-                      <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
-                      <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
-                        {{ f.nombre }}
+            <!-- ======================
+                 MODO SINGLE: 1 lista de formas
+                 ====================== -->
+            @if (!modoAlternativas()) {
+              @if (formasPago().length > 0) {
+                <div class="flex flex-col gap-2.5">
+                  @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
+                    <div class="forma-pago-card"
+                      [ngClass]="'color-' + ((i % 10) + 1)"
+                      [class.es-mejor-precio]="i === indiceMejorPrecio()">
+                      @if (i === indiceMejorPrecio()) {
+                        <span class="badge-mejor-precio">
+                          <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
+                        </span>
+                      }
+                      <div class="flex items-center gap-1.5">
+                        <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
+                        <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
+                          {{ f.nombre }}
+                        </div>
+                      </div>
+                      @if (f.descripcion) {
+                        <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
+                      }
+                      <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
+                        {{ f.precioFinal | currency }}
+                      </div>
+                      @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                        <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
+                          <i class="pi pi-clone text-[10px]"></i>
+                          {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency }}
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="text-xs text-muted-color text-center py-3 flex flex-col items-center gap-1">
+                  <i class="pi pi-info-circle text-[#FF861C]"></i>
+                  No hay formas de pago activas configuradas.
+                </div>
+              }
+            }
+
+            <!-- ======================
+                 MODO ALTERNATIVAS: N secciones, una por grupo
+                 ====================== -->
+            @if (modoAlternativas()) {
+              <div class="flex flex-col gap-4 mt-2">
+                @for (g of gruposAlternativas(); track g.alternativa) {
+                  <div class="rounded-lg border border-[#FF861C]/25 overflow-hidden">
+                    <!-- Header del grupo: letra + total -->
+                    <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#FF861C]/10 border-b border-[#FF861C]/15">
+                      <div class="flex items-center gap-2">
+                        <span class="alternativa-pill activa shrink-0">{{ g.letra }}</span>
+                        <span class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
+                          Alternativa {{ g.alternativa + 1 }}
+                        </span>
+                        <span class="text-[10px] text-muted-color">
+                          ({{ g.cantidadItems }} {{ g.cantidadItems === 1 ? 'ítem' : 'ítems' }})
+                        </span>
+                      </div>
+                      <div class="text-right leading-tight">
+                        @if (g.descuentoEfectivoPorc > 0) {
+                          <div class="text-[10px] text-muted-color line-through">
+                            {{ g.subtotalBrutoSinIva | currency }}
+                          </div>
+                        }
+                        <div class="text-base font-bold text-[#3B1E09] dark:text-surface-0">
+                          {{ g.totalSinIva | currency }}
+                        </div>
+                        @if (g.descuentoEfectivoPorc > 0) {
+                          <div class="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            -{{ g.descuentoEfectivoPorc | number:'1.0-2' }}% off
+                          </div>
+                        } @else {
+                          <div class="text-[9px] text-muted-color">total s/IVA</div>
+                        }
                       </div>
                     </div>
-                    @if (f.descripcion) {
-                      <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
-                    }
-                    <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
-                      {{ f.precioFinal | currency }}
-                    </div>
-                    @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-                      <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
-                        <i class="pi pi-clone text-[10px]"></i>
-                        {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency }}
+                    @if (g.cantidadItems === 0) {
+                      <div class="text-xs text-muted-color text-center py-3 flex items-center justify-center gap-1.5">
+                        <i class="pi pi-inbox text-[#FF861C]"></i>
+                        Sin ítems asignados — el PDF la va a omitir
+                      </div>
+                    } @else if (formasPago().length === 0) {
+                      <div class="text-xs text-muted-color text-center py-3 flex items-center justify-center gap-1.5">
+                        <i class="pi pi-info-circle text-[#FF861C]"></i>
+                        No hay formas de pago configuradas
+                      </div>
+                    } @else {
+                      <div class="flex flex-col gap-2 p-2">
+                        @for (f of g.formas; track f.id; let i = $index) {
+                          <div class="forma-pago-card"
+                            [ngClass]="'color-' + ((i % 10) + 1)"
+                            [class.es-mejor-precio]="i === g.indiceMejorPrecio">
+                            @if (i === g.indiceMejorPrecio) {
+                              <span class="badge-mejor-precio">
+                                <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
+                              </span>
+                            }
+                            <div class="flex items-center gap-1.5">
+                              <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
+                              <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
+                                {{ f.nombre }}
+                              </div>
+                            </div>
+                            @if (f.descripcion) {
+                              <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
+                            }
+                            <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
+                              {{ f.precioFinal | currency }}
+                            </div>
+                            @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                              <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
+                                <i class="pi pi-clone text-[10px]"></i>
+                                {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency }}
+                              </div>
+                            }
+                          </div>
+                        }
                       </div>
                     }
                   </div>
                 }
-              </div>
-            } @else {
-              <div class="text-xs text-muted-color text-center py-3 flex flex-col items-center gap-1">
-                <i class="pi pi-info-circle text-[#FF861C]"></i>
-                No hay formas de pago activas configuradas.
               </div>
             }
           </p-card>

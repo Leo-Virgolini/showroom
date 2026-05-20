@@ -45,22 +45,16 @@ public class PresupuestoComercial {
     @Column(name = "cliente_email", length = 150)
     private String clienteEmail;
 
-    /** Subtotal sin IVA después de aplicar los descuentos individuales por
-     *  línea (PRE descuento global). */
+    /** Total final sin IVA — suma de cada línea con su descuento individual
+     *  aplicado. Es lo que se muestra en el listado del historial. */
     @Column(name = "subtotal_sin_iva", precision = 18, scale = 2)
     private BigDecimal subtotalSinIva;
 
-    /** IVA total (sumando cada línea con su porcIva propio, PRE descuento global). */
-    @Column(name = "iva_total", precision = 18, scale = 2)
-    private BigDecimal ivaTotal;
-
-    /** Total con IVA (PRE descuento global). Base para los cálculos de las
-     *  formas de pago que aplican IVA. */
-    @Column(name = "total_con_iva", precision = 18, scale = 2)
-    private BigDecimal totalConIva;
-
-    /** % de descuento aplicado al subtotal entero (después de los descuentos
-     *  individuales por ítem). 0 = sin descuento global. */
+    /** % EFECTIVO del descuento sobre el subtotal bruto, calculado en el
+     *  frontend al momento de generar el presupuesto. Solo informativo:
+     *  los items en {@link #itemsJson} ya traen sus descuentos individuales
+     *  aplicados, NO se reaplica ningún factor encima (ver feedback del
+     *  2026-05-20). 0 cuando no hubo descuentos. */
     @Column(name = "descuento_global_porcentaje", precision = 5, scale = 2)
     private BigDecimal descuentoGlobalPorcentaje;
 

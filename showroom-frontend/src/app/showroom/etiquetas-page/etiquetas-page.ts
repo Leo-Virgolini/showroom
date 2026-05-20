@@ -6,7 +6,6 @@ import {
   effect,
   inject,
   signal,
-  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -26,8 +25,6 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
-import { Subject, debounceTime } from 'rxjs';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -204,17 +201,6 @@ export class EtiquetasPage {
     () => this.perfiles().find(p => p.id === this.perfilActivoId()) ?? this.perfiles()[0] ?? null,
   );
 
-  /** Flag para suprimir la persistencia del effect cuando estamos cargando
-   *  un perfil distinto (los signals cambian en cascada y no queremos
-   *  pisar la config del perfil que recién activamos). */
-  private cargandoPerfil = false;
-
-  /** Subject que dispara la persistencia debounceada al backend. Cualquier
-   *  cambio en los signals de config emite un void; tras 500ms sin más cambios,
-   *  se hace PUT del perfil activo. Evita martillar el backend por cada
-   *  keystroke en un input numérico. */
-  private readonly persistirSubject = new Subject<void>();
-
   /** Config inicial = valores de fábrica. Los signals la usan como valor
    *  inicial; cuando llega la carga del backend, {@code aplicarConfig} pisa
    *  los signals con la config del perfil activo. */
@@ -383,43 +369,6 @@ export class EtiquetasPage {
 
     this.destroyRef.onDestroy(() => styleEl.remove());
 
-    // Persistencia: cualquier cambio en los signals de config actualiza el
-    // perfil activo en memoria y dispara una emisión al subject. El
-    // suscriptor de abajo lo debouncea y hace PUT al backend.
-    //
-    // Dos defensas contra loops:
-    //  1. {@code perfiles} y {@code perfilActivoId} se leen/escriben con
-    //     {@code untracked} para que el effect NO se dispare por sus cambios —
-    //     solo por los signals de config (los que {@code snapshotConfig} lee).
-    //  2. Comparamos el snapshot con la config ya persistida en el perfil
-    //     activo. Si coinciden (caso típico: acabamos de cargar/cambiar de
-    //     perfil), no hay nada que guardar — short-circuit antes de tocar
-    //     {@code perfiles} y emitir al subject.
-    effect(() => {
-      const config = this.snapshotConfig();
-      const idActivo = untracked(() => this.perfilActivoId());
-      if (idActivo == null) return;
-      const perfilActual = untracked(() => this.perfiles().find(p => p.id === idActivo));
-      if (!perfilActual) return;
-      const configRecord = config as unknown as Record<string, unknown>;
-      // Comparación por JSON — barata para objetos chatos como ConfigPersistida.
-      if (JSON.stringify(perfilActual.config) === JSON.stringify(configRecord)) return;
-      untracked(() => {
-        // Update optimista en memoria — la UI ve el cambio al instante.
-        this.perfiles.set(this.perfiles().map(p =>
-          p.id === idActivo ? { ...p, config: configRecord } : p,
-        ));
-      });
-      this.persistirSubject.next();
-    });
-
-    // Debounce 500ms: si el operador está moviendo +/- en un input, esperamos
-    // a que se quede quieto antes de mandar al backend. Un único PUT con la
-    // config final en vez de N PUTs intermedios.
-    this.persistirSubject
-      .pipe(debounceTime(500), takeUntilDestroyed(this.destroyRef))
-      .subscribe(() => this.persistirPerfilActivo());
-
     this.inicializarPerfiles();
   }
 
@@ -466,23 +415,36 @@ export class EtiquetasPage {
     });
   }
 
-  /** PUT del perfil activo al backend con la config actual de los signals. */
-  private persistirPerfilActivo(): void {
+  /** PUT del perfil activo al backend con la config actual de los signals.
+   *  Disparado por el botón "Guardar perfil" del HTML — el guardado ya no es
+   *  automático, el operador decide cuándo persistir sus cambios. */
+  guardarPerfilActivo(): void {
+    if (this.guardandoPerfil()) return;
     const idActivo = this.perfilActivoId();
     if (idActivo == null) return;
     const actual = this.perfiles().find(p => p.id === idActivo);
     if (!actual) return;
+    const snap = this.snapshotConfig() as unknown as Record<string, unknown>;
+    this.guardandoPerfil.set(true);
     this.api.actualizarPerfilEtiquetas(idActivo, {
       nombre: actual.nombre,
-      config: this.snapshotConfig() as unknown as Record<string, unknown>,
+      config: snap,
     }).subscribe({
       next: (actualizado) => {
+        this.guardandoPerfil.set(false);
         // Refrescamos el perfil con lo que devolvió el backend (incluye
-        // actualizadoAt actualizado). Sin tocar los signals de config para
-        // no disparar otro ciclo del effect.
+        // `actualizadoAt`). Después de esto, `hayCambiosSinGuardar()`
+        // devuelve false porque snapshot == perfil persistido.
         this.perfiles.set(this.perfiles().map(p => p.id === idActivo ? actualizado : p));
+        this.toast.add({
+          severity: 'success',
+          summary: 'Perfil guardado',
+          detail: `Se guardaron los cambios de "${actual.nombre}".`,
+          life: 2500,
+        });
       },
       error: (err) => {
+        this.guardandoPerfil.set(false);
         toastError(this.toast, 'Perfil', err, 'No se pudo guardar el perfil');
       },
     });
@@ -522,38 +484,44 @@ export class EtiquetasPage {
     };
   }
 
-  /** Aplica la config de un perfil a todos los signals. Suprime la persistencia
-   *  durante la cascada de cambios para no pisar el perfil recién activado. */
+  /** Aplica la config de un perfil a todos los signals. */
   private aplicarConfig(c: ConfigPersistida): void {
-    this.cargandoPerfil = true;
-    try {
-      this.formatoHoja.set(c.formatoHoja);
-      this.anchoMm.set(c.anchoMm);
-      this.altoMm.set(c.altoMm);
-      this.etiquetasPorFila.set(c.etiquetasPorFila);
-      this.margenSuperiorMm.set(c.margenSuperiorMm);
-      this.margenInferiorMm.set(c.margenInferiorMm);
-      this.margenIzqMm.set(c.margenIzqMm);
-      this.margenDerMm.set(c.margenDerMm);
-      this.separacionMm.set(c.separacionMm);
-      this.qrSizeMm.set(c.qrSizeMm);
-      this.fontSkuMm.set(c.fontSkuMm);
-      this.fontOrdenMm.set(c.fontOrdenMm);
-      this.fontDescMm.set(c.fontDescMm);
-      this.fontPrecioMm.set(c.fontPrecioMm);
-      this.paddingEtiquetaMm.set(c.paddingEtiquetaMm);
-      this.gapEtiquetaMm.set(c.gapEtiquetaMm);
-      this.textoGapMm.set(c.textoGapMm);
-      this.mostrarSku.set(c.mostrarSku);
-      this.mostrarNumeroOrden.set(c.mostrarNumeroOrden);
-      this.mostrarPrecio.set(c.mostrarPrecio);
-      this.mostrarDescripcion.set(c.mostrarDescripcion);
-    } finally {
-      // Liberamos el flag en un microtask para que el effect que reaccionó al
-      // cambio en cascada vea {@code true} todavía y se saltee la escritura.
-      queueMicrotask(() => { this.cargandoPerfil = false; });
-    }
+    this.formatoHoja.set(c.formatoHoja);
+    this.anchoMm.set(c.anchoMm);
+    this.altoMm.set(c.altoMm);
+    this.etiquetasPorFila.set(c.etiquetasPorFila);
+    this.margenSuperiorMm.set(c.margenSuperiorMm);
+    this.margenInferiorMm.set(c.margenInferiorMm);
+    this.margenIzqMm.set(c.margenIzqMm);
+    this.margenDerMm.set(c.margenDerMm);
+    this.separacionMm.set(c.separacionMm);
+    this.qrSizeMm.set(c.qrSizeMm);
+    this.fontSkuMm.set(c.fontSkuMm);
+    this.fontOrdenMm.set(c.fontOrdenMm);
+    this.fontDescMm.set(c.fontDescMm);
+    this.fontPrecioMm.set(c.fontPrecioMm);
+    this.paddingEtiquetaMm.set(c.paddingEtiquetaMm);
+    this.gapEtiquetaMm.set(c.gapEtiquetaMm);
+    this.textoGapMm.set(c.textoGapMm);
+    this.mostrarSku.set(c.mostrarSku);
+    this.mostrarNumeroOrden.set(c.mostrarNumeroOrden);
+    this.mostrarPrecio.set(c.mostrarPrecio);
+    this.mostrarDescripcion.set(c.mostrarDescripcion);
   }
+
+  /** True si el snapshot actual difiere de la config persistida del perfil
+   *  activo. La UI lo usa para habilitar el botón "Guardar perfil" y mostrar
+   *  un asterisco al lado del nombre cuando hay cambios sin guardar. */
+  readonly hayCambiosSinGuardar = computed(() => {
+    const idActivo = this.perfilActivoId();
+    if (idActivo == null) return false;
+    const perfil = this.perfiles().find(p => p.id === idActivo);
+    if (!perfil) return false;
+    const snap = this.snapshotConfig() as unknown as Record<string, unknown>;
+    return JSON.stringify(perfil.config) !== JSON.stringify(snap);
+  });
+
+  readonly guardandoPerfil = signal(false);
 
   // ===========================================================
   // CRUD de perfiles de impresión (backend)

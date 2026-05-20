@@ -25,6 +25,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
+import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
@@ -69,6 +70,7 @@ import { toastError } from '../toast.utils';
     ProgressSpinnerModule,
     TableModule,
     TextareaModule,
+    ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
   ],
@@ -126,16 +128,26 @@ export class PresupuestosPage implements AfterViewInit {
   private readonly itemsTick = signal(0);
 
   // ------------------------------------------------------------
-  // Datos del cliente / observaciones / descuento global
+  // Datos del cliente / observaciones
   // ------------------------------------------------------------
   readonly clienteNombre = signal('');
   readonly clienteTelefono = signal('');
   readonly clienteEmail = signal('');
   readonly observaciones = signal('');
-  /** Descuento porcentual aplicado al subtotal del presupuesto entero (0–100).
-   *  Se aplica POR ENCIMA de los descuentos individuales por ítem y antes de
-   *  calcular las formas de pago. */
-  readonly descuentoGlobal = signal(0);
+
+  // ------------------------------------------------------------
+  // Modo alternativas — el operador tilda el switch y elige cuántas
+  // alternativas (default 2) para separar el presupuesto en N opciones.
+  // Cada ítem se asigna a una alternativa (A, B, C...) y el PDF emite
+  // una hoja por cada una con su propio detalle + formas de pago.
+  // ------------------------------------------------------------
+  readonly modoAlternativas = signal(false);
+  /** Cantidad de alternativas cuando el modo está activo. Mínimo 2. */
+  readonly cantidadAlternativas = signal(2);
+  /** Letras "A", "B", "C"... para mostrar en los botones de asignación. */
+  readonly letrasAlternativas = computed(() =>
+    Array.from({ length: this.cantidadAlternativas() }, (_, i) =>
+      String.fromCharCode(65 + i)));
 
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
@@ -161,10 +173,22 @@ export class PresupuestosPage implements AfterViewInit {
   readonly cantSeleccionados = computed(() => this.itemsSeleccionados().length);
   readonly haySeleccionados = computed(() => this.cantSeleccionados() > 0);
 
-  /** Subtotal SIN IVA con descuentos individuales aplicados, SIN aplicar el
-   *  descuento global todavía. Lo usamos para mostrar al operador qué precio
-   *  sale antes del descuento global. */
-  readonly subtotalSinIva = computed(() => {
+  /** Subtotal BRUTO sin IVA (sin ningún descuento) — precios de lista
+   *  multiplicados por cantidad. Es la base para calcular el descuento
+   *  efectivo total. */
+  readonly subtotalBrutoSinIva = computed(() => {
+    this.itemsTick();
+    return this.itemsSeleccionados().reduce((acc, it) => {
+      return acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
+    }, 0);
+  });
+
+  /** Total SIN IVA con los descuentos INDIVIDUALES aplicados — es lo que
+   *  paga el cliente. No hay un "descuento global" adicional encima: el
+   *  campo `descuentoGlobal` es solo un reflejo del % efectivo y, cuando
+   *  el operador lo modifica, propaga ese valor a TODOS los descuentos
+   *  individuales. */
+  readonly totalSinIva = computed(() => {
     this.itemsTick();
     return this.itemsSeleccionados().reduce((acc, it) => {
       const precio = it.pvpKtGastroSinIva ?? 0;
@@ -173,9 +197,9 @@ export class PresupuestosPage implements AfterViewInit {
     }, 0);
   });
 
-  /** Subtotal CON IVA con descuentos individuales aplicados, sin descuento
-   *  global. Base interna para calcular las formas de pago que aplican IVA. */
-  readonly subtotalConIva = computed(() => {
+  /** Total CON IVA con descuentos individuales aplicados — base para las
+   *  formas de pago que aplican IVA. */
+  readonly totalConIva = computed(() => {
     this.itemsTick();
     return this.itemsSeleccionados().reduce((acc, it) => {
       const precio = it.pvpKtGastroConIva ?? 0;
@@ -184,26 +208,22 @@ export class PresupuestosPage implements AfterViewInit {
     }, 0);
   });
 
-  /** Total SIN IVA final, con descuento global aplicado. Es el "Total" que
-   *  ve el operador y el cliente en el PDF (consistente con los precios
-   *  s/IVA del scan). */
-  readonly totalSinIva = computed(() => {
-    const factor = 1 - (this.descuentoGlobal() ?? 0) / 100;
-    return this.subtotalSinIva() * factor;
-  });
-
-  /** Total CON IVA final con descuento global — base para las formas de
-   *  pago que aplican IVA. */
-  readonly totalConIva = computed(() => {
-    const factor = 1 - (this.descuentoGlobal() ?? 0) / 100;
-    return this.subtotalConIva() * factor;
-  });
-
-  /** Monto en pesos que se ahorra el cliente por el descuento global, para
-   *  mostrarlo en el resumen. */
-  readonly descuentoGlobalMonto = computed(() =>
-    this.subtotalSinIva() - this.totalSinIva(),
+  /** Suma en pesos de los descuentos individuales (= subtotal bruto - total). */
+  readonly descuentoTotalMonto = computed(() =>
+    this.subtotalBrutoSinIva() - this.totalSinIva(),
   );
+
+  /** % EFECTIVO del descuento sobre el subtotal bruto. Cuando todos los
+   *  ítems llevan el mismo descuento individual coincide con ese %; cuando
+   *  difieren refleja el promedio ponderado por peso de cada línea
+   *  (`descTotal_$ / subtotalBruto × 100`). Se muestra en el input
+   *  "Descuento global" y, si el operador lo edita, ese nuevo % se copia a
+   *  cada ítem (no se "suma" encima). */
+  readonly descuentoGlobal = computed(() => {
+    const bruto = this.subtotalBrutoSinIva();
+    if (bruto <= 0) return 0;
+    return (this.descuentoTotalMonto() / bruto) * 100;
+  });
 
   /** Snapshots de las formas de pago con el precio final ya calculado, listo
    *  para mandar al backend al generar el PDF. */
@@ -231,8 +251,69 @@ export class PresupuestosPage implements AfterViewInit {
    *  final, ignorando las que están en moneda extranjera. -1 si no hay
    *  ganadora clara (lista vacía, una sola, o empate). El backend hace el
    *  mismo cálculo al generar el PDF para mantener consistencia. */
-  readonly indiceMejorPrecio = computed(() => {
-    const formas = this.formasPagoCalculadas();
+  readonly indiceMejorPrecio = computed(() => this.calcularIndiceMejorPrecio(
+    this.formasPagoCalculadas()));
+
+  /** Grupos para el modo alternativas: uno por cada alternativa activa, con
+   *  sus ítems seleccionados, los totales del grupo y las formas de pago
+   *  recalculadas sobre el total del grupo. En modo single (toggle apagado)
+   *  devuelve un array vacío — la UI usa los computed globales en ese caso. */
+  readonly gruposAlternativas = computed<GrupoAlternativa[]>(() => {
+    this.itemsTick();
+    if (!this.modoAlternativas()) return [];
+    const cant = Math.max(1, this.cantidadAlternativas());
+    const seleccionados = this.itemsSeleccionados();
+    const formasBase = this.formasPago();
+
+    const grupos: GrupoAlternativa[] = [];
+    for (let i = 0; i < cant; i++) {
+      const itemsGrupo = seleccionados.filter((it) => (it.alternativa ?? 0) === i);
+      let subtotalBrutoSinIva = 0;
+      let totalSinIva = 0;
+      let totalConIva = 0;
+      for (const it of itemsGrupo) {
+        const pSI = it.pvpKtGastroSinIva ?? 0;
+        const pCI = it.pvpKtGastroConIva ?? 0;
+        const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+        subtotalBrutoSinIva += pSI * it.cantidad;
+        totalSinIva += pSI * factor * it.cantidad;
+        totalConIva += pCI * factor * it.cantidad;
+      }
+      const descMonto = subtotalBrutoSinIva - totalSinIva;
+      const descPorcEfectivo = subtotalBrutoSinIva > 0
+        ? (descMonto / subtotalBrutoSinIva) * 100
+        : 0;
+      const formas: PresupuestoFormaPagoSnapshot[] = formasBase.map((f) => {
+        const recargo = (f.recargoPorcentaje ?? 0) / 100;
+        const aplicaIva = f.aplicaIva ?? true;
+        const base = aplicaIva ? totalConIva : totalSinIva;
+        const precioFinal = base * (1 + recargo);
+        return {
+          id: f.id,
+          nombre: f.nombre,
+          recargoPorcentaje: f.recargoPorcentaje ?? 0,
+          cantidadCuotas: f.cantidadCuotas,
+          aplicaIva,
+          precioFinal,
+          descripcion: this.descripcionForma(f),
+          alternativa: i,
+        };
+      });
+      grupos.push({
+        alternativa: i,
+        letra: String.fromCharCode(65 + i),
+        cantidadItems: itemsGrupo.length,
+        subtotalBrutoSinIva,
+        descuentoEfectivoPorc: descPorcEfectivo,
+        totalSinIva,
+        formas,
+        indiceMejorPrecio: this.calcularIndiceMejorPrecio(formas),
+      });
+    }
+    return grupos;
+  });
+
+  private calcularIndiceMejorPrecio(formas: PresupuestoFormaPagoSnapshot[]): number {
     if (formas.length <= 1) return -1;
     let idx = -1;
     let min: number | null = null;
@@ -245,7 +326,7 @@ export class PresupuestosPage implements AfterViewInit {
     const empates = formas.filter((f) =>
       f.precioFinal === min && !f.monedaSimbolo).length;
     return empates > 1 ? -1 : idx;
-  });
+  }
 
   ngAfterViewInit(): void {
     this.focusInput();
@@ -423,6 +504,10 @@ export class PresupuestosPage implements AfterViewInit {
       cantidad: 1,
       descuentoPorcentaje: 0,
       seleccionado: true,
+      // Por defecto los nuevos items entran a la primera alternativa — si el
+      // modo alternativas está apagado este campo es informativo (se ignora
+      // en el armado del payload).
+      alternativa: 0,
     };
     this.items.set([...actuales, nuevo]);
   }
@@ -453,6 +538,40 @@ export class PresupuestosPage implements AfterViewInit {
     this.itemsTick.update((v) => v + 1);
   }
 
+  /** Asigna el ítem a una alternativa (0-indexed). Mutación in-place + tick
+   *  para no re-renderizar la fila y perder el foco en los inputs. */
+  asignarAlternativa(it: PresupuestoItem, alt: number): void {
+    it.alternativa = alt;
+    this.itemsTick.update((v) => v + 1);
+  }
+
+  /** Encender/apagar el modo alternativas. Cuando se apaga, todos los ítems
+   *  vuelven a la alternativa 0 para que el comportamiento al re-encender
+   *  arranque limpio. */
+  alternarModoAlternativas(activo: boolean): void {
+    this.modoAlternativas.set(activo);
+    if (!activo) {
+      for (const it of this.items()) it.alternativa = 0;
+      this.itemsTick.update((v) => v + 1);
+    }
+  }
+
+  /** Cambia la cantidad de alternativas. Si se reduce, los ítems que
+   *  estaban en alternativas eliminadas vuelven a la 0. */
+  actualizarCantidadAlternativas(cant: number): void {
+    if (!Number.isFinite(cant) || cant < 2) cant = 2;
+    if (cant > 6) cant = 6;
+    this.cantidadAlternativas.set(cant);
+    let reasignado = false;
+    for (const it of this.items()) {
+      if ((it.alternativa ?? 0) >= cant) {
+        it.alternativa = 0;
+        reasignado = true;
+      }
+    }
+    if (reasignado) this.itemsTick.update((v) => v + 1);
+  }
+
   eliminarItem(uid: string): void {
     this.items.set(this.items().filter((it) => it.uid !== uid));
   }
@@ -480,30 +599,46 @@ export class PresupuestosPage implements AfterViewInit {
   // ============================================================
   // Generar / enviar
   // ============================================================
-  /** Setter validado para el descuento global — clampea a 0..100. */
+  /** Cuando el operador escribe en el input "Descuento global", el % se
+   *  COPIA a cada ítem (sobreescribiendo su descuentoPorcentaje individual)
+   *  como atajo cuando todos los ítems llevan el mismo descuento. NO se
+   *  suma sobre los descuentos por línea — esa lógica vieja se descartó.
+   *  El display del input se recalcula automáticamente como % efectivo. */
   actualizarDescuentoGlobal(valor: number): void {
     if (!Number.isFinite(valor) || valor < 0) valor = 0;
     if (valor > 100) valor = 100;
-    this.descuentoGlobal.set(valor);
+    for (const it of this.items()) it.descuentoPorcentaje = valor;
+    this.itemsTick.update((v) => v + 1);
   }
 
-  /** Construye el payload del backend a partir del estado actual. */
+  /** Construye el payload del backend a partir del estado actual.
+   *  En modo single (sin alternativas): items todos con alternativa=0,
+   *  formas calculadas sobre el total global.
+   *  En modo alternativas: items con su alternativa asignada, y formas
+   *  duplicadas por grupo (N formas × M alternativas), cada una con su
+   *  precioFinal recalculado sobre el subtotal del grupo. */
   private armarPayload(): GenerarPresupuestoRequest {
+    const modoAlt = this.modoAlternativas();
+    const items = this.itemsSeleccionados().map((it) => ({
+      sku: it.sku,
+      descripcion: it.descripcion,
+      cantidad: it.cantidad,
+      precioConIva: it.pvpKtGastroConIva ?? 0,
+      porcIva: it.porcIva ?? 21,
+      descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
+      alternativa: modoAlt ? (it.alternativa ?? 0) : 0,
+    }));
+    const formasPago: PresupuestoFormaPagoSnapshot[] = modoAlt
+      ? this.gruposAlternativas().flatMap((g) => g.formas)
+      : this.formasPagoCalculadas().map((f) => ({ ...f, alternativa: 0 }));
     return {
       clienteNombre: this.clienteNombre().trim() || null,
       clienteTelefono: this.clienteTelefono().trim() || null,
       clienteEmail: this.clienteEmail().trim() || null,
       observaciones: this.observaciones().trim() || null,
       descuentoGlobalPorcentaje: this.descuentoGlobal() || 0,
-      items: this.itemsSeleccionados().map((it) => ({
-        sku: it.sku,
-        descripcion: it.descripcion,
-        cantidad: it.cantidad,
-        precioConIva: it.pvpKtGastroConIva ?? 0,
-        porcIva: it.porcIva ?? 21,
-        descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
-      })),
-      formasPago: this.formasPagoCalculadas(),
+      items,
+      formasPago,
     };
   }
 
@@ -637,12 +772,19 @@ export class PresupuestosPage implements AfterViewInit {
     return 'pi pi-tag';
   }
 
+  /** Descripción comercial de la forma de pago que se muestra en la card del
+   *  cliente (PDF + frontend). NO incluye "X% de recargo" — ese % está
+   *  configurado en el sistema sobre el precio CON IVA u s/IVA según la forma,
+   *  no contra el "Mejor precio". Mostrárselo al cliente confunde: ve "10%
+   *  de recargo" cuando en realidad la diferencia vs efectivo es ~33%.
+   *
+   *  Sí mantenemos "X% de descuento" cuando aplica — los descuentos suelen
+   *  ser chicos y se entienden directamente, y son información valiosa
+   *  ("esta forma te da un 5% off"). */
   private descripcionForma(f: FormaPago): string {
     const partes: string[] = [];
     if ((f.recargoPorcentaje ?? 0) < 0) {
       partes.push(`${Math.abs(f.recargoPorcentaje)}% de descuento`);
-    } else if ((f.recargoPorcentaje ?? 0) > 0) {
-      partes.push(`${f.recargoPorcentaje}% de recargo`);
     }
     if ((f.cantidadCuotas ?? 1) > 1) {
       partes.push(`${f.cantidadCuotas} cuotas`);
@@ -652,4 +794,22 @@ export class PresupuestosPage implements AfterViewInit {
     }
     return partes.join(' · ');
   }
+}
+
+/** Grupo de ítems + formas de pago de una alternativa en el modo "separar".
+ *  Solo se construye en {@link PresupuestosPage.gruposAlternativas}; el
+ *  backend recibe items planos + formas planas (cada uno con su
+ *  `alternativa`) y reagrupa por su cuenta. */
+interface GrupoAlternativa {
+  alternativa: number;
+  letra: string;
+  cantidadItems: number;
+  /** Suma de (precio s/IVA × cantidad) sin descuentos — base para el % efectivo. */
+  subtotalBrutoSinIva: number;
+  /** Porcentaje efectivo del descuento dentro del grupo. */
+  descuentoEfectivoPorc: number;
+  /** Suma de (precio s/IVA × cantidad × (1 - descuentoIndividual)) — total final del grupo. */
+  totalSinIva: number;
+  formas: PresupuestoFormaPagoSnapshot[];
+  indiceMejorPrecio: number;
 }

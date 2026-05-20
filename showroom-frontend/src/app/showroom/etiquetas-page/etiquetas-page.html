@@ -148,12 +148,18 @@ SKU003" class="w-full font-mono text-sm"></textarea>
         <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-700">
           <!-- Selector de perfil — el operador puede tener varios setups
                (térmica chica, térmica ancha, A4) y switchear sin reconfigurar
-               todo. Cualquier cambio en los signals de abajo se persiste
-               automáticamente dentro del perfil activo. -->
+               todo. Los cambios en los signals de abajo NO se guardan solos:
+               el operador tiene que pulsar "Guardar perfil" (el asterisco
+               junto al título avisa si hay cambios pendientes). -->
           <h4 class="m-0 mb-2 text-sm text-muted-color font-semibold inline-flex items-center gap-1.5">
             <i class="pi pi-print text-[0.7rem]"></i>Perfil de impresión
+            @if (hayCambiosSinGuardar()) {
+              <span class="text-[#FF861C] font-bold text-base"
+                pTooltip="Hay cambios sin guardar — pulsá 'Guardar perfil'."
+                tooltipPosition="top">*</span>
+            }
           </h4>
-          <div class="flex items-center gap-1 mb-3">
+          <div class="flex items-center gap-1 mb-2">
             <p-select [options]="perfiles()" [ngModel]="perfilActivoId()" (ngModelChange)="cambiarPerfilActivo($event)"
               optionLabel="nombre" optionValue="id" appendTo="body" size="small" class="flex-1 min-w-0" />
             <p-button icon="pi pi-plus" severity="secondary" [text]="true" [rounded]="true" size="small"
@@ -163,6 +169,16 @@ SKU003" class="w-full font-mono text-sm"></textarea>
             <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
               (onClick)="confirmarEliminarPerfil()" [disabled]="perfiles().length <= 1"
               pTooltip="Eliminar este perfil" tooltipPosition="top" />
+          </div>
+          <!-- Botón explícito para persistir los cambios del perfil activo.
+               Se habilita solo cuando hay diferencias entre los signals de
+               config y la versión persistida (computed `hayCambiosSinGuardar`). -->
+          <div class="flex items-center justify-end mb-3">
+            <p-button icon="pi pi-save" label="Guardar perfil" severity="success" size="small"
+              [disabled]="!hayCambiosSinGuardar() || guardandoPerfil()"
+              [loading]="guardandoPerfil()" (onClick)="guardarPerfilActivo()"
+              pTooltip="Persiste los cambios actuales en el perfil activo"
+              tooltipPosition="top" />
           </div>
 
           <h4 class="m-0 mb-2 text-sm text-muted-color font-semibold">Tamaño de etiqueta</h4>

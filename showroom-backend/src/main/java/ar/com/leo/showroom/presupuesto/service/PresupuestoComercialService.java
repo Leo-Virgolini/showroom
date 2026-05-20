@@ -254,9 +254,10 @@ public class PresupuestoComercialService {
     }
 
     private PresupuestoComercial construirEntidad(GenerarPresupuestoRequestDTO datos) {
+        // Total final = suma de cada línea con su descuento individual aplicado.
+        // El campo "descuentoGlobalPorcentaje" del DTO es solo informativo
+        // (% efectivo) y NO se reaplica acá — ver feedback del 2026-05-20.
         BigDecimal subtotalSinIva = BigDecimal.ZERO;
-        BigDecimal subtotalConIva = BigDecimal.ZERO;
-
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
@@ -265,28 +266,15 @@ public class PresupuestoComercialService {
 
             BigDecimal precioConDesc = precio.multiply(
                     BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-            BigDecimal totalLineaConIva = precioConDesc.multiply(cantidad);
             BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal totalLineaSinIva = totalLineaConIva.divide(divisor, 4, RoundingMode.HALF_UP);
-
+            BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
+                    .divide(divisor, 4, RoundingMode.HALF_UP);
             subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
-            subtotalConIva = subtotalConIva.add(totalLineaConIva);
         }
-
-        // Aplicamos el descuento global al subtotal — los snapshots persistidos
-        // y mostrados al cliente ya tienen el descuento aplicado para que las
-        // cifras se vean coherentes con lo que ve en pantalla.
+        BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
         BigDecimal descGlobal = datos.descuentoGlobalPorcentaje() == null
                 ? BigDecimal.ZERO
                 : datos.descuentoGlobalPorcentaje();
-        BigDecimal factor = BigDecimal.ONE.subtract(descGlobal.movePointLeft(2));
-
-        BigDecimal totalSinIva = subtotalSinIva.multiply(factor)
-                .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalConIva = subtotalConIva.multiply(factor)
-                .setScale(2, RoundingMode.HALF_UP);
-        BigDecimal ivaTotal = totalConIva.subtract(totalSinIva)
-                .setScale(2, RoundingMode.HALF_UP);
 
         return PresupuestoComercial.builder()
                 .creadoAt(Instant.now())
@@ -296,8 +284,6 @@ public class PresupuestoComercialService {
                 .observaciones(blankToNull(datos.observaciones()))
                 .descuentoGlobalPorcentaje(descGlobal)
                 .subtotalSinIva(totalSinIva)
-                .ivaTotal(ivaTotal)
-                .totalConIva(totalConIva)
                 .itemsJson(escribirJson(datos.items()))
                 .formasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()))
                 .build();

@@ -10,9 +10,9 @@
 <p-confirmDialog rejectButtonProps='{ "label": "Cancelar", "severity": "secondary", "outlined": true }'
                  acceptButtonProps='{ "label": "Aceptar", "icon": "pi pi-check" }' />
 
-@if (syncState.syncEnCurso() && !esVistaVisor()) {
+@if (syncState.syncEnCurso() && !esVistaVisor() && auth.currentUser()) {
   <div
-    class="sticky top-0 z-50 text-white shadow-md transition-colors duration-500 bg-gradient-to-r {{ bannerClass() }}"
+    class="sticky top-0 z-50 text-white shadow-md transition-colors duration-500 bg-gradient-to-r {{ bannerClass() }} print:hidden"
     role="status"
     aria-live="polite"
   >
@@ -58,7 +58,7 @@
 
 @if (!backendStatus.connected()) {
   <div
-    class="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4"
+    class="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center p-4 print:hidden"
     role="alertdialog"
     aria-modal="true"
     aria-labelledby="backend-down-title"
@@ -90,7 +90,7 @@
     label="Instalar app"
     severity="success"
     [raised]="true"
-    class="!fixed bottom-4 right-4 z-40 shadow-xl"
+    class="!fixed bottom-4 right-4 z-40 shadow-xl print:hidden"
     (onClick)="pwaInstall.instalar()"
     ariaLabel="Instalar la aplicación en este dispositivo"
   />

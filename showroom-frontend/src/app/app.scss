@@ -1,0 +1,7 @@
+// Reservado para estilos scoped al componente App. Las reglas globales de
+// impresión viven en `src/styles.scss` (ahí se ocultan toasts, dialogs y
+// tooltips de PrimeNG que se renderizan vía Portal fuera del árbol).
+//
+// Los overlays propios del template de App (banner de sync, modal "Sin
+// conexión al servidor", botón "Instalar app") llevan la clase Tailwind
+// `print:hidden` directo en su markup.

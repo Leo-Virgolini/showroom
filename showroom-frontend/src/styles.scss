@@ -24,11 +24,22 @@ body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-// El toast y el banner del sync no deben aparecer al imprimir (por ejemplo,
-// desde la página de etiquetas QR).
+// Overlays operativos que NO deben aparecer en la salida del print
+// (Ctrl+P o window.print() desde la página de etiquetas QR, /presupuestos, etc.).
+//
+// El banner de sync, el modal "Sin conexión", el botón "Instalar app", etc.
+// llevan la clase Tailwind `print:hidden` en su markup (más explícito y
+// robusto que un selector posicional). Acá solo cubrimos los componentes
+// PrimeNG que se renderizan vía Portal/Overlay fuera del árbol del
+// componente que los declara, donde `print:hidden` no llega.
 @media print {
   p-toast,
-  app-root > div:first-child {
+  .p-toast,
+  .p-toast-message,
+  .p-dialog-mask,
+  .p-confirmdialog,
+  .p-overlay,
+  .p-tooltip {
     display: none !important;
   }
 }

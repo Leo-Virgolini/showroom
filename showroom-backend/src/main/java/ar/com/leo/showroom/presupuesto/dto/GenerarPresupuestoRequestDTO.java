@@ -48,7 +48,13 @@ public record GenerarPresupuestoRequestDTO(
              *  asume 21 para los cálculos. */
             BigDecimal porcIva,
             /** % de descuento individual aplicado a este ítem (0..100). */
-            @PositiveOrZero BigDecimal descuentoPorcentaje
+            @PositiveOrZero BigDecimal descuentoPorcentaje,
+            /** Índice de alternativa al que pertenece el ítem (0-indexed). Cuando
+             *  el operador activa "Separar en alternativas", cada ítem se asigna
+             *  a una alternativa y el PDF emite una hoja por cada una con su
+             *  propio detalle + formas de pago. Null o 0 = sin separación
+             *  (comportamiento histórico). */
+            Integer alternativa
     ) {}
 
     public record FormaPagoSnapshot(
@@ -65,6 +71,11 @@ public record GenerarPresupuestoRequestDTO(
             String descripcion,
             /** Si la forma se factura en USD/otra moneda — solo informativo
              *  para mostrar "USD" en vez de "$". */
-            String monedaSimbolo
+            String monedaSimbolo,
+            /** Índice de alternativa al que pertenece este snapshot (0-indexed).
+             *  Cuando hay alternativas, el frontend manda len(formasPago) *
+             *  len(alternativas) snapshots con su precioFinal recalculado por
+             *  grupo. Null o 0 cuando no hay separación. */
+            Integer alternativa
     ) {}
 }
