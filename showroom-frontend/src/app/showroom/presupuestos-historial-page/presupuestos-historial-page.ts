@@ -94,6 +94,10 @@ export class PresupuestosHistorialPage {
    *  Debounce para que tipear en el input de búsqueda no dispare un
    *  request por cada letra. */
   private readonly filtroTrigger$ = new Subject<void>();
+  /** Skip del primer disparo del effect (los signals tienen valor inicial,
+   *  así que el effect corre al mount aunque no haya cambio real). Evita
+   *  el doble request inicial junto con {@code onLazyLoad}. */
+  private filtrosInicializados = false;
 
   constructor() {
     this.filtroTrigger$
@@ -107,6 +111,10 @@ export class PresupuestosHistorialPage {
       this.busqueda();
       this.desde();
       this.hasta();
+      if (!this.filtrosInicializados) {
+        this.filtrosInicializados = true;
+        return;
+      }
       this.filtroTrigger$.next();
     });
   }
