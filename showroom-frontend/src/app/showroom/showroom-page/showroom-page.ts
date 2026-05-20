@@ -812,6 +812,11 @@ export class ShowroomPage implements AfterViewInit {
       mq.removeEventListener('change', sync as (e: MediaQueryListEvent) => void),
     );
 
+    // Cancela la request de localidades en vuelo cuando el componente se
+    // destruye. No es un leak crítico (la respuesta sería ignorada igual),
+    // pero evita el warning de Angular Zoneless sobre observables huérfanos.
+    this.destroyRef.onDestroy(() => this.localidadesSub?.unsubscribe());
+
     // En dispositivos táctiles (tablets/phones) reenfocar al click abre el
     // teclado virtual cada vez que tocan algo. Solo activamos el auto-refocus
     // si hay puntero fino (mouse + pistola HID conectada por USB).

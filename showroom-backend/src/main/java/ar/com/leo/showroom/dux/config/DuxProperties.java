@@ -23,7 +23,7 @@ public record DuxProperties(
         if (rateLimitPerSecond <= 0) rateLimitPerSecond = 1.0 / 7.0;
         if (itemsPerPage <= 0) itemsPerPage = 50;
         if (listaPreciosNombre == null || listaPreciosNombre.isBlank()) listaPreciosNombre = "KT GASTRO";
-        if (empresa == null) empresa = new Empresa(0, null, 0, "CONSUMIDOR_FINAL", null);
+        if (empresa == null) empresa = new Empresa(0, null, 0, "CONSUMIDOR_FINAL");
     }
 
     /**
@@ -34,14 +34,7 @@ public record DuxProperties(
             int id,
             String idSucursal,
             int idDeposito,
-            String categoriaFiscalDefault,
-            /** Id del vendedor en DUX. Actualmente {@code SIN USO} — se probaron 12
-             *  variantes de keys en POST /pedido/nuevopedido y DUX las ignora todas
-             *  (asigna el vendedor default atado al token o a la config de sucursal).
-             *  Se mantiene la propiedad por si alguna versión futura de DUX expone
-             *  el campo. La operadora asigna el vendedor manualmente al editar
-             *  el comprobante en DUX UI. Ver detalles en {@code ShowroomService.construirPayloadDux}. */
-            Integer idVendedor
+            String categoriaFiscalDefault
     ) {
         public Empresa {
             if (categoriaFiscalDefault == null || categoriaFiscalDefault.isBlank()) {

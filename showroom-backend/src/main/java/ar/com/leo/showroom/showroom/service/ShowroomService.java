@@ -962,13 +962,13 @@ public class ShowroomService {
             root.put("lugar_entrega", request.domicilio());
             root.put("domicilio", request.domicilio());
         }
-        // Vendedor: NO se puede setear vía API en POST /pedido/nuevopedido (probado el 2026-04-29).
-        // Probamos 12 variantes de keys (id_vendedor, id_personal, idVendedor, idPersonal,
-        // cod_vendedor, id_empleado, idEmpleado, id_persona_personal, personal_id, vendedor_id,
-        // id_persona, vendedor) y DUX siguió asignando el vendedor default (probablemente atado
-        // al token de API o a config de sucursal en DUX UI). El config `dux.empresa.id-vendedor`
-        // queda en application.properties por si alguna versión futura de DUX expone el campo.
-        // La operadora asigna el vendedor manualmente en DUX al editar el comprobante.
+        // NOTE: NO se puede setear el vendedor vía API en POST /pedido/nuevopedido
+        // (probado el 2026-04-29 con 12 variantes de keys: id_vendedor, id_personal,
+        // idVendedor, idPersonal, cod_vendedor, id_empleado, idEmpleado,
+        // id_persona_personal, personal_id, vendedor_id, id_persona, vendedor).
+        // DUX siempre asigna el vendedor default (probablemente atado al token
+        // de API o a la config de sucursal en DUX UI). La operadora asigna el
+        // vendedor manualmente en DUX al editar el comprobante.
         if (StringUtils.hasText(request.codigoProvincia())) root.put("codigo_provincia", request.codigoProvincia());
         if (StringUtils.hasText(request.idLocalidad())) root.put("id_localidad", request.idLocalidad());
         // Tag fijo para que la operadora distinga rápido los pedidos del showroom
