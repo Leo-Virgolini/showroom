@@ -28,6 +28,7 @@ import com.itextpdf.layout.element.IBlockElement;
 import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.properties.BorderRadius;
 import com.itextpdf.layout.properties.HorizontalAlignment;
 import com.itextpdf.layout.properties.TextAlignment;
@@ -76,7 +77,6 @@ public class PresupuestoComercialPdfGenerator {
     private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
     private static final Color KT_MARRON = new DeviceRgb(59, 30, 9);
     private static final Color KT_AZUL_CODIGO_TEXTO = new DeviceRgb(72, 65, 151);
-    private static final Color KT_NARANJA_CODIGO = new DeviceRgb(255, 135, 12);
     private static final Color VERDE_PRECIO = new DeviceRgb(16, 122, 87);
     private static final Color GRIS_OSCURO = new DeviceRgb(45, 45, 45);
     private static final Color GRIS_MEDIO = new DeviceRgb(110, 110, 110);
@@ -92,6 +92,10 @@ public class PresupuestoComercialPdfGenerator {
     private static final Color CHIP_BG_VERDE = new DeviceRgb(216, 244, 230);
     private static final Color CHIP_BG_AZUL = new DeviceRgb(219, 234, 254);
     private static final Color CHIP_FG_AZUL = new DeviceRgb(29, 78, 216);
+    /** Color para el precio tachado dentro del chip azul — gris medio neutro
+     *  que comunica "precio anterior" sin competir con el azul fuerte del
+     *  texto principal. */
+    private static final Color CHIP_TACHADO = new DeviceRgb(90, 90, 90);
 
     /** Colores únicos para los borde-top de las cards de formas de pago.
      *  10 colores bien diferenciados — si hay más formas que esto, ciclan.
@@ -156,7 +160,13 @@ public class PresupuestoComercialPdfGenerator {
                     agregarHeader(doc, presupuesto, logoHeader);
                     agregarCardCliente(doc, presupuesto);
                     agregarHojaItem(doc, it, i + 1, items.size(), datos.formasPago(), sinImagen);
-                    if (i == 0) agregarObservaciones(doc, datos);
+                }
+                // Observaciones al CIERRE del PDF (después del último producto).
+                // Si entran al final de la última hoja, perfecto; si no, iText
+                // las pasa a una hoja extra de cierre — siempre AL FINAL, así
+                // no quedan huérfanas entre dos productos.
+                if (esTextoValido(datos.observaciones())) {
+                    agregarObservaciones(doc, datos);
                 }
             } else {
                 // Modo agregado: tabla detalle + total + formas de pago globales,
@@ -261,35 +271,78 @@ public class PresupuestoComercialPdfGenerator {
         // ni saber cuánto le saldría agregar/quitar unidades.
         BigDecimal cant = item.cantidad();
         BigDecimal desc = item.descuentoPorcentaje();
+        // Producto sin precio cargado en DUX: no podemos calcular formas de
+        // pago (todas darían $0) ni mostrar precio unitario coherente. En
+        // ese caso, ocultamos los chips de precio/descuento y reemplazamos
+        // la columna de formas por un mensaje "Consultar precio".
+        boolean sinPrecio = item.precioConIva() == null || item.precioConIva().signum() <= 0;
         boolean tieneCant = cant != null && cant.signum() > 0;
-        boolean tieneDescuento = desc != null && desc.signum() > 0;
-        // El precio unitario sólo agrega información cuando la cantidad es > 1
-        // (si es 1, el precio unitario coincide con el total de cada forma).
-        boolean tieneUnitario = cant != null && cant.compareTo(BigDecimal.ONE) > 0;
-        if (tieneCant || tieneDescuento || tieneUnitario) {
-            int n = (tieneCant ? 1 : 0) + (tieneDescuento ? 1 : 0) + (tieneUnitario ? 1 : 0);
+        // El descuento solo se muestra si efectivamente hay precio sobre el
+        // que aplicar — sino sería "descuento sobre nada".
+        boolean tieneDescuento = desc != null && desc.signum() > 0 && !sinPrecio;
+        // Chip de precio aparece si:
+        //  - Hay cantidad > 1 (precio unitario es informativo distinto del total).
+        //  - Hay descuento (mostramos el precio actual + el de lista tachado).
+        // No tiene sentido cuando el ítem no tiene precio.
+        boolean cantMayorAUno = cant != null && cant.compareTo(BigDecimal.ONE) > 0;
+        boolean tieneChipPrecio = (cantMayorAUno || tieneDescuento) && !sinPrecio;
+        // tieneChipPrecio ya cubre `tieneDescuento` (es parte de su definición).
+        if (tieneCant || tieneChipPrecio) {
+            int n = (tieneCant ? 1 : 0) + (tieneDescuento ? 1 : 0) + (tieneChipPrecio ? 1 : 0);
+            // Proporciones de columnas según orden: precio (1.6) → desc (0.6, chico)
+            // → cantidad (1). La columna del descuento es la más angosta porque
+            // su contenido ("-5%") es corto y queremos diferenciarla visualmente
+            // como una "etiqueta secundaria" entre los datos más importantes
+            // (precio unitario y cantidad).
             float[] cols = new float[n];
-            for (int i = 0; i < n; i++) cols[i] = 1f;
-            // Width adaptativo: 1 chip → 40%, 2 chips → 70%, 3 chips → 90%.
-            float widthPct = n == 1 ? 40f : (n == 2 ? 70f : 90f);
+            int colIdx = 0;
+            if (tieneChipPrecio) cols[colIdx++] = 1.6f;
+            if (tieneDescuento) cols[colIdx++] = 0.6f;
+            if (tieneCant) cols[colIdx++] = 1f;
+            // Width adaptativo: 1 chip → 40%, 2 chips → 70%, 3 chips → 95%.
+            float widthPct = n == 1 ? 40f : (n == 2 ? 70f : 95f);
             Table chips = new Table(UnitValue.createPercentArray(cols))
                     .setWidth(UnitValue.createPercentValue(widthPct))
                     .setHorizontalAlignment(HorizontalAlignment.CENTER)
                     .setBorder(Border.NO_BORDER)
                     .setMarginBottom(10);
+            // Orden: precio → descuento → cantidad. Cuenta como una "historia"
+            // ascendente: este es el precio, con este descuento, y se llevan
+            // estas unidades. Lo más importante primero (lo que paga el cliente).
+            if (tieneChipPrecio) {
+                // Chip azul con el precio (unitario si cant > 1, sino "Precio").
+                // Si hay descuento, agregamos al lado el precio de lista
+                // tachado en gris para reforzar el ahorro visualmente.
+                BigDecimal precioFinalSinIva = precioUnitarioSinIva(item);
+                String label = cantMayorAUno ? "P. unitario: " : "Precio: ";
+                Paragraph contenido = new Paragraph()
+                        .add(new Text(label + formatPesos(precioFinalSinIva)));
+                if (tieneDescuento) {
+                    BigDecimal listaSinIva = precioListaSinIva(item);
+                    // 4 espacios al tamaño normal (9pt) entre los dos precios
+                    // para que la rayita del tachado no se conecte con el
+                    // precio principal y haya aire visual.
+                    contenido.add(new Text("    ").setFontSize(9));
+                    contenido.add(new Text(formatPesos(listaSinIva)
+                            + (cantMayorAUno ? " c/u" : ""))
+                            .setLineThrough()
+                            .setFontSize(7.5f)
+                            .setFontColor(CHIP_TACHADO));
+                }
+                chips.addCell(chip(contenido, CHIP_FG_AZUL, CHIP_BG_AZUL));
+            }
+            if (tieneDescuento) {
+                // Chip compacto: solo "-X%" (sin la palabra "descuento") con
+                // font + padding más chicos. Se ve como una etiqueta secundaria
+                // al lado del precio principal, no compite visualmente.
+                chips.addCell(chip(
+                        new Paragraph("-" + formatPorcentaje(desc) + "%"),
+                        VERDE_PRECIO, CHIP_BG_VERDE, 8f, 6f));
+            }
             if (tieneCant) {
                 String unidades = cant.compareTo(BigDecimal.ONE) == 0 ? "unidad" : "unidades";
                 chips.addCell(chip(formatCantidad(cant) + " " + unidades,
                         KT_MARRON, CHIP_BG_NARANJA));
-            }
-            if (tieneDescuento) {
-                chips.addCell(chip("-" + formatPorcentaje(desc) + "% descuento",
-                        VERDE_PRECIO, CHIP_BG_VERDE));
-            }
-            if (tieneUnitario) {
-                BigDecimal precioUnitSinIva = precioUnitarioSinIva(item);
-                chips.addCell(chip("P. unitario: " + formatPesos(precioUnitSinIva),
-                        CHIP_FG_AZUL, CHIP_BG_AZUL));
             }
             card.add(chips);
         }
@@ -326,20 +379,48 @@ public class PresupuestoComercialPdfGenerator {
         }
         grid.addCell(celdaFoto);
 
-        // Col 2: lista vertical de formas de pago (precalculadas para este ítem).
+        // Col 2: lista de formas de pago (precalculadas para este ítem).
+        // Si el producto no tiene precio cargado, las formas darían todas $0
+        // — en lugar de mostrar eso reemplazamos por un mensaje "Consultar
+        // precio" más útil para el cliente.
         Cell celdaFormas = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPaddingLeft(12)
-                .setVerticalAlignment(VerticalAlignment.TOP);
+                .setVerticalAlignment(VerticalAlignment.MIDDLE);
 
-        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasItem =
-                filtrarFormasDelItem(todasFormas, item.sku());
-        int indiceMejor = indiceMejorPrecio(formasItem);
-        for (int i = 0; i < formasItem.size(); i++) {
-            celdaFormas.add(buildFilaFormaPagoItem(
-                    formasItem.get(i),
-                    BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length],
-                    i == indiceMejor));
+        if (sinPrecio) {
+            Div aviso = new Div()
+                    .setBackgroundColor(CHIP_BG_NARANJA)
+                    .setBorderRadius(new BorderRadius(10f))
+                    .setPadding(20)
+                    .setHorizontalAlignment(HorizontalAlignment.CENTER);
+            aviso.add(new Paragraph("Consultar precio")
+                    .simulateBold()
+                    .setFontSize(16)
+                    .setFontColor(KT_MARRON)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMargin(0)
+                    .setMarginBottom(6));
+            aviso.add(new Paragraph(
+                    "Este producto no tiene precio publicado. "
+                    + "Comunicate con nosotros para una cotización actualizada.")
+                    .setFontSize(10)
+                    .setFontColor(GRIS_OSCURO)
+                    .setMultipliedLeading(1.3f)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMargin(0));
+            celdaFormas.add(aviso);
+        } else {
+            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasItem =
+                    filtrarFormasDelItem(todasFormas, item.sku());
+            int indiceMejor = indiceMejorPrecio(formasItem);
+            celdaFormas.setVerticalAlignment(VerticalAlignment.TOP);
+            for (int i = 0; i < formasItem.size(); i++) {
+                celdaFormas.add(buildFilaFormaPagoItem(
+                        formasItem.get(i),
+                        BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length],
+                        i == indiceMejor));
+            }
         }
         grid.addCell(celdaFormas);
 
@@ -777,16 +858,29 @@ public class PresupuestoComercialPdfGenerator {
                             .setMargin(0));
             tabla.addCell(celdaCant);
 
-            // Precio (tachado si hay descuento)
+            // Producto sin precio cargado: mostramos "Consultar" en las
+            // columnas de Precio / Total en lugar de "$ 0" — comunica al
+            // cliente que tiene que pedir cotización para este ítem.
+            boolean sinPrecio = precio.signum() <= 0;
+
+            // Precio
             Cell celdaPrecio = new Cell()
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE);
-            celdaPrecio.add(new Paragraph(formatPesos(precio))
-                    .setFontSize(10)
-                    .setFontColor(GRIS_OSCURO)
-                    .setMargin(0));
+            if (sinPrecio) {
+                celdaPrecio.add(new Paragraph("Consultar")
+                        .simulateBold()
+                        .setFontSize(9)
+                        .setFontColor(KT_NARANJA)
+                        .setMargin(0));
+            } else {
+                celdaPrecio.add(new Paragraph(formatPesos(precio))
+                        .setFontSize(10)
+                        .setFontColor(GRIS_OSCURO)
+                        .setMargin(0));
+            }
             tabla.addCell(celdaPrecio);
 
             // Descuento %
@@ -795,7 +889,7 @@ public class PresupuestoComercialPdfGenerator {
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE);
-            if (desc.signum() > 0) {
+            if (!sinPrecio && desc.signum() > 0) {
                 celdaDescuento.add(new Paragraph(formatPorcentaje(desc) + "%")
                         .simulateBold()
                         .setFontSize(10)
@@ -814,12 +908,20 @@ public class PresupuestoComercialPdfGenerator {
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
-                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                    .add(new Paragraph(formatPesos(totalLinea))
-                            .simulateBold()
-                            .setFontSize(11)
-                            .setFontColor(GRIS_OSCURO)
-                            .setMargin(0));
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE);
+            if (sinPrecio) {
+                celdaTotal.add(new Paragraph("Consultar")
+                        .simulateBold()
+                        .setFontSize(9)
+                        .setFontColor(KT_NARANJA)
+                        .setMargin(0));
+            } else {
+                celdaTotal.add(new Paragraph(formatPesos(totalLinea))
+                        .simulateBold()
+                        .setFontSize(11)
+                        .setFontColor(GRIS_OSCURO)
+                        .setMargin(0));
+            }
             tabla.addCell(celdaTotal);
         }
 
@@ -1095,11 +1197,15 @@ public class PresupuestoComercialPdfGenerator {
     // =====================================================
     private void agregarObservaciones(Document doc, GenerarPresupuestoRequestDTO datos) {
         if (!esTextoValido(datos.observaciones())) return;
+        // keepTogether evita que el card de observaciones se parta entre dos
+        // páginas. Si no entra al final de la última hoja, se mueve completo
+        // a una hoja final de cierre.
         Div card = new Div()
                 .setMarginTop(12)
                 .setBackgroundColor(GRIS_CLARO)
                 .setBorderRadius(new BorderRadius(8f))
-                .setPadding(10);
+                .setPadding(10)
+                .setKeepTogether(true);
         card.add(new Paragraph("OBSERVACIONES")
                 .simulateBold()
                 .setFontSize(9)
@@ -1133,24 +1239,47 @@ public class PresupuestoComercialPdfGenerator {
         return precioConDesc.divide(divisor, 2, RoundingMode.HALF_UP);
     }
 
-    /** Construye un chip/pill compacto para mostrar metadata del producto
-     *  (cantidad, descuento, etc.) en el header de la hoja de cotización
-     *  individual. Texto centrado en bold sobre un fondo pastel con esquinas
-     *  redondeadas tipo pill. */
+    /** Precio de lista unitario SIN IVA (sin aplicar el descuento individual).
+     *  Se usa para mostrar el precio tachado encima del precio con descuento
+     *  cuando el ítem tiene un descuento — refuerza visualmente el ahorro. */
+    private static BigDecimal precioListaSinIva(GenerarPresupuestoRequestDTO.Item item) {
+        BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
+        BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
+        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+        return precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+    }
+
+    /** Chip/pill compacto a partir de un String simple — wrapper sobre
+     *  {@link #chip(Paragraph, Color, Color)}. */
     private static Cell chip(String texto, Color colorTexto, Color colorFondo) {
+        return chip(new Paragraph(texto), colorTexto, colorFondo);
+    }
+
+    /** Chip/pill estándar (font 9, padding horizontal 10). */
+    private static Cell chip(Paragraph contenido, Color colorTexto, Color colorFondo) {
+        return chip(contenido, colorTexto, colorFondo, 9f, 10f);
+    }
+
+    /** Chip/pill con tamaño customizable. Permite hacer pills compactas (font
+     *  más chico + menos padding horizontal) cuando el contenido es corto y
+     *  queremos diferenciarla visualmente del resto. Texto en bold sobre un
+     *  fondo pastel con esquinas redondeadas tipo pill. */
+    private static Cell chip(Paragraph contenido, Color colorTexto, Color colorFondo,
+                             float fontSize, float paddingHorizontal) {
+        contenido
+                .simulateBold()
+                .setFontSize(fontSize)
+                .setFontColor(colorTexto)
+                .setBackgroundColor(colorFondo)
+                .setBorderRadius(new BorderRadius(12f))
+                .setPaddings(3, paddingHorizontal, 3, paddingHorizontal)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0);
         return new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPadding(3)
                 .setTextAlignment(TextAlignment.CENTER)
-                .add(new Paragraph(texto)
-                        .simulateBold()
-                        .setFontSize(9)
-                        .setFontColor(colorTexto)
-                        .setBackgroundColor(colorFondo)
-                        .setBorderRadius(new BorderRadius(12f))
-                        .setPaddings(3, 10, 3, 10)
-                        .setTextAlignment(TextAlignment.CENTER)
-                        .setMargin(0));
+                .add(contenido);
     }
 
     private static Cell celdaHeader(String texto) {

@@ -120,7 +120,7 @@ export class PresupuestosPage implements AfterViewInit {
   private scanSeq = 0;
   /** Lista de ítems del presupuesto — orden de agregado preservado.
    *  Solo se reemplaza el array al AGREGAR o ELIMINAR ítems; las ediciones
-   *  inline (cantidad, descuento, checkbox) mutan el objeto in-place para no
+   *  inline (cantidad, descuento) mutan el objeto in-place para no
    *  re-renderizar la fila completa de la tabla — sino p-inputNumber pierde
    *  el foco con cada keystroke al recibir un writeValue desde afuera. */
   readonly items = signal<PresupuestoItem[]>([]);
