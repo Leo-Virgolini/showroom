@@ -283,7 +283,7 @@ export class ShowroomPage implements AfterViewInit {
   readonly menuExtras: MenuItem[] = [
     { label: 'Consultas', items: [
       { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
-      { label: 'Historial', icon: 'pi pi-history', routerLink: '/historial' },
+      { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
       { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
     ]},
     { label: 'Herramientas', items: [
@@ -611,8 +611,7 @@ export class ShowroomPage implements AfterViewInit {
       c.nroDoc != null &&
       this.cuitValido(c.nroDoc) &&
       this.emailValido(c.email) &&
-      this.carrito().length > 0 &&
-      !this.hayItemsExcedidos()
+      this.carrito().length > 0
     );
   });
 
@@ -1123,15 +1122,23 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /** Un producto es vendible cuando está habilitado, tiene stock disponible y
-   *  además tiene un precio cargado en la lista KT GASTRO. Si el precio es 0
-   *  o null, lo más probable es que DUX no tenga ese item en la lista — agregarlo
-   *  generaría un pedido fantasma sin total. */
+  /** Un producto es vendible cuando está habilitado y tiene un precio cargado
+   *  en la lista KT GASTRO. Si el precio es 0/null, lo más probable es que DUX
+   *  no tenga ese item en la lista — agregarlo generaría un pedido fantasma
+   *  sin total. El stock NO bloquea el agregado: si el operador quiere reservar
+   *  un item sin stock disponible, el carrito lo acepta como excedido (rojo)
+   *  y el operador decide si lo deja para reposición o lo quita. */
   productoVendible(r: ScanResult): boolean {
     if (r.habilitado === false) return false;
-    if (r.stockTotal != null && r.stockTotal <= 0) return false;
     if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) return false;
     return true;
+  }
+
+  /** True si el producto se va a agregar "forzando" porque no tiene stock
+   *  disponible. Sirve tanto para mostrar un toast informativo distinto como
+   *  para flaguear el request al backend (que sino recortaría a 0). */
+  private sinStockDisponible(r: ScanResult): boolean {
+    return r.stockTotal != null && r.stockTotal <= 0;
   }
 
   agregarAlCarrito(cantidad: number = 1): void {
@@ -1140,9 +1147,7 @@ export class ShowroomPage implements AfterViewInit {
     if (!this.productoVendible(r)) {
       const motivo = r.habilitado === false
         ? 'el producto está deshabilitado'
-        : (r.stockTotal != null && r.stockTotal <= 0)
-          ? 'no tiene stock disponible'
-          : 'no tiene precio cargado en la lista KT GASTRO';
+        : 'no tiene precio cargado en la lista KT GASTRO';
       this.toast.add({
         severity: 'warn',
         summary: 'No se puede agregar',
@@ -1151,7 +1156,8 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     const cant = cantidad <= 0 ? 1 : cantidad;
-    this.api.agregarItemCarrito(r.sku, cant).subscribe({
+    const forzar = this.sinStockDisponible(r);
+    this.api.agregarItemCarrito(r.sku, cant, forzar).subscribe({
       next: (res) => {
         // El SSE carrito-updated ya va a llegar (con el state nuevo); igual
         // tocamos `this.carrito` con el state del response para no esperar
@@ -1163,6 +1169,17 @@ export class ShowroomPage implements AfterViewInit {
             summary: 'Sin stock',
             detail: `${r.sku}: ${res.motivo ?? 'no se pudieron sumar unidades.'}`,
           });
+        } else if (forzar) {
+          // Forzado por el operador: el item se agregó aunque no haya stock.
+          // Lo marcamos como warn (no success) para que el operador note que
+          // queda como excedido y tendrá que resolverlo antes del pedido a DUX.
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Agregado sin stock',
+            detail: `${r.sku} x${res.cantidadAgregada} — queda como pendiente de reposición.`,
+            life: 4000,
+          });
+          this.flashItemCarrito(r.sku);
         } else {
           this.toast.add({
             severity: res.recortado ? 'warn' : 'success',
@@ -1656,14 +1673,6 @@ export class ShowroomPage implements AfterViewInit {
    *  3. Manda el pedido a DUX.
    */
   confirmarEnvio(): void {
-    if (this.hayItemsExcedidos()) {
-      this.toast.add({
-        severity: 'warn',
-        summary: 'Hay items que superan el stock',
-        detail: 'Ajustá las cantidades antes de enviar a DUX.',
-      });
-      return;
-    }
     if (!this.puedeEnviar()) {
       this.toast.add({
         severity: 'warn',
@@ -1738,6 +1747,14 @@ export class ShowroomPage implements AfterViewInit {
         this.enviarPedido();
       },
     });
+  }
+
+  /** Botón "Enviar igual" del dialog de stock insuficiente — el operador eligió
+   *  mandar el pedido a DUX aunque haya items con cantidad > stock disponible.
+   *  Cierra el dialog y dispara el envío sin re-validar contra DUX. */
+  enviarIgualConExcedidos(): void {
+    this.mostrarDialogExcedidos.set(false);
+    this.enviarPedido();
   }
 
   /** Manda el pedido a DUX con los datos actuales del carrito y del cliente.

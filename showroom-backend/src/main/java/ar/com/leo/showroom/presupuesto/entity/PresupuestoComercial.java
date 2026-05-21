@@ -45,6 +45,13 @@ public class PresupuestoComercial {
     @Column(name = "cliente_email", length = 150)
     private String clienteEmail;
 
+    /** Rubro comercial del cliente (bar, restaurant, panadería, etc.) o un
+     *  texto libre cuando el operador eligió "Otros". Lo usa el equipo
+     *  comercial para segmentar y armar campañas dirigidas. Opcional —
+     *  null cuando no se completó. */
+    @Column(name = "rubro", length = 100)
+    private String rubro;
+
     /** Total final sin IVA — suma de cada línea con su descuento individual
      *  aplicado. Es lo que se muestra en el listado del historial. */
     @Column(name = "subtotal_sin_iva", precision = 18, scale = 2)

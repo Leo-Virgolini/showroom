@@ -6,285 +6,248 @@
        cliente lo vea aunque haya scrolleado, pero NO tapamos el último producto
        válido por si el error vino de un mistake del operador. -->
   @if (codigoErrado(); as codigo) {
-    <div class="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 pointer-events-none">
-      <div class="visor-error-pop pointer-events-auto w-full max-w-md rounded-2xl border-2 border-red-500/60 bg-white dark:bg-surface-900 shadow-xl overflow-hidden">
-        <div class="bg-red-500 text-white px-4 py-2 flex items-center gap-2 font-bold text-sm">
-          <i class="pi pi-exclamation-triangle"></i>
-          <span>Producto no encontrado</span>
-          <button type="button" class="ml-auto opacity-80 hover:opacity-100"
-            aria-label="Cerrar" (click)="cerrarError()">
-            <i class="pi pi-times"></i>
-          </button>
+  <div class="fixed inset-x-0 top-0 z-50 flex justify-center px-3 pt-3 pointer-events-none">
+    <div class="visor-error-pop pointer-events-auto w-full max-w-md rounded-2xl border-2 border-red-500/60 bg-white dark:bg-surface-900 shadow-xl overflow-hidden">
+      <div class="bg-red-500 text-white px-4 py-2 flex items-center gap-2 font-bold text-sm">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>Producto no encontrado</span>
+        <button type="button" class="ml-auto opacity-80 hover:opacity-100" aria-label="Cerrar" (click)="cerrarError()">
+          <i class="pi pi-times"></i>
+        </button>
+      </div>
+      <div class="px-4 py-3 flex items-center gap-3">
+        <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+          <i class="pi pi-times-circle text-red-600 dark:text-red-400 text-2xl"></i>
         </div>
-        <div class="px-4 py-3 flex items-center gap-3">
-          <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-950/40 flex items-center justify-center shrink-0">
-            <i class="pi pi-times-circle text-red-600 dark:text-red-400 text-2xl"></i>
+        <div class="min-w-0">
+          <div class="text-xs text-muted-color">Código escaneado</div>
+          <div class="font-mono font-bold text-base text-[#3B1E09] dark:text-surface-0 truncate">
+            {{ codigo }}
           </div>
-          <div class="min-w-0">
-            <div class="text-xs text-muted-color">Código escaneado</div>
-            <div class="font-mono font-bold text-base text-[#3B1E09] dark:text-surface-0 truncate">
-              {{ codigo }}
-            </div>
-            <div class="text-xs text-muted-color mt-1">
-              Pedile al vendedor que verifique el código.
-            </div>
+          <div class="text-xs text-muted-color mt-1">
+            Pedile al vendedor que verifique el código.
           </div>
         </div>
       </div>
     </div>
+  </div>
   }
 
   <header class="px-4 pt-4 pb-2 flex flex-col items-center gap-2">
     <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
     @if (nombreCliente(); as nombre) {
-      <!-- Pill compacto centrado — usa inline-flex para encogerse al contenido
+    <!-- Pill compacto centrado — usa inline-flex para encogerse al contenido
            y dejar al header (flex-col items-center) hacer el centering.
            Wrap intermedio con `items-baseline` para que "ATENDIENDO A"
            (mayúsculas, sin descenders) y "Leo" (mixta) compartan baseline
            visual. El ícono va aparte porque no tiene baseline real → se
            centra por items-center del wrapper externo. -->
-      <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full">
-        <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 inline-flex items-center gap-2">
-          <i class="pi pi-user text-[#FF861C] text-base"></i>
-          <span class="inline-flex items-baseline gap-2">
-            <span class="text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Atendiendo a</span>
-            <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0 truncate">{{ nombre }}</span>
-          </span>
-        </div>
+    <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full">
+      <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 inline-flex items-center gap-2">
+        <i class="pi pi-user text-[#FF861C] text-base"></i>
+        <span class="inline-flex items-baseline gap-2">
+          <span class="text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Atendiendo a</span>
+          <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0 truncate">{{ nombre }}</span>
+        </span>
       </div>
+    </div>
     }
   </header>
 
   @if (ultimoScan(); as r) {
-    <main class="flex-1 flex flex-col gap-4 px-4 pb-6">
-      <!-- Imagen grande -->
-      @if (r.imagenUrl) {
-        <div class="rounded-2xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 p-3 flex items-center justify-center">
-          <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true"
-            imageClass="w-full max-h-[55vh] object-contain rounded-md cursor-zoom-in" />
-        </div>
-      }
+  <main class="flex-1 flex flex-col gap-4 px-4 pb-6">
+    <!-- Imagen grande -->
+    @if (r.imagenUrl) {
+    <div class="rounded-2xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 p-3 flex items-center justify-center">
+      <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true" imageClass="w-full max-h-[55vh] object-contain rounded-md cursor-zoom-in" />
+    </div>
+    }
 
-      <!-- SKU + descripción -->
-      <div class="flex flex-col gap-2 px-1">
-        <div class="font-mono text-3xl sm:text-4xl font-bold tracking-wide text-primary text-center">
-          {{ r.sku }}
+    <!-- SKU + descripción -->
+    <div class="flex flex-col gap-2 px-1">
+      <div class="font-mono text-3xl sm:text-4xl font-bold tracking-wide text-primary text-center">
+        {{ r.sku }}
+      </div>
+      <div class="text-surface-700 dark:text-surface-200 text-base sm:text-lg text-center">
+        {{ r.descripcion ?? '—' }}
+      </div>
+    </div>
+
+    <!-- Tags de estado — flex-wrap con gap mayor para que se separen bien
+           en mobile y nunca queden encimadas con el texto truncado.
+           gap-x grande porque los `.tag-grande` usan `transform: scale(1.3)`:
+           visualmente son más anchos pero el footprint de layout no escaló. -->
+    <div class="flex justify-center gap-x-10 gap-y-4 flex-wrap mt-1">
+      @if (r.habilitado === false) {
+      <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
+      }
+      @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva
+      <= 0) { <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
+      }
+      @if (r.stockTotal != null && r.stockTotal > 0) {
+      <p-tag severity="info" [value]="'Stock: ' + r.stockTotal" icon="pi pi-box" class="tag-grande" />
+      }
+    </div>
+
+    <!-- Banner sin stock — texto pensado para el cliente (no el operador):
+           le pedimos que consulte al vendedor antes de cerrar el pedido. -->
+    @if (r.stockTotal != null && r.stockTotal <= 0) { <div class="rounded-xl border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 flex items-center gap-3">
+      <i class="pi pi-exclamation-triangle text-red-600 dark:text-red-400 text-3xl shrink-0"></i>
+      <div class="flex-1 min-w-0">
+        <div class="font-bold text-red-700 dark:text-red-400 text-base sm:text-lg">
+          Sin stock disponible
         </div>
-        <div class="text-surface-700 dark:text-surface-200 text-base sm:text-lg text-center">
-          {{ r.descripcion ?? '—' }}
+        <div class="text-sm text-red-700/80 dark:text-red-300/80">
+          Consultalo con el vendedor antes de cerrar el pedido.
         </div>
       </div>
+</div>
+}
 
-      <!-- Tags de estado — flex-wrap con gap mayor para que se separen bien
-           en mobile y nunca queden encimadas con el texto truncado. -->
-      <div class="flex justify-center gap-x-3 gap-y-2 flex-wrap mt-1">
-        @if (r.habilitado === false) {
-          <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
-        }
-        @if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) {
-          <p-tag severity="danger" value="Sin precio" icon="pi pi-dollar" class="tag-grande" />
-        }
-        @if (r.stockTotal != null && r.stockTotal > 0) {
-          <p-tag severity="info" [value]="'Stock: ' + r.stockTotal" icon="pi pi-box" class="tag-grande" />
+<!-- Banner stock no confirmado (DUX no devolvió cantidad). El cliente
+           no necesita saber el detalle técnico; le sugerimos consultar. -->
+@if (r.stockTotal == null && r.habilitado !== false) {
+<div class="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-3">
+  <i class="pi pi-question-circle text-amber-600 dark:text-amber-400 text-3xl shrink-0"></i>
+  <div class="flex-1 min-w-0">
+    <div class="font-bold text-amber-700 dark:text-amber-400 text-base sm:text-lg">
+      Stock por confirmar
+    </div>
+    <div class="text-sm text-amber-700/80 dark:text-amber-300/80">
+      Consultalo con el vendedor.
+    </div>
+  </div>
+</div>
+}
+
+<!-- Precio principal -->
+@if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
+<div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm">
+  <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2 text-center">
+    Precio
+  </div>
+  <div class="flex items-baseline gap-2 flex-wrap justify-center">
+    <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
+    <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">
+      {{ r.pvpKtGastroSinIva | number:'1.0-0' }}
+    </span>
+  </div>
+</div>
+
+<!-- Tiles de descuento — uno por escala configurada -->
+@if (escalasOrdenadas().length > 0) {
+<div class="flex flex-col gap-2">
+  <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
+    Comprá más y ahorrás
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+    @let c = escalaColorScheme(i);
+    <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity" [class]="c.border + ' ' + c.bg" [class.opacity-50]="haySuperior(r.pvpKtGastroSinIva, escala)">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
+          −{{ escala.porcentaje }}%
+        </span>
+        @if (haySuperior(r.pvpKtGastroSinIva, escala)) {
+        <span class="text-[0.7rem] font-medium italic" [class]="c.textItalic">
+          Superado por mejor descuento
+        </span>
+        } @else if (r.pvpKtGastroSinIva >= escala.umbralMin) {
+        <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold" [class]="c.textTitle">
+          <i class="pi pi-check-circle text-[0.75rem]"></i>
+          Aplicado
+        </span>
+        } @else {
+        <span class="text-[0.7rem] font-medium" [class]="c.textTitle">
+          Por compras desde {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
+        </span>
         }
       </div>
+      <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
+        {{ precioConDescuento(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
+      </div>
+      <div class="text-xs inline-flex items-center gap-1" [class]="c.textSmall">
+        <i class="pi pi-arrow-down text-[0.65rem]"></i>
+        Ahorrás {{ ahorro(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }} c/u
+      </div>
+    </div>
+    }
+  </div>
+</div>
+}
+}
 
-      <!-- Banner sin stock -->
-      @if (r.stockTotal != null && r.stockTotal <= 0) {
-        <div class="rounded-xl border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 flex items-center gap-3">
-          <i class="pi pi-exclamation-triangle text-red-600 dark:text-red-400 text-3xl shrink-0"></i>
-          <div class="flex-1 min-w-0">
-            <div class="font-bold text-red-700 dark:text-red-400 text-base sm:text-lg">
-              Sin stock disponible
-            </div>
-            <div class="text-sm text-red-700/80 dark:text-red-300/80">
-              Consultá disponibilidad.
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- Banner stock no confirmado (DUX no devolvió cantidad) — distinto del
-           "sin stock" porque no sabemos si hay o no. El cliente no puede sumar
-           desde acá; el operador confirma manualmente. -->
-      @if (r.stockTotal == null && r.habilitado !== false) {
-        <div class="rounded-xl border-2 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-4 flex items-center gap-3">
-          <i class="pi pi-question-circle text-amber-600 dark:text-amber-400 text-3xl shrink-0"></i>
-          <div class="flex-1 min-w-0">
-            <div class="font-bold text-amber-700 dark:text-amber-400 text-base sm:text-lg">
-              Stock por confirmar
-            </div>
-            <div class="text-sm text-amber-700/80 dark:text-amber-300/80">
-              Consultalo con el vendedor.
-            </div>
-          </div>
-        </div>
-      }
-
-      <!-- Precio principal -->
-      @if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
-        <div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm"
-             [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
-          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2 text-center">
-            Precio
-          </div>
-          <div class="flex items-baseline gap-2 flex-wrap justify-center">
-            <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
-            <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">
-              {{ r.pvpKtGastroSinIva | number:'1.0-0' }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Tiles de descuento — uno por escala configurada -->
-        @if (escalasOrdenadas().length > 0) {
-          <div class="flex flex-col gap-2"
-               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
-            <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
-              Comprá más y ahorrás
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
-                @let c = escalaColorScheme(i);
-                <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity"
-                     [class]="c.border + ' ' + c.bg"
-                     [class.opacity-50]="haySuperior(r.pvpKtGastroSinIva, escala)">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
-                      −{{ escala.porcentaje }}%
-                    </span>
-                    @if (haySuperior(r.pvpKtGastroSinIva, escala)) {
-                      <span class="text-[0.7rem] font-medium italic" [class]="c.textItalic">
-                        Superado por mejor descuento
-                      </span>
-                    } @else if (r.pvpKtGastroSinIva >= escala.umbralMin) {
-                      <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold" [class]="c.textTitle">
-                        <i class="pi pi-check-circle text-[0.75rem]"></i>
-                        Aplicado
-                      </span>
-                    } @else {
-                      <span class="text-[0.7rem] font-medium" [class]="c.textTitle">
-                        Por compras desde {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
-                      </span>
-                    }
-                  </div>
-                  <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
-                    {{ precioConDescuento(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
-                  </div>
-                  <div class="text-xs inline-flex items-center gap-1" [class]="c.textSmall">
-                    <i class="pi pi-arrow-down text-[0.65rem]"></i>
-                    Ahorrás {{ ahorro(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }} c/u
-                  </div>
-                </div>
-              }
-            </div>
-          </div>
-        }
-      }
-
-      <!-- Stepper + botón "Agregar al carrito" — al final, después de que el
+<!-- Stepper + botón "Agregar al carrito" — al final, después de que el
            cliente vio precio y descuentos. Solo si vendible. Mobile-first:
            botones grandes (56px), stepper centrado, botón full-width. -->
-      @if (puedeAgregar()) {
-        <div class="rounded-2xl border-2 border-[#FF861C]/40 dark:border-primary-900 bg-white dark:bg-surface-900 p-4 sm:p-5 flex flex-col gap-4">
-          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color text-center">
-            Cantidad
-          </div>
-          <!-- Stepper custom — el cliente nunca necesita tipear (el max lo da
-               el stock), así que evitamos el input por completo: no abre teclado
-               virtual en mobile. Auto-repeat al mantener presionado replicado
-               vía pointerdown/up (ver iniciarStep/detenerStep en el .ts).
-               Touch-action: none evita el scroll mientras se mantiene apretado. -->
-          <div class="flex items-center justify-center gap-2">
-            <button
-              pButton
-              type="button"
-              icon="pi pi-minus"
-              severity="secondary"
-              [outlined]="true"
-              [disabled]="cantidad() <= 1"
-              (pointerdown)="iniciarStep(-1)"
-              (pointerup)="detenerStep()"
-              (pointerleave)="detenerStep()"
-              (pointercancel)="detenerStep()"
-              class="!h-14 !w-14 !rounded-full touch-none"
-              aria-label="Restar uno"></button>
-            <div class="w-20 text-center text-2xl font-bold tabular-nums select-none">
-              {{ cantidad() }}
-            </div>
-            <button
-              pButton
-              type="button"
-              icon="pi pi-plus"
-              severity="secondary"
-              [outlined]="true"
-              [disabled]="cantidad() >= maxCantidad()"
-              (pointerdown)="iniciarStep(1)"
-              (pointerup)="detenerStep()"
-              (pointerleave)="detenerStep()"
-              (pointercancel)="detenerStep()"
-              class="!h-14 !w-14 !rounded-full touch-none"
-              aria-label="Sumar uno"></button>
-          </div>
-          <button
-            pButton
-            type="button"
-            (click)="agregar()"
-            [disabled]="enviandoAgregar()"
-            [loading]="enviandoAgregar()"
-            icon="pi pi-shopping-cart"
-            label="Agregar al carrito"
-            class="!w-full !h-16 !text-lg !font-bold"
-            severity="primary"></button>
-        </div>
+@if (puedeAgregar()) {
+<div class="rounded-2xl border-2 border-[#FF861C]/40 dark:border-primary-900 bg-white dark:bg-surface-900 p-4 sm:p-5 flex flex-col gap-4">
+  <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color text-center">
+    Cantidad
+  </div>
+  <!-- Stepper +/− con input editable en el medio. Los botones replican
+               auto-repeat al mantener presionado vía pointerdown/up (ver
+               iniciarStep/detenerStep en el .ts) — touch-action:none evita el
+               scroll mientras se mantiene apretado. El input permite tipear
+               un número directamente y se clampa al rango [1, maxCantidad]. -->
+  <div class="flex items-center justify-center gap-2">
+    <button pButton type="button" icon="pi pi-minus" severity="secondary" [outlined]="true" [disabled]="cantidad() <= 1" (pointerdown)="iniciarStep(-1)" (pointerup)="detenerStep()"
+      (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Restar uno"></button>
+    <p-inputNumber [ngModel]="cantidad()" (ngModelChange)="actualizarCantidad($event)" [min]="1" [max]="maxCantidad()" [allowEmpty]="false" [useGrouping]="false"
+      inputStyleClass="!w-20 !h-14 !text-2xl !font-bold !text-center tabular-nums" aria-label="Cantidad" />
+    <button pButton type="button" icon="pi pi-plus" severity="secondary" [outlined]="true" [disabled]="cantidad() >= maxCantidad()" (pointerdown)="iniciarStep(1)"
+      (pointerup)="detenerStep()" (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Sumar uno"></button>
+  </div>
+  <button pButton type="button" (click)="agregar()" [disabled]="enviandoAgregar()" [loading]="enviandoAgregar()" icon="pi pi-shopping-cart" label="Agregar al carrito"
+    class="!w-full !h-16 !text-lg !font-bold" severity="primary"></button>
+</div>
+}
+</main>
+} @else {
+<main class="flex-1 flex flex-col items-center justify-center px-6 gap-6 pb-6">
+  <div class="flex flex-col items-center gap-4">
+    <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-100 dark:bg-surface-800 flex items-center justify-center">
+      <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
+    </div>
+    <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
+      @if (nombreCliente()) {
+      ¡Bienvenido/a, {{ nombreCliente() }}!
+      } @else {
+      Esperando producto…
       }
-    </main>
-  } @else {
-    <main class="flex-1 flex flex-col items-center justify-center px-6 gap-6 pb-6">
-      <div class="flex flex-col items-center gap-4">
-        <div class="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-100 dark:bg-surface-800 flex items-center justify-center">
-          <i class="pi pi-qrcode text-5xl sm:text-6xl text-[#FF861C]"></i>
+    </div>
+    <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
+      @if (nombreCliente()) {
+      En cuanto escaneemos un producto, lo vas a ver acá con su precio.
+      } @else {
+      Cuando se escanee un código en el showroom, vas a ver el producto acá.
+      }
+    </div>
+  </div>
+
+  @if (escalasOrdenadas().length > 0) {
+  <div class="w-full max-w-xl flex flex-col gap-3 mt-4">
+    <div class="text-xs font-semibold uppercase tracking-wider text-muted-color text-center">
+      Promociones vigentes
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
+      @let c = escalaColorScheme(i);
+      <div class="rounded-xl border-2 p-4 flex flex-col items-center gap-2" [class]="c.border + ' ' + c.bg">
+        <span class="px-3 py-1 rounded-full text-white text-base font-bold" [class]="c.pill">
+          −{{ escala.porcentaje }}%
+        </span>
+        <div class="text-sm font-medium text-center" [class]="c.textTitle">
+          Por compras desde
         </div>
-        <div class="text-2xl sm:text-3xl font-bold text-[#3B1E09] dark:text-surface-0 text-center">
-          @if (nombreCliente()) {
-            ¡Bienvenido/a, {{ nombreCliente() }}!
-          } @else {
-            Esperando producto…
-          }
-        </div>
-        <div class="text-sm sm:text-base text-muted-color text-center max-w-xs">
-          @if (nombreCliente()) {
-            En cuanto escaneemos un producto, lo vas a ver acá con su precio.
-          } @else {
-            Cuando se escanee un código en el showroom, vas a ver el producto acá.
-          }
+        <div class="text-xl sm:text-2xl font-bold tabular-nums leading-none" [class]="c.textBig">
+          {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
         </div>
       </div>
-
-      @if (escalasOrdenadas().length > 0) {
-        <div class="w-full max-w-xl flex flex-col gap-3 mt-4">
-          <div class="text-xs font-semibold uppercase tracking-wider text-muted-color text-center">
-            Promociones vigentes
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
-              @let c = escalaColorScheme(i);
-              <div class="rounded-xl border-2 p-4 flex flex-col items-center gap-2"
-                   [class]="c.border + ' ' + c.bg">
-                <span class="px-3 py-1 rounded-full text-white text-base font-bold" [class]="c.pill">
-                  −{{ escala.porcentaje }}%
-                </span>
-                <div class="text-sm font-medium text-center" [class]="c.textTitle">
-                  Por compras desde
-                </div>
-                <div class="text-xl sm:text-2xl font-bold tabular-nums leading-none" [class]="c.textBig">
-                  {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
-                </div>
-              </div>
-            }
-          </div>
-        </div>
       }
-    </main>
+    </div>
+  </div>
   }
+</main>
+}
 </div>

@@ -33,6 +33,7 @@ body {
 // PrimeNG que se renderizan vía Portal/Overlay fuera del árbol del
 // componente que los declara, donde `print:hidden` no llega.
 @media print {
+
   p-toast,
   .p-toast,
   .p-toast-message,
@@ -94,6 +95,7 @@ textarea,
 // Evita que iOS Safari haga zoom al enfocar inputs con font-size < 16px.
 // Solo aplica a coarse pointer para no afectar la densidad visual en desktop.
 @media (pointer: coarse) {
+
   input,
   textarea,
   select {
@@ -230,11 +232,23 @@ textarea,
 // pelearnos con el styling interno de Aura (cuyas reglas de severity tienen
 // alta especificidad y a veces aplican outlined por default si tocamos el
 // padding directo). El scale respeta colores, bordes y bg del severity.
+//
+// PrimeNG 21 aplica la clase del host al MISMO elemento que .p-tag y sus
+// estilos se inyectan DESPUÉS de styles.scss → un `gap` declarado acá
+// queda piso por `.p-tag { gap: var(--p-tag-gap) }` con el default Aura
+// de 0.25rem. La forma limpia es setear el design token: cambiar el valor
+// de `--p-tag-gap` (y `--p-tag-icon-size`) para que el sistema lo aplique.
+//
+// IMPORTANTE: con `transform: scale(1.3)` el footprint de layout sigue
+// siendo el original — visualmente cada tag mide ~30% más pero el navegador
+// los posiciona como si no. Por eso el contenedor padre que apila tags
+// tiene que usar `gap` (horizontal y/o vertical) grande para compensar:
+//   - showroom-page: `gap-4` en el flex-col de la columna derecha.
+//   - visor: `gap-x-8 gap-y-3` en el flex-wrap horizontal.
 .tag-grande {
-  display: inline-flex;
+  --p-tag-icon-size: 0.95rem;
   transform: scale(1.3);
   transform-origin: right center;
-  margin-left: 0.5rem;
 }
 
 // Progress bar del banner de sync. PrimeNG 21 expone los colores via CSS vars,
@@ -254,6 +268,19 @@ textarea,
 // =====================================================================
 .p-dialog {
   --p-dialog-footer-padding: 1rem 1.5rem 1.25rem 1.5rem;
+}
+
+// Modal "QR para celular" — header/footer ultra compactos para que las
+// imágenes QR (que son rectangulares más altas que anchas) entren sin
+// disparar scroll en el dialog y queden lo más grandes posibles. Achicamos
+// también el título y el botón de cerrar para que el header ocupe lo mínimo.
+.dialog-qr-celular {
+  --p-dialog-header-padding: 0.25rem 0.75rem;
+  --p-dialog-content-padding: 0.25rem 0.75rem 0.5rem 0.75rem;
+  --p-dialog-footer-padding: 0.25rem 0.75rem;
+  --p-dialog-header-gap: 0.25rem;
+  --p-dialog-title-font-size: 0.95rem;
+  --p-dialog-title-font-weight: 600;
 }
 
 // =====================================================================

@@ -20,6 +20,11 @@ public record GenerarPresupuestoRequestDTO(
         String clienteNombre,
         String clienteTelefono,
         String clienteEmail,
+        /** Rubro comercial del cliente (bar, restaurant, etc.) — string libre.
+         *  El frontend valida las opciones predefinidas; cuando el operador
+         *  elige "Otros" puede tipear el rubro como texto libre. Null = no
+         *  completado. */
+        String rubro,
         String observaciones,
 
         /** % efectivo del descuento total sobre el subtotal bruto, calculado

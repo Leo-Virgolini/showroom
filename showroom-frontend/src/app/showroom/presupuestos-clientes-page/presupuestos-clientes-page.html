@@ -1,0 +1,166 @@
+<div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
+        </a>
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
+          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+            <i class="pi pi-users text-[#FF861C]"></i> Clientes
+          </span>
+          <span class="text-[0.65rem] text-muted-color">Listado único derivado de los presupuestos</span>
+        </div>
+      </div>
+    </ng-template>
+
+    <ng-template #end>
+      <div class="inline-flex gap-2 items-center">
+        <p-button icon="pi pi-file-export" [label]="screenLg() ? 'Exportar CSV' : ''"
+          ariaLabel="Exportar clientes a CSV" class="btn-kt-verde"
+          [disabled]="cargando() || clientesFiltrados().length === 0"
+          (onClick)="exportarCsv()"
+          pTooltip="Descargar CSV compatible con Marketing Nube (Tiendanube)"
+          tooltipPosition="bottom" />
+        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
+          ariaLabel="Ver historial de presupuestos" class="btn-kt-marron"
+          routerLink="/presupuestos/historial"
+          pTooltip="Ver listado completo de presupuestos" tooltipPosition="bottom" />
+        <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Nuevo presupuesto' : ''"
+          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
+          pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
+        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
+          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
+          pTooltip="Volver al showroom" tooltipPosition="bottom" />
+      </div>
+    </ng-template>
+  </p-toolbar>
+
+  <main class="flex-1 p-3 sm:p-4 lg:p-6">
+    <p-card>
+      <!-- Buscador + refresh -->
+      <div class="flex flex-col md:flex-row gap-3 mb-3 items-stretch md:items-center">
+        <div class="flex-1">
+          <p-iconfield class="w-full block">
+            <p-inputicon class="pi pi-search" />
+            <input pInputText type="text" class="w-full"
+              [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
+              placeholder="Buscar por nombre, email o teléfono..." />
+          </p-iconfield>
+        </div>
+        <div class="flex items-center gap-2 text-sm text-muted-color">
+          <span class="inline-flex items-center gap-1">
+            <i class="pi pi-users text-[#FF861C]"></i>
+            {{ clientesFiltrados().length }} de {{ clientes().length }}
+          </span>
+          <p-button icon="pi pi-refresh" severity="secondary" [text]="true" [rounded]="true"
+            [loading]="cargando()"
+            (onClick)="refrescar()"
+            pTooltip="Refrescar listado" tooltipPosition="left"
+            ariaLabel="Refrescar listado" />
+        </div>
+      </div>
+
+      <!-- Tabla -->
+      <p-table [value]="clientesFiltrados()" dataKey="ultimoPresupuestoId"
+        [loading]="cargando()"
+        [paginator]="true"
+        [rows]="25"
+        [rowsPerPageOptions]="[25, 50, 100]"
+        currentPageReportTemplate="{first} - {last} de {totalRecords}"
+        [showCurrentPageReport]="true"
+        stripedRows>
+        <ng-template #header>
+          <tr>
+            <th>
+              <i class="pi pi-user text-[#FF861C] mr-1"></i> Nombre
+            </th>
+            <th>
+              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email
+            </th>
+            <th style="width: 11rem">
+              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono
+            </th>
+            <th style="width: 9rem">
+              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
+            </th>
+            <th class="text-center" style="width: 9rem">
+              <i class="pi pi-file text-[#FF861C] mr-1"></i> Presupuestos
+            </th>
+            <th style="width: 11rem">
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Último
+            </th>
+            <th class="text-right" style="width: 10rem">
+              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total último
+            </th>
+            <th style="width: 8rem"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template #body let-c>
+          <tr>
+            <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+              {{ c.nombre || '—' }}
+            </td>
+            <td class="text-xs text-muted-color">
+              {{ c.email || '—' }}
+            </td>
+            <td class="text-xs text-muted-color">
+              {{ c.telefono || '—' }}
+            </td>
+            <td class="text-xs">
+              @if (c.rubro) {
+                <span class="capitalize text-[#3B1E09] dark:text-surface-0">{{ c.rubro }}</span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-center">
+              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF861C]/15 text-[#FF861C]">
+                {{ c.cantidadPresupuestos }}
+              </span>
+            </td>
+            <td class="text-xs text-surface-700 dark:text-surface-200">
+              {{ c.ultimoPresupuestoAt | date: 'short' : undefined : 'es-AR' }}
+            </td>
+            <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
+              {{ (c.ultimoTotalSinIva ?? 0) | currency }}
+            </td>
+            <td>
+              <p-button icon="pi pi-search" severity="info" [outlined]="true" size="small"
+                label="Ver"
+                (onClick)="verPresupuestos(c)"
+                pTooltip="Abrir el historial filtrado por este cliente"
+                tooltipPosition="left" />
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="8">
+              <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
+                <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
+                  <i class="pi pi-users text-4xl text-[#FF861C]"></i>
+                </div>
+                <p class="m-0 text-base font-medium text-[#3B1E09] dark:text-surface-0">
+                  @if (busqueda().trim().length > 0) {
+                    No hay clientes que coincidan con la búsqueda
+                  } @else {
+                    Todavía no hay clientes registrados
+                  }
+                </p>
+                <p class="m-0 text-sm">
+                  Los clientes se agrupan por email — los presupuestos sin email no aparecen acá.
+                </p>
+              </div>
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  </main>
+</div>

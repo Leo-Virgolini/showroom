@@ -10,7 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subject, debounceTime } from 'rxjs';
 import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
@@ -66,6 +66,7 @@ export class PresupuestosHistorialPage {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmationService = inject(ConfirmationService);
+  private readonly route = inject(ActivatedRoute);
 
   /** Pantalla ≥ 1024px — usado para mostrar/ocultar labels de botones. */
   readonly screenLg = signal(
@@ -107,6 +108,13 @@ export class PresupuestosHistorialPage {
   private filtrosInicializados = false;
 
   constructor() {
+    // Pre-llena la búsqueda con el queryParam `q` cuando se navega desde la
+    // página de Clientes ("Ver presupuestos de este cliente").
+    const qParam = this.route.snapshot.queryParamMap.get('q');
+    if (qParam) {
+      this.busqueda.set(qParam);
+    }
+
     this.filtroTrigger$
       .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {

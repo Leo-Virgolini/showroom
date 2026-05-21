@@ -1,3 +1,18 @@
 :host {
   display: block;
 }
+
+// Compactación de la tabla de productos para mostrar más filas sin scrollear.
+// El catálogo es grande (~5000 productos), así que cada pixel vertical cuenta.
+// Reducimos el padding interno del p-card y de cada celda de la tabla.
+:host ::ng-deep .p-card-body {
+  padding: 0.5rem !important;
+}
+
+:host ::ng-deep .productos-table {
+  .p-datatable-thead > tr > th,
+  .p-datatable-tbody > tr > td {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+  }
+}

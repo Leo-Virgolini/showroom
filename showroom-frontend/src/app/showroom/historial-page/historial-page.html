@@ -1,15 +1,15 @@
 <div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
     <ng-template #start>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3">
         <a routerLink="/" aria-label="Volver al inicio" pTooltip="Volver al inicio" tooltipPosition="bottom"
           class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
         </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
-          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Historial de escaneos</span>
-          <span class="text-[0.65rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
+          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">Historial de atenciones</span>
+          <span class="text-[0.6rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
             Sesiones de atención al cliente
           </span>
         </div>
@@ -201,10 +201,10 @@
       </p-card>
     </div>
 
-    <!-- Conversión por producto: tabla con escaneados vs comprados + % visual.
-         Los SKUs con menos de 2 scans se filtran en backend (evita ruido tipo
-         "1 scan / 1 compra = 100%"). Las barras se colorean por rango:
-         verde si >50%, ámbar 20-50%, rojo <20%. -->
+    <!-- Conversión por producto: tasa real (sesiones que compraron / sesiones
+         que escanearon). Los SKUs con menos de 2 sesiones que los escanearon
+         se filtran en backend (evita ruido tipo "1 sesión / 1 compra = 100%").
+         Las barras se colorean por rango: verde si ≥50%, ámbar 20-50%, rojo <20%. -->
     <p-card>
       <ng-template #title>
         <div class="flex items-center gap-2 text-base">
@@ -214,7 +214,7 @@
       </ng-template>
       <ng-template #subtitle>
         <span class="text-xs text-muted-color">
-          De cada producto: cuántas veces se escaneó vs unidades efectivamente vendidas.
+          De los clientes que escanearon el producto, qué % terminó comprándolo.
           Alta conversión = gancho. Baja = vidriera (revisar precio, oferta).
         </span>
       </ng-template>
@@ -231,8 +231,14 @@
             <tr>
               <th style="width: 8rem">SKU</th>
               <th>Producto</th>
-              <th class="text-center" style="width: 7rem">Escaneados</th>
-              <th class="text-center" style="width: 7rem">Comprados</th>
+              <th class="text-center" style="width: 8rem"
+                pTooltip="Sesiones únicas que escanearon el producto" tooltipPosition="top">
+                Sesiones
+              </th>
+              <th class="text-center" style="width: 8rem"
+                pTooltip="Sesiones que escanearon Y terminaron comprándolo" tooltipPosition="top">
+                Compraron
+              </th>
               <th style="width: 14rem">Conversión</th>
             </tr>
           </ng-template>
@@ -242,13 +248,13 @@
               <td class="text-sm truncate max-w-[20rem]" [pTooltip]="c.descripcion ?? c.sku" tooltipPosition="top">
                 {{ c.descripcion ?? '—' }}
               </td>
-              <td class="text-center tabular-nums">{{ c.escaneados }}</td>
-              <td class="text-center tabular-nums">{{ c.comprados }}</td>
+              <td class="text-center tabular-nums">{{ c.sesionesEscaneadas }}</td>
+              <td class="text-center tabular-nums">{{ c.sesionesConCompra }}</td>
               <td>
                 <div class="flex items-center gap-2">
                   <div class="flex-1 h-2 rounded-full bg-surface-200 dark:bg-surface-700 overflow-hidden">
                     <div class="h-full rounded-full transition-all"
-                      [style.width.%]="c.porcentaje > 100 ? 100 : c.porcentaje"
+                      [style.width.%]="c.porcentaje"
                       [class.bg-emerald-500]="c.porcentaje >= 50"
                       [class.bg-amber-500]="c.porcentaje >= 20 && c.porcentaje < 50"
                       [class.bg-red-500]="c.porcentaje < 20"></div>

@@ -8,10 +8,12 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ImageModule } from 'primeng/image';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
 import { EscalaDescuento, ScanResult, SesionShowroom } from '../models';
@@ -34,7 +36,7 @@ import { ShowroomService } from '../showroom.service';
   selector: 'app-visor-page',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, ButtonModule, ImageModule, TagModule],
+  imports: [CommonModule, FormsModule, ButtonModule, ImageModule, InputNumberModule, TagModule],
   templateUrl: './visor-page.html',
   styleUrl: './visor-page.scss',
 })
@@ -91,25 +93,23 @@ export class VisorPage {
     [...this.escalas()].sort((a, b) => a.umbralMin - b.umbralMin),
   );
 
-  /** Producto vendible: con precio cargado, habilitado y con stock confirmado
-   *  > 0. Si el stock es null (no sincronizado con DUX), tampoco permitimos
-   *  agregar desde el visor — sino el cliente podría tipear cualquier cantidad
-   *  y el backend tendría que recortarla, dando un toast confuso ("se agregó
-   *  solo X aunque pediste Y"). Mejor que el operador confirme stock manualmente. */
+  /** Producto vendible: con precio cargado y habilitado. El stock NO lo bloquea
+   *  (lo respetan el operador y el backend al cerrar el pedido en DUX) —
+   *  permitimos agregar items sin stock como pendiente de reposición. */
   readonly puedeAgregar = computed(() => {
     const r = this.ultimoScan();
     if (!r) return false;
     if (r.habilitado === false) return false;
     if (r.pvpKtGastroConIva == null || r.pvpKtGastroConIva <= 0) return false;
-    if (r.stockTotal == null || r.stockTotal <= 0) return false;
     return true;
   });
 
-  /** Tope superior del stepper de cantidad. Garantizado > 0 cuando se muestra
-   *  el stepper (puedeAgregar exige stock confirmado > 0). */
+  /** Tope superior del stepper de cantidad. Si el stock no está confirmado
+   *  o es 0, dejamos el máximo en 999 para que el cliente pueda elegir
+   *  cualquier cantidad razonable (el ítem se agregará "forzado"). */
   readonly maxCantidad = computed(() => {
     const r = this.ultimoScan();
-    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 1;
+    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 999;
   });
 
   constructor() {
@@ -209,6 +209,16 @@ export class VisorPage {
     if (this.repeatInterval) { clearInterval(this.repeatInterval); this.repeatInterval = undefined; }
   }
 
+  /** Setter del input editable de cantidad. Clampa al rango [1, maxCantidad]
+   *  para que el operador/cliente no pueda tipear un número fuera del stock. */
+  actualizarCantidad(valor: number | null): void {
+    const max = this.maxCantidad();
+    let v = Number.isFinite(valor as number) ? (valor as number) : 1;
+    if (v < 1) v = 1;
+    if (v > max) v = max;
+    this.cantidad.set(v);
+  }
+
   private aplicarStep(delta: 1 | -1): void {
     const max = this.maxCantidad();
     const proximo = Math.max(1, Math.min(max, this.cantidad() + delta));
@@ -228,9 +238,12 @@ export class VisorPage {
     const r = this.ultimoScan();
     if (!r || !this.puedeAgregar() || this.enviandoAgregar()) return;
     const cant = Math.max(1, Math.min(this.cantidad(), this.maxCantidad()));
+    // forzar=true cuando el stock es 0 o desconocido: el backend acepta el
+    // ítem como pendiente de reposición en vez de rechazarlo.
+    const forzar = r.stockTotal == null || r.stockTotal <= 0;
 
     this.enviandoAgregar.set(true);
-    this.api.visorAgregarAlCarrito(r.sku, cant).subscribe({
+    this.api.visorAgregarAlCarrito(r.sku, cant, forzar).subscribe({
       next: (res) => {
         this.enviandoAgregar.set(false);
         if (res.cantidadAgregada === 0) {
@@ -240,6 +253,14 @@ export class VisorPage {
             summary: 'No se agregó al carrito',
             detail: res.motivo ?? `${r.sku}: el carrito ya tiene el stock completo.`,
             life: 6000,
+          });
+        } else if (forzar) {
+          this.toast.add({
+            key: 'visor',
+            severity: 'warn',
+            summary: 'Agregado sin stock',
+            detail: `${r.sku} x${res.cantidadAgregada} — queda como pendiente de reposición.`,
+            life: 4000,
           });
         } else if (res.recortado) {
           this.toast.add({

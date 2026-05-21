@@ -15,6 +15,7 @@ public record PresupuestoListItemDTO(
         String clienteNombre,
         String clienteTelefono,
         String clienteEmail,
+        String rubro,
         BigDecimal totalSinIva,
         BigDecimal descuentoGlobalPorcentaje
 ) {}

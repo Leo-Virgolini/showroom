@@ -1,24 +1,29 @@
 <div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
 
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
     <ng-template #start>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3">
         <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
           class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
         </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
-          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
+          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
             <i class="pi pi-history text-[#FF861C]"></i> Historial de presupuestos
           </span>
-          <span class="text-xs text-muted-color">Buscar y reenviar presupuestos generados</span>
+          <span class="text-[0.65rem] text-muted-color">Buscar y reenviar presupuestos generados</span>
         </div>
       </div>
     </ng-template>
 
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <p-button icon="pi pi-users" [label]="screenLg() ? 'Clientes' : ''"
+          ariaLabel="Ver listado de clientes" class="btn-kt-violeta"
+          routerLink="/presupuestos/clientes"
+          pTooltip="Ver lista única de clientes a los que se les armó presupuesto"
+          tooltipPosition="bottom" />
         <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Nuevo presupuesto' : ''"
           ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
           pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
@@ -65,22 +70,31 @@
         stripedRows>
         <ng-template #header>
           <tr>
-            <th style="width: 6rem" class="text-center">
+            <th style="width: 5rem" class="text-center">
               <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> #
             </th>
-            <th style="width: 11rem">
+            <th style="width: 10rem">
               <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha
             </th>
             <th>
               <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente
             </th>
+            <th>
+              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email
+            </th>
+            <th style="width: 10rem">
+              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono
+            </th>
+            <th style="width: 9rem">
+              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
+            </th>
             <th class="text-right" style="width: 10rem">
               <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total s/IVA
             </th>
-            <th style="width: 8rem" class="text-center">
+            <th style="width: 7rem" class="text-center">
               <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
             </th>
-            <th style="width: 10rem"></th>
+            <th style="width: 9rem"></th>
           </tr>
         </ng-template>
 
@@ -92,24 +106,21 @@
             <td class="text-sm text-surface-700 dark:text-surface-200">
               {{ p.creadoAt | date: 'short' : undefined : 'es-AR' }}
             </td>
-            <td>
-              <div class="flex flex-col leading-tight">
-                <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-                  {{ p.clienteNombre || '—' }}
-                </span>
-                <span class="text-xs text-muted-color flex items-center gap-2 flex-wrap">
-                  @if (p.clienteEmail) {
-                    <span class="inline-flex items-center gap-1">
-                      <i class="pi pi-envelope text-[10px]"></i> {{ p.clienteEmail }}
-                    </span>
-                  }
-                  @if (p.clienteTelefono) {
-                    <span class="inline-flex items-center gap-1">
-                      <i class="pi pi-phone text-[10px]"></i> {{ p.clienteTelefono }}
-                    </span>
-                  }
-                </span>
-              </div>
+            <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+              {{ p.clienteNombre || '—' }}
+            </td>
+            <td class="text-xs text-muted-color">
+              {{ p.clienteEmail || '—' }}
+            </td>
+            <td class="text-xs text-muted-color">
+              {{ p.clienteTelefono || '—' }}
+            </td>
+            <td class="text-xs">
+              @if (p.rubro) {
+                <span class="capitalize text-[#3B1E09] dark:text-surface-0">{{ p.rubro }}</span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
               {{ (p.totalSinIva ?? 0) | currency }}
@@ -158,7 +169,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="6">
+            <td colspan="9">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>

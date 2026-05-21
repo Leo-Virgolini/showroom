@@ -355,13 +355,17 @@ export interface TasaConversionGlobal {
   sesionesConPedido: number;
 }
 
-/** Conversión de un producto: escaneados vs comprados, con % ya calculado.
- *  Identifica ganchos (alta conversión) vs vidriera (mucho mirado, poca venta). */
+/** Tasa de conversión real de un producto: porcentaje de sesiones que lo
+ *  escanearon y terminaron comprándolo. Identifica ganchos (alta conversión)
+ *  vs vidriera (mucho mirado, poca venta). Siempre entre 0 y 100. */
 export interface ConversionProducto {
   sku: string;
   descripcion: string | null;
-  escaneados: number;
-  comprados: number;
+  /** Sesiones únicas que escanearon el SKU (re-scans en la misma sesión
+   *  cuentan una sola vez — sino el denominador se infla). */
+  sesionesEscaneadas: number;
+  /** Sesiones que escanearon Y terminaron en pedido no anulado con el SKU. */
+  sesionesConCompra: number;
   porcentaje: number;
 }
 
@@ -565,6 +569,9 @@ export interface GenerarPresupuestoRequest {
   clienteNombre?: string | null;
   clienteTelefono?: string | null;
   clienteEmail?: string | null;
+  /** Rubro comercial del cliente — string libre. El frontend muestra un
+   *  dropdown con opciones predefinidas y un input para "Otros". */
+  rubro?: string | null;
   observaciones?: string | null;
   /** % de descuento sobre el subtotal (0..100). Se aplica al final, después
    *  de los descuentos individuales por ítem. */
@@ -597,6 +604,7 @@ export interface PresupuestoListItem {
   clienteNombre: string | null;
   clienteTelefono: string | null;
   clienteEmail: string | null;
+  rubro: string | null;
   totalSinIva: number | null;
   descuentoGlobalPorcentaje: number | null;
 }
@@ -615,6 +623,20 @@ export interface ListarPresupuestosParams {
   hasta?: string;
   page?: number;
   size?: number;
+}
+
+/** Resumen de cliente agrupado (pantalla /presupuestos/clientes). Construido
+ *  en el backend a partir de los presupuestos no eliminados. */
+export interface ClientePresupuestos {
+  email: string | null;
+  telefono: string | null;
+  nombre: string | null;
+  rubro: string | null;
+  cantidadPresupuestos: number;
+  primerPresupuestoAt: string;
+  ultimoPresupuestoAt: string;
+  ultimoTotalSinIva: number | null;
+  ultimoPresupuestoId: number;
 }
 
 export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';

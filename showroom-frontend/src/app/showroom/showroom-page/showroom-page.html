@@ -42,7 +42,7 @@
          efectivo es ~700–800 px). object-contain mantiene la proporción del
          QR para que siga siendo escaneable. -->
     <img src="opinion-google.png" alt="QR para reseña en Google"
-      class="w-full max-h-[60vh] object-contain rounded-xl shadow-sm" />
+      class="w-full max-h-[70vh] object-contain rounded-xl shadow-sm" />
   </div>
   <ng-template #footer>
     <p-button label="Listo" icon="pi pi-check" severity="secondary" [outlined]="true"
@@ -50,32 +50,42 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '95vw', maxWidth: '72rem' }" [breakpoints]="{ '768px': '95vw' }"
-  [draggable]="false" (onHide)="focusInput()">
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 md:divide-x md:divide-surface-200 dark:md:divide-surface-700">
+<p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '98vw', maxWidth: '140rem', maxHeight: '98vh' }" [breakpoints]="{ '1280px': '98vw', '768px': '98vw' }"
+  [draggable]="false" [pt]="{ root: { class: 'dialog-qr-celular' } }" (onHide)="focusInput()">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 md:divide-x md:divide-surface-200 dark:md:divide-surface-700">
 
     <!-- Sección WiFi -->
-    <div class="flex flex-col items-center gap-3 md:pr-4">
-      <div class="w-full flex items-center gap-2">
-        <i class="pi pi-wifi text-[#FF861C] text-xl"></i>
-        <h3 class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 m-0">1. Conectarse al WiFi</h3>
+    <div class="flex flex-col items-center gap-1.5 md:pr-3">
+      <div class="w-full flex items-center gap-1.5">
+        <i class="pi pi-wifi text-[#FF861C] text-base"></i>
+        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">1. Conectarse al WiFi</h3>
       </div>
-      <img src="conexion-wifi.png" alt="QR del WiFi" class="w-full max-h-[65vh] object-contain rounded-xl shadow-sm" />
+      <p-image src="conexion-wifi.png" alt="QR del WiFi" [preview]="true"
+        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
     </div>
 
     <!-- Sección Visor -->
-    <div class="flex flex-col items-center gap-3 md:pl-4 border-t pt-6 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
-      <div class="w-full flex items-center gap-2">
-        <i class="pi pi-mobile text-[#FF861C] text-xl"></i>
-        <h3 class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 m-0">2. Ver los precios</h3>
+    <div class="flex flex-col items-center gap-1.5 md:px-3 border-t pt-3 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
+      <div class="w-full flex items-center gap-1.5">
+        <i class="pi pi-mobile text-[#FF861C] text-base"></i>
+        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">2. Ver los precios</h3>
       </div>
-      <img src="qr-precios.png" alt="QR del visor" class="w-full max-h-[65vh] object-contain rounded-xl shadow-sm" />
+      <p-image src="qr-precios.png" alt="QR del visor" [preview]="true"
+        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
+    </div>
+
+    <!-- Sección Reseña Google — usa la misma imagen que el dialog post-pedido
+         (opinion-google.png). El operador la muestra al cliente al despedirse. -->
+    <div class="flex flex-col items-center gap-1.5 md:pl-3 border-t pt-3 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
+      <div class="w-full flex items-center gap-1.5">
+        <i class="pi pi-star-fill text-[#FF861C] text-base"></i>
+        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">3. Calificanos en Google</h3>
+      </div>
+      <p-image src="opinion-google.png" alt="QR para reseña en Google" [preview]="true"
+        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
     </div>
 
   </div>
-  <ng-template #footer>
-    <p-button label="Cerrar" severity="secondary" [outlined]="true" (onClick)="mostrarDialogVisor.set(false)" />
-  </ng-template>
 </p-dialog>
 
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
@@ -116,31 +126,31 @@
   <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient del PDF) -->
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
 
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-2 !bg-orange-50 dark:!bg-surface-900">
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
     <ng-template #start>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 sm:gap-3">
         <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom" (click)="scrollAlInicio()"
           class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
         </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-3">
-          <span class="text-base font-bold text-[#3B1E09] dark:text-surface-0">Showroom</span>
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
+          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">Showroom</span>
         </div>
         @if (haySesionActiva()) {
         <!-- Chip de sesión activa: click en cualquier parte abre el confirm de
              finalizar sesión (la X refuerza visualmente que es una acción). -->
         <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="kt-badge-xs ml-1 sm:ml-2">
           <div
-            class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
+            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
             [pTooltip]="'Sesión activa — ' + sesionActiva().cantidadEscaneados + ' scan(s) registrados. Click para finalizar.'"
             tooltipPosition="bottom"
             (click)="confirmarCancelarSesion()">
             <p-avatar [label]="inicialesCliente()" shape="circle" size="normal"
-              class="!bg-emerald-600 !text-white !text-xs !w-7 !h-7" />
-            <span class="text-sm font-semibold">
+              class="!bg-emerald-600 !text-white !text-[10px] !w-6 !h-6" />
+            <span class="text-xs sm:text-sm font-semibold">
               <span class="hidden md:inline">Cliente: </span>{{ sesionActiva().nombre }}
             </span>
-            <i class="pi pi-times-circle text-base" aria-label="Finalizar sesión"></i>
+            <i class="pi pi-times-circle text-sm" aria-label="Finalizar sesión"></i>
           </div>
         </p-overlayBadge>
         }
@@ -186,9 +196,9 @@
          layout vertical → cada panel apilado, con divider horizontal. -->
     <p-splitter
       class="flex-1 min-h-0 w-full !border-0 !bg-transparent showroom-splitter"
-      [panelSizes]="[65, 35]"
-      [minSizes]="[35, 25]"
-      stateKey="showroom-main-splitter"
+      [panelSizes]="[55, 45]"
+      [minSizes]="[30, 30]"
+      stateKey="showroom-main-splitter-v2"
       stateStorage="local"
       [layout]="screenLg() ? 'horizontal' : 'vertical'">
       <ng-template #panel>
@@ -245,7 +255,10 @@
                 </div>
               </div>
             </div>
-            <div class="flex flex-col gap-1.5 items-end">
+            <!-- gap-y grande porque los `.tag-grande` usan `transform: scale(1.3)`:
+                 visualmente son ~30% más altos pero el footprint de layout sigue
+                 siendo el original, así que un gap chico los deja pegados. -->
+            <div class="flex flex-col gap-4 items-end">
               <p-button icon="pi pi-sync" severity="secondary" [text]="true" [rounded]="true" size="small"
                 [loading]="refrescandoScan()"
                 (onClick)="refrescarScan()"
@@ -264,7 +277,10 @@
             </div>
           </div>
 
-          <!-- BANNER SIN STOCK (full width, imposible de ignorar) -->
+          <!-- BANNER SIN STOCK (full width, imposible de ignorar). Aún se
+               puede agregar al carrito como pendiente de reposición — el
+               item queda flagueado como "excedido" para que el operador
+               valide antes de generar el pedido en DUX. -->
           @if (r.stockTotal != null && r.stockTotal <= 0) {
           <div class="rounded-lg border-2 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-3 sm:p-4 flex items-center gap-3">
             <i class="pi pi-exclamation-triangle text-red-600 dark:text-red-400 text-2xl sm:text-3xl shrink-0"></i>
@@ -273,7 +289,7 @@
                 Sin stock disponible
               </div>
               <div class="text-sm text-red-700/80 dark:text-red-300/80">
-                Consultá disponibilidad — el producto no se puede agregar al carrito.
+                Consultá disponibilidad. Si lo agregás igual, queda como pendiente de reposición.
               </div>
             </div>
           </div>
@@ -281,8 +297,7 @@
 
           <!-- PRECIO PRINCIPAL — el cliente paga sin IVA -->
           @if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
-          <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm"
-               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+          <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm">
             <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2">
               Precio
             </div>
@@ -298,8 +313,7 @@
                Itera sobre todas las escalas configuradas; alterna ámbar
                (índice par) y verde (índice impar) para distinguir. -->
           @if (escalasOrdenadas().length > 0) {
-          <div class="flex flex-col gap-2"
-               [class.opacity-60]="r.stockTotal != null && r.stockTotal <= 0">
+          <div class="flex flex-col gap-2">
             <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1">
               Comprá más y ahorrás
             </div>
@@ -485,139 +499,151 @@
           <p class="text-muted-color text-sm">Escaneá productos para agregarlos.</p>
         </div>
         } @else {
-        <div class="flex flex-wrap gap-1.5 mb-3">
+        <div class="flex flex-wrap gap-1.5 mb-2">
           <p-tag severity="info" icon="pi pi-list" [value]="carrito().length + ' SKU' + (carrito().length === 1 ? '' : 's')" />
           <p-tag severity="success" icon="pi pi-shopping-cart" [value]="cantidadTotal() + (cantidadTotal() === 1 ? ' unidad' : ' unidades')" />
           @if (hayItemsExcedidos()) {
           <p-tag severity="danger" icon="pi pi-exclamation-triangle" value="Hay items sin stock suficiente" />
           }
         </div>
-        <ul class="flex flex-col divide-y divide-surface-200 dark:divide-surface-700 flex-1 overflow-y-auto min-h-0">
+        <ul class="carrito-items flex flex-col divide-y divide-surface-200 dark:divide-surface-700 flex-1 overflow-y-auto overflow-x-auto min-h-0 px-1">
           @for (it of carrito(); track it.sku) {
-          <li class="py-3 flex flex-col gap-2 px-2 -mx-2 rounded-md" [class.item-excedido]="excedeStock(it)" [attr.data-sku]="it.sku">
-            <div class="flex items-start justify-between gap-2">
-              <div class="flex items-start gap-2.5 min-w-0 flex-1">
-                @if (it.imagenUrl) {
-                <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
-                  imageClass="w-12 h-12 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
-                  class="shrink-0"
-                  (onImageError)="onImagenErrorCarrito(it.sku)" />
-                } @else {
-                <div class="w-12 h-12 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
-                  <i class="pi pi-image text-base text-muted-color opacity-50"></i>
-                </div>
-                }
-                <div class="min-w-0 flex-1">
-                  <div class="font-mono text-sm font-semibold">{{ it.sku }}</div>
-                  <div class="text-xs text-muted-color truncate">
-                    {{ it.descripcion ?? '—' }}
-                  </div>
-                </div>
+          <!-- Item del carrito en UNA fila — los datos críticos (SKU, descripción,
+               cantidad, subtotal) están todos en línea. La descripción se trunca
+               con elipsis. min-w garantiza que todos los items tengan el mismo
+               ancho mínimo (inputs y precios alineados entre filas); si el panel
+               se hace más chico que ese mínimo, el <ul> muestra scroll horizontal.
+               No usamos margin negativo lateral — sino aparecería scroll aún
+               cuando el li entra cómodo en el contenedor (el margen negativo
+               cuenta como contenido fuera de los bordes del <ul>). -->
+          <li class="py-2 px-2 rounded-md flex items-center gap-2 min-w-[20rem]" [class.item-excedido]="excedeStock(it)" [attr.data-sku]="it.sku">
+            @if (it.imagenUrl) {
+              <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
+                imageClass="w-10 h-10 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
+                class="shrink-0"
+                (onImageError)="onImagenErrorCarrito(it.sku)" />
+            } @else {
+              <div class="w-10 h-10 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 shrink-0 flex items-center justify-center">
+                <i class="pi pi-image text-sm text-muted-color opacity-50"></i>
               </div>
-              <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" (onClick)="eliminarDelCarrito(it.sku)" pTooltip="Quitar del carrito" tooltipPosition="left" />
-            </div>
-
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <p-inputNumber [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.sku, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
-                [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-14 text-center text-base" />
-              <span class="tabular-nums text-sm text-muted-color">
-                {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }} c/u
-              </span>
-            </div>
-
-            <div class="flex items-baseline justify-end gap-2 text-sm">
-              <span class="tabular-nums font-semibold text-base">
-                {{ subtotal(it) | currency:'ARS':'symbol':'1.0-0' }}
-              </span>
-            </div>
-
-            @if (it.stockTotal != null) {
-            <div class="flex items-center gap-1.5 text-xs" [class.text-red-600]="excedeStock(it)" [class.dark:text-red-400]="excedeStock(it)" [class.text-muted-color]="!excedeStock(it)">
-              @if (excedeStock(it)) {
-              <i class="pi pi-exclamation-triangle"></i>
-              <span>Supera el stock disponible ({{ it.stockTotal }})</span>
-              } @else {
-              <i class="pi pi-box"></i>
-              <span>Stock: {{ it.stockTotal }}</span>
-              }
-            </div>
             }
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span class="font-mono text-sm font-semibold shrink-0">{{ it.sku }}</span>
+                @if (it.stockTotal != null) {
+                  @if (excedeStock(it)) {
+                    <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 font-semibold inline-flex items-center gap-1 shrink-0"
+                      pTooltip="Supera el stock disponible" tooltipPosition="top">
+                      <i class="pi pi-exclamation-triangle text-[9px]"></i> {{ it.stockTotal }}
+                    </span>
+                  } @else {
+                    <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-semibold inline-flex items-center gap-1 shrink-0">
+                      <i class="pi pi-box text-[9px]"></i> {{ it.stockTotal }}
+                    </span>
+                  }
+                }
+              </div>
+              <div class="text-xs text-muted-color truncate" [pTooltip]="it.descripcion ?? ''" tooltipPosition="top">
+                {{ it.descripcion ?? '—' }}
+              </div>
+            </div>
+
+            <p-inputNumber class="shrink-0" [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.sku, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
+              [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-10 text-center text-sm" />
+
+            <div class="text-right leading-tight shrink-0 min-w-[5.5rem]">
+              <div class="tabular-nums font-semibold text-sm">
+                {{ subtotal(it) | currency:'ARS':'symbol':'1.0-0' }}
+              </div>
+              <div class="tabular-nums text-[11px] text-muted-color">
+                {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }} c/u
+              </div>
+            </div>
+
+            <p-button class="shrink-0" icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small" (onClick)="eliminarDelCarrito(it.sku)" pTooltip="Quitar del carrito" tooltipPosition="left" />
           </li>
           }
         </ul>
 
-        <div class="flex flex-col gap-1.5 mt-4 pt-3 border-t border-surface-200 dark:border-surface-700">
-          <div class="flex items-baseline justify-between text-sm text-muted-color">
+        <div class="flex flex-col gap-1 mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
+          <!-- Subtotal + descuento en una sola fila — si no hay descuento, el
+               valor a la derecha queda solo y se ve como "Subtotal: $X". -->
+          <div class="flex items-baseline justify-between gap-2 text-xs text-muted-color">
             <span class="inline-flex items-center gap-1.5">
-              <i class="pi pi-receipt text-xs"></i>
+              <i class="pi pi-receipt text-[0.65rem]"></i>
               Subtotal
             </span>
-            <span class="tabular-nums">
-              {{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}
+            <span class="inline-flex items-baseline gap-2 tabular-nums">
+              <span>{{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}</span>
+              @if (descuentoAplicado() > 0) {
+                <span class="text-emerald-700 dark:text-emerald-300 font-medium">
+                  −{{ descuentoMonto() | currency:'ARS':'symbol':'1.0-0' }} ({{ descuentoAplicado() }}%)
+                </span>
+              }
             </span>
           </div>
-
-          @if (descuentoAplicado() > 0) {
-          <div class="flex items-baseline justify-between text-sm text-emerald-700 dark:text-emerald-300">
-            <span class="font-medium inline-flex items-center gap-1.5">
-              <i class="pi pi-percentage text-xs"></i>
-              Descuento {{ descuentoAplicado() }}%
-            </span>
-            <span class="tabular-nums">
-              −{{ descuentoMonto() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
-          </div>
-          }
 
           @if (proximoEscalon() != null && faltaParaProximo() != null) {
-          <div class="flex flex-col gap-1">
-            <div class="flex items-baseline justify-between text-xs text-muted-color">
-              <span class="inline-flex items-center gap-1.5">
-                <i class="pi pi-arrow-up text-[0.65rem]"></i>
-                Para {{ proximoEscalon() }}% off
-              </span>
-              <span class="tabular-nums">
-                faltan {{ faltaParaProximo() | currency:'ARS':'symbol':'1.0-0' }}
-              </span>
-            </div>
-            <!-- Visualización del progreso hacia el próximo escalón. El meter
-                 muestra cuánto del subtotal se acumuló dentro del umbral. -->
+          <!-- Próximo escalón de descuento — texto inline + meter en una fila
+               para ahorrar vertical. El meter cuenta su propia label list por CSS. -->
+          <div class="flex items-center gap-2 text-[11px] text-muted-color">
+            <span class="shrink-0 inline-flex items-center gap-1 whitespace-nowrap">
+              <i class="pi pi-arrow-up text-[0.6rem]"></i>
+              Faltan
+              <span class="tabular-nums font-medium">{{ faltaParaProximo() | currency:'ARS':'symbol':'1.0-0' }}</span>
+              para {{ proximoEscalon() }}%
+            </span>
             @if (meterProximoEscalon(); as meta) {
-            <p-meterGroup [value]="meta.items" [max]="meta.max" class="meter-discount" />
+              <p-meterGroup [value]="meta.items" [max]="meta.max" class="meter-discount flex-1" />
             }
           </div>
           }
 
-          <div class="flex items-baseline justify-between mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
-              <i class="pi pi-wallet text-xs"></i>
-              {{ recargoAplicado() > 0 ? 'Subtotal' : 'Total' }}
+          <!-- Total único — cuando NO hay recargo de financiación, este renglón
+               es también el total a cobrar; sino debajo aparece el desglose
+               + el "Total a cobrar" separado. -->
+          @if (recargoAplicado() === 0 && ivaMontoCarrito() === 0) {
+          <div class="flex items-baseline justify-between mt-1 pt-1.5 border-t border-surface-200 dark:border-surface-700">
+            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
+              <i class="pi pi-wallet text-[0.65rem]"></i>
+              Total
+              @if (!aplicaIvaCliente()) {
+                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
+              }
             </span>
-            <span class="tabular-nums font-bold text-xl"
-              [class.text-emerald-700]="recargoAplicado() === 0"
-              [class.dark:text-emerald-400]="recargoAplicado() === 0"
-              [class.text-surface-700]="recargoAplicado() > 0"
-              [class.dark:text-surface-200]="recargoAplicado() > 0">
+            <span class="tabular-nums font-bold text-lg text-emerald-700 dark:text-emerald-400">
+              {{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+          } @else {
+          <div class="flex items-baseline justify-between mt-1 pt-1.5 border-t border-surface-200 dark:border-surface-700">
+            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
+              <i class="pi pi-wallet text-[0.65rem]"></i>
+              Subtotal
+            </span>
+            <span class="tabular-nums font-bold text-sm text-surface-700 dark:text-surface-200">
               {{ totalCarrito() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
+          }
 
           <!-- Forma de pago + recargo financiero. El selector aparece siempre
                (incluso si la lista de formas está vacía, queda como hint para
                configurar). El breakdown del recargo solo cuando hay forma con
                recargo > 0. -->
           @if (formasPagoActivas().length > 0) {
-          <div class="mt-3 pt-3 border-t border-surface-200 dark:border-surface-700">
-            <div class="flex items-center justify-between mb-1.5">
-              <label class="text-xs uppercase tracking-wider text-muted-color font-semibold flex items-center gap-1.5">
-                <i class="pi pi-credit-card text-[0.65rem]"></i>
+          <div class="mt-1.5 pt-1.5 border-t border-surface-200 dark:border-surface-700">
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-[11px] uppercase tracking-wider text-muted-color font-semibold flex items-center gap-1">
+                <i class="pi pi-credit-card text-[0.6rem]"></i>
                 Forma de pago
               </label>
               <p-button
                 icon="pi pi-list"
                 label="Ver precios"
                 severity="info"
-                [outlined]="true"
+                [text]="true"
                 size="small"
                 (onClick)="abrirDialogFormasPago()"
                 [disabled]="carrito().length === 0"
@@ -654,11 +680,11 @@
           </div>
           }
 
-          @if (formaPagoSeleccionada(); as fp) {
+          @if (formaPagoSeleccionada() && (recargoAplicado() > 0 || ivaMontoCarrito() > 0)) {
           @if (recargoMontoSinIva() > 0) {
-          <div class="flex items-baseline justify-between text-sm text-muted-color mt-2">
+          <div class="flex items-baseline justify-between text-xs text-muted-color mt-1">
             <span class="font-medium inline-flex items-center gap-1.5">
-              <i class="pi pi-credit-card text-xs"></i>
+              <i class="pi pi-credit-card text-[0.65rem]"></i>
               Recargo financiación
             </span>
             <span class="tabular-nums">
@@ -667,9 +693,9 @@
           </div>
           }
           @if (ivaMontoCarrito() > 0) {
-          <div class="flex items-baseline justify-between text-sm text-muted-color mt-2">
+          <div class="flex items-baseline justify-between text-xs text-muted-color mt-1">
             <span class="font-medium inline-flex items-center gap-1.5">
-              <i class="pi pi-percentage text-xs"></i>
+              <i class="pi pi-percentage text-[0.65rem]"></i>
               IVA
             </span>
             <span class="tabular-nums">
@@ -677,30 +703,30 @@
             </span>
           </div>
           }
-          <div class="flex items-baseline justify-between mt-2 pt-2 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-sm uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
-              <i class="pi pi-wallet text-xs"></i>
+          <div class="flex items-baseline justify-between mt-1.5 pt-1.5 border-t border-surface-200 dark:border-surface-700">
+            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
+              <i class="pi pi-wallet text-[0.65rem]"></i>
               Total a cobrar
               @if (!aplicaIvaCliente()) {
                 <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
               }
             </span>
-            <span class="tabular-nums font-bold text-xl text-emerald-700 dark:text-emerald-400">
+            <span class="tabular-nums font-bold text-lg text-emerald-700 dark:text-emerald-400">
               {{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
           }
         </div>
 
-        <div class="flex flex-col items-end gap-2 mt-4">
+        <div class="flex items-center justify-end gap-3 mt-2 flex-wrap">
           @if (hayItemsExcedidos()) {
-          <p class="text-xs text-red-600 dark:text-red-400 inline-flex items-center gap-1">
-            <i class="pi pi-exclamation-triangle"></i>
-            Hay items que superan el stock — ajustá las cantidades.
+          <p class="text-xs text-amber-700 dark:text-amber-300 inline-flex items-center gap-1 m-0 flex-1 min-w-0 justify-end text-right">
+            <i class="pi pi-exclamation-triangle shrink-0"></i>
+            <span>Hay items sin stock o que lo superan — el pedido se va a generar igual.</span>
           </p>
           }
-          <p-button label="Crear Pedido en Dux" icon="pi pi-cloud-upload" size="large"
-            [disabled]="carrito().length === 0 || hayItemsExcedidos()"
+          <p-button class="shrink-0" label="Crear Pedido en Dux" icon="pi pi-cloud-upload" size="large"
+            [disabled]="carrito().length === 0"
             [loading]="enviando()"
             (onClick)="abrirConfirmacion()" />
         </div>
@@ -711,27 +737,6 @@
     </p-splitter>
   </main>
 
-  <footer
-    class="px-6 py-3 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-color">
-    <div class="flex items-center gap-3 flex-wrap">
-      <span class="inline-flex items-center gap-1.5">
-        <i class="pi pi-building"></i> Sucursal 3 — KT GASTRO
-      </span>
-      @if (health(); as h) {
-      <span class="inline-flex items-center gap-1.5">
-        <i class="pi pi-list"></i> Lista: {{ h.listaPrecios }}
-      </span>
-      @if (h.totalProductos != null) {
-      <span class="inline-flex items-center gap-1.5">
-        <i class="pi pi-box"></i> {{ h.totalProductos | number: '1.0-0' : 'es-AR' }} productos
-      </span>
-      }
-      }
-    </div>
-    <div class="hidden md:block">
-      Pistola QR como input HID — escaneá y se completa solo.
-    </div>
-  </footer>
 </div>
 
 <p-dialog header="Confirmar pedido a DUX" [(visible)]="mostrarConfirmacion" [modal]="true" [style]="{ width: '90vw', maxWidth: '60rem' }"
@@ -887,19 +892,19 @@
      para verificar la lista. Los items del carrito ya quedaron actualizados
      con los stocks frescos, así que el operador puede ajustar cantidades y
      reintentar el envío. -->
-<p-dialog header="Stock insuficiente — pedido no enviado" [(visible)]="mostrarDialogExcedidos"
-  [modal]="true" [draggable]="false" [closeOnEscape]="false"
+<p-dialog header="Stock insuficiente — ¿enviar igual?" [(visible)]="mostrarDialogExcedidos"
+  [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '40rem' }" [breakpoints]="{ '640px': '95vw' }" (onHide)="focusInput()">
   <div class="flex flex-col gap-3">
     <div class="flex items-start gap-2 text-sm">
-      <i class="pi pi-exclamation-triangle text-red-500 text-xl mt-0.5"></i>
+      <i class="pi pi-exclamation-triangle text-amber-500 text-xl mt-0.5"></i>
       <span>
         Al re-validar contra DUX, los siguientes
         <strong>{{ excedidosStock().length }}</strong>
         producto{{ excedidosStock().length === 1 ? '' : 's' }}
         {{ excedidosStock().length === 1 ? 'tiene' : 'tienen' }}
-        menos stock del que pediste. Ajustá las cantidades del carrito y
-        volvé a apretar "Crear Pedido en Dux".
+        menos stock del que pediste. Podés ajustar las cantidades del carrito,
+        o mandarlo igual y que DUX lo registre como pendiente de reposición.
       </span>
     </div>
 
@@ -930,7 +935,10 @@
     </div>
   </div>
   <ng-template #footer>
-    <p-button label="Entendido" icon="pi pi-check" (onClick)="mostrarDialogExcedidos.set(false)" />
+    <p-button label="Ajustar cantidades" icon="pi pi-pencil" severity="secondary"
+      [outlined]="true" (onClick)="mostrarDialogExcedidos.set(false)" />
+    <p-button label="Enviar igual" icon="pi pi-cloud-upload" severity="warn"
+      [loading]="enviando()" (onClick)="enviarIgualConExcedidos()" />
   </ng-template>
 </p-dialog>
 

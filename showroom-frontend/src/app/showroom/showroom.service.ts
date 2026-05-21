@@ -6,6 +6,7 @@ import {
   CarritoState,
   CatalogoItem,
   CatalogoPage,
+  ClientePresupuestos,
   CrearPedidoRequest,
   CrearPedidoResponse,
   EnviarPresupuestoRequest,
@@ -48,9 +49,9 @@ export class ShowroomService {
   /** Llamada desde /visor cuando el cliente toca "Agregar al carrito" en el
    *  celular. El backend lo suma al carrito (único global) y emite SSE
    *  `carrito-updated`. La respuesta incluye cuánto se sumó realmente. */
-  visorAgregarAlCarrito(sku: string, cantidad: number): Observable<CarritoAgregarResponse> {
+  visorAgregarAlCarrito(sku: string, cantidad: number, forzar = false): Observable<CarritoAgregarResponse> {
     return this.http.post<CarritoAgregarResponse>(
-      `${this.base}/visor/agregar-carrito`, { sku, cantidad });
+      `${this.base}/visor/agregar-carrito`, { sku, cantidad, forzar });
   }
 
   // =====================================================
@@ -62,9 +63,9 @@ export class ShowroomService {
     return this.http.get<CarritoState>(`${this.base}/carrito`);
   }
 
-  agregarItemCarrito(sku: string, cantidad: number): Observable<CarritoAgregarResponse> {
+  agregarItemCarrito(sku: string, cantidad: number, forzar = false): Observable<CarritoAgregarResponse> {
     return this.http.post<CarritoAgregarResponse>(
-      `${this.base}/carrito/items`, { sku, cantidad });
+      `${this.base}/carrito/items`, { sku, cantidad, forzar });
   }
 
   actualizarCantidadItemCarrito(sku: string, cantidad: number): Observable<CarritoState> {
@@ -419,6 +420,13 @@ export class ShowroomService {
     if (opts.desde) params = params.set('desde', opts.desde);
     if (opts.hasta) params = params.set('hasta', opts.hasta);
     return this.http.get<PresupuestoListPage>(`${this.base}/presupuesto-comercial`, { params });
+  }
+
+  /** Lista de clientes únicos derivados de los presupuestos guardados —
+   *  agrupados por email (o teléfono / nombre si no hay email), con datos
+   *  canónicos del presupuesto más reciente. Sin paginar. */
+  listarClientesPresupuestos(): Observable<ClientePresupuestos[]> {
+    return this.http.get<ClientePresupuestos[]>(`${this.base}/presupuesto-comercial/clientes`);
   }
 
   /** Elimina (soft-delete) un presupuesto del historial. El registro

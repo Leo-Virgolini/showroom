@@ -399,32 +399,36 @@ public class ShowroomService {
         long finalizadas = sesionRepository.contarFinalizadas(desde, hasta);
         long conPedido = sesionRepository.contarConPedido(desde, hasta);
 
-        // Conversión por producto: joineamos escaneados vs comprados en Java.
-        // Indexamos los comprados por SKU para lookup O(1). Filtramos productos
-        // con muy pocos scans (<2) para evitar ruido — un SKU escaneado 1 vez
-        // y comprado 1 vez da 100% pero no es informativo. Ordenamos por %
-        // descendente y luego por unidades vendidas (desempate: el que más
-        // vendió primero).
-        Map<String, Long> compradosPorSku = pedidoRepository.sumarCompradosPorSku(desde, hasta).stream()
+        // Tasa de conversión por producto: numerador = sesiones únicas que
+        // escanearon X y compraron X; denominador = sesiones únicas que
+        // escanearon X. Da un % real (0..100) que responde "de los clientes
+        // que vieron este producto, ¿qué % lo terminó comprando?".
+        //
+        // Filtramos productos con muy pocos scans (<2) para evitar ruido — un
+        // SKU escaneado 1 vez y comprado 1 vez daría 100% pero no es
+        // estadísticamente relevante. Ordenamos por % desc; desempate por
+        // sesiones con compra (el producto que convirtió a más clientes primero).
+        Map<String, Long> sesionesConCompraPorSku = sesionRepository
+                .contarSesionesConvertidasPorSku(desde, hasta).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         EstadisticaProductoDTO::sku,
                         EstadisticaProductoDTO::total,
                         (a, b) -> a));
         final int MIN_SCANS = 2;
         List<ConversionProductoDTO> topConversion = sesionRepository
-                .contarEscaneadosPorSku(desde, hasta).stream()
+                .contarSesionesEscaneadasPorSku(desde, hasta).stream()
                 .filter(esc -> esc.total() >= MIN_SCANS)
                 .map(esc -> {
-                    long comprados = compradosPorSku.getOrDefault(esc.sku(), 0L);
+                    long convertidas = sesionesConCompraPorSku.getOrDefault(esc.sku(), 0L);
                     double pct = esc.total() > 0
-                            ? Math.round((comprados * 1000.0) / esc.total()) / 10.0
+                            ? Math.round((convertidas * 1000.0) / esc.total()) / 10.0
                             : 0.0;
                     return new ConversionProductoDTO(
-                            esc.sku(), esc.descripcion(), esc.total(), comprados, pct);
+                            esc.sku(), esc.descripcion(), esc.total(), convertidas, pct);
                 })
                 .sorted(java.util.Comparator
                         .comparingDouble(ConversionProductoDTO::porcentaje).reversed()
-                        .thenComparingLong(ConversionProductoDTO::comprados).reversed())
+                        .thenComparingLong(ConversionProductoDTO::sesionesConCompra).reversed())
                 .limit(limitSafe)
                 .toList();
 

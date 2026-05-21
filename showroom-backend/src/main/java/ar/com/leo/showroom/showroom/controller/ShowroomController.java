@@ -152,7 +152,8 @@ public class ShowroomController {
             throw new ConflictException(
                     "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
         }
-        return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR);
+        return carritoService.agregar(
+                request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR, request.forzarFlag());
     }
 
     // =====================================================
@@ -267,7 +268,8 @@ public class ShowroomController {
 
     @PostMapping("/carrito/items")
     public CarritoAgregarResponseDTO agregarItemCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
-        return carritoService.agregar(request.sku(), request.cantidad(), CarritoStateDTO.Origen.OPERADOR);
+        return carritoService.agregar(
+                request.sku(), request.cantidad(), CarritoStateDTO.Origen.OPERADOR, request.forzarFlag());
     }
 
     @PatchMapping("/carrito/items/{sku}")
@@ -630,6 +632,15 @@ public class ShowroomController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size) {
         return presupuestoComercialService.listar(id, q, desde, hasta, page, size);
+    }
+
+    /** Vista agrupada por cliente — un row por persona con email/teléfono/
+     *  nombre, cantidad de presupuestos y fecha del último. La usa la pantalla
+     *  {@code /presupuestos/clientes}. No paginamos: la cantidad de clientes
+     *  es manejable en memoria. */
+    @GetMapping("/presupuesto-comercial/clientes")
+    public java.util.List<ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO> listarClientesPresupuestos() {
+        return presupuestoComercialService.listarClientes();
     }
 
     /**

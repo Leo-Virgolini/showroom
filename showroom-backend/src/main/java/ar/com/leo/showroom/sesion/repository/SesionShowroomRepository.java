@@ -71,19 +71,47 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
             @Param("hasta") Instant hasta,
             Pageable pageable);
 
-    /** Cuenta TODOS los SKUs escaneados sin límite, para joinear con los
-     *  comprados y calcular la conversión por producto. Sin {@code Pageable}
-     *  porque queremos el universo completo (el filtro / orden lo hace el
-     *  caller en Java). */
+    /** Cuenta SESIONES ÚNICAS que escanearon cada SKU en el rango — es el
+     *  denominador correcto para una tasa de conversión por producto. Un
+     *  cliente que escanea el mismo SKU 5 veces en su sesión cuenta como UNA
+     *  visita al producto, no como 5 (sino el denominador se infla y la
+     *  conversión queda artificialmente baja). {@code COUNT(DISTINCT i.sesion)}
+     *  fuerza la deduplicación a nivel sesión. */
     @Query("""
             SELECT new ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO(
-                i.sku, MAX(i.descripcion), COUNT(i))
+                i.sku, MAX(i.descripcion), COUNT(DISTINCT i.sesion))
             FROM SesionScanItem i
             WHERE (:desde IS NULL OR i.escaneadoAt >= :desde)
               AND (:hasta IS NULL OR i.escaneadoAt <= :hasta)
             GROUP BY i.sku
             """)
-    List<EstadisticaProductoDTO> contarEscaneadosPorSku(
+    List<EstadisticaProductoDTO> contarSesionesEscaneadasPorSku(
+            @Param("desde") Instant desde,
+            @Param("hasta") Instant hasta);
+
+    /** Cuenta SESIONES ÚNICAS que escanearon un SKU y terminaron en pedido no
+     *  anulado que incluye ESE mismo SKU — es el numerador correcto para la
+     *  tasa de conversión por producto. Dicho con palabras: "de los clientes
+     *  que mostraron interés en X, ¿cuántos lo terminaron comprando?".
+     *
+     *  <p>El join se hace por {@code SesionShowroom.pedidoId} (no es FK estricta
+     *  por diseño) contra {@code PedidoShowroom.id}, y por SKU contra
+     *  {@code PedidoShowroomItem.sku}. La fecha del filtro aplica sobre
+     *  {@code escaneadoAt} para alinear con el denominador. */
+    @Query("""
+            SELECT new ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO(
+                si.sku, MAX(si.descripcion), COUNT(DISTINCT si.sesion))
+            FROM SesionScanItem si
+            JOIN ar.com.leo.showroom.pedido.entity.PedidoShowroom p
+                ON p.id = si.sesion.pedidoId
+            JOIN ar.com.leo.showroom.pedido.entity.PedidoShowroomItem pi
+                ON pi.pedido = p AND pi.sku = si.sku
+            WHERE p.estado <> ar.com.leo.showroom.pedido.entity.EstadoPedido.ANULADO
+              AND (:desde IS NULL OR si.escaneadoAt >= :desde)
+              AND (:hasta IS NULL OR si.escaneadoAt <= :hasta)
+            GROUP BY si.sku
+            """)
+    List<EstadisticaProductoDTO> contarSesionesConvertidasPorSku(
             @Param("desde") Instant desde,
             @Param("hasta") Instant hasta);
 

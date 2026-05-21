@@ -3,6 +3,7 @@ package ar.com.leo.showroom.presupuesto.service;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.SyncEventService;
+import ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListItemDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListPageDTO;
@@ -27,7 +28,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -165,6 +168,74 @@ public class PresupuestoComercialService {
     }
 
     /**
+     * Lista los clientes únicos que aparecen en presupuestos guardados,
+     * agrupados por email (lowercased). El email es la identidad canónica;
+     * presupuestos sin email no se cuentan en esta vista. Toma los datos
+     * (nombre, teléfono) del presupuesto MÁS RECIENTE como canónicos — si
+     * en uno viejo el operador tipeó mal el nombre o el teléfono, prevalece
+     * la última versión.
+     *
+     * <p>Devuelve la lista ordenada por último presupuesto descendente
+     * (cliente más reciente primero). No paginamos en SQL: la cantidad de
+     * clientes en /presupuestos es manejable y agrupar en memoria es más
+     * simple que un GROUP BY con subqueries para "último monto" / "último id".
+     */
+    public List<ClientePresupuestosDTO> listarClientes() {
+        List<PresupuestoComercial> todos = repository.findByEliminadoAtIsNullOrderByCreadoAtDesc();
+        // LinkedHashMap mantiene el orden de inserción — como recorremos los
+        // presupuestos DESC por fecha, la primera vez que entra una clave es
+        // el presupuesto más reciente del cliente. Inicializamos con esos
+        // datos canónicos; las pasadas siguientes solo actualizan contador y
+        // primerPresupuestoAt.
+        Map<String, ClientePresupuestosDTO> agrupados = new LinkedHashMap<>();
+        for (PresupuestoComercial p : todos) {
+            String clave = claveCliente(p);
+            if (clave == null) continue;
+            ClientePresupuestosDTO actual = agrupados.get(clave);
+            if (actual == null) {
+                agrupados.put(clave, new ClientePresupuestosDTO(
+                        p.getClienteEmail(),
+                        p.getClienteTelefono(),
+                        p.getClienteNombre(),
+                        p.getRubro(),
+                        1,
+                        p.getCreadoAt(),
+                        p.getCreadoAt(),
+                        p.getSubtotalSinIva(),
+                        p.getId()
+                ));
+            } else {
+                // Mantenemos los datos canónicos del más reciente (actual),
+                // solo actualizamos contador y movemos primerPresupuestoAt
+                // hacia atrás (el `todos` viene DESC, así que este es más viejo).
+                agrupados.put(clave, new ClientePresupuestosDTO(
+                        actual.email(),
+                        actual.telefono(),
+                        actual.nombre(),
+                        actual.rubro(),
+                        actual.cantidadPresupuestos() + 1,
+                        p.getCreadoAt(),
+                        actual.ultimoPresupuestoAt(),
+                        actual.ultimoTotalSinIva(),
+                        actual.ultimoPresupuestoId()
+                ));
+            }
+        }
+        return List.copyOf(agrupados.values());
+    }
+
+    /** Clave de agrupamiento: SOLO email lowercased. El email es la identidad
+     *  canónica del cliente — dos presupuestos con mismo email son del mismo
+     *  cliente aunque el nombre o el teléfono difieran (datos actualizados).
+     *  Presupuestos sin email no aparecen en la vista de clientes. */
+    private static String claveCliente(PresupuestoComercial p) {
+        if (StringUtils.hasText(p.getClienteEmail())) {
+            return p.getClienteEmail().trim().toLowerCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    /**
      * Regenera el PDF de un presupuesto persistido con el modo original
      * (inferido de las formas guardadas).
      */
@@ -240,7 +311,7 @@ public class PresupuestoComercialService {
         }
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
-                datos.observaciones(), datos.descuentoGlobalPorcentaje(),
+                datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
                 false, datos.items(), formasAgregadas);
     }
 
@@ -276,7 +347,7 @@ public class PresupuestoComercialService {
         }
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
-                datos.observaciones(), datos.descuentoGlobalPorcentaje(),
+                datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
                 true, datos.items(), formasIndividuales);
     }
 
@@ -320,6 +391,7 @@ public class PresupuestoComercialService {
                 p.getClienteNombre(),
                 p.getClienteTelefono(),
                 p.getClienteEmail(),
+                p.getRubro(),
                 p.getObservaciones(),
                 p.getDescuentoGlobalPorcentaje(),
                 individual,
@@ -344,6 +416,7 @@ public class PresupuestoComercialService {
                 p.getClienteNombre(),
                 p.getClienteTelefono(),
                 p.getClienteEmail(),
+                p.getRubro(),
                 p.getSubtotalSinIva(),
                 p.getDescuentoGlobalPorcentaje());
     }
@@ -455,6 +528,7 @@ public class PresupuestoComercialService {
                 .clienteNombre(blankToNull(datos.clienteNombre()))
                 .clienteTelefono(blankToNull(datos.clienteTelefono()))
                 .clienteEmail(blankToNull(datos.clienteEmail()))
+                .rubro(blankToNull(datos.rubro()))
                 .observaciones(blankToNull(datos.observaciones()))
                 .descuentoGlobalPorcentaje(descGlobal)
                 .subtotalSinIva(totalSinIva)

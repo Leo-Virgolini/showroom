@@ -14,14 +14,17 @@ import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { MessageService } from 'primeng/api';
+import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
@@ -39,6 +42,17 @@ import {
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { toastError } from '../toast.utils';
+
+/** Dominios sugeridos al tipear el email — mismo set que el dialog de pedidos
+ *  para mantener consistencia visual y de comportamiento entre ambos flujos. */
+const DOMINIOS_EMAIL_SUGERIDOS = [
+  'gmail.com',
+  'hotmail.com',
+  'outlook.com',
+  'yahoo.com.ar',
+  'live.com',
+  'icloud.com',
+];
 
 /**
  * Pantalla para armar presupuestos comerciales: el operador escanea/busca
@@ -63,14 +77,17 @@ import { toastError } from '../toast.utils';
     CommonModule,
     FormsModule,
     RouterLink,
+    AutoCompleteModule,
     ButtonModule,
     CardModule,
     DialogModule,
     IconFieldModule,
     InputIconModule,
+    InputMaskModule,
     InputNumberModule,
     InputTextModule,
     ProgressSpinnerModule,
+    SelectModule,
     TableModule,
     TextareaModule,
     ToggleSwitchModule,
@@ -136,7 +153,29 @@ export class PresupuestosPage implements AfterViewInit {
   readonly clienteNombre = signal('');
   readonly clienteTelefono = signal('');
   readonly clienteEmail = signal('');
+  /** Lista dinámica de sugerencias del autocomplete del email — se rearma
+   *  con cada keystroke (ver {@link onCompletarEmail}). */
+  readonly sugerenciasEmail = signal<string[]>([]);
+  /** Rubro del cliente — uno de los predefinidos en {@link RUBROS_PREDEFINIDOS}
+   *  o `'otros'` para activar el input libre {@link rubroOtros}. Null/vacío =
+   *  no completado. */
+  readonly rubro = signal<string | null>(null);
+  /** Texto libre cuando el operador eligió "Otros" en el dropdown de rubro.
+   *  Solo se manda al backend si {@link rubro} === 'otros'. */
+  readonly rubroOtros = signal('');
   readonly observaciones = signal('');
+
+  /** Opciones del dropdown de rubro. La opción 'otros' habilita un input
+   *  libre para tipear el rubro a medida. */
+  readonly opcionesRubro: { label: string; value: string }[] = [
+    { label: 'Bar', value: 'bar' },
+    { label: 'Restaurant', value: 'restaurant' },
+    { label: 'Catering', value: 'catering' },
+    { label: 'Cafetería', value: 'cafeteria' },
+    { label: 'Panadería', value: 'panaderia' },
+    { label: 'Pastelería', value: 'pasteleria' },
+    { label: 'Otros…', value: 'otros' },
+  ];
 
   // ------------------------------------------------------------
   // Modo "Cotización individual" — toggle único. Cuando está ON, el PDF
@@ -565,6 +604,7 @@ export class PresupuestosPage implements AfterViewInit {
       clienteNombre: this.clienteNombre().trim() || null,
       clienteTelefono: this.clienteTelefono().trim() || null,
       clienteEmail: this.clienteEmail().trim() || null,
+      rubro: this.rubroFinal(),
       observaciones: this.observaciones().trim() || null,
       descuentoGlobalPorcentaje: this.descuentoGlobal() || 0,
       cotizacionIndividual: individual,
@@ -573,11 +613,24 @@ export class PresupuestosPage implements AfterViewInit {
     };
   }
 
+  /** Resuelve el valor final del rubro: si el operador eligió "otros" se usa
+   *  el texto libre, sino se manda la opción predefinida. Null si no completó. */
+  private rubroFinal(): string | null {
+    const r = this.rubro();
+    if (!r) return null;
+    if (r === 'otros') {
+      const libre = this.rubroOtros().trim();
+      return libre || null;
+    }
+    return r;
+  }
+
   previsualizar(): void {
     if (!this.hayItems()) {
       this.warn('Tenés que seleccionar al menos un producto para previsualizar.');
       return;
     }
+    if (!this.validarDatosCliente()) return;
     // Truco anti-popup-blocker: abrimos la pestaña en blanco AHORA, sincrónico
     // con el click del operador. Chrome considera esta apertura como
     // user-initiated (no la bloquea). Cuando llega el PDF del backend, le
@@ -648,19 +701,13 @@ export class PresupuestosPage implements AfterViewInit {
       this.warn('Tenés que seleccionar al menos un producto para enviar.');
       return;
     }
+    if (!this.validarDatosCliente()) return;
     this.mostrarDialogEnviar.set(true);
   }
 
   enviarPorEmail(): void {
+    if (!this.validarDatosCliente()) return;
     const email = this.clienteEmail().trim();
-    if (!email) {
-      this.warn('Falta el email del cliente.');
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      this.warn('El email del cliente no tiene un formato válido.');
-      return;
-    }
     const payload: EnviarPresupuestoRequest = {
       email,
       presupuesto: this.armarPayload(),
@@ -686,6 +733,59 @@ export class PresupuestosPage implements AfterViewInit {
 
   private warn(detail: string): void {
     this.toast.add({ severity: 'warn', summary: 'Atención', detail, life: 5000 });
+  }
+
+  /** Arma las sugerencias del autocomplete del email mientras el operador
+   *  tipea. Replica la misma lógica del dialog de pedidos: si todavía no
+   *  hay `@`, sugiere todos los dominios; si ya está el `@` con dominio
+   *  parcial, filtra por prefijo. */
+  onCompletarEmail(event: AutoCompleteCompleteEvent): void {
+    const query = (event.query ?? '').trim();
+    if (!query) {
+      this.sugerenciasEmail.set([]);
+      return;
+    }
+    const at = query.indexOf('@');
+    if (at < 0) {
+      this.sugerenciasEmail.set(DOMINIOS_EMAIL_SUGERIDOS.map((d) => `${query}@${d}`));
+      return;
+    }
+    const localPart = query.substring(0, at);
+    const dominioPart = query.substring(at + 1).toLowerCase();
+    if (!localPart) {
+      this.sugerenciasEmail.set([]);
+      return;
+    }
+    if (dominioPart.includes('.') && !DOMINIOS_EMAIL_SUGERIDOS.some((d) => d.startsWith(dominioPart))) {
+      this.sugerenciasEmail.set([]);
+      return;
+    }
+    this.sugerenciasEmail.set(
+      DOMINIOS_EMAIL_SUGERIDOS
+        .filter((d) => d.startsWith(dominioPart))
+        .map((d) => `${localPart}@${d}`),
+    );
+  }
+
+  /** Email y teléfono son obligatorios para generar/enviar el presupuesto:
+   *  el cliente queda registrado en el sistema y son necesarios para el
+   *  seguimiento comercial posterior. */
+  private validarDatosCliente(): boolean {
+    const email = this.clienteEmail().trim();
+    const telefono = this.clienteTelefono().trim();
+    if (!email) {
+      this.warn('Falta el email del cliente.');
+      return false;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.warn('El email del cliente no tiene un formato válido.');
+      return false;
+    }
+    if (!telefono) {
+      this.warn('Falta el teléfono del cliente.');
+      return false;
+    }
+    return true;
   }
 
   // ============================================================
@@ -726,9 +826,9 @@ export class PresupuestosPage implements AfterViewInit {
     if ((f.cantidadCuotas ?? 1) > 1) {
       partes.push(`${f.cantidadCuotas} cuotas`);
     }
-    if (f.aplicaIva === false) {
-      partes.push('s/IVA');
-    }
+    // El indicador de IVA (c/IVA / s/IVA) se renderiza aparte en el PDF y en
+    // las cards del frontend, basado en `aplicaIva` del snapshot. No lo
+    // agregamos a la descripción para evitar duplicación visual.
     return partes.join(' · ');
   }
 }

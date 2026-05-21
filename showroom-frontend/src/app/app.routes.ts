@@ -53,6 +53,13 @@ export const routes: Routes = [
         .then((m) => m.PresupuestosHistorialPage),
   },
   {
+    path: 'presupuestos/clientes',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/presupuestos-clientes-page/presupuestos-clientes-page')
+        .then((m) => m.PresupuestosClientesPage),
+  },
+  {
     path: 'historial',
     canActivate: [authGuard],
     loadComponent: () =>

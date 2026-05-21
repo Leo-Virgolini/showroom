@@ -78,12 +78,15 @@ public class CarritoService {
     /**
      * Agrega {@code cantidad} unidades del producto con {@code sku} al carrito.
      * Si el item ya existe, suma a lo que había. Si el total supera el stock,
-     * recorta y reporta cuánto se sumó realmente.
+     * recorta y reporta cuánto se sumó realmente — salvo que {@code forzar=true},
+     * en cuyo caso se agrega la cantidad pedida ignorando el stock (queda
+     * marcado como excedido y el operador lo resuelve antes de generar el
+     * pedido en DUX).
      *
      * @throws NotFoundException si el SKU no está en cache (no se llama a DUX).
      * @throws ConflictException si está deshabilitado o no tiene precio.
      */
-    public CarritoAgregarResponseDTO agregar(String sku, int cantidad, CarritoStateDTO.Origen origen) {
+    public CarritoAgregarResponseDTO agregar(String sku, int cantidad, CarritoStateDTO.Origen origen, boolean forzar) {
         if (sku == null || sku.isBlank()) {
             throw new NotFoundException("SKU vacío");
         }
@@ -108,11 +111,14 @@ public class CarritoService {
             CarritoItemDTO actual = items.get(scan.sku());
             int cantidadActual = actual != null ? actual.cantidad() : 0;
             int cantidadDeseada = cantidadActual + cantidad;
-            int cantidadFinal = (stock != null && stock >= 0)
-                    ? Math.min(cantidadDeseada, stock)
-                    : cantidadDeseada;
+            // Si forzar=true, ignoramos el stock — el operador asume la
+            // responsabilidad de que el item quede "excedido" y lo resuelva
+            // antes de crear el pedido en DUX.
+            int cantidadFinal = forzar || stock == null || stock < 0
+                    ? cantidadDeseada
+                    : Math.min(cantidadDeseada, stock);
             int agregada = cantidadFinal - cantidadActual;
-            boolean recortado = cantidadFinal < cantidadDeseada;
+            boolean recortado = !forzar && cantidadFinal < cantidadDeseada;
 
             if (cantidadFinal <= 0) {
                 // Sin stock disponible — no agregamos nada.
@@ -143,10 +149,17 @@ public class CarritoService {
         }
     }
 
+    /** Sobrecarga sin forzar — compatibilidad con callers existentes que
+     *  respetan la política de stock por defecto. */
+    public CarritoAgregarResponseDTO agregar(String sku, int cantidad, CarritoStateDTO.Origen origen) {
+        return agregar(sku, cantidad, origen, false);
+    }
+
     /** Reemplaza la cantidad de un item existente. Si la nueva cantidad supera
-     *  el stock, se recorta. Si el stock cayó a 0 entre el agregar y el editar
-     *  (DUX se actualizó mientras tanto), rechaza — sino quedaría un item con
-     *  cantidad 0 violando la invariante "items siempre con cantidad ≥ 1". */
+     *  el stock disponible, se respeta la cantidad pedida y el ítem queda
+     *  marcado como excedido del lado del frontend — el operador decide si
+     *  ajusta o lo manda igual como pendiente de reposición al crear el
+     *  pedido en DUX. */
     public CarritoStateDTO actualizarCantidad(String sku, int cantidad) {
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
@@ -157,13 +170,7 @@ public class CarritoService {
             if (actual == null) {
                 throw new NotFoundException("El item no está en el carrito: " + sku);
             }
-            Integer stock = actual.stockTotal();
-            int cantidadFinal = (stock != null && stock >= 0) ? Math.min(cantidad, stock) : cantidad;
-            if (cantidadFinal <= 0) {
-                throw new ConflictException(
-                        "El producto no tiene stock disponible. Eliminalo del carrito o esperá a que se reponga.");
-            }
-            items.put(sku, actual.withCantidad(cantidadFinal));
+            items.put(sku, actual.withCantidad(cantidad));
             CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
             broadcast(state);
             return state;

@@ -220,7 +220,12 @@ public class PresupuestoComercialPdfGenerator {
                                  int total,
                                  List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> todasFormas,
                                  ImageData sinImagen) {
-        // Sub-título "Producto N de M".
+        // Sub-título "Producto N de M". `setKeepWithNext(true)` lo "pega" al
+        // card del producto que viene abajo: si el card (que tiene
+        // setKeepTogether) no entra en el espacio remaining de la página
+        // actual, el subtitulo también se mueve a la siguiente página. Sin
+        // esto, el subtitulo quedaba huérfano al final de la primera página
+        // (típicamente cuando los datos del cliente empujan el contenido).
         Paragraph subtitulo = new Paragraph("PRODUCTO " + idx + " DE " + total)
                 .simulateBold()
                 .setFontSize(11)
@@ -233,7 +238,8 @@ public class PresupuestoComercialPdfGenerator {
                 .setMarginTop(12)
                 .setMarginBottom(8)
                 .setHorizontalAlignment(HorizontalAlignment.LEFT)
-                .setWidth(UnitValue.createPercentValue(45));
+                .setWidth(UnitValue.createPercentValue(45))
+                .setKeepWithNext(true);
         doc.add(subtitulo);
 
         // Card del producto: nombre + código arriba, foto | formas de pago abajo.
@@ -488,8 +494,27 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontSize(9)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
-        if (esTextoValido(f.descripcion())) {
-            info.add(new Paragraph(f.descripcion())
+        // Indicación de IVA siempre visible (c/IVA o s/IVA). Igual que en la
+        // card grande del modo agregado, así el cliente no tiene que adivinar
+        // si el precio mostrado ya tiene IVA o se le suma aparte.
+        if (f.aplicaIva() != null) {
+            info.add(new Paragraph(f.aplicaIva() ? "c/IVA" : "s/IVA")
+                    .setFontSize(7.5f)
+                    .setFontColor(GRIS_MEDIO)
+                    .setMargin(0)
+                    .setMarginTop(1));
+        }
+        // Limpiamos "s/IVA" si viene dentro de la descripción para no
+        // duplicar el bloque de arriba (presupuestos viejos lo persistían).
+        String desc = f.descripcion();
+        if (desc != null) {
+            desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
+                    .replaceAll("^s/IVA\\s*·\\s*", "")
+                    .replaceAll("^s/IVA$", "")
+                    .trim();
+        }
+        if (esTextoValido(desc)) {
+            info.add(new Paragraph(desc)
                     .setFontSize(7.5f)
                     .setFontColor(GRIS_MEDIO)
                     .setMargin(0)
@@ -692,8 +717,13 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     // =====================================================
-    // Card del cliente — solo (cliente + contacto) | (fecha y hora).
+    // Card del cliente — solo (nombre) | (fecha y hora).
     // El logo ya aparece en el header, así que esta card no lo repite.
+    // No incluimos el teléfono: la card crecía verticalmente y, en modo
+    // cotización individual, empujaba el card del producto a una segunda
+    // hoja dejando la primera con el header + datos del cliente sueltos.
+    // El teléfono queda registrado en la BD para seguimiento comercial,
+    // pero no se imprime en el PDF que ve el cliente.
     // =====================================================
     private void agregarCardCliente(Document doc, PresupuestoComercial p) {
         Div card = new Div()
@@ -707,20 +737,13 @@ public class PresupuestoComercialPdfGenerator {
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER);
 
-        // Columna 1: cliente (nombre + teléfono).
+        // Columna 1: nombre del cliente.
         Cell celdaCliente = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(4);
         celdaCliente.add(labelChico("CLIENTE"));
         celdaCliente.add(valorGrande(safe(p.getClienteNombre(), "—")));
-        if (esTextoValido(p.getClienteTelefono())) {
-            celdaCliente.add(new Paragraph(p.getClienteTelefono())
-                    .setFontSize(10)
-                    .setFontColor(GRIS_MEDIO)
-                    .setMargin(0)
-                    .setMarginTop(2));
-        }
         grid.addCell(celdaCliente);
 
         // Columna 2: fecha y hora.
@@ -1157,8 +1180,33 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0)
                 .setMarginBottom(2));
 
-        if (esTextoValido(f.descripcion())) {
-            contenido.add(new Paragraph(f.descripcion())
+        // Indicación de IVA siempre visible cuando el snapshot tiene el flag
+        // poblado. Antes solo aparecía "s/IVA" si la forma NO incluía IVA
+        // (vía f.descripcion()), pero las que sí lo incluían quedaban sin
+        // aclaración y el cliente no podía distinguir si el precio mostrado
+        // ya tenía IVA o si se le sumaba aparte. Ahora marcamos siempre
+        // "c/IVA" o "s/IVA" debajo del nombre.
+        if (f.aplicaIva() != null) {
+            contenido.add(new Paragraph(f.aplicaIva() ? "c/IVA" : "s/IVA")
+                    .setFontSize(8)
+                    .setFontColor(GRIS_MEDIO)
+                    .setMargin(0)
+                    .setMarginBottom(2));
+        }
+
+        // Limpiamos "s/IVA" si viene dentro de la descripción (presupuestos
+        // viejos lo guardaban como parte del string). Ahora se renderiza
+        // siempre arriba (c/IVA o s/IVA), así que duplicarlo en la descripción
+        // queda redundante.
+        String desc = f.descripcion();
+        if (desc != null) {
+            desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
+                    .replaceAll("^s/IVA\\s*·\\s*", "")
+                    .replaceAll("^s/IVA$", "")
+                    .trim();
+        }
+        if (esTextoValido(desc)) {
+            contenido.add(new Paragraph(desc)
                     .setFontSize(8)
                     .setFontColor(GRIS_MEDIO)
                     .setMultipliedLeading(1.2f)
