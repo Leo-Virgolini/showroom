@@ -679,47 +679,55 @@ export class ShowroomPage implements AfterViewInit {
     // Carga los escalones de descuento desde el backend al iniciar. Si la
     // request falla, la signal queda vacía → no se aplica ningún descuento
     // (default seguro: el operador siempre puede vender al precio de lista).
-    this.api.obtenerEscalasDescuento().subscribe({
-      next: (lista) => this.escalasDescuento.set(lista),
-      error: (err) =>
-        console.warn('[escalas-descuento] no se pudieron cargar:', err),
-    });
+    this.api.obtenerEscalasDescuento()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.escalasDescuento.set(lista),
+        error: (err) =>
+          console.warn('[escalas-descuento] no se pudieron cargar:', err),
+      });
 
     // Formas de pago activas — para el selector del carrito. La primera de la
     // lista (orden asc) queda seleccionada por default — el operador la
     // configuró como "default" desde /configuracion (p.ej. Efectivo).
-    this.api.listarFormasPagoActivas().subscribe({
-      next: (lista) => {
-        this.formasPagoActivas.set(lista);
-        if (lista.length > 0 && this.formaPagoSeleccionada() == null) {
-          this.formaPagoSeleccionada.set(lista[0]);
-        }
-      },
-      error: (err) =>
-        console.warn('[formas-pago] no se pudieron cargar:', err),
-    });
+    this.api.listarFormasPagoActivas()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => {
+          this.formasPagoActivas.set(lista);
+          if (lista.length > 0 && this.formaPagoSeleccionada() == null) {
+            this.formaPagoSeleccionada.set(lista[0]);
+          }
+        },
+        error: (err) =>
+          console.warn('[formas-pago] no se pudieron cargar:', err),
+      });
 
     // Hidratación inicial del carrito server-side. Si la pestaña recarga o se
     // abre una segunda PC, el estado se levanta del backend (sin localStorage).
-    this.api.obtenerCarrito().subscribe({
-      next: (state) => this.carrito.set(state.items),
-      error: (err) => console.warn('[carrito] no se pudo hidratar:', err),
-    });
+    this.api.obtenerCarrito()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (state) => this.carrito.set(state.items),
+        error: (err) => console.warn('[carrito] no se pudo hidratar:', err),
+      });
 
     // Hidratación inicial de la sesión activa. Si había una en curso, la
     // levantamos para pre-llenar el form y mostrar el badge en el header.
     // Si no hay sesión activa (carga limpia / reinicio / cliente recién
     // terminado), abrimos el modal de "Nuevo cliente" automáticamente para
     // que el operador identifique al cliente antes de empezar a escanear.
-    this.api.obtenerSesionActiva().subscribe({
-      next: (s) => {
-        this.aplicarSesion(s);
-        if (s.id == null) {
-          this.abrirDialogoNuevoCliente();
-        }
-      },
-      error: (err) => console.warn('[sesion] no se pudo hidratar:', err),
-    });
+    this.api.obtenerSesionActiva()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (s) => {
+          this.aplicarSesion(s);
+          if (s.id == null) {
+            this.abrirDialogoNuevoCliente();
+          }
+        },
+        error: (err) => console.warn('[sesion] no se pudo hidratar:', err),
+      });
 
     // SSE en vivo: cualquier cambio en la sesión (iniciar/scan/finalizar)
     // que dispare cualquier PC llega acá y refresca el estado local.

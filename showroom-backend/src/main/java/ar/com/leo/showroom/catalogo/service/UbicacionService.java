@@ -7,15 +7,16 @@ import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.dux.model.DuxLocalidad;
 import ar.com.leo.showroom.dux.model.DuxProvincia;
 import ar.com.leo.showroom.dux.service.DuxClient;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -74,6 +75,7 @@ public class UbicacionService {
         }
     }
 
+    @Transactional(readOnly = true)
     public List<Provincia> listarProvincias() {
         List<Provincia> cached = provinciaRepo.findAllByOrderByNombreAsc();
         if (!cached.isEmpty()) return cached;
@@ -82,6 +84,7 @@ public class UbicacionService {
         return provinciaRepo.findAllByOrderByNombreAsc();
     }
 
+    @Transactional(readOnly = true)
     public List<Localidad> listarLocalidadesPorCodIso(String codIso) {
         if (codIso == null || codIso.isBlank()) return List.of();
         Provincia prov = provinciaRepo.findByCodIsoIgnoreCase(codIso).orElse(null);
@@ -99,6 +102,10 @@ public class UbicacionService {
             log.warn("UbicacionService - DUX devolvió 0 provincias");
             return;
         }
+        // Batch insert: armamos la lista de entities y hacemos UN saveAll en
+        // vez de N saves individuales — reduce roundtrips a la DB y permite
+        // a Hibernate optimizar el flush.
+        List<Provincia> aGuardar = new ArrayList<>(remotas.size());
         for (DuxProvincia r : remotas) {
             if (r.getId() == null || r.getCodIso() == null) continue;
             Provincia entity = provinciaRepo.findById(r.getId())
@@ -107,9 +114,10 @@ public class UbicacionService {
             entity.setNombre(r.getProvincia());
             entity.setIdPais(r.getIdPais());
             entity.setPais(r.getPais());
-            provinciaRepo.save(entity);
+            aGuardar.add(entity);
         }
-        log.info("UbicacionService - {} provincias persistidas", remotas.size());
+        provinciaRepo.saveAll(aGuardar);
+        log.info("UbicacionService - {} provincias persistidas", aGuardar.size());
     }
 
     /**
