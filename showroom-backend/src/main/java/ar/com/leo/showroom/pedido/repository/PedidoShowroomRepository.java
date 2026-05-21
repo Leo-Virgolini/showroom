@@ -25,7 +25,7 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
      * cerrada y un {@code findById} normal tira
      * {@code LazyInitializationException} al tocar {@code getItems()}.
      */
-    @Query("select p from PedidoShowroom p left join fetch p.items where p.id = :id")
+    @Query("select distinct p from PedidoShowroom p left join fetch p.items where p.id = :id")
     Optional<PedidoShowroom> findByIdWithItems(@Param("id") Long id);
 
     /** Estado del pedido por id, en bulk — usado por /historial para etiquetar

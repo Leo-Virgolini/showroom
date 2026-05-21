@@ -103,11 +103,19 @@ export class ProductosPage {
         this.cargar(0, this.pageSize());
       });
 
+    // Guard contra doble request inicial: el effect corre la primera vez al
+    // mount (los signals tienen valor inicial) y `onLazyLoad` del p-table
+    // también dispara. Si no skipeamos la primera, se hacen 2 cargas idénticas.
+    let filtrosInicializados = false;
     effect(() => {
       // Re-evaluamos cada vez que cambian los filtros.
       this.busqueda();
       this.soloDeshabilitados();
       this.soloSinStock();
+      if (!filtrosInicializados) {
+        filtrosInicializados = true;
+        return;
+      }
       this.filtroTrigger$.next();
     });
   }

@@ -136,10 +136,9 @@ textarea,
   --p-button-primary-active-border-color: #5a8500;
 }
 
-// Gris carbón — mismo tono que la palabra "TOOLS" del logo KT.
-// Reemplaza al marrón anterior por algo más coherente con el tipográfico
-// del logo y más neutro para acciones secundarias / volver atrás.
-.btn-kt-gris,
+// Gris carbón — mismo tono que la palabra "TOOLS" del logo KT. Usado por
+// los botones "Volver" del toolbar de cada pantalla, neutro y coherente con
+// el tipográfico del logo.
 .btn-volver {
   --p-button-primary-background: #5a5a5a;
   --p-button-primary-border-color: #5a5a5a;
@@ -149,17 +148,6 @@ textarea,
   --p-button-primary-hover-color: #fff;
   --p-button-primary-active-background: #333333;
   --p-button-primary-active-border-color: #333333;
-}
-
-.btn-kt-naranja-oscuro {
-  --p-button-primary-background: #bf5908;
-  --p-button-primary-border-color: #bf5908;
-  --p-button-primary-color: #fff;
-  --p-button-primary-hover-background: #a04d05;
-  --p-button-primary-hover-border-color: #a04d05;
-  --p-button-primary-hover-color: #fff;
-  --p-button-primary-active-background: #7e3d04;
-  --p-button-primary-active-border-color: #7e3d04;
 }
 
 // Marrón KT — el tono del subtítulo "GASTRONOMIA" del logo.

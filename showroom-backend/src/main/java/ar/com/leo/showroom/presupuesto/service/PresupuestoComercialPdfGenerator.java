@@ -1398,13 +1398,20 @@ public class PresupuestoComercialPdfGenerator {
         try {
             return new Image(ImageDataFactory.create(fileOpt.get().toString()));
         } catch (Exception e) {
+            log.warn("No se pudo cargar la imagen del producto {} ({}): {}",
+                    sku, fileOpt.get(), e.getMessage());
             return null;
         }
     }
 
     private ImageData cargarRecurso(String resourcePath) {
+        java.net.URL url = getClass().getResource(resourcePath);
+        if (url == null) {
+            log.warn("Recurso PDF no encontrado en classpath: {}", resourcePath);
+            return null;
+        }
         try {
-            return ImageDataFactory.create(getClass().getResource(resourcePath).toExternalForm());
+            return ImageDataFactory.create(url.toExternalForm());
         } catch (Exception e) {
             log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
             return null;

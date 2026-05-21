@@ -200,10 +200,18 @@ export class HistorialPage {
         this.cargarStats();
       });
 
+    // Guard contra doble request inicial: el effect corre la primera vez al
+    // mount (los signals tienen valor inicial) y `onLazyLoad` del p-table
+    // también dispara. Si no skipeamos la primera, se hacen 2 cargas idénticas.
+    let filtrosInicializados = false;
     effect(() => {
       this.busqueda();
       this.desde();
       this.hasta();
+      if (!filtrosInicializados) {
+        filtrosInicializados = true;
+        return;
+      }
       this.filtroTrigger$.next();
     });
 
