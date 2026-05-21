@@ -153,12 +153,20 @@ public class PresupuestoComercialPdfGenerator {
                 // foto + sus propias formas de pago calculadas sobre el precio
                 // de ese ítem específico. NO hay hoja agregada con total ni
                 // formas globales — cada producto se evalúa por separado.
+                //
+                // Header + card del cliente se agregan UNA SOLA VEZ al
+                // principio. Antes se repetían en cada producto y eso forzaba
+                // un AreaBreak después de la "portada", dejando la primera
+                // página casi vacía y empujando el primer producto a una
+                // segunda hoja. Ahora el primer producto comparte página con
+                // los datos del cliente, y el resto va detrás (un producto
+                // por hoja vía AreaBreak entre items).
+                agregarHeader(doc, presupuesto, logoHeader);
+                agregarCardCliente(doc, presupuesto);
                 List<GenerarPresupuestoRequestDTO.Item> items = datos.items();
                 for (int i = 0; i < items.size(); i++) {
                     if (i > 0) doc.add(new AreaBreak());
                     GenerarPresupuestoRequestDTO.Item it = items.get(i);
-                    agregarHeader(doc, presupuesto, logoHeader);
-                    agregarCardCliente(doc, presupuesto);
                     agregarHojaItem(doc, it, i + 1, items.size(), datos.formasPago(), sinImagen);
                 }
                 // Observaciones al CIERRE del PDF (después del último producto).
@@ -228,28 +236,33 @@ public class PresupuestoComercialPdfGenerator {
         // (típicamente cuando los datos del cliente empujan el contenido).
         Paragraph subtitulo = new Paragraph("PRODUCTO " + idx + " DE " + total)
                 .simulateBold()
-                .setFontSize(11)
+                .setFontSize(10)
                 .setCharacterSpacing(2f)
                 .setFontColor(ColorConstants.WHITE)
                 .setBackgroundColor(KT_NARANJA)
                 .setBorderRadius(new BorderRadius(8f))
-                .setPaddings(6, 14, 6, 14)
+                .setPaddings(4, 12, 4, 12)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(12)
-                .setMarginBottom(8)
+                .setMarginTop(8)
+                .setMarginBottom(4)
                 .setHorizontalAlignment(HorizontalAlignment.LEFT)
-                .setWidth(UnitValue.createPercentValue(45))
+                .setWidth(UnitValue.createPercentValue(40))
                 .setKeepWithNext(true);
         doc.add(subtitulo);
 
         // Card del producto: nombre + código arriba, foto | formas de pago abajo.
+        // SIN keepTogether: el card es alto (foto grande + N formas de pago)
+        // y con keepTogether iText lo movía completo a una nueva página
+        // cuando no entraba en el espacio remaining después del header +
+        // datos del cliente, dejando la primera hoja casi vacía. Permitir
+        // que se parta entre páginas hace que el primer producto comparta
+        // página con la portada y el contenido fluya naturalmente.
         Div card = new Div()
                 .setMarginTop(0)
                 .setBackgroundColor(ColorConstants.WHITE)
                 .setBorder(new SolidBorder(GRIS_LINEA, 1f))
                 .setBorderRadius(new BorderRadius(12f))
-                .setPadding(16)
-                .setKeepTogether(true);
+                .setPadding(10);
 
         // Encabezado del producto: nombre + sku + chips visuales para
         // (cantidad / descuento) cuando aplican.
@@ -726,12 +739,18 @@ public class PresupuestoComercialPdfGenerator {
     // pero no se imprime en el PDF que ve el cliente.
     // =====================================================
     private void agregarCardCliente(Document doc, PresupuestoComercial p) {
+        // Padding/margen recortados: este card es informativo (CLIENTE | FECHA)
+        // y antes ocupaba ~80px por el padding 16+16 + valor en 13pt. Bajándolo
+        // a padding 8 + valor en 11pt queda en ~50px, liberando espacio para
+        // que el card del producto entre completo en la primera página en
+        // modo cotización individual (la queja típica era que una forma de
+        // pago quedaba en una hoja extra).
         Div card = new Div()
-                .setMarginTop(12)
+                .setMarginTop(8)
                 .setBackgroundColor(ColorConstants.WHITE)
                 .setBorder(new SolidBorder(GRIS_LINEA, 1f))
-                .setBorderRadius(new BorderRadius(12f))
-                .setPadding(16);
+                .setBorderRadius(new BorderRadius(10f))
+                .setPadding(8);
 
         Table grid = new Table(UnitValue.createPercentArray(new float[]{1.8f, 1f}))
                 .useAllAvailableWidth()
@@ -741,23 +760,27 @@ public class PresupuestoComercialPdfGenerator {
         Cell celdaCliente = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                .setPadding(4);
+                .setPadding(2);
         celdaCliente.add(labelChico("CLIENTE"));
-        celdaCliente.add(valorGrande(safe(p.getClienteNombre(), "—")));
+        celdaCliente.add(new Paragraph(safe(p.getClienteNombre(), "—"))
+                .simulateBold()
+                .setFontSize(11)
+                .setFontColor(GRIS_OSCURO)
+                .setMargin(0));
         grid.addCell(celdaCliente);
 
         // Columna 2: fecha y hora.
         Cell celdaMeta = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                .setPadding(4);
+                .setPadding(2);
         celdaMeta.add(labelChico("FECHA Y HORA"));
         String fechaHora = p.getCreadoAt() != null
                 ? p.getCreadoAt().atZone(TZ_AR).format(FECHA_HORA_FMT)
                 : "";
         celdaMeta.add(new Paragraph(fechaHora)
                 .simulateBold()
-                .setFontSize(13)
+                .setFontSize(11)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
         grid.addCell(celdaMeta);
