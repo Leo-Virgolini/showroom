@@ -10,8 +10,6 @@ import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
-import ar.com.leo.showroom.config.entity.EscalaDescuento;
-import ar.com.leo.showroom.config.entity.HorarioSync;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.config.entity.FormaPago;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;

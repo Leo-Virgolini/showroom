@@ -171,9 +171,9 @@ public class PresupuestoComercialService {
      * Lista los clientes únicos que aparecen en presupuestos guardados,
      * agrupados por email (lowercased). El email es la identidad canónica;
      * presupuestos sin email no se cuentan en esta vista. Toma los datos
-     * (nombre, teléfono) del presupuesto MÁS RECIENTE como canónicos — si
-     * en uno viejo el operador tipeó mal el nombre o el teléfono, prevalece
-     * la última versión.
+     * (nombre, teléfono, rubro) del presupuesto MÁS RECIENTE como canónicos
+     * — si en uno viejo el operador tipeó mal un campo, prevalece la
+     * última versión.
      *
      * <p>Devuelve la lista ordenada por último presupuesto descendente
      * (cliente más reciente primero). No paginamos en SQL: la cantidad de

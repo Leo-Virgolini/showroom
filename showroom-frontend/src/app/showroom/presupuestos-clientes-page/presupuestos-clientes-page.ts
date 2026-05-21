@@ -23,9 +23,9 @@ import { toastError } from '../toast.utils';
 
 /**
  * Lista de clientes únicos derivada de los presupuestos guardados. Agrupa
- * por email > teléfono > nombre y muestra los datos canónicos del
- * presupuesto más reciente, la cantidad de presupuestos y la fecha/monto
- * del último.
+ * SOLO por email (lowercased): presupuestos sin email no aparecen acá. Los
+ * datos canónicos (nombre, teléfono, rubro) se toman del presupuesto más
+ * reciente del cliente.
  *
  * <p>Sirve al operador como agenda informal: ver de un vistazo a quién le
  * armó presupuestos y abrir el historial filtrado por ese cliente para

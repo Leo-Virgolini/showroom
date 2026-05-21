@@ -83,12 +83,12 @@ export class PresupuestosHistorialPage {
   readonly pageSize = signal(50);
   readonly first = signal(0);
 
-  /** SKUs cuyo PDF se está descargando — para deshabilitar el botón mientras
-   *  espera el response del backend. */
+  /** IDs de presupuestos cuyo PDF se está descargando — para deshabilitar
+   *  el botón mientras espera el response del backend. */
   readonly descargandoPdf = signal<Set<number>>(new Set());
 
-  /** IDs cuyo presupuesto se está eliminando — para deshabilitar el botón
-   *  mientras espera el response del backend. */
+  /** IDs de presupuestos que se están eliminando — para deshabilitar el
+   *  botón mientras espera el response del backend. */
   readonly eliminandoPdf = signal<Set<number>>(new Set());
 
   readonly hayFiltros = computed(
