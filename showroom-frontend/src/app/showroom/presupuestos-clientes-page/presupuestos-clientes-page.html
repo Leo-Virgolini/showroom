@@ -127,7 +127,7 @@
               {{ c.ultimoPresupuestoAt | date: 'short' : undefined : 'es-AR' }}
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-              {{ (c.ultimoTotalSinIva ?? 0) | currency }}
+              {{ (c.ultimoTotalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td>
               <p-button icon="pi pi-search" severity="info" [outlined]="true" size="small"

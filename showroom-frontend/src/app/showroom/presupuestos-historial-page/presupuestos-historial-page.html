@@ -123,7 +123,7 @@
               }
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-              {{ (p.totalSinIva ?? 0) | currency }}
+              {{ (p.totalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td class="text-center">
               @if (p.descuentoGlobalPorcentaje && p.descuentoGlobalPorcentaje > 0) {

@@ -149,7 +149,7 @@
                     </div>
                     <div class="text-right shrink-0">
                       <div class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-                        {{ (r.pvpKtGastroSinIva ?? 0) | currency }}
+                        {{ (r.pvpKtGastroSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
                       </div>
                       <div class="text-[10px] text-muted-color">s/IVA</div>
                     </div>
@@ -299,7 +299,7 @@
                   </td>
                   <td class="text-right">
                     <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-                      {{ (it.pvpKtGastroSinIva ?? 0) | currency }}
+                      {{ (it.pvpKtGastroSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
                     </span>
                   </td>
                   <td class="text-center">
@@ -310,7 +310,7 @@
                   </td>
                   <td class="text-right">
                     <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-                      {{ totalLinea(it) | currency }}
+                      {{ totalLinea(it) | currency:'ARS':'symbol':'1.0-0' }}
                     </span>
                   </td>
                   <td>
@@ -431,7 +431,7 @@
                 </span>
                 @if (descuentoTotalMonto() > 0 && !cotizacionIndividual()) {
                   <span class="text-xs text-muted-color text-right">
-                    Subtotal: <span class="line-through">{{ subtotalBrutoSinIva() | currency }}</span>
+                    Subtotal: <span class="line-through">{{ subtotalBrutoSinIva() | currency:'ARS':'symbol':'1.0-0' }}</span>
                   </span>
                 }
               </div>
@@ -462,11 +462,11 @@
                   </span>
                   <div class="text-right leading-tight">
                     <div class="text-xl font-bold text-[#3B1E09] dark:text-surface-0">
-                      {{ totalSinIva() | currency }}
+                      {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
                     </div>
                     @if (descuentoTotalMonto() > 0) {
                       <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                        Ahorro: {{ descuentoTotalMonto() | currency }}
+                        Ahorro: {{ descuentoTotalMonto() | currency:'ARS':'symbol':'1.0-0' }}
                       </div>
                     } @else {
                       <div class="text-[10px] text-muted-color">precios sin IVA</div>
@@ -501,12 +501,12 @@
                         <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
                       }
                       <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
-                        {{ f.precioFinal | currency }}
+                        {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
                       </div>
                       @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
                         <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
                           <i class="pi pi-clone text-[10px]"></i>
-                          {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency }}
+                          {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
                         </div>
                       }
                     </div>
@@ -545,7 +545,7 @@
                       </div>
                       <div class="text-right leading-tight shrink-0">
                         <div class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-                          {{ g.totalSinIva | currency }}
+                          {{ g.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
                         </div>
                         <div class="text-[9px] text-muted-color">total s/IVA</div>
                       </div>
@@ -608,7 +608,7 @@
         <i class="pi pi-wallet text-[#FF861C]"></i> Total
       </span>
       <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
-        {{ totalSinIva() | currency }}
+        {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
       </span>
     </div>
   </div>
