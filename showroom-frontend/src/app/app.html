@@ -12,8 +12,17 @@
      o "recortado"). Reemplaza al toast plano `SKU x10` por uno con la
      descripción del producto bien visible. -->
 <p-toast position="top-right" key="carrito-add" class="toast-carrito-add">
-  <ng-template let-message #message let-closeFn="closeFn">
-    <div class="flex items-start gap-3 w-full"
+  <!-- Usamos `#headless` (no `#message`) porque en PrimeNG 21 solo el template
+       headless recibe `closeFn` en su contexto y, además, suprime la X
+       default de PrimeNG (que sino se superpone con la nuestra). El outer
+       container con el styling del toast lo sigue poniendo PrimeNG. -->
+  <ng-template let-message #headless let-closeFn="closeFn">
+    <!-- `relative` + `pr-9` reservan el espacio para la X absoluta.
+         `overflow-hidden` es necesario porque el modo headless saltea el
+         wrapper `.p-toast-message-content` de PrimeNG (que lo trae por
+         default) — sin esto, descripciones largas desbordan el recuadro
+         y empujan la X fuera de la zona visible. -->
+    <div class="relative flex items-start gap-3 w-full p-3 pr-9 overflow-hidden"
       [class.text-emerald-700]="message.severity === 'success'"
       [class.dark:text-emerald-300]="message.severity === 'success'"
       [class.text-amber-700]="message.severity === 'warn'"
@@ -52,15 +61,14 @@
         <div class="text-xs text-muted-color mt-2 leading-snug">{{ message.detail }}</div>
         }
       </div>
-      <!-- Botón X de cierre: usando ng-template custom PrimeNG no agrega el
-           botón por defecto. closeFn viene como context del p-toast. Lo
-           ponemos arriba a la derecha — buttonless interfere with no-mouse
-           devices (mobile/touch); con el botón el operador puede descartar
-           toasts largos sin esperar el life. -->
+      <!-- Botón X de cierre. `closeFn` viene del context del headless template
+           (firma `(event) => void`). Posición absoluta para que descripciones
+           largas no lo empujen fuera del toast. Sin esto el operador tiene
+           que esperar el `life` — molesto en mobile/touch. -->
       <button type="button"
         (click)="closeFn($event)"
         aria-label="Cerrar"
-        class="shrink-0 -mt-1 -mr-1 w-7 h-7 rounded-full inline-flex items-center justify-center text-muted-color hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors">
+        class="absolute top-2 right-2 w-7 h-7 rounded-full inline-flex items-center justify-center text-muted-color hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors">
         <i class="pi pi-times text-xs"></i>
       </button>
     </div>
