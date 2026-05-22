@@ -445,7 +445,10 @@ public class ShowroomService {
     }
 
     public PedidoDetailDTO obtenerPedido(Long id) {
-        PedidoShowroom p = pedidoRepository.findById(id)
+        // findByIdWithItems hace JOIN FETCH de la colección — sin esto, iterar
+        // p.getItems() fuera del @Transactional explota con LazyInitializationException
+        // (OSIV está desactivado, la sesión Hibernate cierra al salir del repo).
+        PedidoShowroom p = pedidoRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
         List<PedidoItemDTO> items = p.getItems().stream()
                 .map(it -> new PedidoItemDTO(
