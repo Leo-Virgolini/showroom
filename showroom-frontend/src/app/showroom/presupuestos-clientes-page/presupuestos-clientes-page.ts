@@ -11,13 +11,16 @@ import { RouterLink, Router } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
+import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { ClientePresupuestos } from '../models';
+import { ActualizarClienteRequest, ClientePresupuestos } from '../models';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -46,10 +49,13 @@ import { UserChip } from '../user-chip/user-chip';
     RouterLink,
     ButtonModule,
     CardModule,
+    DialogModule,
     IconFieldModule,
     InputIconModule,
     InputTextModule,
+    SelectModule,
     TableModule,
+    TextareaModule,
     ToolbarModule,
     TooltipModule,
     MoreMenu,
@@ -69,6 +75,33 @@ export class PresupuestosClientesPage {
   readonly cargando = signal(false);
   readonly clientes = signal<ClientePresupuestos[]>([]);
   readonly busqueda = signal('');
+
+  // ---------- Dialog "Editar cliente" ----------
+  // El operador puede corregir nombre/email/rubro/notas del cliente sin
+  // tocar los presupuestos/pedidos históricos. El backend persiste un
+  // ClienteMaster por teléfono que pisa los datos derivados del historial
+  // al armar este listado.
+  readonly mostrarDialogEditar = signal(false);
+  readonly guardandoEdicion = signal(false);
+  readonly clienteEditando = signal<ClientePresupuestos | null>(null);
+  readonly editNombre = signal('');
+  readonly editEmail = signal('');
+  readonly editRubro = signal<string | null>(null);
+  readonly editRubroOtros = signal('');
+  readonly editNotas = signal('');
+
+  /** Opciones del dropdown de rubro — mismo set que /presupuestos y el modal
+   *  de pedidos para que un mismo cliente caiga al mismo rubro en cualquier
+   *  flujo. "Otros…" habilita un input libre. */
+  readonly opcionesRubro: { label: string; value: string }[] = [
+    { label: 'Bar', value: 'bar' },
+    { label: 'Restaurant', value: 'restaurant' },
+    { label: 'Catering', value: 'catering' },
+    { label: 'Cafetería', value: 'cafeteria' },
+    { label: 'Panadería', value: 'panaderia' },
+    { label: 'Pastelería', value: 'pasteleria' },
+    { label: 'Otros…', value: 'otros' },
+  ];
 
   /** Filtro client-side: substring case-insensitive sobre nombre/email/
    *  teléfono. Como el endpoint devuelve todos los clientes sin paginar,
@@ -129,6 +162,76 @@ export class PresupuestosClientesPage {
     const fragmento = this.fragmentoTelefono(c);
     this.router.navigate(['/pedidos'], {
       queryParams: fragmento ? { q: fragmento } : {},
+    });
+  }
+
+  /** Abre el dialog de edición con los valores actuales del cliente. Si el
+   *  rubro guardado no es uno de los predefinidos, lo tratamos como "otros"
+   *  con texto libre — mismo comportamiento que /presupuestos. */
+  abrirDialogEditar(c: ClientePresupuestos): void {
+    this.clienteEditando.set(c);
+    this.editNombre.set(c.nombre ?? '');
+    this.editEmail.set(c.email ?? '');
+    this.editNotas.set('');
+    const rubroActual = c.rubro ?? '';
+    const esPredefinido = this.opcionesRubro.some((o) => o.value === rubroActual);
+    if (rubroActual && !esPredefinido) {
+      this.editRubro.set('otros');
+      this.editRubroOtros.set(rubroActual);
+    } else {
+      this.editRubro.set(rubroActual || null);
+      this.editRubroOtros.set('');
+    }
+    this.mostrarDialogEditar.set(true);
+  }
+
+  cerrarDialogEditar(): void {
+    this.mostrarDialogEditar.set(false);
+    this.clienteEditando.set(null);
+  }
+
+  /** Resuelve el rubro final: si el operador eligió "otros" usa el texto
+   *  libre; sino devuelve la opción predefinida. Null si no completó. */
+  private rubroFinalEdicion(): string | null {
+    const r = this.editRubro();
+    if (!r) return null;
+    if (r === 'otros') {
+      const libre = this.editRubroOtros().trim();
+      return libre || null;
+    }
+    return r;
+  }
+
+  guardarEdicion(): void {
+    const c = this.clienteEditando();
+    if (!c || !c.telefono) return;
+    const payload: ActualizarClienteRequest = {
+      telefono: c.telefono,
+      nombre: this.editNombre().trim() || null,
+      email: this.editEmail().trim() || null,
+      rubro: this.rubroFinalEdicion(),
+      notas: this.editNotas().trim() || null,
+    };
+    this.guardandoEdicion.set(true);
+    this.api.actualizarClienteMaster(payload).subscribe({
+      next: () => {
+        this.guardandoEdicion.set(false);
+        this.mostrarDialogEditar.set(false);
+        this.clienteEditando.set(null);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Cliente actualizado',
+          detail: 'Los datos del cliente se guardaron en el maestro.',
+          life: 3000,
+        });
+        // Refrescamos la tabla para que el merge aplique los nuevos overrides.
+        this.cargar();
+      },
+      error: (err) => {
+        this.guardandoEdicion.set(false);
+        toastError(this.toast, 'Editar cliente', err,
+          'No se pudo guardar el cliente.');
+      },
     });
   }
 

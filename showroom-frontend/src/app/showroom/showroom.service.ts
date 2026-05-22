@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
+  ActualizarClienteRequest,
   CarritoAgregarResponse,
   CarritoState,
   CatalogoItem,
@@ -447,6 +448,14 @@ export class ShowroomService {
    *  Sin paginar. */
   listarClientesPresupuestos(): Observable<ClientePresupuestos[]> {
     return this.http.get<ClientePresupuestos[]>(`${this.base}/presupuesto-comercial/clientes`);
+  }
+
+  /** Upsert del maestro de clientes — guarda overrides editables de
+   *  nombre/email/rubro/notas para el cliente identificado por el teléfono.
+   *  No toca los presupuestos/pedidos históricos: el merge se hace al armar
+   *  la vista de /clientes en el backend. */
+  actualizarClienteMaster(payload: ActualizarClienteRequest): Observable<void> {
+    return this.http.put<void>(`${this.base}/cliente-master`, payload);
   }
 
   /** Elimina (soft-delete) un presupuesto del historial. El registro

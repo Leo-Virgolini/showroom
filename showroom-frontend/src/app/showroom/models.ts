@@ -669,6 +669,18 @@ export interface ClientePresupuestos {
   ultimoPedidoId: number | null;
 }
 
+/** Payload del PUT /cliente-master — upsert del maestro editable de clientes.
+ *  El teléfono es la clave lógica (se normaliza a solo dígitos en el backend);
+ *  el resto de los campos pueden venir null/vacíos: el master los persiste
+ *  como null y el listado de /clientes cae al valor del último movimiento. */
+export interface ActualizarClienteRequest {
+  telefono: string;
+  nombre: string | null;
+  email: string | null;
+  rubro: string | null;
+  notas: string | null;
+}
+
 export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';
 
 export interface PresupuestoEmailEvent {

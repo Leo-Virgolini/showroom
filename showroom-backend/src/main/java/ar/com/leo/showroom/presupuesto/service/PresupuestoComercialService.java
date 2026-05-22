@@ -1,6 +1,8 @@
 package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
+import ar.com.leo.showroom.cliente.entity.ClienteMaster;
+import ar.com.leo.showroom.cliente.service.ClienteMasterService;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -60,6 +62,10 @@ public class PresupuestoComercialService {
      *  presupuestos). El service lee pedidos directamente del repo y los
      *  agrupa junto con los presupuestos por teléfono normalizado. */
     private final ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository;
+    /** Maestro editable de clientes — se mergea con los datos derivados del
+     *  historial al armar la vista de /clientes (nombre/email/rubro del master
+     *  pisan los del último movimiento). */
+    private final ClienteMasterService clienteMasterService;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -88,7 +94,8 @@ public class PresupuestoComercialService {
             SyncEventService eventService,
             ObjectMapper mapper,
             UsuarioRepository usuarioRepository,
-            ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository) {
+            ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository,
+            ClienteMasterService clienteMasterService) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
@@ -96,6 +103,7 @@ public class PresupuestoComercialService {
         this.mapper = mapper;
         this.usuarioRepository = usuarioRepository;
         this.pedidoRepository = pedidoRepository;
+        this.clienteMasterService = clienteMasterService;
     }
 
     /** Resuelve username a usuarioId. Null si el username no existe (caso
@@ -261,16 +269,42 @@ public class PresupuestoComercialService {
             agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPedido(pedido);
         }
 
+        // Cargamos los masters una sola vez y aplicamos el override al armar
+        // el DTO. Si hay master para ese teléfono, sus campos no-nulos pisan
+        // los del último movimiento; los presupuestos/pedidos históricos
+        // quedan intactos (sus PDFs siguen mostrando los datos originales).
+        Map<String, ClienteMaster> masters = clienteMasterService.cargarTodosIndexados();
+
         // Convertimos a DTO ordenando por última actividad descendente (cliente
         // más reciente arriba), independiente del orden de inserción.
-        return agrupados.values().stream()
-                .map(AgregadorCliente::toDTO)
+        return agrupados.entrySet().stream()
+                .map(e -> aplicarMaster(e.getValue().toDTO(), masters.get(e.getKey())))
                 .sorted((a, b) -> {
                     if (a.ultimoMovimientoAt() == null) return 1;
                     if (b.ultimoMovimientoAt() == null) return -1;
                     return b.ultimoMovimientoAt().compareTo(a.ultimoMovimientoAt());
                 })
                 .toList();
+    }
+
+    /** Sobrescribe los campos del DTO derivado del historial con los del
+     *  master cuando existe. Solo pisa campos no-nulos: si el operador editó
+     *  el master pero dejó el email vacío, el email se sigue tomando del
+     *  último movimiento (más útil que mostrar vacío). */
+    private static ClientePresupuestosDTO aplicarMaster(ClientePresupuestosDTO base, ClienteMaster master) {
+        if (master == null) return base;
+        return new ClientePresupuestosDTO(
+                StringUtils.hasText(master.getEmail()) ? master.getEmail() : base.email(),
+                base.telefono(),
+                StringUtils.hasText(master.getNombre()) ? master.getNombre() : base.nombre(),
+                StringUtils.hasText(master.getRubro()) ? master.getRubro() : base.rubro(),
+                base.cantidadPresupuestos(),
+                base.cantidadPedidos(),
+                base.primerMovimientoAt(),
+                base.ultimoMovimientoAt(),
+                base.ultimoTotalSinIva(),
+                base.ultimoPresupuestoId(),
+                base.ultimoPedidoId());
     }
 
     /** Normaliza el teléfono a solo dígitos. Sin esto, "11-12345678" y

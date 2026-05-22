@@ -147,7 +147,13 @@
                    en los items del dropdown no se disparan). Además, mostrar
                    ambas opciones expuestas con sus contadores es más
                    directo que un menú colapsado. -->
-              <div class="inline-flex gap-1">
+              <div class="inline-flex gap-1 items-center">
+                <p-button icon="pi pi-pencil" size="small" severity="secondary"
+                  [outlined]="true" [rounded]="true"
+                  [disabled]="!c.telefono"
+                  (onClick)="abrirDialogEditar(c)"
+                  pTooltip="Editar datos del cliente" tooltipPosition="top"
+                  ariaLabel="Editar cliente" />
                 <p-button [label]="'Presup. (' + c.cantidadPresupuestos + ')'"
                   icon="pi pi-file-edit" size="small" [outlined]="true"
                   class="btn-kt-naranja-oscuro"
@@ -190,3 +196,76 @@
     </p-card>
   </main>
 </div>
+
+<!-- =====================================================================
+     Dialog "Editar cliente" — upsert del maestro de clientes.
+     El teléfono se muestra como read-only porque es la clave lógica del
+     master (editarlo rompería el join con los presupuestos/pedidos
+     históricos). Los demás campos pisan los datos derivados al guardar.
+     ===================================================================== -->
+<p-dialog header="Editar cliente" [modal]="true" [(visible)]="mostrarDialogEditar"
+  [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [draggable]="false" [resizable]="false" (onHide)="cerrarDialogEditar()">
+  @if (clienteEditando(); as c) {
+  <div class="flex flex-col gap-4">
+    <p class="text-sm text-muted-color m-0">
+      Los cambios sobrescriben los datos derivados del último presupuesto/pedido al armar
+      esta lista. Los presupuestos históricos siguen mostrando sus datos originales.
+    </p>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-sm font-medium text-muted-color">Teléfono</label>
+      <input pInputText type="text" [value]="c.telefono ?? ''" disabled class="w-full" />
+      <span class="text-[0.7rem] text-muted-color">Clave del cliente — no editable.</span>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-nombre" class="text-sm font-medium text-muted-color">Nombre</label>
+      <input pInputText id="edit-cliente-nombre" type="text" maxlength="150"
+        [ngModel]="editNombre()" (ngModelChange)="editNombre.set($event)"
+        placeholder="Nombre del cliente" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-email" class="text-sm font-medium text-muted-color">Email</label>
+      <input pInputText id="edit-cliente-email" type="email" maxlength="150"
+        [ngModel]="editEmail()" (ngModelChange)="editEmail.set($event)"
+        placeholder="cliente@dominio.com" class="w-full" />
+    </div>
+
+    <div class="grid grid-cols-1 gap-3" [class.sm:grid-cols-2]="editRubro() === 'otros'">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Rubro</label>
+        <p-select [options]="opcionesRubro" [ngModel]="editRubro()"
+          (ngModelChange)="editRubro.set($event)"
+          optionLabel="label" optionValue="value" placeholder="Seleccionar…"
+          [showClear]="true" appendTo="body" class="w-full" />
+      </div>
+      @if (editRubro() === 'otros') {
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Detalle del rubro</label>
+        <input pInputText type="text" maxlength="100"
+          [ngModel]="editRubroOtros()" (ngModelChange)="editRubroOtros.set($event)"
+          placeholder="Ej: heladería, kiosco…" class="w-full" />
+      </div>
+      }
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-notas" class="text-sm font-medium text-muted-color">Notas</label>
+      <textarea pTextarea id="edit-cliente-notas" rows="3" maxlength="2000"
+        [ngModel]="editNotas()" (ngModelChange)="editNotas.set($event)"
+        placeholder="Notas internas (frecuencia, contacto preferido, etc.)"
+        class="w-full"></textarea>
+    </div>
+  </div>
+  }
+  <ng-template #footer>
+    <div class="flex justify-end gap-2">
+      <p-button label="Cancelar" severity="secondary" [outlined]="true"
+        (onClick)="cerrarDialogEditar()" [disabled]="guardandoEdicion()" />
+      <p-button label="Guardar" icon="pi pi-save"
+        [loading]="guardandoEdicion()" (onClick)="guardarEdicion()" />
+    </div>
+  </ng-template>
+</p-dialog>
