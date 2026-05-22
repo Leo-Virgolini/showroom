@@ -19,6 +19,7 @@ import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ClientePresupuestos } from '../models';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
@@ -53,6 +54,7 @@ import { UserChip } from '../user-chip/user-chip';
     TableModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './presupuestos-clientes-page.html',
@@ -132,21 +134,29 @@ export class PresupuestosClientesPage {
     });
   }
 
-  /** Items del menú split-button "Ver" por fila. Cada fila construye el suyo
-   *  porque el `disabled` depende de los contadores del cliente. */
+  /** Items del menú split-button "Ver" por fila. Usamos {@code routerLink} +
+   *  {@code queryParams} directamente en cada item (NO {@code command}: con
+   *  {@code appendTo="body"} y change-detection OnPush los callbacks de
+   *  command no se disparan de forma confiable en PrimeNG SplitButton). El
+   *  patrón {@code routerLink} sí funciona porque PrimeNG lo bindea al
+   *  RouterLink directive de Angular y la navegación va por el router. */
   itemsVer(c: ClientePresupuestos): MenuItem[] {
+    const fragmento = this.fragmentoTelefono(c);
+    const queryParams = fragmento ? { q: fragmento } : {};
     return [
       {
         label: `Ver presupuestos${c.cantidadPresupuestos > 0 ? ' (' + c.cantidadPresupuestos + ')' : ''}`,
         icon: 'pi pi-file-edit',
         disabled: c.cantidadPresupuestos === 0,
-        command: () => this.verPresupuestos(c),
+        routerLink: ['/presupuestos/historial'],
+        queryParams,
       },
       {
         label: `Ver pedidos${c.cantidadPedidos > 0 ? ' (' + c.cantidadPedidos + ')' : ''}`,
         icon: 'pi pi-receipt',
         disabled: c.cantidadPedidos === 0,
-        command: () => this.verPedidos(c),
+        routerLink: ['/pedidos'],
+        queryParams,
       },
     ];
   }

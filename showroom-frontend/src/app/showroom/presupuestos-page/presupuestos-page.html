@@ -21,7 +21,6 @@
 
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
-        <app-user-chip />
         @if (items().length > 0) {
           <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar el detalle"
             class="btn-kt-rojo" (onClick)="vaciar()" pTooltip="Vaciar el detalle" tooltipPosition="bottom" />
@@ -36,17 +35,13 @@
           (onClick)="abrirDialogEnviar()"
           pTooltip="Generar y enviar el presupuesto al cliente" tooltipPosition="bottom" />
 
-        <p-button icon="pi pi-users" [label]="screenLg() ? 'Clientes' : ''"
-          ariaLabel="Ver listado de clientes" class="btn-kt-violeta"
-          routerLink="/clientes"
-          pTooltip="Ver lista única de clientes (presupuestos + pedidos)"
-          tooltipPosition="bottom" />
-
         <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
           ariaLabel="Ver historial de presupuestos" class="btn-kt-marron"
           routerLink="/presupuestos/historial"
           pTooltip="Ver presupuestos generados anteriormente" tooltipPosition="bottom" />
 
+        <app-more-menu />
+        <app-user-chip />
         <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
           [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
           pTooltip="Volver al showroom" tooltipPosition="bottom" />

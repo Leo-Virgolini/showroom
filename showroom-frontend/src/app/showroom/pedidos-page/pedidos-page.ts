@@ -36,6 +36,7 @@ import {
   PedidoListItem,
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
@@ -64,6 +65,7 @@ import { UserChip } from '../user-chip/user-chip';
     TextareaModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './pedidos-page.html',

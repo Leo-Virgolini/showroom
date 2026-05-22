@@ -37,6 +37,7 @@ import {
   SesionDetalle,
   SesionListItem,
 } from '../models';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
@@ -66,6 +67,7 @@ import { UserChip } from '../user-chip/user-chip';
     TagModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './historial-page.html',

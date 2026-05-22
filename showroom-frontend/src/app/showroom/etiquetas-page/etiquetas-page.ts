@@ -26,6 +26,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
@@ -173,6 +174,7 @@ function guardarPerfilActivoIdLocal(id: number | null): void {
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './etiquetas-page.html',

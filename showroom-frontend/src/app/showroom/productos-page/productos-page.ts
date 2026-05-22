@@ -26,6 +26,7 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProductoListItem } from '../models';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -51,6 +52,7 @@ import { UserChip } from '../user-chip/user-chip';
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './productos-page.html',

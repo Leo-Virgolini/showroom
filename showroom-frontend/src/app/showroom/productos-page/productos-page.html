@@ -17,7 +17,6 @@
     </ng-template>
     <ng-template #end>
       <div class="inline-flex items-center gap-2">
-        <app-user-chip />
         @if (health()?.ultimaSincronizacionAt; as fecha) {
           <p-tag
             severity="secondary"
@@ -27,6 +26,8 @@
             tooltipPosition="bottom"
             class="hidden md:inline-flex" />
         }
+        <app-more-menu />
+        <app-user-chip />
         <p-button
           icon="pi pi-arrow-left"
           ariaLabel="Volver al showroom"

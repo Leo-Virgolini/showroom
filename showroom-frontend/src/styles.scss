@@ -162,6 +162,21 @@ textarea,
   --p-button-primary-active-border-color: #1f0f04;
 }
 
+// Naranja oscuro / terracota — para el botón "Más" del toolbar. Mismo
+// "family" que el naranja brillante de Sincronizar (#FF861C, la olla del
+// logo) pero más profundo y rojizo, así no se confunden entre sí. Conecta
+// visualmente con la paleta KT sin chocar con los demás colores ya usados.
+.btn-kt-naranja-oscuro {
+  --p-button-primary-background: #c2580e;
+  --p-button-primary-border-color: #c2580e;
+  --p-button-primary-color: #fff;
+  --p-button-primary-hover-background: #a4470a;
+  --p-button-primary-hover-border-color: #a4470a;
+  --p-button-primary-hover-color: #fff;
+  --p-button-primary-active-background: #843707;
+  --p-button-primary-active-border-color: #843707;
+}
+
 // Rojo apagado — para acciones de salida/cierre como logout. No tan agresivo
 // como un danger pero claramente distinto del resto de la toolbar.
 .btn-kt-rojo {

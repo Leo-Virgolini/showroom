@@ -41,6 +41,7 @@ import {
 } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
+import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
 
@@ -94,6 +95,7 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './presupuestos-page.html',

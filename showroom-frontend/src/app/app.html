@@ -4,6 +4,69 @@
      visor usan `key: 'visor'` al hacer `toast.add(...)`. -->
 <p-toast position="top-center" key="visor" />
 
+<!-- Toast con template personalizado para "agregado al carrito" — funciona
+     tanto para adds del operador (desde la pantalla principal) como del
+     cliente (desde el visor). Los items vienen como `message.data` (array
+     de {sku, descripcion, cantidad}); el color y el ícono cambian según
+     `message.severity` (success = verde, warn = ámbar para casos "sin stock"
+     o "recortado"). Reemplaza al toast plano `SKU x10` por uno con la
+     descripción del producto bien visible. -->
+<p-toast position="top-right" key="carrito-add" class="toast-carrito-add">
+  <ng-template let-message #message let-closeFn="closeFn">
+    <div class="flex items-start gap-3 w-full"
+      [class.text-emerald-700]="message.severity === 'success'"
+      [class.dark:text-emerald-300]="message.severity === 'success'"
+      [class.text-amber-700]="message.severity === 'warn'"
+      [class.dark:text-amber-300]="message.severity === 'warn'">
+      <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+        [class.bg-emerald-100]="message.severity === 'success'"
+        [class.dark:bg-emerald-900\/40]="message.severity === 'success'"
+        [class.bg-amber-100]="message.severity === 'warn'"
+        [class.dark:bg-amber-900\/40]="message.severity === 'warn'">
+        <i class="pi text-lg"
+          [class.pi-shopping-cart]="message.severity === 'success'"
+          [class.pi-exclamation-triangle]="message.severity === 'warn'"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-bold leading-tight">
+          {{ message.summary }}
+        </div>
+        <ul class="mt-2 flex flex-col gap-1.5 text-sm">
+          @for (item of message.data; track item.sku) {
+          <li class="flex items-start gap-2 leading-snug">
+            <span class="inline-flex items-center justify-center min-w-[2.25rem] h-5 px-1.5 rounded-md text-white text-xs font-bold shrink-0"
+              [class.bg-emerald-600]="message.severity === 'success'"
+              [class.bg-amber-600]="message.severity === 'warn'">
+              ×{{ item.cantidad }}
+            </span>
+            <span class="flex-1 min-w-0">
+              <span class="block font-medium text-surface-900 dark:text-surface-0 truncate">
+                {{ item.descripcion || 'Sin descripción' }}
+              </span>
+              <span class="block text-[0.7rem] font-mono text-muted-color">{{ item.sku }}</span>
+            </span>
+          </li>
+          }
+        </ul>
+        @if (message.detail) {
+        <div class="text-xs text-muted-color mt-2 leading-snug">{{ message.detail }}</div>
+        }
+      </div>
+      <!-- Botón X de cierre: usando ng-template custom PrimeNG no agrega el
+           botón por defecto. closeFn viene como context del p-toast. Lo
+           ponemos arriba a la derecha — buttonless interfere with no-mouse
+           devices (mobile/touch); con el botón el operador puede descartar
+           toasts largos sin esperar el life. -->
+      <button type="button"
+        (click)="closeFn($event)"
+        aria-label="Cerrar"
+        class="shrink-0 -mt-1 -mr-1 w-7 h-7 rounded-full inline-flex items-center justify-center text-muted-color hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors">
+        <i class="pi pi-times text-xs"></i>
+      </button>
+    </div>
+  </ng-template>
+</p-toast>
+
 <!-- ConfirmDialog global — cualquier componente que inyecte ConfirmationService
      y llame .confirm({...}) abre este dialog reutilizable. Evita declarar un
      <p-dialog> custom por cada confirmación. -->

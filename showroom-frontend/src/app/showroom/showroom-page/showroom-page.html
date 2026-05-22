@@ -169,7 +169,6 @@
     </ng-template>
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
-        <app-user-chip />
         <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
           class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
           [pTooltip]="haySesionActiva() ? 'Cerrar la sesión actual e iniciar otra' : 'Iniciar sesión para registrar los scans del cliente'"
@@ -186,17 +185,9 @@
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
           [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
 
-        <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Presupuestos' : ''" ariaLabel="Armar presupuesto comercial"
-          class="btn-kt-teal" routerLink="/presupuestos"
-          pTooltip="Armar un presupuesto y enviarlo por email al cliente" tooltipPosition="bottom" />
+        <app-more-menu />
 
-        <p-menu #menuExtrasRef [model]="menuExtras" [popup]="true" appendTo="body" [pt]="{ root: { class: 'kt-menu-extras' } }" />
-        <p-button icon="pi pi-bars" [label]="screenLg() ? 'Más' : ''" ariaLabel="Más opciones"
-          class="btn-kt-naranja-oscuro"
-          (onClick)="menuExtrasRef.toggle($event)"
-          pTooltip="Pedidos, historial, productos, etiquetas, configuración"
-          tooltipPosition="bottom" />
-
+        <app-user-chip />
         <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo" (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />
       </div>
     </ng-template>

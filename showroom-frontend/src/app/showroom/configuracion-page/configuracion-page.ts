@@ -26,6 +26,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
 import { EscalaDescuento, FormaPago, HorarioSync, NotificacionesAutoConfig, PickitConfig } from '../models';
+import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
@@ -74,6 +75,7 @@ interface FilaHorario {
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './configuracion-page.html',

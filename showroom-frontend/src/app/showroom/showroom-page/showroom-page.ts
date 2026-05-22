@@ -17,7 +17,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { EMPTY, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
-import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
@@ -33,7 +33,6 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
-import { MenuModule } from 'primeng/menu';
 import { MeterGroupModule } from 'primeng/metergroup';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
@@ -49,6 +48,7 @@ import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago,
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
+import { MoreMenu } from '../more-menu/more-menu';
 import { UserChip } from '../user-chip/user-chip';
 
 /**
@@ -164,7 +164,6 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     InputMaskModule,
     InputNumberModule,
     InputTextModule,
-    MenuModule,
     MeterGroupModule,
     OverlayBadgeModule,
     ProgressSpinnerModule,
@@ -175,6 +174,7 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     TextareaModule,
     ToolbarModule,
     TooltipModule,
+    MoreMenu,
     UserChip,
   ],
   templateUrl: './showroom-page.html',
@@ -305,20 +305,8 @@ export class ShowroomPage implements AfterViewInit {
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
 
-  readonly menuExtras: MenuItem[] = [
-    { label: 'Consultas', items: [
-      { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
-      { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
-      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
-      { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
-    ]},
-    { label: 'Herramientas', items: [
-      { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags', routerLink: '/etiquetas' },
-    ]},
-    { label: 'Administración', items: [
-      { label: 'Configuración', icon: 'pi pi-cog', routerLink: '/configuracion' },
-    ]},
-  ];
+  // menuExtras vive ahora en <app-more-menu /> (componente reusable) — sin
+  // esto se duplicaba la lista en cada toolbar que quería el botón "Más".
 
   readonly provincias = signal<Provincia[]>([]);
   readonly localidades = signal<Localidad[]>([]);
@@ -1251,7 +1239,16 @@ export class ShowroomPage implements AfterViewInit {
         // tocamos `this.carrito` con el state del response para no esperar
         // al round-trip del SSE en la misma pantalla.
         this.carrito.set(res.carrito.items);
+        // Item del data del toast — la descripción + sku se renderizan con
+        // el template custom de `key='carrito-add'` en app.html.
+        const itemToast = [{
+          sku: r.sku,
+          descripcion: r.descripcion ?? null,
+          cantidad: res.cantidadAgregada,
+        }];
         if (res.cantidadAgregada === 0) {
+          // Caso especial: no se sumó nada. No mostramos el item en el toast
+          // estilizado porque "×0" se vería raro — usamos el toast plano.
           this.toast.add({
             severity: 'warn',
             summary: 'Sin stock',
@@ -1262,20 +1259,24 @@ export class ShowroomPage implements AfterViewInit {
           // Lo marcamos como warn (no success) para que el operador note que
           // queda como excedido y tendrá que resolverlo antes del pedido a DUX.
           this.toast.add({
+            key: 'carrito-add',
             severity: 'warn',
             summary: 'Agregado sin stock',
-            detail: `${r.sku} x${res.cantidadAgregada} — queda como pendiente de reposición.`,
+            detail: 'Queda como pendiente de reposición.',
+            data: itemToast,
             life: 4000,
           });
           this.flashItemCarrito(r.sku);
         } else {
           this.toast.add({
+            key: 'carrito-add',
             severity: res.recortado ? 'warn' : 'success',
-            summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado',
+            summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado al carrito',
             detail: res.recortado
-              ? `${r.sku} x${res.cantidadAgregada} (tope ${r.stockTotal}).`
-              : `${r.sku} x${res.cantidadAgregada}`,
-            life: res.recortado ? 3500 : 1500,
+              ? `Tope disponible: ${r.stockTotal}.`
+              : undefined,
+            data: itemToast,
+            life: res.recortado ? 3500 : 2500,
           });
           this.flashItemCarrito(r.sku);
         }
@@ -1333,25 +1334,41 @@ export class ShowroomPage implements AfterViewInit {
 
   /** Notifica al operador cuando un add proviene del visor (cliente en su celular):
    *  toast informativo + mismo pulso verde sobre la fila que ya hace el flujo
-   *  local. Compara estado previo vs nuevo para decidir qué SKUs cambiaron. */
+   *  local. Compara estado previo vs nuevo para decidir qué SKUs cambiaron.
+   *
+   *  <p>El toast usa el {@code key='cliente-carrito'} que tiene un template
+   *  custom en {@code app.html} — los datos del producto van en
+   *  {@code message.data} (sku + descripcion + cantidad agregada) para que
+   *  el operador vea de un vistazo QUÉ pidió el cliente, no solo el SKU. */
   private procesarCambioDesdeVisor(previo: CarritoItem[], nuevo: CarritoItem[]): void {
-    const prevMap = new Map(previo.map((it) => [it.sku, it.cantidad]));
-    const cambios: string[] = [];
+    const prevMap = new Map(previo.map((it) => [it.sku, it]));
+    const items: { sku: string; descripcion: string | null; cantidad: number }[] = [];
     const skusAgregados: string[] = [];
     for (const it of nuevo) {
-      const antes = prevMap.get(it.sku) ?? 0;
-      const diff = it.cantidad - antes;
+      const antes = prevMap.get(it.sku);
+      const cantidadAntes = antes?.cantidad ?? 0;
+      const diff = it.cantidad - cantidadAntes;
       if (diff > 0) {
-        cambios.push(`${it.sku} x${diff}`);
+        items.push({
+          sku: it.sku,
+          descripcion: it.descripcion ?? antes?.descripcion ?? null,
+          cantidad: diff,
+        });
         skusAgregados.push(it.sku);
       }
     }
-    if (cambios.length === 0) return;
+    if (items.length === 0) return;
     this.toast.add({
-      severity: 'info',
-      summary: 'Cliente agregó al carrito',
-      detail: cambios.join(', '),
-      life: 4000,
+      key: 'carrito-add',
+      severity: 'success',
+      summary: items.length === 1
+        ? 'El cliente sumó un producto'
+        : `El cliente sumó ${items.length} productos`,
+      // No mandamos `detail`: la lista de productos con su descripción ya se
+      // renderiza vía `data` en el template custom. Un detail redundante con
+      // "SKU ×N" se mostraría debajo y duplicaría la info.
+      data: items,
+      life: 6000,
     });
     // Sin la animación el operador veía el toast pero podía perderse cuál fila
     // del carrito cambió — sobre todo si la lista es larga y el item ya estaba.
