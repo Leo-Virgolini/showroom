@@ -46,16 +46,16 @@ export class MoreMenu {
   /** Estructura del menú — fuente única para toda la app. Si en el futuro
    *  se agregan nuevas pantallas, solo se modifica acá. */
   readonly items: MenuItem[] = [
-    { label: 'Consultas', items: [
-      { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
-      { label: 'Historial de presupuestos', icon: 'pi pi-file', routerLink: '/presupuestos/historial' },
-      { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
-      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
-      { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
-    ]},
     { label: 'Herramientas', items: [
       { label: 'Armar presupuesto', icon: 'pi pi-file-edit', routerLink: '/presupuestos' },
       { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags', routerLink: '/etiquetas' },
+    ]},
+    { label: 'Consultas', items: [
+      { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
+      { label: 'Historial de presupuestos', icon: 'pi pi-file', routerLink: '/presupuestos/historial' },
+      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
+      { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
+      { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
     ]},
     { label: 'Administración', items: [
       { label: 'Configuración', icon: 'pi pi-cog', routerLink: '/configuracion' },
