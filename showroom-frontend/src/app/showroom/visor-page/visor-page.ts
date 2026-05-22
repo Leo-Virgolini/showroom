@@ -53,6 +53,13 @@ export class VisorPage {
    *  qué carrito agrega items el botón "Agregar al carrito". */
   readonly operadorUsername = this.route.snapshot.paramMap.get('username') ?? '';
 
+  /** True cuando el username del path está vacío, malformado o no corresponde
+   *  a un operador activo (el backend devuelve 404). Muestra un overlay
+   *  explicativo en lugar de la pantalla normal — sin esto, el visor quedaría
+   *  pegado en "esperando…" sin que el cliente sepa por qué nunca recibe
+   *  scans (típico: QR mal generado, operador deshabilitado en la consola). */
+  readonly operadorInvalido = signal(false);
+
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
   readonly ultimoScan = signal<ScanResult | null>(null);
 
@@ -120,11 +127,15 @@ export class VisorPage {
   });
 
   constructor() {
+    // Username faltante en la URL (típico: alguien tipeó /visor/ a mano).
+    // No intentamos conectar — el SSE quedaría con doble barra y daría 404.
+    if (!this.operadorUsername) {
+      this.operadorInvalido.set(true);
+      return;
+    }
     // Engancha el SSE del BackendStatusService al canal personal del operador
     // — sin esto este celular recibiría solo eventos globales (ningún scan).
-    if (this.operadorUsername) {
-      this.backendStatus.conectarComoVisor(this.operadorUsername);
-    }
+    this.backendStatus.conectarComoVisor(this.operadorUsername);
 
     this.api.obtenerEscalasDescuento().subscribe({
       next: (lista) => this.escalas.set(lista),
@@ -149,15 +160,20 @@ export class VisorPage {
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
     // Usamos el endpoint público por operador — el visor no está autenticado.
-    if (this.operadorUsername) {
-      this.api.visorObtenerSesionActiva(this.operadorUsername).subscribe({
-        next: (s) => {
-          this.nombreCliente.set(s.id != null ? s.nombre : null);
-          this.previousSesionId = s.id ?? null;
-        },
-        error: () => { /* sin sesión activa, queda en null y se muestra el header genérico */ },
-      });
-    }
+    // El error 404 acá significa que el username del path no corresponde a
+    // un operador activo → mostramos el overlay de "URL inválida".
+    this.api.visorObtenerSesionActiva(this.operadorUsername).subscribe({
+      next: (s) => {
+        this.nombreCliente.set(s.id != null ? s.nombre : null);
+        this.previousSesionId = s.id ?? null;
+      },
+      error: (err) => {
+        if (err?.status === 404) {
+          this.operadorInvalido.set(true);
+        }
+        // Otros errores (500, network): queda en null y muestra header genérico.
+      },
+    });
     this.backendStatus.sesionEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((s: SesionShowroom) => {

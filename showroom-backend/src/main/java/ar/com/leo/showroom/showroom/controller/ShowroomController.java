@@ -82,6 +82,7 @@ public class ShowroomController {
 
     private final ShowroomService service;
     private final CarritoService carritoService;
+    private final ar.com.leo.showroom.auth.repository.UsuarioRepository usuarioRepository;
     private final CatalogoSyncService catalogoSync;
     private final DuxClient duxClient;
     private final SyncEventService eventService;
@@ -170,6 +171,7 @@ public class ShowroomController {
     public CarritoAgregarResponseDTO visorAgregarAlCarrito(
             @PathVariable String username,
             @RequestBody @Valid CarritoAgregarRequestDTO request) {
+        validarOperadorVisor(username);
         if (sesionShowroomService.obtenerActiva(username).id() == null) {
             throw new ConflictException(
                     "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
@@ -183,6 +185,7 @@ public class ShowroomController {
      *  el visor del cliente pueda mostrar el nombre del cliente actual. */
     @GetMapping("/visor/{username}/sesion/activa")
     public SesionShowroomDTO visorSesionActiva(@PathVariable String username) {
+        validarOperadorVisor(username);
         return sesionShowroomService.obtenerActiva(username);
     }
 
@@ -191,10 +194,32 @@ public class ShowroomController {
      * Subscribe el emitter al canal del operador correspondiente; el celular
      * recibe solo los eventos de ese operador (carrito, scan-visor,
      * sesion-updated) y nada de los demás.
+     *
+     * <p>Valida que {@code username} exista como operador activo antes de
+     * abrir el canal — sino, cualquiera podría spammear URLs aleatorias
+     * {@code /visor/{random}/events} para ir creando suscripciones fantasma
+     * que nunca reciben eventos y solo consumen memoria del bus SSE.
      */
     @GetMapping(value = "/visor/{username}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter visorEvents(@PathVariable String username) {
+        validarOperadorVisor(username);
         return eventService.subscribe(username);
+    }
+
+    /** 404 si el username del visor no corresponde a un operador existente
+     *  y activo. Aplica a TODOS los endpoints públicos del visor para
+     *  prevenir abuso por URLs aleatorias. */
+    private void validarOperadorVisor(String username) {
+        if (username == null || username.isBlank()) {
+            throw new NotFoundException("URL del visor inválida — falta el username del operador.");
+        }
+        boolean existeYActivo = usuarioRepository.findByUsername(username)
+                .map(u -> u.isActivo())
+                .orElse(false);
+        if (!existeYActivo) {
+            throw new NotFoundException(
+                    "El operador '" + username + "' no existe o está deshabilitado.");
+        }
     }
 
     // =====================================================
