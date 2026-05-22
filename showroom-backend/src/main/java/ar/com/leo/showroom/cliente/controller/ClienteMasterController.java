@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * mergea estos masters con los datos derivados del historial.
  */
 @RestController
-@RequestMapping("/cliente-master")
+@RequestMapping("/api/showroom/cliente-master")
 @RequiredArgsConstructor
 public class ClienteMasterController {
 
