@@ -721,7 +721,7 @@ public class ShowroomController {
 
     /** Vista agrupada por cliente — un row por persona con email/teléfono/
      *  nombre, cantidad de presupuestos y fecha del último. La usa la pantalla
-     *  {@code /presupuestos/clientes}. No paginamos: la cantidad de clientes
+     *  {@code /clientes}. No paginamos: la cantidad de clientes
      *  es manejable en memoria. */
     @GetMapping("/presupuesto-comercial/clientes")
     public java.util.List<ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO> listarClientesPresupuestos() {

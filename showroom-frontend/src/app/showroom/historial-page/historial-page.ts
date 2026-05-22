@@ -39,6 +39,7 @@ import {
 } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 @Component({
   selector: 'app-historial-page',
@@ -65,6 +66,7 @@ import { toastError } from '../toast.utils';
     TagModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './historial-page.html',
   styleUrl: './historial-page.scss',

@@ -13,7 +13,8 @@ import java.util.List;
 public interface PresupuestoComercialRepository extends JpaRepository<PresupuestoComercial, Long> {
 
     /** Todos los presupuestos activos ordenados por fecha descendente — usado
-     *  para construir la vista agrupada por cliente en /presupuestos/clientes.
+     *  para construir la vista agrupada por cliente en /clientes (junto con
+     *  los pedidos — los datos se unen en memoria en {@code listarClientes}).
      *  La agrupación se hace en memoria (suelen ser cientos, no decenas de
      *  miles), así que no necesitamos un GROUP BY con subqueries. */
     List<PresupuestoComercial> findByEliminadoAtIsNullOrderByCreadoAtDesc();

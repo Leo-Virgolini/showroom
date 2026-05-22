@@ -28,13 +28,23 @@ export type TipoDoc = 'DNI' | 'CUIT' | 'CUIL';
 
 export interface CrearPedidoRequest {
   apellidoRazonSocial: string;
-  nombre?: string;
+  /** Nombre del cliente — obligatorio desde mayo 2026 (antes opcional). */
+  nombre: string;
   categoriaFiscal?: CategoriaFiscal;
   tipoDoc?: TipoDoc;
   nroDoc?: number;
   codigoCliente?: string;
-  telefono?: string;
-  email?: string;
+  /** Teléfono del cliente — obligatorio desde mayo 2026. Es el identificador
+   *  único en la vista unificada de clientes (/clientes). */
+  telefono: string;
+  /** Email del cliente — sigue siendo obligatorio para crear pedidos (en
+   *  presupuestos sí es opcional). El PDF de seguimiento post-pedido lo usa. */
+  email: string;
+  /** Rubro comercial del cliente — obligatorio desde mayo 2026. Igual a los
+   *  rubros de presupuestos: 'bar' / 'restaurant' / 'catering' / 'cafeteria'
+   *  / 'panaderia' / 'pasteleria' o texto libre cuando el operador elige
+   *  "Otros". Se guarda en pedido_showroom.rubro. */
+  rubro: string;
   domicilio?: string;
   codigoProvincia?: string;
   idLocalidad?: string;
@@ -634,18 +644,29 @@ export interface ListarPresupuestosParams {
   size?: number;
 }
 
-/** Resumen de cliente agrupado (pantalla /presupuestos/clientes). Construido
- *  en el backend a partir de los presupuestos no eliminados. */
+/** Resumen de cliente agrupado (pantalla /clientes). Construido en el
+ *  backend a partir de presupuestos NO eliminados + pedidos (incluyendo
+ *  anulados — el contador es histórico). Agrupado por teléfono normalizado:
+ *  movimientos sin teléfono no aparecen. */
 export interface ClientePresupuestos {
   email: string | null;
   telefono: string | null;
   nombre: string | null;
   rubro: string | null;
+  /** Cantidad de presupuestos comerciales generados (0 si solo tiene pedidos). */
   cantidadPresupuestos: number;
-  primerPresupuestoAt: string;
-  ultimoPresupuestoAt: string;
+  /** Cantidad de pedidos (incluye anulados; 0 si solo tiene presupuestos). */
+  cantidadPedidos: number;
+  /** Fecha del movimiento más antiguo (presupuesto o pedido). */
+  primerMovimientoAt: string;
+  /** Fecha del movimiento más reciente — define los datos canónicos
+   *  (nombre/email/rubro) y el orden de la tabla. */
+  ultimoMovimientoAt: string;
   ultimoTotalSinIva: number | null;
-  ultimoPresupuestoId: number;
+  /** ID del último presupuesto — null si solo tiene pedidos. */
+  ultimoPresupuestoId: number | null;
+  /** ID del último pedido — null si solo tiene presupuestos. */
+  ultimoPedidoId: number | null;
 }
 
 export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';

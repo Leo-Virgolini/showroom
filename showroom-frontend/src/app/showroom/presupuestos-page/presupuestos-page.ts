@@ -42,6 +42,7 @@ import {
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 /** Dominios sugeridos al tipear el email — mismo set que el dialog de pedidos
  *  para mantener consistencia visual y de comportamiento entre ambos flujos. */
@@ -93,6 +94,7 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './presupuestos-page.html',
   styleUrl: './presupuestos-page.scss',

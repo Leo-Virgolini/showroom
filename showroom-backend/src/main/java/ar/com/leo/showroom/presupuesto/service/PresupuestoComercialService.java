@@ -56,6 +56,10 @@ public class PresupuestoComercialService {
     private final SyncEventService eventService;
     private final ObjectMapper mapper;
     private final UsuarioRepository usuarioRepository;
+    /** Para unificar la vista de clientes con los pedidos (no solo
+     *  presupuestos). El service lee pedidos directamente del repo y los
+     *  agrupa junto con los presupuestos por teléfono normalizado. */
+    private final ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -83,13 +87,15 @@ public class PresupuestoComercialService {
             ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
             ObjectMapper mapper,
-            UsuarioRepository usuarioRepository) {
+            UsuarioRepository usuarioRepository,
+            ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.mapper = mapper;
         this.usuarioRepository = usuarioRepository;
+        this.pedidoRepository = pedidoRepository;
     }
 
     /** Resuelve username a usuarioId. Null si el username no existe (caso
@@ -232,60 +238,134 @@ public class PresupuestoComercialService {
      * simple que un GROUP BY con subqueries para "último monto" / "último id".
      */
     public List<ClientePresupuestosDTO> listarClientes() {
-        List<PresupuestoComercial> todos = repository.findByEliminadoAtIsNullOrderByCreadoAtDesc();
-        // LinkedHashMap mantiene el orden de inserción — como recorremos los
-        // presupuestos DESC por fecha, la primera vez que entra una clave es
-        // el presupuesto más reciente del cliente. Inicializamos con esos
-        // datos canónicos; las pasadas siguientes solo actualizan contador y
-        // primerPresupuestoAt.
-        Map<String, ClientePresupuestosDTO> agrupados = new LinkedHashMap<>();
-        for (PresupuestoComercial p : todos) {
-            String clave = claveCliente(p);
+        // Fusionamos presupuestos y pedidos en un solo agrupador por teléfono.
+        // El "movimiento más reciente" (por creadoAt) determina los datos
+        // canónicos (nombre/email/rubro) — sin distinguir entre presupuesto o
+        // pedido. Los contadores se llevan separados para que el frontend
+        // pueda mostrar "Ver presupuestos" / "Ver pedidos" según corresponda.
+        Map<String, AgregadorCliente> agrupados = new LinkedHashMap<>();
+
+        // 1. Presupuestos comerciales (excluidos los soft-deleted).
+        for (PresupuestoComercial p : repository.findByEliminadoAtIsNullOrderByCreadoAtDesc()) {
+            String clave = claveTelefono(p.getClienteTelefono());
             if (clave == null) continue;
-            ClientePresupuestosDTO actual = agrupados.get(clave);
-            if (actual == null) {
-                agrupados.put(clave, new ClientePresupuestosDTO(
-                        p.getClienteEmail(),
-                        p.getClienteTelefono(),
-                        p.getClienteNombre(),
-                        p.getRubro(),
-                        1,
-                        p.getCreadoAt(),
-                        p.getCreadoAt(),
-                        p.getSubtotalSinIva(),
-                        p.getId()
-                ));
-            } else {
-                // Mantenemos los datos canónicos del más reciente (actual),
-                // solo actualizamos contador y movemos primerPresupuestoAt
-                // hacia atrás (el `todos` viene DESC, así que este es más viejo).
-                agrupados.put(clave, new ClientePresupuestosDTO(
-                        actual.email(),
-                        actual.telefono(),
-                        actual.nombre(),
-                        actual.rubro(),
-                        actual.cantidadPresupuestos() + 1,
-                        p.getCreadoAt(),
-                        actual.ultimoPresupuestoAt(),
-                        actual.ultimoTotalSinIva(),
-                        actual.ultimoPresupuestoId()
-                ));
-            }
+            agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPresupuesto(p);
         }
-        return List.copyOf(agrupados.values());
+
+        // 2. Pedidos. NO excluimos anulados — el contador es histórico (el
+        // operador igual quiere ver "este cliente nos compró 3 veces" aunque
+        // alguno haya quedado anulado por error).
+        for (var pedido : pedidoRepository.findAll()) {
+            String clave = claveTelefono(pedido.getTelefono());
+            if (clave == null) continue;
+            agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPedido(pedido);
+        }
+
+        // Convertimos a DTO ordenando por última actividad descendente (cliente
+        // más reciente arriba), independiente del orden de inserción.
+        return agrupados.values().stream()
+                .map(AgregadorCliente::toDTO)
+                .sorted((a, b) -> {
+                    if (a.ultimoMovimientoAt() == null) return 1;
+                    if (b.ultimoMovimientoAt() == null) return -1;
+                    return b.ultimoMovimientoAt().compareTo(a.ultimoMovimientoAt());
+                })
+                .toList();
     }
 
-    /** Clave de agrupamiento: teléfono normalizado a solo dígitos. El teléfono
-     *  es la identidad canónica del cliente — dos presupuestos con el mismo
-     *  teléfono son del mismo cliente aunque el nombre o el email difieran
-     *  (datos actualizados). La normalización (quitar guiones/espacios/
-     *  paréntesis) evita que la misma persona aparezca duplicada por usar
-     *  formatos distintos al tipear el número. Presupuestos sin teléfono no
+    /** Normaliza el teléfono a solo dígitos. Sin esto, "11-12345678" y
+     *  "1112345678" agruparían como clientes distintos. Devuelve null si el
+     *  teléfono está vacío o no tiene ningún dígito — esos movimientos no
      *  aparecen en la vista de clientes. */
-    private static String claveCliente(PresupuestoComercial p) {
-        if (!StringUtils.hasText(p.getClienteTelefono())) return null;
-        String soloDigitos = p.getClienteTelefono().replaceAll("\\D+", "");
+    private static String claveTelefono(String telefono) {
+        if (!StringUtils.hasText(telefono)) return null;
+        String soloDigitos = telefono.replaceAll("\\D+", "");
         return soloDigitos.isEmpty() ? null : soloDigitos;
+    }
+
+    /** Agregador mutable usado durante el merge — el DTO inmutable se construye
+     *  al final con {@link #toDTO()}. Mantiene los datos canónicos del movimiento
+     *  más reciente (presupuesto o pedido, el que sea más nuevo) y contadores
+     *  separados por tipo de movimiento. */
+    private static final class AgregadorCliente {
+        // Datos canónicos: snapshot del movimiento más reciente (por creadoAt).
+        // Se actualizan SOLO cuando llega un movimiento más nuevo que el actual.
+        private Instant canonicoCreadoAt;
+        private String email;
+        private String telefono;
+        private String nombre;
+        private String rubro;
+        private java.math.BigDecimal ultimoTotalSinIva;
+
+        // Contadores y referencias separadas por tipo.
+        private int cantidadPresupuestos;
+        private int cantidadPedidos;
+        private Long ultimoPresupuestoId;
+        private Long ultimoPedidoId;
+        private Instant ultimoPresupuestoAt;
+        private Instant ultimoPedidoAt;
+        private Instant primerMovimientoAt;
+
+        void agregarPresupuesto(PresupuestoComercial p) {
+            cantidadPresupuestos++;
+            // Cada presupuesto entrante puede ser el más reciente del cliente
+            // dentro de su tipo — usamos eso para el deep-link a presupuestos.
+            if (ultimoPresupuestoAt == null || p.getCreadoAt().isAfter(ultimoPresupuestoAt)) {
+                ultimoPresupuestoAt = p.getCreadoAt();
+                ultimoPresupuestoId = p.getId();
+            }
+            actualizarCanonicoSiMasNuevo(p.getCreadoAt(),
+                    p.getClienteEmail(), p.getClienteTelefono(),
+                    p.getClienteNombre(), p.getRubro(),
+                    p.getSubtotalSinIva());
+            actualizarPrimerMovimiento(p.getCreadoAt());
+        }
+
+        void agregarPedido(ar.com.leo.showroom.pedido.entity.PedidoShowroom pedido) {
+            cantidadPedidos++;
+            if (ultimoPedidoAt == null || pedido.getCreadoAt().isAfter(ultimoPedidoAt)) {
+                ultimoPedidoAt = pedido.getCreadoAt();
+                ultimoPedidoId = pedido.getId();
+            }
+            // totalSinIva del pedido (no total con recargo) — coherente con
+            // el total mostrado en presupuestos.
+            actualizarCanonicoSiMasNuevo(pedido.getCreadoAt(),
+                    pedido.getEmail(), pedido.getTelefono(),
+                    pedido.getNombre(), pedido.getRubro(),
+                    pedido.getTotalSinIva());
+            actualizarPrimerMovimiento(pedido.getCreadoAt());
+        }
+
+        private void actualizarCanonicoSiMasNuevo(Instant creadoAt, String emailM, String telefonoM,
+                                                  String nombreM, String rubroM,
+                                                  java.math.BigDecimal totalM) {
+            if (canonicoCreadoAt != null && !creadoAt.isAfter(canonicoCreadoAt)) return;
+            canonicoCreadoAt = creadoAt;
+            email = emailM;
+            telefono = telefonoM;
+            nombre = nombreM;
+            rubro = rubroM;
+            ultimoTotalSinIva = totalM;
+        }
+
+        private void actualizarPrimerMovimiento(Instant creadoAt) {
+            if (primerMovimientoAt == null || creadoAt.isBefore(primerMovimientoAt)) {
+                primerMovimientoAt = creadoAt;
+            }
+        }
+
+        ClientePresupuestosDTO toDTO() {
+            // El "último movimiento" es el más nuevo entre los dos ejes —
+            // habilita ordenar la tabla por actividad reciente sin importar
+            // si el cliente terminó comprando o solo cotizando.
+            Instant ultimoMov = canonicoCreadoAt;
+            return new ClientePresupuestosDTO(
+                    email, telefono, nombre, rubro,
+                    cantidadPresupuestos, cantidadPedidos,
+                    primerMovimientoAt, ultimoMov,
+                    ultimoTotalSinIva,
+                    ultimoPresupuestoId, ultimoPedidoId);
+        }
     }
 
     /**

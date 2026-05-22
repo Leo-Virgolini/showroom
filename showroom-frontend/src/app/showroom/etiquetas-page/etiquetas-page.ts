@@ -28,6 +28,7 @@ import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 interface EtiquetaImprimible {
   sku: string;
@@ -172,6 +173,7 @@ function guardarPerfilActivoIdLocal(id: number | null): void {
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './etiquetas-page.html',
   styleUrl: './etiquetas-page.scss',

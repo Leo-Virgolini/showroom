@@ -27,6 +27,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { PresupuestoListItem } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -57,6 +58,7 @@ import { toastError } from '../toast.utils';
     TableModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './presupuestos-historial-page.html',
   styleUrl: './presupuestos-historial-page.scss',

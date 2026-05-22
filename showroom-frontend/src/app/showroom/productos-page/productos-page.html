@@ -17,6 +17,7 @@
     </ng-template>
     <ng-template #end>
       <div class="inline-flex items-center gap-2">
+        <app-user-chip />
         @if (health()?.ultimaSincronizacionAt; as fecha) {
           <p-tag
             severity="secondary"

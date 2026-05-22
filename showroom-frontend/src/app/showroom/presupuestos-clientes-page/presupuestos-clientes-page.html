@@ -12,13 +12,14 @@
           <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
             <i class="pi pi-users text-[#FF861C]"></i> Clientes
           </span>
-          <span class="text-[0.65rem] text-muted-color">Listado único derivado de los presupuestos</span>
+          <span class="text-[0.65rem] text-muted-color">Listado único derivado de presupuestos y pedidos</span>
         </div>
       </div>
     </ng-template>
 
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <app-user-chip />
         <p-button icon="pi pi-file-export" [label]="screenLg() ? 'Exportar CSV' : ''"
           ariaLabel="Exportar clientes a CSV" class="btn-kt-verde"
           [disabled]="cargando() || clientesFiltrados().length === 0"
@@ -65,7 +66,7 @@
       </div>
 
       <!-- Tabla -->
-      <p-table [value]="clientesFiltrados()" dataKey="ultimoPresupuestoId"
+      <p-table [value]="clientesFiltrados()" dataKey="telefono"
         [loading]="cargando()"
         [paginator]="true"
         [rows]="25"
@@ -87,16 +88,19 @@
             <th style="width: 9rem">
               <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
             </th>
-            <th class="text-center" style="width: 9rem">
-              <i class="pi pi-file text-[#FF861C] mr-1"></i> Presupuestos
+            <th class="text-center" style="width: 8rem">
+              <i class="pi pi-file-edit text-[#FF861C] mr-1"></i> Presupuestos
+            </th>
+            <th class="text-center" style="width: 7rem">
+              <i class="pi pi-receipt text-[#FF861C] mr-1"></i> Pedidos
             </th>
             <th style="width: 11rem">
-              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Último
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Último mov.
             </th>
             <th class="text-right" style="width: 10rem">
               <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total último
             </th>
-            <th style="width: 8rem"></th>
+            <th style="width: 10rem"></th>
           </tr>
         </ng-template>
 
@@ -119,21 +123,39 @@
               }
             </td>
             <td class="text-center">
-              <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF861C]/15 text-[#FF861C]">
-                {{ c.cantidadPresupuestos }}
-              </span>
+              @if (c.cantidadPresupuestos > 0) {
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF861C]/15 text-[#FF861C]">
+                  {{ c.cantidadPresupuestos }}
+                </span>
+              } @else {
+                <span class="text-xs text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-center">
+              @if (c.cantidadPedidos > 0) {
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  {{ c.cantidadPedidos }}
+                </span>
+              } @else {
+                <span class="text-xs text-muted-color">—</span>
+              }
             </td>
             <td class="text-xs text-surface-700 dark:text-surface-200">
-              {{ c.ultimoPresupuestoAt | date: 'short' : undefined : 'es-AR' }}
+              {{ c.ultimoMovimientoAt | date: 'short' : undefined : 'es-AR' }}
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
               {{ (c.ultimoTotalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td>
-              <p-button icon="pi pi-search" severity="info" [outlined]="true" size="small"
-                label="Ver"
-                (onClick)="verPresupuestos(c)"
-                pTooltip="Abrir el historial filtrado por este cliente"
+              <!-- Split-button: el menú expone "Ver presupuestos" / "Ver pedidos"
+                   con sus contadores. Acciones deshabilitadas si la cantidad es 0
+                   para que el operador entienda de un vistazo qué tiene el cliente. -->
+              <p-splitButton label="Ver" icon="pi pi-search"
+                [model]="itemsVer(c)"
+                size="small" severity="info" [outlined]="true"
+                appendTo="body"
+                (onClick)="c.cantidadPresupuestos > 0 ? verPresupuestos(c) : verPedidos(c)"
+                pTooltip="Abrir presupuestos o pedidos filtrados por este cliente"
                 tooltipPosition="left" />
             </td>
           </tr>
@@ -141,7 +163,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="8">
+            <td colspan="9">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-users text-4xl text-[#FF861C]"></i>

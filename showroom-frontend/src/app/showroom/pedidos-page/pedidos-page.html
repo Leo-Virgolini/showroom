@@ -16,13 +16,16 @@
       </div>
     </ng-template>
     <ng-template #end>
-      <p-button
-        icon="pi pi-arrow-left"
-        ariaLabel="Volver al showroom"
-        label="Volver"
-        class="btn-volver"
-        routerLink="/"
-      />
+      <div class="inline-flex gap-2 items-center">
+        <app-user-chip />
+        <p-button
+          icon="pi pi-arrow-left"
+          ariaLabel="Volver al showroom"
+          label="Volver"
+          class="btn-volver"
+          routerLink="/"
+        />
+      </div>
     </ng-template>
   </p-toolbar>
 

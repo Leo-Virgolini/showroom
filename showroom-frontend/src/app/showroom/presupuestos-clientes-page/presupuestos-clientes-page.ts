@@ -8,28 +8,33 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
-import { MessageService } from 'primeng/api';
+import { MenuItem, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ClientePresupuestos } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 /**
- * Lista de clientes únicos derivada de los presupuestos guardados. Agrupa
- * por teléfono normalizado (solo dígitos): presupuestos sin teléfono no
- * aparecen acá. Los datos canónicos (nombre, email, rubro) se toman del
- * presupuesto más reciente del cliente.
+ * Lista de clientes únicos derivada de presupuestos comerciales + pedidos.
+ * Agrupa por teléfono normalizado (solo dígitos): movimientos sin teléfono
+ * no aparecen acá. Los datos canónicos (nombre, email, rubro) se toman del
+ * movimiento más reciente del cliente sin importar si fue presupuesto o
+ * pedido.
  *
  * <p>Sirve al operador como agenda informal: ver de un vistazo a quién le
- * armó presupuestos y abrir el historial filtrado por ese cliente para
- * reenviar o partir de un presupuesto previo.
+ * cotizó/vendió y abrir el historial o listado de pedidos filtrado por ese
+ * cliente. El botón "Ver" expone un split-button con dos acciones según
+ * los contadores: "Ver presupuestos" y "Ver pedidos" (deshabilitadas si la
+ * cantidad es 0).
  */
 @Component({
   selector: 'app-presupuestos-clientes-page',
@@ -44,9 +49,11 @@ import { toastError } from '../toast.utils';
     IconFieldModule,
     InputIconModule,
     InputTextModule,
+    SplitButtonModule,
     TableModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './presupuestos-clientes-page.html',
 })
@@ -99,23 +106,49 @@ export class PresupuestosClientesPage {
     this.cargar();
   }
 
-  /** Abre el historial de presupuestos filtrado por el teléfono del cliente
-   *  (el identificador canónico — siempre presente porque agrupamos por él).
-   *  Pasamos los ÚLTIMOS 8 DÍGITOS sin formato como `q` (no el teléfono crudo)
-   *  para que la búsqueda LIKE del backend encuentre todos los presupuestos
-   *  del cliente aunque el operador haya tipeado distinto formato en cada
-   *  uno: tanto "11-12345678" como "1112345678" contienen "12345678" al
-   *  final, así que el LIKE matchea ambos. */
-  verPresupuestos(c: ClientePresupuestos): void {
-    if (!c.telefono) {
-      this.router.navigate(['/presupuestos/historial']);
-      return;
-    }
+  /** Calcula un fragmento del teléfono útil como query LIKE en backend —
+   *  los últimos 8 dígitos del teléfono normalizado. Funciona aunque el
+   *  operador haya tipeado formatos distintos del mismo número en cada
+   *  movimiento (con o sin guiones, etc.). */
+  private fragmentoTelefono(c: ClientePresupuestos): string {
+    if (!c.telefono) return '';
     const soloDigitos = c.telefono.replace(/\D+/g, '');
-    const fragmento = soloDigitos.slice(-8) || soloDigitos;
+    return soloDigitos.slice(-8) || soloDigitos;
+  }
+
+  /** Abre el historial de presupuestos filtrado por el teléfono del cliente. */
+  verPresupuestos(c: ClientePresupuestos): void {
+    const fragmento = this.fragmentoTelefono(c);
     this.router.navigate(['/presupuestos/historial'], {
-      queryParams: { q: fragmento },
+      queryParams: fragmento ? { q: fragmento } : {},
     });
+  }
+
+  /** Abre el listado de pedidos filtrado por el teléfono del cliente. */
+  verPedidos(c: ClientePresupuestos): void {
+    const fragmento = this.fragmentoTelefono(c);
+    this.router.navigate(['/pedidos'], {
+      queryParams: fragmento ? { q: fragmento } : {},
+    });
+  }
+
+  /** Items del menú split-button "Ver" por fila. Cada fila construye el suyo
+   *  porque el `disabled` depende de los contadores del cliente. */
+  itemsVer(c: ClientePresupuestos): MenuItem[] {
+    return [
+      {
+        label: `Ver presupuestos${c.cantidadPresupuestos > 0 ? ' (' + c.cantidadPresupuestos + ')' : ''}`,
+        icon: 'pi pi-file-edit',
+        disabled: c.cantidadPresupuestos === 0,
+        command: () => this.verPresupuestos(c),
+      },
+      {
+        label: `Ver pedidos${c.cantidadPedidos > 0 ? ' (' + c.cantidadPedidos + ')' : ''}`,
+        icon: 'pi pi-receipt',
+        disabled: c.cantidadPedidos === 0,
+        command: () => this.verPedidos(c),
+      },
+    ];
   }
 
   /** Exporta los clientes filtrados como CSV compatible con la importación

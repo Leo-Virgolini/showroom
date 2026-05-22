@@ -729,6 +729,7 @@ public class ShowroomService {
                 .nroDoc(request.nroDoc())
                 .telefono(request.telefono())
                 .email(request.email())
+                .rubro(request.rubro())
                 .domicilio(request.domicilio())
                 .codigoProvincia(request.codigoProvincia())
                 .idLocalidad(request.idLocalidad())

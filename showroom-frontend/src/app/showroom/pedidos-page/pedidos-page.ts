@@ -38,6 +38,7 @@ import {
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 @Component({
   selector: 'app-pedidos-page',
@@ -63,6 +64,7 @@ import { toastError } from '../toast.utils';
     TextareaModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './pedidos-page.html',
   styleUrl: './pedidos-page.scss',

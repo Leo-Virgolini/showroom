@@ -138,6 +138,15 @@ public class PedidoShowroom {
     @Column(name = "email", length = 150)
     private String email;
 
+    /** Rubro comercial del cliente (bar, restaurant, panadería, etc.) o un
+     *  texto libre cuando el operador eligió "Otros" al armar el pedido.
+     *  Obligatorio en pedidos nuevos (desde mayo 2026); nullable porque
+     *  los pedidos legacy fueron creados antes de que existiera el campo.
+     *  Lo usa la vista unificada de clientes para asociar rubro al teléfono
+     *  aunque el cliente solo tenga pedidos y nunca haya pedido un presupuesto. */
+    @Column(name = "rubro", length = 100)
+    private String rubro;
+
     @Column(name = "domicilio", length = 200)
     private String domicilio;
 

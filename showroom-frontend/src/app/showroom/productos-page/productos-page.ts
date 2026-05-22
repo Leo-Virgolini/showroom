@@ -29,6 +29,7 @@ import { ProductoListItem } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 @Component({
   selector: 'app-productos-page',
@@ -50,6 +51,7 @@ import { toastError } from '../toast.utils';
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './productos-page.html',
   styleUrl: './productos-page.scss',

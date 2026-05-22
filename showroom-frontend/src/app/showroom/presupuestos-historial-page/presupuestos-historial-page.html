@@ -19,10 +19,11 @@
 
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <app-user-chip />
         <p-button icon="pi pi-users" [label]="screenLg() ? 'Clientes' : ''"
           ariaLabel="Ver listado de clientes" class="btn-kt-violeta"
-          routerLink="/presupuestos/clientes"
-          pTooltip="Ver lista única de clientes a los que se les armó presupuesto"
+          routerLink="/clientes"
+          pTooltip="Ver lista única de clientes (presupuestos + pedidos)"
           tooltipPosition="bottom" />
         <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Nuevo presupuesto' : ''"
           ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"

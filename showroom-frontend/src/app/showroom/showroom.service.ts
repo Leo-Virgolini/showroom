@@ -438,10 +438,13 @@ export class ShowroomService {
     return this.http.get<PresupuestoListPage>(`${this.base}/presupuesto-comercial`, { params });
   }
 
-  /** Lista de clientes únicos derivados de los presupuestos guardados —
-   *  agrupados por teléfono normalizado (solo dígitos) — los presupuestos
-   *  sin teléfono no se cuentan. Datos canónicos (nombre, email, rubro) del
-   *  presupuesto más reciente. Sin paginar. */
+  /** Lista de clientes únicos derivados de presupuestos comerciales + pedidos
+   *  — agrupados por teléfono normalizado (solo dígitos). Movimientos sin
+   *  teléfono no se cuentan. Datos canónicos (nombre, email, rubro) del
+   *  movimiento más reciente sin importar si es presupuesto o pedido.
+   *  Devuelve `cantidadPresupuestos` y `cantidadPedidos` separados para que
+   *  la UI pueda ofrecer "Ver presupuestos" / "Ver pedidos" según corresponda.
+   *  Sin paginar. */
   listarClientesPresupuestos(): Observable<ClientePresupuestos[]> {
     return this.http.get<ClientePresupuestos[]>(`${this.base}/presupuesto-comercial/clientes`);
   }

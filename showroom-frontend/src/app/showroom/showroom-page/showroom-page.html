@@ -169,6 +169,7 @@
     </ng-template>
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <app-user-chip />
         <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
           class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
           [pTooltip]="haySesionActiva() ? 'Cerrar la sesión actual e iniciar otra' : 'Iniciar sesión para registrar los scans del cliente'"
@@ -782,7 +783,9 @@
       </div>
 
       <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">Nombre y apellido</label>
+        <label class="text-sm font-medium text-muted-color">
+          Nombre y apellido <span class="text-red-500">*</span>
+        </label>
         <input pInputText type="text" [ngModel]="cliente().nombre" (ngModelChange)="actualizarCliente('nombre', $event)"
           placeholder="Aparece en la carátula del PDF y en DUX" maxlength="100" class="w-full" />
       </div>
@@ -844,7 +847,9 @@
       </div>
 
       <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Teléfono</label>
+        <label class="text-sm font-medium text-muted-color">
+          Teléfono <span class="text-red-500">*</span>
+        </label>
         <p-inputMask mask="99-99999999" [unmask]="true" [ngModel]="telefonoInputValue()" (ngModelChange)="onTelefonoChange($event)" placeholder="11-12345678" class="w-full" />
       </div>
 
@@ -861,6 +866,40 @@
         <span class="text-xs text-red-600 dark:text-red-400">Formato de email inválido.</span>
         }
       </div>
+
+      <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
+        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">
+          <i class="pi pi-briefcase"></i>
+          Comercial
+        </h4>
+        <p class="text-xs text-muted-color m-0 mt-1">
+          El rubro se guarda con el pedido y se usa para segmentar la vista de clientes.
+        </p>
+      </div>
+
+      <!-- Rubro: dropdown con opciones predefinidas + input libre cuando se elige "Otros".
+           Mismas opciones que /presupuestos para que un mismo cliente caiga al mismo
+           rubro en ambos flujos y agrupe parejo en /clientes. -->
+      <div class="flex flex-col gap-1" [class.col-span-2]="cliente().rubro !== 'otros'">
+        <label class="text-sm font-medium text-muted-color">
+          Rubro <span class="text-red-500">*</span>
+        </label>
+        <p-select [options]="opcionesRubro" [ngModel]="cliente().rubro"
+          (ngModelChange)="actualizarCliente('rubro', $event)"
+          optionLabel="label" optionValue="value" placeholder="Seleccionar…"
+          appendTo="body" class="w-full" />
+      </div>
+      @if (cliente().rubro === 'otros') {
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">
+          Detalle del rubro <span class="text-red-500">*</span>
+        </label>
+        <input pInputText type="text" maxlength="100"
+          [ngModel]="cliente().rubroOtros"
+          (ngModelChange)="actualizarCliente('rubroOtros', $event)"
+          placeholder="Ej: heladería, kiosco…" class="w-full" />
+      </div>
+      }
 
       <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
         <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">

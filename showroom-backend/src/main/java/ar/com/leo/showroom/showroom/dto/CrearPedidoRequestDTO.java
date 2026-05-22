@@ -22,6 +22,7 @@ public record CrearPedidoRequestDTO(
         @NotBlank(message = "apellidoRazonSocial requerido")
         String apellidoRazonSocial,
 
+        @NotBlank(message = "nombre del cliente requerido")
         String nombre,
 
         @Pattern(
@@ -36,11 +37,20 @@ public record CrearPedidoRequestDTO(
         Long nroDoc,
 
         String codigoCliente,
+
+        @NotBlank(message = "teléfono del cliente requerido")
         String telefono,
 
         @NotBlank(message = "email requerido — se usa para mandar al cliente el PDF con los productos vistos")
         @Email(message = "email inválido")
         String email,
+
+        /** Rubro comercial del cliente (bar/restaurant/panadería/otros). Lo usa
+         *  la vista unificada de clientes en {@code /clientes} para mostrar y
+         *  segmentar — sin esto, los clientes que llegan via pedido sin haber
+         *  cotizado nunca tendrían rubro. */
+        @NotBlank(message = "rubro del cliente requerido")
+        String rubro,
 
         String domicilio,
         String codigoProvincia,

@@ -53,11 +53,20 @@ export const routes: Routes = [
         .then((m) => m.PresupuestosHistorialPage),
   },
   {
-    path: 'presupuestos/clientes',
+    // Ruta nueva (mayo 2026): ahora la página unifica clientes de presupuestos
+    // y pedidos, así que el path bajo /presupuestos quedaba engañoso. Está en
+    // el menú "+" principal del showroom-page.
+    path: 'clientes',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./showroom/presupuestos-clientes-page/presupuestos-clientes-page')
         .then((m) => m.PresupuestosClientesPage),
+  },
+  // Redirect del path viejo para no romper bookmarks ni links externos.
+  {
+    path: 'presupuestos/clientes',
+    redirectTo: 'clientes',
+    pathMatch: 'full',
   },
   {
     path: 'historial',

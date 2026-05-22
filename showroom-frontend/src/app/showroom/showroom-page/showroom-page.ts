@@ -49,6 +49,7 @@ import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago,
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
+import { UserChip } from '../user-chip/user-chip';
 
 /**
  * Datos del cliente que el vendedor completa al cerrar el pedido.
@@ -66,6 +67,15 @@ interface DatosCliente {
   nombre: string;
   telefono: string;
   email: string;
+  /** Rubro comercial del cliente — obligatorio desde mayo 2026 al crear el
+   *  pedido. Valor es el ID de la opción ({@code 'bar'}, {@code 'restaurant'},
+   *  etc.) o {@code 'otros'} cuando el operador eligió texto libre. Si es
+   *  {@code 'otros'}, el texto real va en {@link rubroOtros}. */
+  rubro: string | null;
+  /** Texto libre cuando {@link rubro} === 'otros'. Se envía al backend
+   *  resuelto: si rubro es una opción predefinida se manda esa; si es
+   *  'otros' se manda este texto. */
+  rubroOtros: string;
   domicilio: string;
   codigoProvincia: string | null;
   idLocalidad: string | null;
@@ -79,11 +89,25 @@ const CLIENTE_VACIO: DatosCliente = {
   nombre: '',
   telefono: '',
   email: '',
+  rubro: null,
+  rubroOtros: '',
   domicilio: '',
   codigoProvincia: null,
   idLocalidad: null,
   observaciones: '',
 };
+
+/** Opciones del dropdown de rubro — mismas que /presupuestos para coherencia.
+ *  'otros' habilita un input libre. */
+const OPCIONES_RUBRO: { label: string; value: string }[] = [
+  { label: 'Bar', value: 'bar' },
+  { label: 'Restaurant', value: 'restaurant' },
+  { label: 'Catering', value: 'catering' },
+  { label: 'Cafetería', value: 'cafeteria' },
+  { label: 'Panadería', value: 'panaderia' },
+  { label: 'Pastelería', value: 'pasteleria' },
+  { label: 'Otros…', value: 'otros' },
+];
 
 /** Dominios sugeridos al tipear el email. Orden = popularidad esperada en AR. */
 const DOMINIOS_EMAIL_SUGERIDOS = [
@@ -151,6 +175,7 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     TextareaModule,
     ToolbarModule,
     TooltipModule,
+    UserChip,
   ],
   templateUrl: './showroom-page.html',
   styleUrl: './showroom-page.scss',
@@ -284,6 +309,7 @@ export class ShowroomPage implements AfterViewInit {
     { label: 'Consultas', items: [
       { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
       { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
+      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
       { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
     ]},
     { label: 'Herramientas', items: [
@@ -611,9 +637,34 @@ export class ShowroomPage implements AfterViewInit {
       c.nroDoc != null &&
       this.cuitValido(c.nroDoc) &&
       this.emailValido(c.email) &&
+      // Desde mayo 2026 también son obligatorios nombre, teléfono y rubro.
+      // Si el operador elige "Otros" en rubro, tiene que cargar el texto libre.
+      c.nombre.trim().length > 0 &&
+      c.telefono.trim().length > 0 &&
+      this.rubroValido(c) &&
       this.carrito().length > 0
     );
   });
+
+  /** Opciones del dropdown de rubro — expuestas para el template. */
+  readonly opcionesRubro = OPCIONES_RUBRO;
+
+  /** True si el cliente cargó un rubro válido: una opción predefinida, o
+   *  "Otros" con texto libre no vacío. */
+  rubroValido(c: DatosCliente): boolean {
+    if (!c.rubro) return false;
+    if (c.rubro === 'otros') return c.rubroOtros.trim().length > 0;
+    return true;
+  }
+
+  /** Resuelve el valor final del rubro para el payload del backend: si el
+   *  operador eligió "otros" se manda el texto libre; sino, la opción
+   *  predefinida. */
+  rubroFinal(): string {
+    const c = this.cliente();
+    if (c.rubro === 'otros') return c.rubroOtros.trim();
+    return c.rubro ?? '';
+  }
 
   /** Valor de `apellido_razon_social` que recibe DUX. Siempre es el placeholder
    *  fijo: la operadora lo asocia con el cliente real al editar el comprobante
@@ -1804,13 +1855,18 @@ export class ShowroomPage implements AfterViewInit {
         // `apellido_razon_social` (obligatorio en DUX) siempre es el placeholder fijo:
         // la operadora lo edita en DUX al asociar el comprobante con el cliente real.
         apellidoRazonSocial: APELLIDO_RAZON_SOCIAL,
-        // "Nombre y apellido" del cliente real → DUX `nombre` (opcional).
-        nombre: c.nombre.trim() || undefined,
+        // "Nombre y apellido" del cliente real → DUX `nombre`. Obligatorio
+        // desde mayo 2026 (validado por el dialog antes de llegar acá).
+        nombre: c.nombre.trim(),
         categoriaFiscal: this.categoriaFiscalFinal,
         tipoDoc: 'CUIT',
         nroDoc: c.nroDoc ?? undefined,
-        telefono: c.telefono.trim() || undefined,
-        email: c.email.trim() || undefined,
+        telefono: c.telefono.trim(),
+        email: c.email.trim(),
+        // Rubro: si eligió una opción predefinida va esa; si eligió "otros"
+        // mandamos el texto libre. El dialog garantiza que uno u otro tenga
+        // valor antes de llegar acá.
+        rubro: this.rubroFinal(),
         domicilio: c.domicilio.trim() || undefined,
         codigoProvincia: c.codigoProvincia ?? undefined,
         idLocalidad: c.idLocalidad ?? undefined,
