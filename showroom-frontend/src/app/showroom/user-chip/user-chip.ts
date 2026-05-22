@@ -23,7 +23,7 @@ import { AuthService } from '../../auth/auth.service';
   imports: [CommonModule, TooltipModule],
   template: `
     @if (auth.currentUser(); as u) {
-      <span class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#3B1E09] dark:text-surface-0 bg-orange-100/70 dark:bg-surface-800 rounded-full border border-orange-200 dark:border-surface-700"
+      <span class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-[#3B1E09] dark:text-surface-0 bg-orange-100 dark:bg-surface-800 rounded-full border border-orange-300 dark:border-surface-700"
         [pTooltip]="'Sesión iniciada como ' + u.username" tooltipPosition="bottom">
         <i class="pi pi-user text-[#FF861C]"></i>
         <span class="leading-none">{{ u.nombre || u.username }}</span>
