@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +31,14 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
             order by p.sku asc
             """)
     List<ProductoCache> findByCodigoBarra(@Param("ean") String ean);
+
+    /** Códigos de barra por producto, en bulk — usado por el listado paginado
+     *  para evitar tocar la colección lazy {@code ProductoCache.codigosBarra}
+     *  (que requeriría OSIV o sufriría N+1). Una sola query con join sobre la
+     *  tabla lateral {@code producto_cache_codigo_barra}. Cada row es
+     *  {@code [productoId, ean]}. */
+    @Query("select p.id, c from ProductoCache p join p.codigosBarra c where p.id in :ids")
+    List<Object[]> findCodigosBarraByProductoIds(@Param("ids") Collection<Long> ids);
 
     // La búsqueda por texto + filtros vive en {@link ProductoCacheSpecs} +
     // {@code findAll(Specification, Pageable)} de JpaSpecificationExecutor.

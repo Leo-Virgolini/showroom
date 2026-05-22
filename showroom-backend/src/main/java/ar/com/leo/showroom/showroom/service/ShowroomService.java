@@ -310,8 +310,18 @@ public class ShowroomService {
         if (soloSinStock) spec = spec.and(ProductoCacheSpecs.soloSinStock());
 
         Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
+        // Bulk fetch de codigosBarra (colección lazy @ElementCollection) en una
+        // sola query — tocarla via pc.getCodigosBarra() explotaría con
+        // LazyInitializationException al estar OSIV desactivado.
+        List<Long> ids = resultado.getContent().stream().map(ProductoCache::getId).toList();
+        Map<Long, List<String>> codigosPorProducto = ids.isEmpty()
+                ? Map.of()
+                : productoCacheRepository.findCodigosBarraByProductoIds(ids).stream()
+                        .collect(Collectors.groupingBy(
+                                row -> (Long) row[0],
+                                Collectors.mapping(row -> (String) row[1], Collectors.toList())));
         List<ProductoListItemDTO> items = resultado.getContent().stream()
-                .map(this::toProductoListItem)
+                .map(pc -> toProductoListItem(pc, codigosPorProducto.getOrDefault(pc.getId(), List.of())))
                 .toList();
         return new ProductoListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
     }
@@ -608,10 +618,8 @@ public class ShowroomService {
         );
     }
 
-    private ProductoListItemDTO toProductoListItem(ProductoCache pc) {
-        List<String> eans = pc.getCodigosBarra() == null
-                ? List.of()
-                : pc.getCodigosBarra().stream().sorted().toList();
+    private ProductoListItemDTO toProductoListItem(ProductoCache pc, List<String> codigosBarra) {
+        List<String> eans = codigosBarra.stream().sorted().toList();
         return new ProductoListItemDTO(
                 pc.getSku(),
                 pc.getDescripcion(),
