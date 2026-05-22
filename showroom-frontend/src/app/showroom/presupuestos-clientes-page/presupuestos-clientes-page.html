@@ -141,16 +141,26 @@
               {{ (c.ultimoTotalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td>
-              <!-- Split-button: el menú expone "Ver presupuestos" / "Ver pedidos"
-                   con sus contadores. Acciones deshabilitadas si la cantidad es 0
-                   para que el operador entienda de un vistazo qué tiene el cliente. -->
-              <p-splitButton label="Ver" icon="pi pi-search"
-                [model]="itemsVer(c)"
-                size="small" severity="info" [outlined]="true"
-                appendTo="body"
-                (onClick)="c.cantidadPresupuestos > 0 ? verPresupuestos(c) : verPedidos(c)"
-                pTooltip="Abrir presupuestos o pedidos filtrados por este cliente"
-                tooltipPosition="left" />
+              <!-- Dos botones chicos lado a lado en vez de p-splitButton: el
+                   SplitButton de PrimeNG 21 tiene problemas con OnPush +
+                   appendTo="body" (los callbacks `command` y los `routerLink`
+                   en los items del dropdown no se disparan). Además, mostrar
+                   ambas opciones expuestas con sus contadores es más
+                   directo que un menú colapsado. -->
+              <div class="inline-flex gap-1">
+                <p-button [label]="'Presup. (' + c.cantidadPresupuestos + ')'"
+                  icon="pi pi-file-edit" size="small" [outlined]="true"
+                  class="btn-kt-naranja-oscuro"
+                  [disabled]="c.cantidadPresupuestos === 0"
+                  (onClick)="verPresupuestos(c)"
+                  pTooltip="Ver presupuestos de este cliente" tooltipPosition="top" />
+                <p-button [label]="'Pedidos (' + c.cantidadPedidos + ')'"
+                  icon="pi pi-receipt" size="small" [outlined]="true"
+                  class="btn-kt-teal"
+                  [disabled]="c.cantidadPedidos === 0"
+                  (onClick)="verPedidos(c)"
+                  pTooltip="Ver pedidos de este cliente" tooltipPosition="top" />
+              </div>
             </td>
           </tr>
         </ng-template>

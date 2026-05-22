@@ -13,7 +13,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -104,6 +104,7 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
 export class PresupuestosPage implements AfterViewInit {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -638,10 +639,41 @@ export class PresupuestosPage implements AfterViewInit {
       return;
     }
     if (!this.validarDatosCliente()) return;
+    // Confirmación previa: el endpoint backend persiste el presupuesto
+    // (consume número + crea/actualiza cliente). El operador tiene que saber
+    // que cada click genera un registro nuevo — antes esto ocurría silencioso
+    // y se ensuciaba el historial con duplicados al re-descargar para probar
+    // ajustes de descuento o forma de pago.
+    const nombre = this.clienteNombre().trim();
+    const sujeto = nombre ? `"${nombre}"` : 'el cliente';
+    const cantidad = this.items().length;
+    this.confirmationService.confirm({
+      header: 'Generar presupuesto',
+      message:
+        `Se va a generar el PDF con ${cantidad} producto${cantidad === 1 ? '' : 's'} ` +
+        `para ${sujeto} y quedará registrado en el historial de presupuestos. ` +
+        `${nombre ? sujeto : 'El cliente'} también aparecerá en la lista de Clientes.\n\n` +
+        `¿Continuar?`,
+      icon: 'pi pi-file-pdf',
+      acceptButtonProps: {
+        label: 'Generar y descargar',
+        icon: 'pi pi-download',
+      },
+      rejectButtonProps: {
+        label: 'Cancelar',
+        severity: 'secondary',
+        outlined: true,
+      },
+      accept: () => this.ejecutarPrevisualizar(),
+    });
+  }
+
+  private ejecutarPrevisualizar(): void {
     // Truco anti-popup-blocker: abrimos la pestaña en blanco AHORA, sincrónico
-    // con el click del operador. Chrome considera esta apertura como
-    // user-initiated (no la bloquea). Cuando llega el PDF del backend, le
-    // cargamos la URL del blob a esta misma pestaña.
+    // con el click del operador (sobre el botón "Generar y descargar" del
+    // confirm). Chrome considera esta apertura como user-initiated (no la
+    // bloquea). Cuando llega el PDF del backend, le cargamos la URL del blob
+    // a esta misma pestaña.
     //
     // Si abrieramos window.open() recién en el .subscribe(next), Chrome
     // lo trata como popup automático post-async y lo bloquea.

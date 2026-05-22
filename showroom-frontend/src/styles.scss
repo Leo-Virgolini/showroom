@@ -175,6 +175,13 @@ textarea,
   --p-button-primary-hover-color: #fff;
   --p-button-primary-active-background: #843707;
   --p-button-primary-active-border-color: #843707;
+  // Outlined: PrimeNG usa una familia de vars distinta cuando [outlined]="true".
+  // Sin estos overrides el outlined cae al tema default (naranja primario) y
+  // los botones outlined de toda la app se ven iguales.
+  --p-button-outlined-primary-color: #c2580e;
+  --p-button-outlined-primary-border-color: #c2580e;
+  --p-button-outlined-primary-hover-background: #fdf3ed;
+  --p-button-outlined-primary-active-background: #f8e0cd;
 }
 
 // Rojo apagado — para acciones de salida/cierre como logout. No tan agresivo
@@ -215,6 +222,11 @@ textarea,
   --p-button-primary-hover-color: #fff;
   --p-button-primary-active-background: #115e59;
   --p-button-primary-active-border-color: #115e59;
+  // Outlined override — ver explicación en `.btn-kt-naranja-oscuro`.
+  --p-button-outlined-primary-color: #0d9488;
+  --p-button-outlined-primary-border-color: #0d9488;
+  --p-button-outlined-primary-hover-background: #ecfdf5;
+  --p-button-outlined-primary-active-background: #ccfbf1;
 }
 
 // Violeta — para "Historial". Tono frío distinto del resto de la paleta

@@ -8,13 +8,12 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
-import { MenuItem, MessageService } from 'primeng/api';
+import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
-import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
@@ -50,7 +49,6 @@ import { UserChip } from '../user-chip/user-chip';
     IconFieldModule,
     InputIconModule,
     InputTextModule,
-    SplitButtonModule,
     TableModule,
     ToolbarModule,
     TooltipModule,
@@ -132,33 +130,6 @@ export class PresupuestosClientesPage {
     this.router.navigate(['/pedidos'], {
       queryParams: fragmento ? { q: fragmento } : {},
     });
-  }
-
-  /** Items del menú split-button "Ver" por fila. Usamos {@code routerLink} +
-   *  {@code queryParams} directamente en cada item (NO {@code command}: con
-   *  {@code appendTo="body"} y change-detection OnPush los callbacks de
-   *  command no se disparan de forma confiable en PrimeNG SplitButton). El
-   *  patrón {@code routerLink} sí funciona porque PrimeNG lo bindea al
-   *  RouterLink directive de Angular y la navegación va por el router. */
-  itemsVer(c: ClientePresupuestos): MenuItem[] {
-    const fragmento = this.fragmentoTelefono(c);
-    const queryParams = fragmento ? { q: fragmento } : {};
-    return [
-      {
-        label: `Ver presupuestos${c.cantidadPresupuestos > 0 ? ' (' + c.cantidadPresupuestos + ')' : ''}`,
-        icon: 'pi pi-file-edit',
-        disabled: c.cantidadPresupuestos === 0,
-        routerLink: ['/presupuestos/historial'],
-        queryParams,
-      },
-      {
-        label: `Ver pedidos${c.cantidadPedidos > 0 ? ' (' + c.cantidadPedidos + ')' : ''}`,
-        icon: 'pi pi-receipt',
-        disabled: c.cantidadPedidos === 0,
-        routerLink: ['/pedidos'],
-        queryParams,
-      },
-    ];
   }
 
   /** Exporta los clientes filtrados como CSV compatible con la importación

@@ -25,10 +25,10 @@
           <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar el detalle"
             class="btn-kt-rojo" (onClick)="vaciar()" pTooltip="Vaciar el detalle" tooltipPosition="bottom" />
         }
-        <p-button icon="pi pi-download" [label]="screenLg() ? 'Descargar PDF' : ''" ariaLabel="Descargar PDF"
+        <p-button icon="pi pi-download" [label]="screenLg() ? 'Generar PDF' : ''" ariaLabel="Generar y descargar PDF"
           class="btn-kt-marron" [disabled]="!hayItems() || generandoPreview()"
           [loading]="generandoPreview()" (onClick)="previsualizar()"
-          pTooltip="Descarga y abre el PDF para revisarlo o reenviarlo (no consume número)"
+          pTooltip="Genera, descarga y guarda el presupuesto en el historial (pide confirmación antes)"
           tooltipPosition="bottom" />
         <p-button icon="pi pi-send" [label]="screenLg() ? 'Enviar' : ''" ariaLabel="Enviar por email"
           class="btn-kt-naranja" [disabled]="!hayItems()"
