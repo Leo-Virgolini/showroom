@@ -42,16 +42,32 @@ export class ShowroomService {
   private readonly http = inject(HttpClient);
   private readonly base = '/api/showroom';
 
-  scan(sku: string): Observable<ScanResult> {
-    return this.http.get<ScanResult>(`${this.base}/scan/${encodeURIComponent(sku)}`);
+  /** Lookup por SKU. Con {@code publicarVisor=false} el backend NO emite el
+   *  evento SSE `scan-visor` ni registra el scan en la sesión activa — útil
+   *  para flujos paralelos como /presupuestos donde el producto no debe
+   *  aparecer en la pantalla del cliente. */
+  scan(sku: string, publicarVisor = true): Observable<ScanResult> {
+    let params = new HttpParams();
+    if (!publicarVisor) params = params.set('publicarVisor', 'false');
+    return this.http.get<ScanResult>(`${this.base}/scan/${encodeURIComponent(sku)}`, { params });
   }
 
-  /** Llamada desde /visor cuando el cliente toca "Agregar al carrito" en el
-   *  celular. El backend lo suma al carrito (único global) y emite SSE
-   *  `carrito-updated`. La respuesta incluye cuánto se sumó realmente. */
-  visorAgregarAlCarrito(sku: string, cantidad: number, forzar = false): Observable<CarritoAgregarResponse> {
+  /** Llamada desde /visor/:username cuando el cliente toca "Agregar al carrito"
+   *  en el celular. El backend lo suma al carrito DEL OPERADOR identificado
+   *  por {@code username} y emite SSE `carrito-updated` en su canal personal.
+   *  La respuesta incluye cuánto se sumó realmente. */
+  visorAgregarAlCarrito(username: string, sku: string, cantidad: number, forzar = false):
+      Observable<CarritoAgregarResponse> {
     return this.http.post<CarritoAgregarResponse>(
-      `${this.base}/visor/agregar-carrito`, { sku, cantidad, forzar });
+      `${this.base}/visor/${encodeURIComponent(username)}/agregar-carrito`,
+      { sku, cantidad, forzar });
+  }
+
+  /** Estado de la sesión activa de un operador específico — endpoint público
+   *  que usa el visor para mostrar el nombre del cliente actual. */
+  visorObtenerSesionActiva(username: string): Observable<SesionShowroom> {
+    return this.http.get<SesionShowroom>(
+      `${this.base}/visor/${encodeURIComponent(username)}/sesion/activa`);
   }
 
   // =====================================================

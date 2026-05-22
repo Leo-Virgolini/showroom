@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.picking;
 
+import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.PickingEmailEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -53,6 +54,11 @@ public class PickingEmailService {
     private final JavaMailSender mailSender;
     private final SyncEventService eventService;
     private final SesionShowroomRepository sesionRepository;
+    /** Para resolver {@code pedido.usuarioId} / {@code sesion.usuarioId} a
+     *  username y publicar el SSE en el canal personal del operador que
+     *  disparó el envío — así el toast del email aparece solo en SU pantalla,
+     *  no en la de todos los operadores logueados. */
+    private final UsuarioRepository usuarioRepository;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean enabled;
@@ -71,11 +77,32 @@ public class PickingEmailService {
             PresupuestoPdfGenerator pdfGenerator,
             org.springframework.beans.factory.ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
-            SesionShowroomRepository sesionRepository) {
+            SesionShowroomRepository sesionRepository,
+            UsuarioRepository usuarioRepository) {
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.sesionRepository = sesionRepository;
+        this.usuarioRepository = usuarioRepository;
+    }
+
+    /** Resuelve el username del operador que disparó la operación a partir
+     *  del {@code usuarioId} guardado en pedido/sesión. Null si no se puede
+     *  resolver (legacy sin usuario) — en ese caso el SSE se publica global
+     *  como fallback para no perder el toast. */
+    private String usernameDe(Long usuarioId) {
+        if (usuarioId == null) return null;
+        return usuarioRepository.findById(usuarioId).map(u -> u.getUsername()).orElse(null);
+    }
+
+    /** Publica {@code event} al canal del operador {@code username}; si es null
+     *  (legacy data o resolución fallida), broadcast global como fallback. */
+    private void publicarEvento(String username, Object payload) {
+        if (username != null) {
+            eventService.publishTo(username, SSE_EVENT, payload);
+        } else {
+            eventService.publish(SSE_EVENT, payload);
+        }
     }
 
     /**
@@ -104,7 +131,22 @@ public class PickingEmailService {
      */
     @Async
     public void enviarAsync(PedidoShowroom pedido) {
-        enviarPedidoSync(pedido); // fire-and-forget, ignora outcome
+        // Path automático tras pedido OK — el operador autenticado coincide
+        // con el creador, así que dejamos que enviarPedidoSync resuelva el
+        // username del propio pedido.
+        enviarPedidoSync(pedido, null);
+    }
+
+    /**
+     * Disparo manual desde {@code POST /pedidos/{id}/email}. {@code operadorActual}
+     * es el username del que apretó el botón — puede no ser el creador del
+     * pedido (otro operador re-enviando un pedido ajeno). El toast SSE va a
+     * la pantalla del operador que disparó, no del creador, para que reciba
+     * la confirmación inmediata sin tener que mirar la pantalla de otro.
+     */
+    @Async
+    public void enviarAsync(PedidoShowroom pedido, String operadorActual) {
+        enviarPedidoSync(pedido, operadorActual);
     }
 
     /**
@@ -116,6 +158,22 @@ public class PickingEmailService {
      *         cualquier otro outcome (skip, falla SMTP, sin destinatario, etc.).
      */
     public boolean enviarPedidoSync(PedidoShowroom pedido) {
+        return enviarPedidoSync(pedido, null);
+    }
+
+    /**
+     * Versión con override: {@code operadorActual} dirige el toast SSE al
+     * operador que disparó la acción (no necesariamente el creador del pedido).
+     * Lo usan los endpoints manuales del controller pasando {@code auth.getName()}.
+     * Si {@code operadorActual} es null, se usa el creador del pedido como
+     * fallback — comportamiento del flujo automático post-pedido OK.
+     */
+    public boolean enviarPedidoSync(PedidoShowroom pedido, String operadorActual) {
+        // El operador efectivo del toast SSE: override del que apretó el botón
+        // (si vino) sino el creador del pedido (caso auto post-pedido).
+        String operador = operadorActual != null ? operadorActual
+                : usernameDe(pedido.getUsuarioId());
+
         if (!enabled || mailSender == null) {
             log.debug("Email no disponible — pedido {} no se envía.", pedido.getId());
             return false;
@@ -145,7 +203,8 @@ public class PickingEmailService {
                 () -> pdfGenerator.generarHistorial(sesion, pedido),
                 "pedido " + pedido.getId(),
                 emailCliente,
-                failedFactory);
+                failedFactory,
+                operador);
         if (pdf == null) {
             // Caso "no items extra" — el cliente compró todo lo que vio. No es
             // un error técnico, pero igual notificamos al frontend con SKIPPED
@@ -153,7 +212,7 @@ public class PickingEmailService {
             // claro en vez de quedar esperando.
             String motivo = "El cliente compró todo lo que vio — no hay PDF de productos extra para mandar.";
             log.info("Pedido {} — {}", pedido.getId(), motivo);
-            eventService.publish(SSE_EVENT, PickingEmailEvent.skippedPedido(
+            publicarEvento(operador, PickingEmailEvent.skippedPedido(
                     pedido.getId(), cuit, emailCliente, motivo));
             return false;
         }
@@ -166,7 +225,8 @@ public class PickingEmailService {
                 "pedido " + pedido.getId(),
                 sentFactory,
                 failedFactory,
-                ambiguoFactory);
+                ambiguoFactory,
+                operador);
     }
 
     /**
@@ -175,6 +235,20 @@ public class PickingEmailService {
      */
     @Async
     public void enviarPdfSesionAsync(SesionShowroom sesion, String emailDestinatario) {
+        // Sin override: el toast va al dueño de la sesión.
+        enviarPdfSesionAsync(sesion, emailDestinatario, null);
+    }
+
+    /**
+     * Versión con override — el toast SSE va al operador que apretó el botón
+     * (pasa {@code auth.getName()} desde el controller), no al dueño de la
+     * sesión. Si {@code operadorActual} es null, cae al dueño como fallback.
+     */
+    @Async
+    public void enviarPdfSesionAsync(SesionShowroom sesion, String emailDestinatario, String operadorActual) {
+        String operador = operadorActual != null ? operadorActual
+                : usernameDe(sesion.getUsuarioId());
+
         Function<String, PickingEmailEvent> sentFactory =
                 emailDest -> PickingEmailEvent.sentSesion(sesion.getId(), emailDest);
         BiFunction<String, String, PickingEmailEvent> failedFactory =
@@ -185,12 +259,12 @@ public class PickingEmailService {
         Optional<String> motivo = motivoNoConfigurado();
         if (motivo.isPresent()) {
             log.debug("Email no disponible: {}. Sesión {} no se envía.", motivo.get(), sesion.getId());
-            eventService.publish(SSE_EVENT, failedFactory.apply(emailDestinatario, motivo.get()));
+            publicarEvento(operador, failedFactory.apply(emailDestinatario, motivo.get()));
             return;
         }
         if (!StringUtils.hasText(emailDestinatario)) {
             log.warn("Sesión {} sin email destinatario — no se manda email.", sesion.getId());
-            eventService.publish(SSE_EVENT, failedFactory.apply(null, "Falta el email del cliente."));
+            publicarEvento(operador, failedFactory.apply(null, "Falta el email del cliente."));
             return;
         }
 
@@ -198,10 +272,11 @@ public class PickingEmailService {
                 () -> pdfGenerator.generarHistorialSesion(sesion),
                 "sesión " + sesion.getId(),
                 emailDestinatario,
-                failedFactory);
+                failedFactory,
+                operador);
         if (pdf == null) {
             log.info("Sesión {} sin items escaneados — no hay PDF que mandar.", sesion.getId());
-            eventService.publish(SSE_EVENT, failedFactory.apply(emailDestinatario,
+            publicarEvento(operador, failedFactory.apply(emailDestinatario,
                     "La sesión no tiene items escaneados — no hay PDF que mandar."));
             return;
         }
@@ -214,7 +289,8 @@ public class PickingEmailService {
                 "sesión " + sesion.getId(),
                 sentFactory,
                 failedFactory,
-                ambiguoFactory);
+                ambiguoFactory,
+                operador);
     }
 
     /**
@@ -241,7 +317,8 @@ public class PickingEmailService {
             String logContext,
             Function<String, PickingEmailEvent> sentFactory,
             BiFunction<String, String, PickingEmailEvent> failedFactory,
-            BiFunction<String, String, PickingEmailEvent> ambiguoFactory) {
+            BiFunction<String, String, PickingEmailEvent> ambiguoFactory,
+            String operador) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -260,7 +337,7 @@ public class PickingEmailService {
             log.info("Email {} — enviando a {} PDF={}KB", logContext, destinatario, pdf.length / 1024);
             mailSender.send(mime);
             log.info("Email enviado a {} para {}", destinatario, logContext);
-            eventService.publish(SSE_EVENT, sentFactory.apply(destinatario));
+            publicarEvento(operador, sentFactory.apply(destinatario));
             return true;
         } catch (Exception e) {
             if (esReadTimeoutPostUpload(e)) {
@@ -275,13 +352,13 @@ public class PickingEmailService {
                         logContext, pdf.length / 1024, e.getMessage());
                 String detalle = "Gmail tardó en confirmar el envío. El mail probablemente llegó — "
                         + "verificá la bandeja del cliente antes de reintentar.";
-                eventService.publish(SSE_EVENT, ambiguoFactory.apply(destinatario, detalle));
+                publicarEvento(operador, ambiguoFactory.apply(destinatario, detalle));
                 return false;
             }
             log.error("Falló envío de email para {}: {}", logContext, e.getMessage(), e);
             String detalle = UserMessages.traducir(e,
                     "No se pudo enviar el email. Revisar logs del backend para más detalle.");
-            eventService.publish(SSE_EVENT, failedFactory.apply(destinatario, detalle));
+            publicarEvento(operador, failedFactory.apply(destinatario, detalle));
             return false;
         }
     }
@@ -305,13 +382,14 @@ public class PickingEmailService {
             java.util.function.Supplier<byte[]> pdfSupplier,
             String logContext,
             String destinatario,
-            BiFunction<String, String, PickingEmailEvent> failedFactory) {
+            BiFunction<String, String, PickingEmailEvent> failedFactory,
+            String operador) {
         try {
             return pdfSupplier.get();
         } catch (Exception ex) {
             log.warn("No se pudo generar el PDF de historial para {}: {}", logContext, ex.getMessage(), ex);
             String detalle = UserMessages.traducir(ex, "No se pudo generar el PDF de follow-up.");
-            eventService.publish(SSE_EVENT, failedFactory.apply(destinatario, detalle));
+            publicarEvento(operador, failedFactory.apply(destinatario, detalle));
             return null;
         }
     }

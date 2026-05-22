@@ -17,5 +17,8 @@ public record PresupuestoListItemDTO(
         String clienteEmail,
         String rubro,
         BigDecimal totalSinIva,
-        BigDecimal descuentoGlobalPorcentaje
+        BigDecimal descuentoGlobalPorcentaje,
+        /** Nombre o username del operador que generó el presupuesto. Null en
+         *  presupuestos legacy creados antes del multi-usuario. */
+        String creadoPor
 ) {}

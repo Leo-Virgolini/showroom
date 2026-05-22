@@ -1,5 +1,7 @@
 package ar.com.leo.showroom.sesion.service;
 
+import ar.com.leo.showroom.auth.entity.Usuario;
+import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.events.SesionCerradaEvent;
@@ -42,14 +44,13 @@ import java.util.stream.Collectors;
  * VE durante la visita (todos los SKUs escaneados), separado del carrito que
  * son los que efectivamente COMPRA.
  *
- * <p>Hay como máximo una sesión activa a la vez (igual que el carrito). Al
- * iniciar una nueva, la anterior se finaliza automáticamente (queda como
- * "abandonada" si no llegó a asociarse a un pedido).
+ * <p><b>Multi-usuario</b>: cada operador tiene su propia sesión activa. Iniciar
+ * una nueva sesión finaliza la anterior DEL MISMO operador (no la de otros).
+ * "Activa" = {@code usuarioId = X AND finalizadaAt IS NULL}.
  *
- * <p>Los scans se registran via {@link #registrarScan(ScanResultDTO)} llamado
- * desde el endpoint {@code /scan/{sku}}. Si no hay sesión activa, el scan
- * sigue funcionando normalmente pero no se persiste — el frontend muestra
- * un aviso al operador.
+ * <p>Los scans se registran via {@link #registrarScan(String, ScanResultDTO)}
+ * llamado desde el endpoint {@code /scan/{sku}}. Si el operador no tiene sesión
+ * activa, el scan sigue funcionando normalmente pero no se persiste.
  *
  * <p>Persistencia: tabla {@code sesion_showroom} + {@code sesion_scan_item}.
  * Restart del backend no pierde nada — a diferencia del carrito.
@@ -65,89 +66,99 @@ public class SesionShowroomService {
     private final SyncEventService eventService;
     private final ImagenLocalService imagenLocalService;
     private final PedidoShowroomRepository pedidoRepository;
+    private final UsuarioRepository usuarioRepository;
     /** Para publicar {@link SesionCerradaEvent} cuando se abandona/cancela una
      *  sesión. {@code CarritoService} lo escucha y vacía el carrito — así
      *  evitamos el acoplamiento directo y el ciclo de dependencias. */
     private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
-     * Inicia una sesión nueva con el nombre del cliente. Si había una activa
-     * sin pedido asociado, la marca como finalizada (abandonada).
+     * Inicia una sesión nueva para {@code username} con el nombre del cliente.
+     * Si había una activa del MISMO operador sin pedido asociado, la marca
+     * como finalizada (abandonada). Las sesiones de otros operadores no se
+     * tocan.
      *
      * @return el DTO de la nueva sesión activa.
      */
     @Transactional
-    public SesionShowroomDTO iniciar(String nombre) {
+    public SesionShowroomDTO iniciar(String username, String nombre) {
+        Usuario operador = resolverOperador(username);
         String limpio = nombre == null ? "" : nombre.trim();
         if (limpio.isEmpty()) {
             throw new IllegalArgumentException("Nombre del cliente requerido");
         }
 
-        repository.findActiva().ifPresent(activa -> {
+        repository.findActivaByUsuarioId(operador.getId()).ifPresent(activa -> {
             activa.setFinalizadaAt(Instant.now());
             repository.save(activa);
-            // El carrito es global — sin vaciar, el cliente nuevo hereda items
-            // del anterior que no compró nada. Lo hace CarritoService al recibir
-            // el evento.
+            // El carrito del operador se vacía con el listener. Otros operadores
+            // y sus carritos no se ven afectados.
             applicationEventPublisher.publishEvent(new SesionCerradaEvent(
-                    activa.getId(), activa.getNombre(), SesionCerradaEvent.Motivo.ABANDONADA));
-            log.info("Sesión {} ({}) abandonada al iniciar una nueva", activa.getId(), activa.getNombre());
+                    activa.getId(), activa.getNombre(), username, SesionCerradaEvent.Motivo.ABANDONADA));
+            log.info("Sesión {} ({}, op={}) abandonada al iniciar una nueva",
+                    activa.getId(), activa.getNombre(), username);
         });
 
         SesionShowroom nueva = SesionShowroom.builder()
+                .usuarioId(operador.getId())
                 .nombre(limpio)
                 .iniciadaAt(Instant.now())
                 .build();
         nueva = repository.save(nueva);
-        log.info("Sesión {} iniciada para cliente '{}'", nueva.getId(), limpio);
+        log.info("Sesión {} iniciada por '{}' para cliente '{}'",
+                nueva.getId(), username, limpio);
 
         SesionShowroomDTO dto = toEstadoDTO(nueva);
-        eventService.publish(EVENTO_SESION, dto);
+        eventService.publishTo(username, EVENTO_SESION, dto);
         return dto;
     }
 
     /**
-     * Cierra la sesión activa sin asociarla a ningún pedido (cancelación
-     * manual desde el frontend). 204 si no había sesión activa — operación
-     * idempotente.
+     * Cierra la sesión activa de {@code username} sin asociarla a ningún pedido.
+     * Idempotente — si no había sesión activa, devuelve el placeholder
+     * inactiva sin tocar nada.
      */
     @Transactional
-    public SesionShowroomDTO cancelar() {
-        Optional<SesionShowroom> activa = repository.findActiva();
+    public SesionShowroomDTO cancelar(String username) {
+        Usuario operador = resolverOperador(username);
+        Optional<SesionShowroom> activa = repository.findActivaByUsuarioId(operador.getId());
         if (activa.isEmpty()) {
             return SesionShowroomDTO.inactiva();
         }
         SesionShowroom s = activa.get();
         s.setFinalizadaAt(Instant.now());
         repository.save(s);
-        // El carrito es global — al cerrar la atención al cliente, queda vacío
-        // para que el próximo cliente arranque limpio. Lo hace CarritoService
-        // al recibir el evento.
         applicationEventPublisher.publishEvent(new SesionCerradaEvent(
-                s.getId(), s.getNombre(), SesionCerradaEvent.Motivo.CANCELADA));
-        log.info("Sesión {} ({}) cancelada manualmente", s.getId(), s.getNombre());
-        eventService.publish(EVENTO_SESION, SesionShowroomDTO.inactiva());
+                s.getId(), s.getNombre(), username, SesionCerradaEvent.Motivo.CANCELADA));
+        log.info("Sesión {} ({}, op={}) cancelada manualmente",
+                s.getId(), s.getNombre(), username);
+        eventService.publishTo(username, EVENTO_SESION, SesionShowroomDTO.inactiva());
         return SesionShowroomDTO.inactiva();
     }
 
-    /** Estado actual de la sesión (o inactiva si no hay una). */
+    /** Estado actual de la sesión del operador (o inactiva si no hay una). */
     @Transactional
-    public SesionShowroomDTO obtenerActiva() {
-        return repository.findActiva()
+    public SesionShowroomDTO obtenerActiva(String username) {
+        Optional<Usuario> op = usuarioRepository.findByUsername(username);
+        if (op.isEmpty()) return SesionShowroomDTO.inactiva();
+        return repository.findActivaByUsuarioId(op.get().getId())
                 .map(this::toEstadoDTO)
                 .orElseGet(SesionShowroomDTO::inactiva);
     }
 
     /**
-     * Registra un scan en la sesión activa si la hay. Idempotente por SKU:
-     * si el SKU ya estaba registrado, actualiza el timestamp + el snapshot
-     * de precio/descripción (último visto gana). Si no hay sesión activa,
-     * no hace nada — el caller no necesita preocuparse.
+     * Registra un scan en la sesión activa del operador si la hay. Idempotente
+     * por SKU: si el SKU ya estaba registrado, actualiza el timestamp + el
+     * snapshot de precio/descripción (último visto gana). Si no hay sesión
+     * activa, no hace nada — el caller no necesita preocuparse.
      */
     @Transactional
-    public void registrarScan(ScanResultDTO scan) {
+    public void registrarScan(String username, ScanResultDTO scan) {
         if (scan == null || scan.sku() == null) return;
-        Optional<SesionShowroom> activaOpt = repository.findActiva();
+        if (username == null || username.isBlank()) return;
+        Optional<Usuario> op = usuarioRepository.findByUsername(username);
+        if (op.isEmpty()) return;
+        Optional<SesionShowroom> activaOpt = repository.findActivaByUsuarioId(op.get().getId());
         if (activaOpt.isEmpty()) return;
         SesionShowroom activa = activaOpt.get();
 
@@ -176,19 +187,22 @@ public class SesionShowroomService {
         repository.save(activa);
         // Broadcast lightweight: solo la cantidad cambió. El frontend no
         // necesita ver el detalle en vivo, solo saber que el contador subió.
-        eventService.publish(EVENTO_SESION, toEstadoDTO(activa));
+        eventService.publishTo(username, EVENTO_SESION, toEstadoDTO(activa));
     }
 
     /**
-     * Marca la sesión activa como finalizada y la asocia al pedido creado.
-     * No-op si no había sesión activa.
+     * Marca la sesión activa del operador como finalizada y la asocia al
+     * pedido creado. No-op si no había sesión activa.
      *
      * @return la sesión finalizada con sus items hidratados, o vacío si no
      *         había sesión activa.
      */
     @Transactional
-    public Optional<SesionShowroom> finalizarConPedido(Long pedidoId) {
-        Optional<SesionShowroom> activaOpt = repository.findActiva();
+    public Optional<SesionShowroom> finalizarConPedido(String username, Long pedidoId) {
+        if (username == null || username.isBlank()) return Optional.empty();
+        Optional<Usuario> op = usuarioRepository.findByUsername(username);
+        if (op.isEmpty()) return Optional.empty();
+        Optional<SesionShowroom> activaOpt = repository.findActivaByUsuarioId(op.get().getId());
         if (activaOpt.isEmpty()) return Optional.empty();
         SesionShowroom s = activaOpt.get();
         s.setFinalizadaAt(Instant.now());
@@ -197,12 +211,17 @@ public class SesionShowroomService {
         // el caller (email service async) los usa fuera del @Transactional.
         s.getItems().size();
         repository.save(s);
-        log.info("Sesión {} ({}) finalizada con pedido {}", s.getId(), s.getNombre(), pedidoId);
-        eventService.publish(EVENTO_SESION, SesionShowroomDTO.inactiva());
+        log.info("Sesión {} ({}, op={}) finalizada con pedido {}",
+                s.getId(), s.getNombre(), username, pedidoId);
+        eventService.publishTo(username, EVENTO_SESION, SesionShowroomDTO.inactiva());
         return Optional.of(s);
     }
 
     /** Listado paginado de sesiones (página /historial). Ordenado por inicio desc.
+     *  Sin filtrar por usuario — el historial muestra todas las sesiones del
+     *  showroom independientemente del operador (los listados gerenciales
+     *  necesitan ver el global). Si en el futuro se quiere segmentar por
+     *  operador, se agrega un filtro opcional.
      *
      *  <p>Carga el estado del pedido asociado en bulk para todas las sesiones
      *  de la página que tienen pedidoId — así el frontend puede mostrar si la
@@ -231,8 +250,22 @@ public class SesionShowroomService {
             }
         }
 
+        // Bulk lookup de operadores: una sola query para resolver usuarioId
+        // → display name de todos los operadores presentes en la página.
+        Set<Long> usuarioIds = resultado.getContent().stream()
+                .map(SesionShowroom::getUsuarioId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> operadores = usuarioIds.isEmpty() ? Map.of()
+                : usuarioRepository.findAllById(usuarioIds).stream()
+                        .collect(Collectors.toMap(
+                                u -> u.getId(),
+                                u -> (u.getNombre() != null && !u.getNombre().isBlank())
+                                        ? u.getNombre().trim() : u.getUsername()));
+
         List<SesionListItemDTO> items = resultado.getContent().stream()
-                .map(s -> toListItemDTO(s, estadosByPedidoId.get(s.getPedidoId())))
+                .map(s -> toListItemDTO(s, estadosByPedidoId.get(s.getPedidoId()),
+                        s.getUsuarioId() == null ? null : operadores.get(s.getUsuarioId())))
                 .toList();
         return new SesionListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
     }
@@ -260,6 +293,19 @@ public class SesionShowroomService {
     }
 
     // =====================================================
+    // Helpers
+    // =====================================================
+
+    /** Resuelve el username al Usuario o lanza 404 si no existe. */
+    private Usuario resolverOperador(String username) {
+        if (username == null || username.isBlank()) {
+            throw new NotFoundException("Operador no identificado");
+        }
+        return usuarioRepository.findByUsername(username)
+                .orElseThrow(() -> new NotFoundException("Operador no encontrado: " + username));
+    }
+
+    // =====================================================
     // Mappers
     // =====================================================
 
@@ -274,7 +320,8 @@ public class SesionShowroomService {
         );
     }
 
-    private SesionListItemDTO toListItemDTO(SesionShowroom s, EstadoPedido estadoPedido) {
+    private SesionListItemDTO toListItemDTO(SesionShowroom s, EstadoPedido estadoPedido,
+                                            String creadoPor) {
         return new SesionListItemDTO(
                 s.getId(),
                 s.getNombre(),
@@ -282,7 +329,8 @@ public class SesionShowroomService {
                 s.getFinalizadaAt(),
                 s.getPedidoId(),
                 estadoPedido,
-                s.getItems() == null ? 0 : s.getItems().size()
+                s.getItems() == null ? 0 : s.getItems().size(),
+                creadoPor
         );
     }
 

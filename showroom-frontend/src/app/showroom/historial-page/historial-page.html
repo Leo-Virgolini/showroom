@@ -291,6 +291,7 @@
             <th style="width: 3rem"></th>
             <th style="width: 11rem">Inicio</th>
             <th>Cliente</th>
+            <th style="width: 9rem">Operador</th>
             <th class="text-center" style="width: 12rem">Estado</th>
             <th class="text-center" style="width: 8rem">Escaneados</th>
             <th class="text-center" style="width: 8rem">Pedido</th>
@@ -308,6 +309,16 @@
             <td class="text-xs tabular-nums">{{ s.iniciadaAt | date: 'dd/MM/yy HH:mm' }}</td>
             <td class="text-sm truncate max-w-[18rem]" [pTooltip]="s.nombre" tooltipPosition="top">
               {{ s.nombre }}
+            </td>
+            <td class="text-sm truncate max-w-[10rem]" [pTooltip]="s.creadoPor ?? ''" tooltipPosition="top">
+              @if (s.creadoPor) {
+                <span class="inline-flex items-center gap-1">
+                  <i class="pi pi-user text-xs text-muted-color"></i>
+                  {{ s.creadoPor }}
+                </span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
             </td>
             <td class="text-center">
               @if (estadoSesion(s); as e) {
@@ -342,7 +353,7 @@
 
           @if (estaExpandido(s.id)) {
           <tr class="bg-surface-50 dark:bg-surface-900">
-            <td colspan="7" class="p-4">
+            <td colspan="8" class="p-4">
               @if (estaCargandoDetalle(s.id)) {
               <!-- Skeleton placeholder con el shape aproximado del detalle
                    (cabecera + tabla de items). -->
@@ -434,7 +445,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="7" class="text-center py-12 text-muted-color">
+            <td colspan="8" class="text-center py-12 text-muted-color">
               <i class="pi pi-history text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
               Ninguna sesión coincide con los filtros.

@@ -42,6 +42,10 @@ public record PedidoListItemDTO(
         Boolean formaPagoAplicaIva,
         /** Snapshot de la cantidad de cuotas — null si no hubo forma. */
         Integer cantidadCuotas,
-        int cantidadItems
+        int cantidadItems,
+        /** Nombre o username del operador que creó el pedido. Null en pedidos
+         *  legacy creados antes del multi-usuario. Se muestra como columna
+         *  "Operador" en el listado. */
+        String creadoPor
 ) {
 }

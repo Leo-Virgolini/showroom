@@ -490,7 +490,10 @@ export class PresupuestosPage implements AfterViewInit {
     this.resultadosBusqueda.set([]);
     this.cargandoScan.set(true);
     const seq = ++this.scanSeq;
-    this.api.scan(sku).subscribe({
+    // publicarVisor=false: el presupuestador es un flujo paralelo a la
+    // atención del cliente — los productos cotizados no deben aparecer en
+    // la pantalla /visor que mira el cliente.
+    this.api.scan(sku, false).subscribe({
       next: (res) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
@@ -702,11 +705,13 @@ export class PresupuestosPage implements AfterViewInit {
       return;
     }
     if (!this.validarDatosCliente()) return;
+    if (!this.validarEmailParaEnvio()) return;
     this.mostrarDialogEnviar.set(true);
   }
 
   enviarPorEmail(): void {
     if (!this.validarDatosCliente()) return;
+    if (!this.validarEmailParaEnvio()) return;
     const email = this.clienteEmail().trim();
     const payload: EnviarPresupuestoRequest = {
       email,
@@ -767,22 +772,40 @@ export class PresupuestosPage implements AfterViewInit {
     );
   }
 
-  /** Email y teléfono son obligatorios para generar/enviar el presupuesto:
-   *  el cliente queda registrado en el sistema y son necesarios para el
-   *  seguimiento comercial posterior. */
+  /** Valida los datos del cliente. El email NO es obligatorio para previsualizar
+   *  o descargar el PDF (el operador puede armar el presupuesto sin tener el
+   *  email del cliente todavía). Sí lo es para enviarlo por email — esa
+   *  validación se hace por separado en {@link validarEmailParaEnvio}.
+   *
+   *  <p>Si el operador cargó un email, lo validamos por formato igual — un
+   *  email malformado guardado en BD complica el follow-up posterior.
+   *  El teléfono sigue obligatorio (se usa para identificar al cliente en
+   *  el seguimiento comercial). */
   private validarDatosCliente(): boolean {
     const email = this.clienteEmail().trim();
     const telefono = this.clienteTelefono().trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      this.warn('El email del cliente no tiene un formato válido.');
+      return false;
+    }
+    if (!telefono) {
+      this.warn('Falta el teléfono del cliente.');
+      return false;
+    }
+    return true;
+  }
+
+  /** Validación adicional para los flujos que requieren enviar email
+   *  (botón "Enviar por email" → dialog + POST al backend). Si el email
+   *  está vacío o malformado, el envío no puede ocurrir. */
+  private validarEmailParaEnvio(): boolean {
+    const email = this.clienteEmail().trim();
     if (!email) {
       this.warn('Falta el email del cliente.');
       return false;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       this.warn('El email del cliente no tiene un formato válido.');
-      return false;
-    }
-    if (!telefono) {
-      this.warn('Falta el teléfono del cliente.');
       return false;
     }
     return true;

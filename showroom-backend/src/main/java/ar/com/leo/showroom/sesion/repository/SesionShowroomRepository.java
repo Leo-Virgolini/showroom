@@ -17,15 +17,16 @@ import java.util.Optional;
 @Repository
 public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, Long> {
 
-    /** La sesión actualmente activa (sin finalizar). Hay como máximo una a la
-     *  vez por diseño — si por algún motivo hubiera más de una con finalizadaAt
-     *  null (corte abrupto del backend mid-iniciar) devolvemos la más reciente. */
+    /** La sesión actualmente activa de un operador (sin finalizar). Hay como
+     *  máximo una por usuario a la vez por diseño — si por algún motivo hubiera
+     *  más de una con finalizadaAt null (corte abrupto del backend mid-iniciar)
+     *  devolvemos la más reciente. */
     @Query("""
             SELECT s FROM SesionShowroom s
-            WHERE s.finalizadaAt IS NULL
+            WHERE s.usuarioId = :usuarioId AND s.finalizadaAt IS NULL
             ORDER BY s.iniciadaAt DESC
             """)
-    Optional<SesionShowroom> findActiva();
+    Optional<SesionShowroom> findActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
 
     /** Detalle de una sesión con sus items hidratados (evita N+1 al renderizar). */
     @EntityGraph(attributePaths = "items")

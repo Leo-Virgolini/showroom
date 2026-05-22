@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.pickit_externo;
 
+import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickitExternoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -61,6 +62,10 @@ public class PickitExternoService {
 
     private final ConfiguracionService configuracionService;
     private final SyncEventService eventService;
+    /** Para publicar el toast en el canal SSE del operador propietario del
+     *  pedido — sin esto, todos los operadores logueados verían el "Pickit
+     *  generado" cuando uno solo de ellos creó el pedido. */
+    private final UsuarioRepository usuarioRepository;
 
     /**
      * Validación de configuración pública. Devuelve un motivo si el envío no
@@ -141,19 +146,48 @@ public class PickitExternoService {
      */
     @Async
     public void generarAsync(PedidoShowroom pedido, String clientId) {
+        generarAsync(pedido, clientId, null);
+    }
+
+    /**
+     * Versión con override del operador destinatario del toast SSE. {@code
+     * operadorActual} es el username del que apretó el botón "regenerar
+     * pickit" desde {@code POST /pedidos/{id}/pickit-externo} — puede no ser
+     * el creador del pedido. Si es null, cae al creador como fallback (path
+     * automático post-pedido OK).
+     */
+    @Async
+    public void generarAsync(PedidoShowroom pedido, String clientId, String operadorActual) {
         if (motivoNoConfigurado().isPresent()) {
             log.debug("Pickit externo no configurado — pedido {} no se procesa.", pedido.getId());
             return;
         }
+        // Operador efectivo: override del que apretó el botón o creador del
+        // pedido como fallback. clientId sigue siendo la PC específica para
+        // que el auto-descargue del .xlsx solo se dispare donde fue creado
+        // el pedido (relevante si el operador tiene varias pestañas/PCs).
+        String operador = operadorActual != null ? operadorActual
+                : (pedido.getUsuarioId() == null ? null
+                        : usuarioRepository.findById(pedido.getUsuarioId())
+                                .map(u -> u.getUsername()).orElse(null));
         try {
             Path resultado = generar(pedido);
             log.info("Pickit externo pedido {} OK: {}", pedido.getId(), resultado);
-            eventService.publish("pickit-externo",
+            publicarEvento(operador,
                     PickitExternoEvent.generated(pedido.getId(), resultado.toString(), clientId));
         } catch (PickitExternoException e) {
             log.warn("Pickit externo pedido {} falló: {}", pedido.getId(), e.getMessage());
-            eventService.publish("pickit-externo",
+            publicarEvento(operador,
                     PickitExternoEvent.failed(pedido.getId(), e.getMessage(), clientId));
+        }
+    }
+
+    /** Publica al canal del operador o broadcast global como fallback. */
+    private void publicarEvento(String operador, Object payload) {
+        if (operador != null) {
+            eventService.publishTo(operador, "pickit-externo", payload);
+        } else {
+            eventService.publish("pickit-externo", payload);
         }
     }
 

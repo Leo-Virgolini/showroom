@@ -22,6 +22,7 @@ import java.time.Instant;
 @Entity
 @Table(name = "presupuesto_comercial", indexes = {
         @Index(name = "idx_presupuesto_comercial_creado_at", columnList = "creado_at"),
+        @Index(name = "idx_presupuesto_comercial_usuario_id", columnList = "usuario_id"),
 })
 @Data
 @NoArgsConstructor
@@ -32,6 +33,13 @@ public class PresupuestoComercial {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Operador que generó el presupuesto — snapshot del usuario logueado al
+     *  POST /presupuesto-comercial/{preview|enviar}. Nullable para no romper
+     *  presupuestos legacy generados antes del multi-usuario. Lo usa el envío
+     *  async para que el toast del email aparezca solo en SU pantalla. */
+    @Column(name = "usuario_id")
+    private Long usuarioId;
 
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;

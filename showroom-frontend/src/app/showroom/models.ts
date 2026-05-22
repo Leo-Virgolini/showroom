@@ -143,6 +143,9 @@ export interface SesionListItem {
    *  COMPLETADA pero luego ANULADA del flujo normal completado. */
   estadoPedido: EstadoPedido | null;
   cantidadEscaneados: number;
+  /** Nombre o username del operador que atendió la sesión. Null para
+   *  sesiones legacy anteriores al multi-usuario. */
+  creadoPor: string | null;
 }
 
 export interface SesionListPage {
@@ -440,6 +443,9 @@ export interface PedidoListItem {
   /** Snapshot de la cantidad de cuotas. Null si no hubo forma. */
   cantidadCuotas: number | null;
   cantidadItems: number;
+  /** Nombre o username del operador que creó el pedido. Null para pedidos
+   *  legacy anteriores al multi-usuario. */
+  creadoPor: string | null;
 }
 
 export interface PedidoListPage {
@@ -606,6 +612,9 @@ export interface PresupuestoListItem {
   rubro: string | null;
   totalSinIva: number | null;
   descuentoGlobalPorcentaje: number | null;
+  /** Nombre o username del operador que generó el presupuesto. Null para
+   *  presupuestos legacy anteriores al multi-usuario. */
+  creadoPor: string | null;
 }
 
 export interface PresupuestoListPage {

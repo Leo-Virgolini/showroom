@@ -140,6 +140,7 @@
             <th style="width: 9rem" pSortableColumn="nroDoc">
               CUIT <p-sortIcon field="nroDoc" />
             </th>
+            <th style="width: 8rem">Operador</th>
             <th class="text-center" style="width: 6rem">Items</th>
             <th class="text-center" style="width: 6rem" pSortableColumn="descuentoPorcentaje">
               Desc <p-sortIcon field="descuentoPorcentaje" />
@@ -179,6 +180,16 @@
             </td>
             <td class="font-mono text-sm">
               {{ p.nroDoc ?? '—' }}
+            </td>
+            <td class="text-sm truncate max-w-[10rem]" [pTooltip]="p.creadoPor ?? ''" tooltipPosition="top">
+              @if (p.creadoPor) {
+                <span class="inline-flex items-center gap-1">
+                  <i class="pi pi-user text-xs text-muted-color"></i>
+                  {{ p.creadoPor }}
+                </span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
             </td>
             <td class="text-center tabular-nums">{{ p.cantidadItems }}</td>
             <td class="text-center tabular-nums">
@@ -306,7 +317,7 @@
 
           @if (estaExpandido(p.id)) {
             <tr class="bg-surface-50 dark:bg-surface-900">
-              <td colspan="10" class="p-4">
+              <td colspan="11" class="p-4">
                 @if (estaCargandoDetalle(p.id)) {
                   <!-- Skeleton placeholder con el shape aproximado del detalle
                        (dos columnas Cliente/Pedido + lista de items). Mejor
@@ -554,7 +565,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="10" class="text-center py-12 text-muted-color">
+            <td colspan="11" class="text-center py-12 text-muted-color">
               <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
                 Ningún pedido coincide con los filtros.

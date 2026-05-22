@@ -17,6 +17,7 @@ import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.HorarioSyncSchedulerService;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.dux.service.DuxClient;
+import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
@@ -86,6 +87,8 @@ public class ShowroomService {
     private final PdfFollowupOrchestrator pdfFollowupOrchestrator;
     private final PickitExternoService pickitExternoService;
     private final SesionShowroomService sesionShowroomService;
+    private final ar.com.leo.showroom.auth.repository.UsuarioRepository usuarioRepository;
+    private final SyncEventService eventService;
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
@@ -387,10 +390,36 @@ public class ShowroomService {
                         .collect(Collectors.toMap(
                                 row -> (Long) row[0],
                                 row -> ((Number) row[1]).intValue()));
+        // Bulk lookup de operadores: una sola query para todos los usuarioId
+        // distintos de la página. Evita N+1 contra usuario_repository al
+        // mapear cada pedido a su DTO.
+        Map<Long, String> operadores = resolverOperadoresDePedidos(resultado.getContent());
         List<PedidoListItemDTO> items = resultado.getContent().stream()
-                .map(p -> toPedidoListItem(p, cantidadItems.getOrDefault(p.getId(), 0)))
+                .map(p -> toPedidoListItem(p, cantidadItems.getOrDefault(p.getId(), 0), operadores))
                 .toList();
         return new PedidoListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
+    }
+
+    /** Devuelve un mapa {@code usuarioId → displayName} para los operadores
+     *  presentes en la página. {@code displayName} prefiere {@code nombre}
+     *  (más legible) y cae a {@code username} si está vacío. Una sola query. */
+    private Map<Long, String> resolverOperadoresDePedidos(List<PedidoShowroom> pedidos) {
+        Set<Long> ids = pedidos.stream()
+                .map(PedidoShowroom::getUsuarioId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) return Map.of();
+        return usuarioRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(
+                        u -> u.getId(),
+                        u -> displayNameOperador(u.getNombre(), u.getUsername())));
+    }
+
+    /** Display name del operador: prefiere {@code nombre}, fallback a username.
+     *  Reutilizado por sesiones/presupuestos para mantener consistencia visual. */
+    private static String displayNameOperador(String nombre, String username) {
+        if (nombre != null && !nombre.isBlank()) return nombre.trim();
+        return username;
     }
 
     /**
@@ -542,6 +571,12 @@ public class ShowroomService {
         }
         pedidoRepository.save(p);
         log.info("Pedido id={} anulado. motivo='{}'", id, p.getMotivoAnulacion());
+        // Broadcast a TODAS las pantallas para que las listas abiertas en
+        // /pedidos se refresquen sin polling. Es global (no per-usuario)
+        // porque la lista es global — cualquier operador con la pantalla
+        // abierta debe ver el cambio.
+        eventService.publish("pedido-actualizado",
+                java.util.Map.of("pedidoId", id, "estado", EstadoPedido.ANULADO.name()));
         return obtenerPedido(id);
     }
 
@@ -579,6 +614,8 @@ public class ShowroomService {
         p.setMotivoAnulacion(null);
         pedidoRepository.save(p);
         log.info("Pedido id={} revertido a estado {}", id, estadoOriginal);
+        eventService.publish("pedido-actualizado",
+                java.util.Map.of("pedidoId", id, "estado", estadoOriginal.name()));
         return obtenerPedido(id);
     }
 
@@ -596,7 +633,12 @@ public class ShowroomService {
         }
     }
 
-    private PedidoListItemDTO toPedidoListItem(PedidoShowroom p, int cantidadItems) {
+    private PedidoListItemDTO toPedidoListItem(PedidoShowroom p, int cantidadItems,
+                                               Map<Long, String> usernamesByUsuarioId) {
+        // creadoPor: nombre del operador (o username como fallback) si está
+        // en el cache pre-calculado. Null para pedidos legacy sin usuarioId.
+        String creadoPor = p.getUsuarioId() == null ? null
+                : usernamesByUsuarioId.get(p.getUsuarioId());
         return new PedidoListItemDTO(
                 p.getId(),
                 p.getCreadoAt(),
@@ -614,7 +656,8 @@ public class ShowroomService {
                 p.getFormaPagoNombre(),
                 p.getFormaPagoAplicaIva(),
                 p.getCantidadCuotas(),
-                cantidadItems
+                cantidadItems,
+                creadoPor
         );
     }
 
@@ -646,7 +689,7 @@ public class ShowroomService {
     }
 
     @Transactional
-    public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId) {
+    public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId, String username) {
         // Si todos los items vienen con el mismo descuento (típico — el frontend manda
         // el descuento global), lo guardamos a nivel pedido también para que la pantalla
         // de listado lo muestre sin tener que iterar items.
@@ -669,7 +712,14 @@ public class ShowroomService {
                 ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
         boolean aplicaIva = formaPago == null || !Boolean.FALSE.equals(formaPago.getAplicaIva());
 
+        // Snapshot del operador que creó el pedido. Si el username no resuelve
+        // a un usuario (caso teórico — el controller siempre manda un username
+        // autenticado), queda null y el pedido se trata como legacy.
+        Long usuarioId = username == null ? null
+                : usuarioRepository.findByUsername(username).map(u -> u.getId()).orElse(null);
+
         PedidoShowroom pedido = PedidoShowroom.builder()
+                .usuarioId(usuarioId)
                 .creadoAt(Instant.now())
                 .estado(EstadoPedido.PENDIENTE)
                 .observaciones(request.observaciones())
@@ -779,7 +829,7 @@ public class ShowroomService {
                 // asociarla al pedido recién creado. Esto deja la sesión
                 // marcada como "completada" y permite al email service
                 // resolverla vía pedidoId al armar el PDF de follow-up.
-                sesionShowroomService.finalizarConPedido(pedido.getId());
+                sesionShowroomService.finalizarConPedido(username, pedido.getId());
 
                 // Mandar el PDF de follow-up al cliente + generar el pickit
                 // externo en PARALELO — dos @Async independientes que corren en

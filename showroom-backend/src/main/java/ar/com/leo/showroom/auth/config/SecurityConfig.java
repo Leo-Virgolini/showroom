@@ -72,15 +72,16 @@ public class SecurityConfig {
                         // sesión activa lo hace el propio AuthController).
                         .requestMatchers("/api/auth/login", "/api/auth/me").permitAll()
                         // SSE + recursos que necesita el visor (lectura pública).
+                        // /events (operador autenticado) sigue público — Authentication
+                        // puede ser null y el endpoint funciona devolviendo solo
+                        // eventos globales en ese caso.
                         .requestMatchers("/api/showroom/events").permitAll()
                         .requestMatchers("/api/showroom/productos/*/imagen").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/config/escalas-descuento").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
-                        // El visor puede agregar al carrito del operador (público).
-                        .requestMatchers(HttpMethod.POST, "/api/showroom/visor/agregar-carrito").permitAll()
-                        // El visor también necesita leer el nombre del cliente
-                        // de la sesión activa para mostrar el saludo personalizado.
-                        .requestMatchers(HttpMethod.GET, "/api/showroom/sesion/activa").permitAll()
+                        // Endpoints del visor por operador — todos públicos. El
+                        // {username} en el path identifica el canal del operador.
+                        .requestMatchers("/api/showroom/visor/**").permitAll()
                         // Healthcheck — el container Docker hace curl /health
                         // para saber si está UP. Sin esto, queda "starting" para
                         // siempre porque el endpoint responde 401 sin sesión.

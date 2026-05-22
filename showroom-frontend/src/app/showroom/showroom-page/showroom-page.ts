@@ -934,14 +934,51 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /** QR (data URL) del visor del operador logueado — se genera al abrir el
+   *  dialog. Apunta a {@code /visor/{username}} contra el host actual, así
+   *  cada operador tiene un QR único que enlaza a su canal personal del
+   *  visor. Si el QR aún no se generó (dialog nunca abierto), queda null. */
+  readonly qrVisorDataUrl = signal<string | null>(null);
+
   /**
-   * Abre el dialog "QR para celular" que muestra dos imágenes pre-generadas
-   * desde {@code public/}: {@code conexion-wifi.png} (auto-conexión a la red del
-   * showroom) y {@code qr-precios.png} (link al visor de precios).
+   * Abre el dialog "QR para celular" y genera (perezosamente) el QR del visor
+   * del operador logueado apuntando al host actual.
+   *
+   * <p>El QR se regenera en cada apertura para que, si el operador cambia de
+   * cuenta (logout + login) o si la app se sirve detrás de hostnames
+   * distintos (LAN vs. túnel), siempre refleje la URL correcta.
    */
-  abrirDialogVisor(): void {
+  async abrirDialogVisor(): Promise<void> {
     this.mostrarDialogVisor.set(true);
+    const username = this.auth.currentUser()?.username;
+    if (!username || typeof window === 'undefined') {
+      this.qrVisorDataUrl.set(null);
+      return;
+    }
+    // Carga dinámica para no inflar el bundle inicial — el dialog rara vez
+    // se abre y la lib pesa varios KB.
+    const QRCode = await import('qrcode');
+    const url = `${window.location.origin}/visor/${encodeURIComponent(username)}`;
+    try {
+      const dataUrl = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 512,
+      });
+      this.qrVisorDataUrl.set(dataUrl);
+    } catch {
+      // Si el browser no logra generar (raro), mostramos la URL como texto
+      // de fallback en el HTML.
+      this.qrVisorDataUrl.set(null);
+    }
   }
+
+  /** URL completa del visor del operador — para mostrar como texto debajo del QR. */
+  readonly visorUrl = computed(() => {
+    const username = this.auth.currentUser()?.username;
+    if (!username || typeof window === 'undefined') return '';
+    return `${window.location.origin}/visor/${encodeURIComponent(username)}`;
+  });
 
   /** Cierra la sesión y redirige al login. */
   cerrarSesion(): void {

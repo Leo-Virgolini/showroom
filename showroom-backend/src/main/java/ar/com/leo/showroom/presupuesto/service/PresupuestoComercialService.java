@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.presupuesto.service;
 
+import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -54,6 +55,7 @@ public class PresupuestoComercialService {
     private final JavaMailSender mailSender;
     private final SyncEventService eventService;
     private final ObjectMapper mapper;
+    private final UsuarioRepository usuarioRepository;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -80,12 +82,36 @@ public class PresupuestoComercialService {
             PresupuestoComercialPdfGenerator pdfGenerator,
             ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
-            ObjectMapper mapper) {
+            ObjectMapper mapper,
+            UsuarioRepository usuarioRepository) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.mapper = mapper;
+        this.usuarioRepository = usuarioRepository;
+    }
+
+    /** Resuelve username a usuarioId. Null si el username no existe (caso
+     *  teórico — el controller siempre manda un username autenticado). */
+    private Long usuarioIdDe(String username) {
+        if (username == null) return null;
+        return usuarioRepository.findByUsername(username).map(u -> u.getId()).orElse(null);
+    }
+
+    /** Resuelve usuarioId a username para publicar el SSE en su canal. Null
+     *  si el id no resuelve (legacy data) — el caller usa fallback global. */
+    private String usernameDe(Long usuarioId) {
+        if (usuarioId == null) return null;
+        return usuarioRepository.findById(usuarioId).map(u -> u.getUsername()).orElse(null);
+    }
+
+    private void publicarEvento(String operador, Object payload) {
+        if (operador != null) {
+            eventService.publishTo(operador, SSE_EVENT, payload);
+        } else {
+            eventService.publish(SSE_EVENT, payload);
+        }
     }
 
     /**
@@ -99,8 +125,9 @@ public class PresupuestoComercialService {
      * tener PDFs listos para enviar sin paso intermedio.
      */
     @Transactional
-    public Resultado generarYPersistir(GenerarPresupuestoRequestDTO datos) {
+    public Resultado generarYPersistir(GenerarPresupuestoRequestDTO datos, String username) {
         PresupuestoComercial p = construirEntidad(datos);
+        p.setUsuarioId(usuarioIdDe(username));
         p = repository.save(p);
         byte[] pdf = pdfGenerator.generar(p, datos);
         return new Resultado(p, pdf, pdfGenerator.nombreArchivo(p));
@@ -110,15 +137,18 @@ public class PresupuestoComercialService {
      * Crea el presupuesto en BD (asigna número), genera el PDF y dispara el
      * envío del email en background. Devuelve el {@link Resultado} con el ID
      * generado para que el controller lo informe al frontend; el resultado
-     * real del envío llega vía SSE {@code presupuesto-comercial-email}.
+     * real del envío llega vía SSE {@code presupuesto-comercial-email}
+     * <b>solo en la pantalla del operador {@code username}</b>.
      */
     @Transactional
     public Resultado generarYEnviarPorEmail(String destinatario,
-                                            GenerarPresupuestoRequestDTO datos) {
-        Resultado r = generarYPersistir(datos);
+                                            GenerarPresupuestoRequestDTO datos,
+                                            String username) {
+        Resultado r = generarYPersistir(datos, username);
         // self.* atraviesa el proxy de Spring para que @Async funcione.
         self.enviarPorEmailAsync(destinatario, r.presupuesto().getId(),
-                r.presupuesto().getClienteNombre(), r.pdf(), r.nombreArchivo());
+                r.presupuesto().getClienteNombre(), r.pdf(), r.nombreArchivo(),
+                username);
         return r;
     }
 
@@ -161,8 +191,20 @@ public class PresupuestoComercialService {
                                 org.springframework.data.domain.Sort.Direction.DESC, "creadoAt"));
         org.springframework.data.domain.Page<PresupuestoComercial> p =
                 repository.buscar(id, qNormalizada, desde, hasta, pr);
+        // Bulk lookup de operadores para la página — una sola query a usuario.
+        java.util.Set<Long> usuarioIds = p.getContent().stream()
+                .map(PresupuestoComercial::getUsuarioId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<Long, String> operadores = usuarioIds.isEmpty() ? Map.of()
+                : usuarioRepository.findAllById(usuarioIds).stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                u -> u.getId(),
+                                u -> (u.getNombre() != null && !u.getNombre().isBlank())
+                                        ? u.getNombre().trim() : u.getUsername()));
         List<PresupuestoListItemDTO> items = p.getContent().stream()
-                .map(this::toListItemDTO)
+                .map(pc -> toListItemDTO(pc,
+                        pc.getUsuarioId() == null ? null : operadores.get(pc.getUsuarioId())))
                 .toList();
         return new PresupuestoListPageDTO(items, p.getTotalElements(), p.getNumber(), p.getSize());
     }
@@ -409,7 +451,7 @@ public class PresupuestoComercialService {
         }
     }
 
-    private PresupuestoListItemDTO toListItemDTO(PresupuestoComercial p) {
+    private PresupuestoListItemDTO toListItemDTO(PresupuestoComercial p, String creadoPor) {
         return new PresupuestoListItemDTO(
                 p.getId(),
                 p.getCreadoAt(),
@@ -418,7 +460,8 @@ public class PresupuestoComercialService {
                 p.getClienteEmail(),
                 p.getRubro(),
                 p.getSubtotalSinIva(),
-                p.getDescuentoGlobalPorcentaje());
+                p.getDescuentoGlobalPorcentaje(),
+                creadoPor);
     }
 
     public Optional<String> motivoEmailNoConfigurado() {
@@ -440,7 +483,8 @@ public class PresupuestoComercialService {
      */
     @Async
     public void enviarPorEmailAsync(String destinatario, Long presupuestoId,
-                                    String nombreCliente, byte[] pdf, String filename) {
+                                    String nombreCliente, byte[] pdf, String filename,
+                                    String operador) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -458,7 +502,7 @@ public class PresupuestoComercialService {
             log.info("Email presupuesto #{} → {} ({} KB)",
                     presupuestoId, destinatario, pdf.length / 1024);
             mailSender.send(mime);
-            eventService.publish(SSE_EVENT, Map.of(
+            publicarEvento(operador, Map.of(
                     "estado", "SENT",
                     "presupuestoId", presupuestoId,
                     "email", destinatario));
@@ -471,7 +515,7 @@ public class PresupuestoComercialService {
                 log.warn("Email presupuesto #{} — Read timed out esperando ACK de Gmail "
                         + "(PDF={}KB). El mail probablemente se entregó: {}",
                         presupuestoId, pdf.length / 1024, e.getMessage());
-                eventService.publish(SSE_EVENT, Map.of(
+                publicarEvento(operador, Map.of(
                         "estado", "AMBIGUO",
                         "presupuestoId", presupuestoId,
                         "email", destinatario,
@@ -483,7 +527,7 @@ public class PresupuestoComercialService {
                     presupuestoId, e.getMessage(), e);
             String detalle = UserMessages.traducir(e,
                     "No se pudo enviar el email. Revisar logs del backend.");
-            eventService.publish(SSE_EVENT, Map.of(
+            publicarEvento(operador, Map.of(
                     "estado", "FAILED",
                     "presupuestoId", presupuestoId,
                     "email", destinatario,

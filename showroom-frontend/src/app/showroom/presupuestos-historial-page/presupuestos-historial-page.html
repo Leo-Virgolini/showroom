@@ -88,6 +88,9 @@
             <th style="width: 9rem">
               <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
             </th>
+            <th style="width: 8rem">
+              <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Operador
+            </th>
             <th class="text-right" style="width: 10rem">
               <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total s/IVA
             </th>
@@ -118,6 +121,16 @@
             <td class="text-xs">
               @if (p.rubro) {
                 <span class="capitalize text-[#3B1E09] dark:text-surface-0">{{ p.rubro }}</span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-xs truncate" [pTooltip]="p.creadoPor ?? ''" tooltipPosition="top">
+              @if (p.creadoPor) {
+                <span class="inline-flex items-center gap-1">
+                  <i class="pi pi-user text-[10px] text-muted-color"></i>
+                  {{ p.creadoPor }}
+                </span>
               } @else {
                 <span class="text-muted-color">—</span>
               }
@@ -169,7 +182,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="9">
+            <td colspan="10">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>

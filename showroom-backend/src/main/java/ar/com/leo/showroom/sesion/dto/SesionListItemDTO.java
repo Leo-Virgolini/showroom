@@ -16,6 +16,9 @@ public record SesionListItemDTO(
         Instant finalizadaAt,
         Long pedidoId,
         EstadoPedido estadoPedido,
-        int cantidadEscaneados
+        int cantidadEscaneados,
+        /** Nombre o username del operador que atendió la sesión. Null en
+         *  sesiones legacy creadas antes del multi-usuario. */
+        String creadoPor
 ) {
 }

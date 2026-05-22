@@ -14,7 +14,7 @@ package ar.com.leo.showroom.events;
  * broadcast SSE del carrito vacío lo hace {@code CarritoService.vaciar} cuando
  * el listener procesa el evento.
  */
-public record SesionCerradaEvent(Long sesionId, String nombreCliente, Motivo motivo) {
+public record SesionCerradaEvent(Long sesionId, String nombreCliente, String username, Motivo motivo) {
 
     /** Cómo se cerró la sesión — útil para listeners que quieran distinguir
      *  acción explícita del operador vs. cierre automático al iniciar otra. */

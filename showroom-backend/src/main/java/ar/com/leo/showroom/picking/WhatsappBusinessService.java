@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.picking;
 
+import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -92,6 +93,9 @@ public class WhatsappBusinessService {
     private final ObjectMapper objectMapper;
     private final ConfiguracionService configuracionService;
     private final RestClient restClient;
+    /** Para resolver {@code pedido.usuarioId} / {@code sesion.usuarioId} a
+     *  username y publicar el toast SSE solo al operador propietario. */
+    private final UsuarioRepository usuarioRepository;
 
     @Value("${showroom.whatsapp.enabled:false}")
     private boolean enabled;
@@ -114,18 +118,35 @@ public class WhatsappBusinessService {
             SyncEventService eventService,
             ObjectMapper objectMapper,
             ConfiguracionService configuracionService,
-            RestClient.Builder restClientBuilder) {
+            RestClient.Builder restClientBuilder,
+            UsuarioRepository usuarioRepository) {
         this.pdfGenerator = pdfGenerator;
         this.sesionRepository = sesionRepository;
         this.eventService = eventService;
         this.objectMapper = objectMapper;
         this.configuracionService = configuracionService;
+        this.usuarioRepository = usuarioRepository;
         // Partimos del builder autoconfigurado por Spring Boot — hereda el
         // ClientHttpRequestFactory auto-detectado y los timeouts globales de
         // spring.http.clients.*. El access_token va como Bearer header por request.
         this.restClient = restClientBuilder
                 .baseUrl("https://graph.facebook.com")
                 .build();
+    }
+
+    /** Resuelve {@code usuarioId} a username. Null si no se puede resolver
+     *  (legacy pedido/sesión sin usuario) — en ese caso el SSE va global. */
+    private String usernameDe(Long usuarioId) {
+        if (usuarioId == null) return null;
+        return usuarioRepository.findById(usuarioId).map(u -> u.getUsername()).orElse(null);
+    }
+
+    private void publicarEvento(String operador, Object payload) {
+        if (operador != null) {
+            eventService.publishTo(operador, SSE_EVENT, payload);
+        } else {
+            eventService.publish(SSE_EVENT, payload);
+        }
     }
 
     /**
@@ -154,7 +175,20 @@ public class WhatsappBusinessService {
      */
     @Async
     public void enviarPdfAsync(PedidoShowroom pedido) {
-        enviarPedidoSync(pedido); // fire-and-forget, ignora outcome
+        // Path automático post-pedido — el toast va al creador del pedido
+        // (operador autenticado = creador en este flujo).
+        enviarPedidoSync(pedido, null);
+    }
+
+    /**
+     * Disparo manual desde {@code POST /pedidos/{id}/whatsapp}. {@code operadorActual}
+     * es el username del que apretó el botón — puede no ser el creador del
+     * pedido. El toast SSE va a SU pantalla para que reciba la confirmación
+     * inmediata sin tener que mirar la pantalla del creador.
+     */
+    @Async
+    public void enviarPdfAsync(PedidoShowroom pedido, String operadorActual) {
+        enviarPedidoSync(pedido, operadorActual);
     }
 
     /**
@@ -167,6 +201,16 @@ public class WhatsappBusinessService {
      *         En todos los casos se emite el SSE correspondiente.
      */
     public boolean enviarPedidoSync(PedidoShowroom pedido) {
+        return enviarPedidoSync(pedido, null);
+    }
+
+    /**
+     * Versión con override: {@code operadorActual} dirige el toast SSE al
+     * operador que disparó la acción (no necesariamente el creador del pedido).
+     * Si {@code operadorActual} es null, cae al creador como fallback —
+     * comportamiento del flujo automático post-pedido.
+     */
+    public boolean enviarPedidoSync(PedidoShowroom pedido, String operadorActual) {
         if (!enabled || !StringUtils.hasText(phoneNumberId) || !StringUtils.hasText(accessToken)) {
             log.debug("WhatsApp no disponible — pedido {} no se envía.", pedido.getId());
             return false;
@@ -190,6 +234,10 @@ public class WhatsappBusinessService {
                 t -> WhatsappBusinessEvent.windowClosedPedido(pedido.getId(), t),
                 (t, motivo) -> WhatsappBusinessEvent.skippedPedido(pedido.getId(), t, motivo));
 
+        // Operador efectivo para el toast: override del que apretó el botón
+        // (si vino) sino el creador del pedido (caso auto post-pedido).
+        String operador = operadorActual != null ? operadorActual
+                : usernameDe(pedido.getUsuarioId());
         return enviarPdfInterno(
                 telefonoRaw,
                 () -> pdfGenerator.generarHistorial(sesion, pedido),
@@ -197,7 +245,8 @@ public class WhatsappBusinessService {
                 pedido.getNombreCompleto(),
                 "pedido " + pedido.getId(),
                 factories,
-                /* emitirSkipsComoFailed */ false);
+                /* emitirSkipsComoFailed */ false,
+                operador);
     }
 
     /**
@@ -206,12 +255,24 @@ public class WhatsappBusinessService {
      */
     @Async
     public void enviarPdfSesionAsync(SesionShowroom sesion, String telefonoRaw) {
+        enviarPdfSesionAsync(sesion, telefonoRaw, null);
+    }
+
+    /**
+     * Versión con override — el toast SSE va al operador que apretó el botón
+     * (pasa {@code auth.getName()} desde el controller), no al dueño de la
+     * sesión. Si {@code operadorActual} es null, cae al dueño como fallback.
+     */
+    @Async
+    public void enviarPdfSesionAsync(SesionShowroom sesion, String telefonoRaw, String operadorActual) {
         EventFactories factories = new EventFactories(
                 t -> WhatsappBusinessEvent.sentSesion(sesion.getId(), t),
                 (t, err) -> WhatsappBusinessEvent.failedSesion(sesion.getId(), t, err),
                 t -> WhatsappBusinessEvent.windowClosedSesion(sesion.getId(), t),
                 (t, motivo) -> WhatsappBusinessEvent.skippedSesion(sesion.getId(), t, motivo));
 
+        String operador = operadorActual != null ? operadorActual
+                : usernameDe(sesion.getUsuarioId());
         enviarPdfInterno(
                 telefonoRaw,
                 () -> pdfGenerator.generarHistorialSesion(sesion),
@@ -219,7 +280,8 @@ public class WhatsappBusinessService {
                 sesion.getNombre(),
                 "sesión " + sesion.getId(),
                 factories,
-                /* emitirSkipsComoFailed */ true);
+                /* emitirSkipsComoFailed */ true,
+                operador);
         // Sesión-path no necesita el outcome — lo descartamos. El fallback a
         // email solo aplica al flujo automático tras pedido (orquestador).
     }
@@ -245,19 +307,20 @@ public class WhatsappBusinessService {
             String nombreClienteParaCaption,
             String logContext,
             EventFactories factories,
-            boolean emitirSkipsComoFailed) {
+            boolean emitirSkipsComoFailed,
+            String operador) {
         Optional<String> motivo = motivoNoConfigurado();
         if (motivo.isPresent()) {
             log.debug("WhatsApp no disponible: {}. {} no se envía.", motivo.get(), logContext);
             if (emitirSkipsComoFailed) {
-                eventService.publish(SSE_EVENT, factories.failed.apply(telefonoRaw, motivo.get()));
+                publicarEvento(operador, factories.failed.apply(telefonoRaw, motivo.get()));
             }
             return false;
         }
         if (!StringUtils.hasText(telefonoRaw)) {
             log.warn("{} sin teléfono — no se manda WhatsApp.", logContext);
             if (emitirSkipsComoFailed) {
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.failed.apply(null, "Falta el teléfono del cliente."));
             }
             return false;
@@ -265,7 +328,7 @@ public class WhatsappBusinessService {
         String telefono = normalizarTelefono(telefonoRaw);
         if (telefono == null) {
             log.warn("{} con teléfono inválido '{}' — no se manda WhatsApp.", logContext, telefonoRaw);
-            eventService.publish(SSE_EVENT,
+            publicarEvento(operador,
                     factories.failed.apply(telefonoRaw, "Teléfono con formato inválido — revisar el dato cargado."));
             return false;
         }
@@ -275,7 +338,7 @@ public class WhatsappBusinessService {
             pdf = pdfSupplier.get();
         } catch (Exception ex) {
             log.warn("No se pudo generar el PDF para WhatsApp {}: {}", logContext, ex.getMessage(), ex);
-            eventService.publish(SSE_EVENT,
+            publicarEvento(operador,
                     factories.failed.apply(telefono,
                             UserMessages.traducir(ex, "No se pudo generar el PDF de follow-up.")));
             return false;
@@ -288,13 +351,13 @@ public class WhatsappBusinessService {
             if (emitirSkipsComoFailed) {
                 // Path sesión-abandonada: no hay items escaneados → es un error
                 // de input del operador (debería tener algo en la sesión).
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.failed.apply(telefono, motivoBase));
             } else {
                 // Path pedido (manual desde /pedidos o auto post-pedido): no es
                 // un error, el cliente compró todo lo que vio. Emitimos SKIPPED
                 // para que el operador reciba un toast informativo.
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.skipped.apply(telefono, motivoBase));
             }
             return false;
@@ -306,16 +369,16 @@ public class WhatsappBusinessService {
             String caption = renderCuerpo(nombreClienteParaCaption);
             enviarDocumento(telefono, mediaId, caption, filename);
             log.info("WhatsApp enviado a {} para {} ({} KB)", telefono, logContext, pdf.length / 1024);
-            eventService.publish(SSE_EVENT, factories.sent.apply(telefono));
+            publicarEvento(operador, factories.sent.apply(telefono));
             return true;
         } catch (HttpClientErrorException e) {
             int metaCode = extraerErrorCodeMeta(e.getResponseBodyAsString());
             if (metaCode == META_ERROR_WINDOW_CLOSED) {
                 log.info("WhatsApp {} — ventana 24hs cerrada para {}", logContext, telefono);
-                eventService.publish(SSE_EVENT, factories.windowClosed.apply(telefono));
+                publicarEvento(operador, factories.windowClosed.apply(telefono));
             } else if (metaCode == META_ERROR_PAIR_RATE_LIMIT) {
                 log.warn("WhatsApp {} — pair rate limit (1 msg/6s) excedido para {}", logContext, telefono);
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.failed.apply(telefono,
                                 "Demasiados mensajes seguidos al mismo número. Esperá ~6s y reintentá."));
             } else if (metaCode == META_ERROR_PERMISSIONS) {
@@ -323,20 +386,20 @@ public class WhatsappBusinessService {
                         "Revisar en Meta Business Settings: el system user debe tener acceso a la WABA " +
                         "y los permisos business_management + whatsapp_business_management + " +
                         "whatsapp_business_messaging.", logContext);
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.failed.apply(telefono,
                                 "Permisos del token insuficientes — revisar config en Meta Business Settings."));
             } else {
                 log.error("WhatsApp {} falló ({}): {}", logContext, e.getStatusCode(),
                         e.getResponseBodyAsString(), e);
-                eventService.publish(SSE_EVENT,
+                publicarEvento(operador,
                         factories.failed.apply(telefono,
                                 resumirErrorMeta(e.getResponseBodyAsString(), e.getMessage())));
             }
             return false;
         } catch (Exception e) {
             log.error("WhatsApp {} falló: {}", logContext, e.getMessage(), e);
-            eventService.publish(SSE_EVENT,
+            publicarEvento(operador,
                     factories.failed.apply(telefono,
                             UserMessages.traducir(e, "No se pudo enviar el WhatsApp. Revisar logs del backend.")));
             return false;

@@ -16,7 +16,8 @@ import java.util.List;
 @Table(name = "pedido_showroom", indexes = {
         @Index(name = "idx_pedido_showroom_nro_doc", columnList = "nro_doc"),
         @Index(name = "idx_pedido_showroom_creado_at", columnList = "creado_at"),
-        @Index(name = "idx_pedido_showroom_estado", columnList = "estado")
+        @Index(name = "idx_pedido_showroom_estado", columnList = "estado"),
+        @Index(name = "idx_pedido_showroom_usuario_id", columnList = "usuario_id")
 })
 @Data
 @NoArgsConstructor
@@ -27,6 +28,14 @@ public class PedidoShowroom {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Operador que creó el pedido — snapshot del id del usuario logueado al
+     *  POST /pedido-dux. Nullable para no romper pedidos legacy creados antes
+     *  del multi-usuario. Útil para: filtrar listados por operador, asociar
+     *  notificaciones async (toast del email/whatsapp post-envío) al canal
+     *  SSE personal del operador, y auditoría. */
+    @Column(name = "usuario_id")
+    private Long usuarioId;
 
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;

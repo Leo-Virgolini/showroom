@@ -22,25 +22,26 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Estado del carrito del showroom — único, global, en memoria. Cualquier
- * pantalla logueada (operador en {@code /}) o pública ({@code /visor}) opera
- * sobre el mismo carrito y todas las pantallas suscritas al SSE
- * {@code carrito-updated} se sincronizan al instante.
+ * Estado del carrito del showroom — un carrito independiente por usuario logueado.
+ * Cada operador tiene su propio carrito (identificado por username); ni el
+ * operador A ve el de B ni se contaminan entre sí. El visor del cliente
+ * (pantalla espejo en celular) se liga al canal de un operador específico
+ * vía {@code /visor/{username}} y opera sobre el carrito de ese operador.
  *
- * <p><b>Por qué carrito único global:</b> el showroom atiende un cliente a la
- * vez, así que no tiene sentido tener carritos por sesión. Si en el futuro
- * se necesita atender en paralelo (caja A y caja B), se cambia a
- * {@code Map<userId, CarritoState>} sin tocar los callers.
+ * <p><b>Persistencia:</b> ninguna. Restart del backend ⇒ todos los carritos
+ * vacíos. Aceptable porque el carrito es ephemeral (vida útil ~minutos).
  *
- * <p><b>Persistencia:</b> ninguna. Restart del backend ⇒ carrito vacío.
- * Aceptable porque el carrito es ephemeral (vida útil ~minutos).
+ * <p><b>Concurrencia:</b> {@link ConcurrentHashMap} de "espacios" por usuario;
+ * dentro de cada espacio, un {@link ReentrantLock} protege las mutaciones del
+ * carrito de ese usuario. Operadores distintos no compiten por el mismo lock
+ * — un carrito ocupado en refrescar stock (~7s por SKU) no bloquea al resto.
  *
- * <p><b>Concurrencia:</b> todas las mutaciones bajo un {@link ReentrantLock}
- * porque el estado se toca desde requests HTTP simultáneos del operador y del
- * visor. El cost es despreciable (carritos < 100 items).
+ * <p>Los eventos {@code carrito-updated} se publican al canal del usuario
+ * propietario, así que cada pantalla solo recibe su propio carrito.
  */
 @Slf4j
 @Service
@@ -52,8 +53,10 @@ public class CarritoService {
     private final ShowroomService showroomService;
     private final SyncEventService eventService;
 
-    private final ReentrantLock lock = new ReentrantLock();
-    private final Map<String, CarritoItemDTO> items = new LinkedHashMap<>();
+    /** Carrito por usuario. {@code computeIfAbsent} crea el espacio al primer
+     *  acceso; nunca se elimina (sobrevive a logout — el operador encuentra
+     *  su carrito tal cual lo dejó al volver a entrar). */
+    private final Map<String, EspacioUsuario> espacios = new ConcurrentHashMap<>();
 
     /** @Lazy en ShowroomService evita potencial ciclo si en el futuro algún
      *  service usado por ShowroomService termina tocando CarritoService. */
@@ -66,27 +69,29 @@ public class CarritoService {
         this.eventService = eventService;
     }
 
-    public CarritoStateDTO obtener() {
-        lock.lock();
+    public CarritoStateDTO obtener(String username) {
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
         try {
-            return snapshot(CarritoStateDTO.Origen.SISTEMA);
+            return snapshot(esp, CarritoStateDTO.Origen.SISTEMA);
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
     /**
-     * Agrega {@code cantidad} unidades del producto con {@code sku} al carrito.
-     * Si el item ya existe, suma a lo que había. Si el total supera el stock,
-     * recorta y reporta cuánto se sumó realmente — salvo que {@code forzar=true},
-     * en cuyo caso se agrega la cantidad pedida ignorando el stock (queda
-     * marcado como excedido y el operador lo resuelve antes de generar el
-     * pedido en DUX).
+     * Agrega {@code cantidad} unidades del producto al carrito del usuario
+     * {@code username}. Si el item ya existe, suma a lo que había. Si el total
+     * supera el stock, recorta y reporta cuánto se sumó realmente — salvo que
+     * {@code forzar=true}, en cuyo caso se agrega la cantidad pedida ignorando
+     * el stock (queda marcado como excedido y el operador lo resuelve antes
+     * de generar el pedido en DUX).
      *
      * @throws NotFoundException si el SKU no está en cache (no se llama a DUX).
      * @throws ConflictException si está deshabilitado o no tiene precio.
      */
-    public CarritoAgregarResponseDTO agregar(String sku, int cantidad, CarritoStateDTO.Origen origen, boolean forzar) {
+    public CarritoAgregarResponseDTO agregar(String username, String sku, int cantidad,
+                                             CarritoStateDTO.Origen origen, boolean forzar) {
         if (sku == null || sku.isBlank()) {
             throw new NotFoundException("SKU vacío");
         }
@@ -106,9 +111,10 @@ public class CarritoService {
         ScanResultDTO scan = showroomService.toScanResult(pc);
         Integer stock = scan.stockTotal();
 
-        lock.lock();
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
         try {
-            CarritoItemDTO actual = items.get(scan.sku());
+            CarritoItemDTO actual = esp.items.get(scan.sku());
             int cantidadActual = actual != null ? actual.cantidad() : 0;
             int cantidadDeseada = cantidadActual + cantidad;
             // Si forzar=true, ignoramos el stock — el operador asume la
@@ -126,33 +132,34 @@ public class CarritoService {
                         ? "El producto no tiene stock disponible"
                         : "Cantidad inválida";
                 return new CarritoAgregarResponseDTO(
-                        snapshot(origen), cantidad, 0, true, motivo);
+                        snapshot(esp, origen), cantidad, 0, true, motivo);
             }
 
             if (actual == null) {
-                items.put(scan.sku(), CarritoItemDTO.from(scan, cantidadFinal));
+                esp.items.put(scan.sku(), CarritoItemDTO.from(scan, cantidadFinal));
             } else {
-                items.put(scan.sku(), actual
+                esp.items.put(scan.sku(), actual
                         .conScanActualizado(scan)
                         .withCantidad(cantidadFinal));
             }
 
-            CarritoStateDTO state = snapshot(origen);
-            broadcast(state);
+            CarritoStateDTO state = snapshot(esp, origen);
+            broadcast(username, state);
             String motivo = recortado
                     ? "Recortado al stock disponible (" + stock + ")"
                     : null;
             return new CarritoAgregarResponseDTO(
                     state, cantidad, agregada, recortado, motivo);
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
     /** Sobrecarga sin forzar — compatibilidad con callers existentes que
      *  respetan la política de stock por defecto. */
-    public CarritoAgregarResponseDTO agregar(String sku, int cantidad, CarritoStateDTO.Origen origen) {
-        return agregar(sku, cantidad, origen, false);
+    public CarritoAgregarResponseDTO agregar(String username, String sku, int cantidad,
+                                             CarritoStateDTO.Origen origen) {
+        return agregar(username, sku, cantidad, origen, false);
     }
 
     /** Reemplaza la cantidad de un item existente. Si la nueva cantidad supera
@@ -160,54 +167,57 @@ public class CarritoService {
      *  marcado como excedido del lado del frontend — el operador decide si
      *  ajusta o lo manda igual como pendiente de reposición al crear el
      *  pedido en DUX. */
-    public CarritoStateDTO actualizarCantidad(String sku, int cantidad) {
+    public CarritoStateDTO actualizarCantidad(String username, String sku, int cantidad) {
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
         }
-        lock.lock();
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
         try {
-            CarritoItemDTO actual = items.get(sku);
+            CarritoItemDTO actual = esp.items.get(sku);
             if (actual == null) {
                 throw new NotFoundException("El item no está en el carrito: " + sku);
             }
-            items.put(sku, actual.withCantidad(cantidad));
-            CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
-            broadcast(state);
+            esp.items.put(sku, actual.withCantidad(cantidad));
+            CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
+            broadcast(username, state);
             return state;
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
-    public CarritoStateDTO eliminar(String sku) {
-        lock.lock();
+    public CarritoStateDTO eliminar(String username, String sku) {
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
         try {
-            if (items.remove(sku) == null) {
+            if (esp.items.remove(sku) == null) {
                 throw new NotFoundException("El item no está en el carrito: " + sku);
             }
-            CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
-            broadcast(state);
+            CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
+            broadcast(username, state);
             return state;
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
-    public CarritoStateDTO vaciar(CarritoStateDTO.Origen origen) {
-        lock.lock();
+    public CarritoStateDTO vaciar(String username, CarritoStateDTO.Origen origen) {
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
         try {
-            items.clear();
-            CarritoStateDTO state = snapshot(origen);
-            broadcast(state);
+            esp.items.clear();
+            CarritoStateDTO state = snapshot(esp, origen);
+            broadcast(username, state);
             return state;
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
     /**
-     * Refresca contra DUX el stock de todos los items del carrito. <b>No
-     * toca los precios</b>: el cliente paga lo que vio al armar el pedido,
+     * Refresca contra DUX el stock de todos los items del carrito del usuario.
+     * <b>No toca los precios</b>: el cliente paga lo que vio al armar el pedido,
      * aunque DUX haya cambiado el precio entre el scan y el envío. Sí se
      * actualizan stock, descripción, imagen, habilitado y flags de
      * sincronización porque son metadata que el operador debe ver.
@@ -216,16 +226,17 @@ public class CarritoService {
      * item, el frontend lo verá al recibir el SSE — la decisión de qué hacer
      * (recortar o mantener) la sigue tomando el operador en pantalla.
      */
-    public CarritoStateDTO refrescarStock() {
+    public CarritoStateDTO refrescarStock(String username) {
+        EspacioUsuario esp = espacioDe(username);
         List<String> skus;
-        lock.lock();
+        esp.lock.lock();
         try {
-            skus = new ArrayList<>(items.keySet());
+            skus = new ArrayList<>(esp.items.keySet());
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
         if (skus.isEmpty()) {
-            return obtener();
+            return obtener(username);
         }
 
         // FUERA del lock: cada SKU consume 1 request DUX (~7s). No podemos
@@ -236,75 +247,102 @@ public class CarritoService {
             map.put(pc.getSku(), showroomService.toScanResult(pc));
         }
 
-        lock.lock();
+        esp.lock.lock();
         try {
-            for (Map.Entry<String, CarritoItemDTO> e : items.entrySet()) {
+            for (Map.Entry<String, CarritoItemDTO> e : esp.items.entrySet()) {
                 ScanResultDTO fresh = map.get(e.getKey());
                 if (fresh != null) {
-                    items.put(e.getKey(), e.getValue().withStockFrescoDe(fresh));
+                    esp.items.put(e.getKey(), e.getValue().withStockFrescoDe(fresh));
                 }
             }
-            CarritoStateDTO state = snapshot(CarritoStateDTO.Origen.OPERADOR);
-            broadcast(state);
+            CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
+            broadcast(username, state);
             return state;
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
     /**
-     * Listener para {@link SesionCerradaEvent}: vacía el carrito cuando la
-     * sesión de atención termina sin pedido (cancelada manualmente o abandonada
-     * al iniciar otra). Sin esto, el siguiente cliente heredaría los items del
-     * anterior. Idempotente: si el carrito ya está vacío, no hace ruido.
+     * Listener para {@link SesionCerradaEvent}: vacía el carrito DEL OPERADOR
+     * que cerró la sesión, no de todos. Sin esto, el siguiente cliente del
+     * mismo operador heredaría los items del anterior. Idempotente: si el
+     * carrito ya está vacío, no hace ruido.
      */
     @EventListener
     public void onSesionCerrada(SesionCerradaEvent event) {
-        lock.lock();
+        String username = event.username();
+        if (username == null || username.isBlank()) return;
+        EspacioUsuario esp = espacios.get(username);
+        if (esp == null) return;
+        esp.lock.lock();
         try {
-            if (items.isEmpty()) return;
-            log.info("Carrito vaciado: sesión {} ({}) {} con {} item(s) en carrito",
-                    event.sesionId(), event.nombreCliente(),
-                    event.motivo().name().toLowerCase(), items.size());
-            items.clear();
-            broadcast(snapshot(CarritoStateDTO.Origen.SISTEMA));
+            if (esp.items.isEmpty()) return;
+            log.info("Carrito de '{}' vaciado: sesión {} ({}) {} con {} item(s)",
+                    username, event.sesionId(), event.nombreCliente(),
+                    event.motivo().name().toLowerCase(), esp.items.size());
+            esp.items.clear();
+            broadcast(username, snapshot(esp, CarritoStateDTO.Origen.SISTEMA));
         } finally {
-            lock.unlock();
+            esp.lock.unlock();
         }
     }
 
     @EventListener
     public void onSyncCatalogoCompletado(SyncCatalogoCompletadoEvent event) {
-        lock.lock();
-        try {
-            if (items.isEmpty()) return;
-            boolean huboCambio = false;
-            for (Map.Entry<String, CarritoItemDTO> entry : items.entrySet()) {
-                var pcOpt = catalogoSync.buscarPorSkuOEan(entry.getKey());
-                if (pcOpt.isEmpty()) continue;
-                ScanResultDTO fresh = showroomService.toScanResult(pcOpt.get());
-                CarritoItemDTO actualizado = entry.getValue().withStockFrescoDe(fresh);
-                if (!actualizado.equals(entry.getValue())) {
-                    items.put(entry.getKey(), actualizado);
-                    huboCambio = true;
+        // Refrescar todos los carritos de todos los operadores con la metadata
+        // actualizada del catálogo. Iteramos los espacios; cada operador
+        // recibe su propio broadcast solo si tuvo cambios.
+        for (Map.Entry<String, EspacioUsuario> e : espacios.entrySet()) {
+            String username = e.getKey();
+            EspacioUsuario esp = e.getValue();
+            esp.lock.lock();
+            try {
+                if (esp.items.isEmpty()) continue;
+                boolean huboCambio = false;
+                for (Map.Entry<String, CarritoItemDTO> entry : esp.items.entrySet()) {
+                    var pcOpt = catalogoSync.buscarPorSkuOEan(entry.getKey());
+                    if (pcOpt.isEmpty()) continue;
+                    ScanResultDTO fresh = showroomService.toScanResult(pcOpt.get());
+                    CarritoItemDTO actualizado = entry.getValue().withStockFrescoDe(fresh);
+                    if (!actualizado.equals(entry.getValue())) {
+                        esp.items.put(entry.getKey(), actualizado);
+                        huboCambio = true;
+                    }
                 }
+                if (huboCambio) {
+                    log.info("Carrito de '{}' actualizado tras sync ({} productos en catálogo)",
+                            username, event.productosActualizados());
+                    broadcast(username, snapshot(esp, CarritoStateDTO.Origen.SISTEMA));
+                }
+            } finally {
+                esp.lock.unlock();
             }
-            if (huboCambio) {
-                log.info("Carrito actualizado tras sync ({} productos en catálogo)",
-                        event.productosActualizados());
-                broadcast(snapshot(CarritoStateDTO.Origen.SISTEMA));
-            }
-        } finally {
-            lock.unlock();
         }
     }
 
-    /** Lectura inmutable del estado actual. El caller ya debe tener el lock. */
-    private CarritoStateDTO snapshot(CarritoStateDTO.Origen origen) {
-        return CarritoStateDTO.of(new ArrayList<>(items.values()), origen);
+    /** Crea (o reutiliza) el espacio del usuario. Null/blank cae al espacio
+     *  "anónimo" — no debería ocurrir en producción (todo endpoint llega con
+     *  username resuelto), pero si pasa no rompemos: el flujo sigue, solo
+     *  que ese carrito no tiene broadcast útil. */
+    private EspacioUsuario espacioDe(String username) {
+        String key = (username == null || username.isBlank()) ? "" : username;
+        return espacios.computeIfAbsent(key, k -> new EspacioUsuario());
     }
 
-    private void broadcast(CarritoStateDTO state) {
-        eventService.publish(EVENTO_CARRITO, state);
+    /** Lectura inmutable del estado del usuario. El caller ya debe tener el lock. */
+    private CarritoStateDTO snapshot(EspacioUsuario esp, CarritoStateDTO.Origen origen) {
+        return CarritoStateDTO.of(new ArrayList<>(esp.items.values()), origen);
+    }
+
+    private void broadcast(String username, CarritoStateDTO state) {
+        eventService.publishTo(username, EVENTO_CARRITO, state);
+    }
+
+    /** Estado privado por usuario. Cada uno tiene su lock independiente para
+     *  no serializar a operadores distintos contra el mismo monitor. */
+    private static final class EspacioUsuario {
+        final ReentrantLock lock = new ReentrantLock();
+        final Map<String, CarritoItemDTO> items = new LinkedHashMap<>();
     }
 }

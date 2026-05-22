@@ -28,7 +28,8 @@ import java.util.List;
 @Table(name = "sesion_showroom", indexes = {
         @Index(name = "idx_sesion_showroom_iniciada_at", columnList = "iniciada_at"),
         @Index(name = "idx_sesion_showroom_finalizada_at", columnList = "finalizada_at"),
-        @Index(name = "idx_sesion_showroom_pedido_id", columnList = "pedido_id")
+        @Index(name = "idx_sesion_showroom_pedido_id", columnList = "pedido_id"),
+        @Index(name = "idx_sesion_showroom_usuario_activa", columnList = "usuario_id, finalizada_at")
 })
 @Data
 @NoArgsConstructor
@@ -39,6 +40,16 @@ public class SesionShowroom {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /** Operador propietario de la sesión. Cada operador puede tener su propia
+     *  sesión activa en paralelo a la de los demás — el "activa única" del
+     *  modelo viejo se rompe acá: ahora es "activa única por usuario".
+     *
+     *  <p>Nullable para no romper filas legacy generadas antes del multi-usuario
+     *  (quedan asociadas a "operador desconocido"). Las filas nuevas siempre
+     *  llevan el id del operador que inició la sesión. */
+    @Column(name = "usuario_id")
+    private Long usuarioId;
 
     /** Nombre del cliente — lo carga el operador al clickear "Nuevo cliente". */
     @Column(name = "nombre", length = 150, nullable = false)

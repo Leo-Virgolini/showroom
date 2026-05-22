@@ -9,7 +9,7 @@ export const routes: Routes = [
       import('./auth/login-page/login-page').then((m) => m.LoginPage),
   },
   {
-    path: 'visor',
+    path: 'visor/:username',
     loadComponent: () =>
       import('./showroom/visor-page/visor-page').then((m) => m.VisorPage),
   },

@@ -35,6 +35,7 @@ import {
   PedidoDetalle,
   PedidoListItem,
 } from '../models';
+import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 
@@ -71,6 +72,7 @@ export class PedidosPage {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
+  private readonly backendStatus = inject(BackendStatusService);
 
   readonly busqueda = signal('');
   readonly estado = signal<EstadoPedido | null>(null);
@@ -139,6 +141,20 @@ export class PedidosPage {
       .subscribe(() => {
         this.first.set(0);
         this.cargar(0, this.pageSize());
+      });
+
+    // Cuando otro operador anula/reactiva un pedido, recibimos el evento SSE
+    // y recargamos el listado. Es un broadcast global — todos los operadores
+    // con la pantalla abierta se sincronizan automáticamente.
+    this.backendStatus.pedidoActualizado$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => {
+        // Solo recargamos si el pedido afectado podría estar visible en la
+        // página actual — sino el operador está mirando otros datos y un
+        // refetch sería ruido.
+        if (this.pedidos().some((p) => p.id === ev.pedidoId)) {
+          this.cargar(Math.floor(this.first() / this.pageSize()), this.pageSize());
+        }
       });
 
     // Guard contra doble request inicial: el effect corre la primera vez al

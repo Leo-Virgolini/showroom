@@ -64,14 +64,25 @@
         imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
     </div>
 
-    <!-- Sección Visor -->
+    <!-- Sección Visor — QR dinámico que apunta a /visor/{username} del operador
+         logueado, así cada operador tiene su propio canal y el cliente solo ve
+         los scans de su vendedor. -->
     <div class="flex flex-col items-center gap-1.5 md:px-3 border-t pt-3 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
       <div class="w-full flex items-center gap-1.5">
         <i class="pi pi-mobile text-[#FF861C] text-base"></i>
         <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">2. Ver los precios</h3>
       </div>
-      <p-image src="qr-precios.png" alt="QR del visor" [preview]="true"
-        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
+      @if (qrVisorDataUrl()) {
+      <p-image [src]="qrVisorDataUrl()!" alt="QR del visor del operador" [preview]="true"
+        imageClass="w-full max-h-[70vh] object-contain rounded-xl shadow-sm cursor-zoom-in bg-white" class="w-full" />
+      <div class="text-[10px] font-mono text-muted-color break-all text-center max-w-full select-all">
+        {{ visorUrl() }}
+      </div>
+      } @else {
+      <div class="w-full aspect-square max-h-[70vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
+        <i class="pi pi-spin pi-spinner text-3xl text-muted-color"></i>
+      </div>
+      }
     </div>
 
     <!-- Sección Reseña Google — usa la misma imagen que el dialog post-pedido

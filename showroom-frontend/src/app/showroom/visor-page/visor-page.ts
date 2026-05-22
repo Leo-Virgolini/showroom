@@ -10,6 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ImageModule } from 'primeng/image';
@@ -44,7 +45,13 @@ export class VisorPage {
   private readonly api = inject(ShowroomService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(MessageService);
+
+  /** Username del operador al que está ligado este visor — viene del path
+   *  {@code /visor/:username}. Determina a qué canal SSE nos conectamos y a
+   *  qué carrito agrega items el botón "Agregar al carrito". */
+  readonly operadorUsername = this.route.snapshot.paramMap.get('username') ?? '';
 
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
   readonly ultimoScan = signal<ScanResult | null>(null);
@@ -113,6 +120,12 @@ export class VisorPage {
   });
 
   constructor() {
+    // Engancha el SSE del BackendStatusService al canal personal del operador
+    // — sin esto este celular recibiría solo eventos globales (ningún scan).
+    if (this.operadorUsername) {
+      this.backendStatus.conectarComoVisor(this.operadorUsername);
+    }
+
     this.api.obtenerEscalasDescuento().subscribe({
       next: (lista) => this.escalas.set(lista),
       error: () => {
@@ -135,13 +148,16 @@ export class VisorPage {
 
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
-    this.api.obtenerSesionActiva().subscribe({
-      next: (s) => {
-        this.nombreCliente.set(s.id != null ? s.nombre : null);
-        this.previousSesionId = s.id ?? null;
-      },
-      error: () => { /* sin sesión activa, queda en null y se muestra el header genérico */ },
-    });
+    // Usamos el endpoint público por operador — el visor no está autenticado.
+    if (this.operadorUsername) {
+      this.api.visorObtenerSesionActiva(this.operadorUsername).subscribe({
+        next: (s) => {
+          this.nombreCliente.set(s.id != null ? s.nombre : null);
+          this.previousSesionId = s.id ?? null;
+        },
+        error: () => { /* sin sesión activa, queda en null y se muestra el header genérico */ },
+      });
+    }
     this.backendStatus.sesionEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((s: SesionShowroom) => {
@@ -243,7 +259,7 @@ export class VisorPage {
     const forzar = r.stockTotal == null || r.stockTotal <= 0;
 
     this.enviandoAgregar.set(true);
-    this.api.visorAgregarAlCarrito(r.sku, cant, forzar).subscribe({
+    this.api.visorAgregarAlCarrito(this.operadorUsername, r.sku, cant, forzar).subscribe({
       next: (res) => {
         this.enviandoAgregar.set(false);
         if (res.cantidadAgregada === 0) {

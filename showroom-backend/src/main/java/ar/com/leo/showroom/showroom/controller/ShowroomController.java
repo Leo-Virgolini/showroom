@@ -65,6 +65,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -109,73 +110,117 @@ public class ShowroomController {
      * <p>El resultado también se publica al visor (SSE {@code scan-visor})
      * para que las pantallas en {@code /visor} (típicamente celulares de
      * clientes) muestren el producto en tiempo real.
+     *
+     * <p>El presupuestador (/presupuestos) llama con {@code publicarVisor=false}
+     * para no contaminar la pantalla del cliente con los productos que el
+     * operador está cotizando — es un flujo paralelo, independiente de la
+     * sesión de atención. En ese modo tampoco se registra el scan en la
+     * sesión activa.
      */
     @GetMapping("/scan/{sku}")
-    public ScanResultDTO scan(@PathVariable String sku) {
+    public ScanResultDTO scan(
+            @PathVariable String sku,
+            @RequestParam(value = "publicarVisor", defaultValue = "true") boolean publicarVisor,
+            Authentication auth) {
+        // Sin auth (endpoint público) o publicarVisor=false ⇒ el scan no
+        // pertenece a un operador identificable, así que no se publica al
+        // visor ni se registra en sesión. Es scan "silencioso".
+        String username = (auth != null && publicarVisor) ? auth.getName() : null;
         try {
             ScanResultDTO result = service.scan(sku);
-            visorService.publicarScan(result);
-            // Registrar en la sesión activa si la hay. No bloquea el flujo si
-            // no hay sesión (operador no inició una) — el registro es best-effort.
-            sesionShowroomService.registrarScan(result);
+            if (username != null) {
+                visorService.publicarScan(username, result);
+                // Registrar en la sesión activa si la hay. No bloquea el flujo si
+                // el operador no inició una — el registro es best-effort.
+                sesionShowroomService.registrarScan(username, result);
+            }
             return result;
         } catch (NotFoundException e) {
             // El código no existe ni en cache ni en DUX. Publicamos al visor
-            // para que el cliente no se confunda viendo el último producto
-            // válido en pantalla. Re-lanzamos para que el operador siga
+            // del operador para que el cliente no se confunda viendo el último
+            // producto válido en pantalla. Re-lanzamos para que el operador siga
             // viendo el 404 + toast en su pantalla.
-            visorService.publicarScanFallido(sku);
+            if (username != null) {
+                visorService.publicarScanFallido(username, sku);
+            }
             throw e;
         }
     }
 
     /**
-     * Disparado desde {@code /visor}: el cliente agregó un producto al carrito
-     * desde el celular. Pasa por el {@link CarritoService} igual que el endpoint
-     * del operador — el carrito es único global, así que el item aparece en la
-     * pantalla del operador automáticamente vía SSE {@code carrito-updated}.
+     * Disparado desde {@code /visor/{username}}: el cliente agregó un producto
+     * al carrito desde el celular. Pasa por el {@link CarritoService} apuntando
+     * al carrito del operador correspondiente — el item aparece en la pantalla
+     * de ese operador automáticamente vía SSE {@code carrito-updated} en su
+     * canal personal.
      *
      * <p>El response incluye cuánto se agregó realmente (puede ser menor a lo
      * pedido si el carrito ya estaba al tope por stock). El visor muestra esa
      * cantidad real al cliente, no la pedida.
      *
-     * <p>Endpoint público (el visor no tiene sesión).
+     * <p>Endpoint público (el visor no tiene sesión HTTP) — el {@code username}
+     * en el path determina a qué operador pertenece el carrito.
      *
-     * <p>Rechaza con 409 si no hay sesión de atención activa: el carrito tiene
-     * sentido solo cuando el operador está atendiendo a un cliente. Sin esta
-     * validación, cualquiera con la URL del visor podría agregar items al carrito
-     * fuera del horario de atención, o cuando el operador no le inició la sesión.
+     * <p>Rechaza con 409 si el operador no tiene sesión de atención activa: el
+     * carrito tiene sentido solo cuando hay un cliente concreto siendo atendido.
+     * Sin esta validación, cualquiera con la URL del visor podría agregar items
+     * al carrito de un operador que ni siquiera está atendiendo.
      */
-    @PostMapping("/visor/agregar-carrito")
-    public CarritoAgregarResponseDTO visorAgregarAlCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
-        if (sesionShowroomService.obtenerActiva().id() == null) {
+    @PostMapping("/visor/{username}/agregar-carrito")
+    public CarritoAgregarResponseDTO visorAgregarAlCarrito(
+            @PathVariable String username,
+            @RequestBody @Valid CarritoAgregarRequestDTO request) {
+        if (sesionShowroomService.obtenerActiva(username).id() == null) {
             throw new ConflictException(
                     "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
         }
         return carritoService.agregar(
-                request.sku(), request.cantidad(), CarritoStateDTO.Origen.VISOR, request.forzarFlag());
+                username, request.sku(), request.cantidad(),
+                CarritoStateDTO.Origen.VISOR, request.forzarFlag());
+    }
+
+    /** Estado de la sesión activa del operador — público (sin auth) para que
+     *  el visor del cliente pueda mostrar el nombre del cliente actual. */
+    @GetMapping("/visor/{username}/sesion/activa")
+    public SesionShowroomDTO visorSesionActiva(@PathVariable String username) {
+        return sesionShowroomService.obtenerActiva(username);
+    }
+
+    /**
+     * SSE para la pantalla {@code /visor/{username}} — público, sin auth.
+     * Subscribe el emitter al canal del operador correspondiente; el celular
+     * recibe solo los eventos de ese operador (carrito, scan-visor,
+     * sesion-updated) y nada de los demás.
+     */
+    @GetMapping(value = "/visor/{username}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter visorEvents(@PathVariable String username) {
+        return eventService.subscribe(username);
     }
 
     // =====================================================
     // Sesión de atención al cliente — agrupa scans para el historial.
     // =====================================================
 
-    /** Inicia una sesión nueva cerrando la anterior si existía. */
+    /** Inicia una sesión nueva del operador logueado, cerrando la anterior
+     *  del mismo operador si existía. Las sesiones de otros operadores no se
+     *  tocan. */
     @PostMapping("/sesion/iniciar")
-    public SesionShowroomDTO iniciarSesion(@RequestBody @Valid IniciarSesionRequestDTO body) {
-        return sesionShowroomService.iniciar(body.nombre());
+    public SesionShowroomDTO iniciarSesion(
+            @RequestBody @Valid IniciarSesionRequestDTO body,
+            Authentication auth) {
+        return sesionShowroomService.iniciar(auth.getName(), body.nombre());
     }
 
-    /** Cancela la sesión activa (operador descartó al cliente sin pedido). */
+    /** Cancela la sesión activa del operador logueado. */
     @PostMapping("/sesion/cancelar")
-    public SesionShowroomDTO cancelarSesion() {
-        return sesionShowroomService.cancelar();
+    public SesionShowroomDTO cancelarSesion(Authentication auth) {
+        return sesionShowroomService.cancelar(auth.getName());
     }
 
-    /** Estado actual: la sesión activa o un placeholder inactivo. */
+    /** Estado actual: la sesión activa del operador o un placeholder inactivo. */
     @GetMapping("/sesion/activa")
-    public SesionShowroomDTO sesionActiva() {
-        return sesionShowroomService.obtenerActiva();
+    public SesionShowroomDTO sesionActiva(Authentication auth) {
+        return sesionShowroomService.obtenerActiva(auth.getName());
     }
 
     /** Listado paginado para la página /historial. */
@@ -218,7 +263,8 @@ public class ShowroomController {
     @PostMapping("/sesiones/{id}/email")
     public ResponseEntity<Map<String, Object>> enviarEmailSesion(
             @PathVariable Long id,
-            @RequestBody @Valid SesionEnvioEmailRequestDTO body) {
+            @RequestBody @Valid SesionEnvioEmailRequestDTO body,
+            Authentication auth) {
         SesionShowroom sesion = sesionRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
         return pickingEmailService.motivoNoConfigurado()
@@ -226,7 +272,9 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    pickingEmailService.enviarPdfSesionAsync(sesion, body.email());
+                    // operadorActual = el que apretó el botón → toast va a su pantalla
+                    // (puede no coincidir con el dueño de la sesión).
+                    pickingEmailService.enviarPdfSesionAsync(sesion, body.email(), auth.getName());
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Envío encolado — el toast confirmará cuando salga.",
                             "sesionId", sesion.getId()));
@@ -241,7 +289,8 @@ public class ShowroomController {
     @PostMapping("/sesiones/{id}/whatsapp")
     public ResponseEntity<Map<String, Object>> enviarWhatsappSesion(
             @PathVariable Long id,
-            @RequestBody @Valid SesionEnvioWhatsappRequestDTO body) {
+            @RequestBody @Valid SesionEnvioWhatsappRequestDTO body,
+            Authentication auth) {
         SesionShowroom sesion = sesionRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
         return whatsappBusinessService.motivoNoConfigurado()
@@ -249,7 +298,7 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    whatsappBusinessService.enviarPdfSesionAsync(sesion, body.telefono());
+                    whatsappBusinessService.enviarPdfSesionAsync(sesion, body.telefono(), auth.getName());
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Envío encolado — el toast confirmará cuando salga.",
                             "sesionId", sesion.getId()));
@@ -257,41 +306,46 @@ public class ShowroomController {
     }
 
     // =====================================================
-    // Carrito (operador, autenticado). Es el mismo carrito que toca el visor —
-    // único global y broadcasteado por SSE {@code carrito-updated}.
+    // Carrito (operador, autenticado). Cada operador tiene su propio carrito;
+    // los eventos SSE {@code carrito-updated} se publican solo a su canal, así
+    // que las pantallas de otros operadores no ven mutaciones ajenas.
     // =====================================================
 
     @GetMapping("/carrito")
-    public CarritoStateDTO obtenerCarrito() {
-        return carritoService.obtener();
+    public CarritoStateDTO obtenerCarrito(Authentication auth) {
+        return carritoService.obtener(auth.getName());
     }
 
     @PostMapping("/carrito/items")
-    public CarritoAgregarResponseDTO agregarItemCarrito(@RequestBody @Valid CarritoAgregarRequestDTO request) {
+    public CarritoAgregarResponseDTO agregarItemCarrito(
+            @RequestBody @Valid CarritoAgregarRequestDTO request,
+            Authentication auth) {
         return carritoService.agregar(
-                request.sku(), request.cantidad(), CarritoStateDTO.Origen.OPERADOR, request.forzarFlag());
+                auth.getName(), request.sku(), request.cantidad(),
+                CarritoStateDTO.Origen.OPERADOR, request.forzarFlag());
     }
 
     @PatchMapping("/carrito/items/{sku}")
     public CarritoStateDTO actualizarCantidadItemCarrito(
             @PathVariable String sku,
-            @RequestBody @Valid CantidadRequestDTO request) {
-        return carritoService.actualizarCantidad(sku, request.cantidad());
+            @RequestBody @Valid CantidadRequestDTO request,
+            Authentication auth) {
+        return carritoService.actualizarCantidad(auth.getName(), sku, request.cantidad());
     }
 
     @DeleteMapping("/carrito/items/{sku}")
-    public CarritoStateDTO eliminarItemCarrito(@PathVariable String sku) {
-        return carritoService.eliminar(sku);
+    public CarritoStateDTO eliminarItemCarrito(@PathVariable String sku, Authentication auth) {
+        return carritoService.eliminar(auth.getName(), sku);
     }
 
     @DeleteMapping("/carrito")
-    public CarritoStateDTO vaciarCarrito() {
-        return carritoService.vaciar(CarritoStateDTO.Origen.OPERADOR);
+    public CarritoStateDTO vaciarCarrito(Authentication auth) {
+        return carritoService.vaciar(auth.getName(), CarritoStateDTO.Origen.OPERADOR);
     }
 
     @PostMapping("/carrito/refresh-stock")
-    public CarritoStateDTO refrescarStockCarrito() {
-        return carritoService.refrescarStock();
+    public CarritoStateDTO refrescarStockCarrito(Authentication auth) {
+        return carritoService.refrescarStock(auth.getName());
     }
 
     /**
@@ -474,7 +528,7 @@ public class ShowroomController {
      * encoló; el resultado real llega vía SSE picking-email (toast en el frontend).
      */
     @PostMapping("/pedidos/{id}/email")
-    public ResponseEntity<Map<String, Object>> reenviarEmailPedido(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> reenviarEmailPedido(@PathVariable Long id, Authentication auth) {
         // findByIdWithItems hidrata los items en la misma query — los necesita
         // el thread @Async, donde la sesión Hibernate ya está cerrada.
         PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
@@ -484,7 +538,9 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    pickingEmailService.enviarAsync(pedido);
+                    // auth.getName() = operador que apretó el botón → recibe el toast,
+                    // aunque el pedido lo haya creado otro operador.
+                    pickingEmailService.enviarAsync(pedido, auth.getName());
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Envío encolado — el toast confirmará cuando salga.",
                             "pedidoId", pedido.getId()));
@@ -498,7 +554,7 @@ public class ShowroomController {
      * {@code whatsapp-business}.
      */
     @PostMapping("/pedidos/{id}/whatsapp")
-    public ResponseEntity<Map<String, Object>> reenviarWhatsappPedido(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> reenviarWhatsappPedido(@PathVariable Long id, Authentication auth) {
         PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException("Pedido no encontrado: " + id));
         return whatsappBusinessService.motivoNoConfigurado()
@@ -506,7 +562,7 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    whatsappBusinessService.enviarPdfAsync(pedido);
+                    whatsappBusinessService.enviarPdfAsync(pedido, auth.getName());
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Envío encolado — el toast confirmará cuando salga.",
                             "pedidoId", pedido.getId()));
@@ -521,7 +577,8 @@ public class ShowroomController {
     @PostMapping("/pedidos/{id}/pickit-externo")
     public ResponseEntity<Map<String, Object>> regenerarPickitExterno(
             @PathVariable Long id,
-            @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId,
+            Authentication auth) {
         // findByIdWithItems hidrata los items en la misma query — los necesita
         // el thread @Async para escribir el .xlsx de input al programa pickit.
         PedidoShowroom pedido = pedidoRepository.findByIdWithItems(id)
@@ -531,7 +588,7 @@ public class ShowroomController {
                         .status(HttpStatus.SERVICE_UNAVAILABLE)
                         .body(Map.of("error", motivo)))
                 .orElseGet(() -> {
-                    pickitExternoService.generarAsync(pedido, clientId);
+                    pickitExternoService.generarAsync(pedido, clientId, auth.getName());
                     return ResponseEntity.accepted().body(Map.of(
                             "message", "Pickit externo encolado — el toast confirmará el path generado.",
                             "pedidoId", pedido.getId()));
@@ -579,8 +636,9 @@ public class ShowroomController {
     @PostMapping("/pedido-dux")
     public ResponseEntity<CrearPedidoResponseDTO> crearPedido(
             @RequestBody @Valid CrearPedidoRequestDTO request,
-            @RequestHeader(value = "X-Client-Id", required = false) String clientId) {
-        CrearPedidoResponseDTO response = service.crearPedido(request, clientId);
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId,
+            Authentication auth) {
+        CrearPedidoResponseDTO response = service.crearPedido(request, clientId, auth.getName());
         HttpStatus status = response.estado() == EstadoPedido.ENVIADO
                 ? HttpStatus.CREATED
                 : HttpStatus.ACCEPTED; // 202 si quedó local pero DUX falló
@@ -601,8 +659,10 @@ public class ShowroomController {
     @PostMapping(value = "/presupuesto-comercial/preview",
             produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<byte[]> previewPresupuesto(
-            @RequestBody @Valid GenerarPresupuestoRequestDTO body) {
-        PresupuestoComercialService.Resultado r = presupuestoComercialService.generarYPersistir(body);
+            @RequestBody @Valid GenerarPresupuestoRequestDTO body,
+            Authentication auth) {
+        PresupuestoComercialService.Resultado r =
+                presupuestoComercialService.generarYPersistir(body, auth.getName());
         // Usamos `attachment` (no `inline`) para que Chrome no bloquee la
         // descarga como "no segura": cuando combinamos blob URL + a.click()
         // + window.open() automático, browsers modernos consideran sospechosa
@@ -697,14 +757,16 @@ public class ShowroomController {
      */
     @PostMapping("/presupuesto-comercial/enviar")
     public ResponseEntity<Map<String, Object>> enviarPresupuesto(
-            @RequestBody @Valid EnviarPresupuestoRequestDTO body) {
+            @RequestBody @Valid EnviarPresupuestoRequestDTO body,
+            Authentication auth) {
         java.util.Optional<String> motivo = presupuestoComercialService.motivoEmailNoConfigurado();
         if (motivo.isPresent()) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(Map.of("error", motivo.get()));
         }
         PresupuestoComercialService.Resultado r =
-                presupuestoComercialService.generarYEnviarPorEmail(body.email(), body.presupuesto());
+                presupuestoComercialService.generarYEnviarPorEmail(
+                        body.email(), body.presupuesto(), auth.getName());
         return ResponseEntity.accepted().body(Map.of(
                 "message", "Envío encolado — el toast confirmará cuando salga.",
                 "presupuestoId", r.presupuesto().getId(),
@@ -1003,12 +1065,13 @@ public class ShowroomController {
     }
 
     /**
-     * Stream Server-Sent Events. Los clientes abren un EventSource y reciben
-     * eventos en tiempo real (sync started/completed/failed). El browser hace
-     * reconnect automático si la conexión se cae.
+     * Stream Server-Sent Events del operador logueado. Recibe eventos globales
+     * (sync de catálogo, rate-limit DUX) más los eventos personales de su
+     * canal (carrito, scan-visor, sesion). El browser hace reconnect automático
+     * si la conexión se cae.
      */
     @GetMapping(value = "/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter events() {
-        return eventService.subscribe();
+    public SseEmitter events(Authentication auth) {
+        return eventService.subscribe(auth != null ? auth.getName() : null);
     }
 }

@@ -66,6 +66,10 @@ export class BackendStatusService {
   /** Estado de la sesión de atención al cliente. Se emite al iniciar/cancelar/
    *  registrar scan/finalizar. Cuando no hay activa, todos los campos son null. */
   readonly sesionEvents$ = new Subject<SesionShowroom>();
+  /** Cambio de estado de un pedido (anulado/reactivado). Lo emite el backend
+   *  para que las listas abiertas en /pedidos se refresquen sin polling.
+   *  Es global — cualquier operador con la pantalla abierta debe enterarse. */
+  readonly pedidoActualizado$ = new Subject<{ pedidoId: number; estado: string }>();
   /** Se emite cuando se detecta que el backend reinició (cambió su bootTimeMs).
    *  Los consumers lo usan para mostrar un toast al operador y/o resetear estado
    *  efímero local que no tenga sentido tras un restart. */
@@ -75,6 +79,11 @@ export class BackendStatusService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private source: EventSource | null = null;
+  /** Cuando el componente {@code VisorPage} se monta, llama a
+   *  {@link conectarComoVisor} con el username del operador (del path) y este
+   *  servicio reconfigura el EventSource para enchufarse al canal personal de
+   *  ese operador. Null = modo operador (usa /events con la cookie de sesión). */
+  private visorUsername: string | null = null;
   private healthPoll: ReturnType<typeof setInterval> | null = null;
   /** Último bootTime visto del backend — comparamos contra el de cada /health
    *  para detectar reinicio. Null hasta el primer health response exitoso. */
@@ -83,6 +92,12 @@ export class BackendStatusService {
    *  conexión" (carga inicial de la app) de "reconexión" (donde queremos
    *  rehidratar estado por si nos perdimos eventos durante la caída). */
   private yaConectoAlMenosUnaVez = false;
+
+  /** Último username del operador observado por el effect de auth-change.
+   *  Se compara contra {@code auth.currentUser()} para detectar transiciones
+   *  login↔logout o cambio de operador en el mismo browser y disparar el
+   *  reset del SSE + estado local. Null = nadie autenticado actualmente. */
+  private ultimoUsernameAutenticado: string | null = null;
 
   constructor() {
     this.iniciarSSE();
@@ -98,6 +113,38 @@ export class BackendStatusService {
           this.cerrarSSE();
           this.iniciarSSE();
         }
+      }
+    });
+
+    // Observa cambios de sesión del operador. Cuando A logout → B login (o
+    // A logout sin login posterior), reconfigura el SSE para que el nuevo
+    // operador escuche su propio canal personal en lugar del de A. Sin esto,
+    // B vería los toasts/carrito del último canal usado o no recibiría nada.
+    //
+    // visorUsername (set por VisorPage) tiene prioridad — si la app está
+    // corriendo en modo visor (URL /visor/:username), el SSE se mantiene
+    // ligado a ese username independientemente del estado de auth.
+    effect(() => {
+      const u = this.auth.currentUser();
+      if (u === undefined) return; // primera resolución de /me, aún no sabemos
+      const usernameNuevo = u?.username ?? null;
+      if (usernameNuevo === this.ultimoUsernameAutenticado) return;
+
+      const eraReset = this.ultimoUsernameAutenticado !== null;
+      this.ultimoUsernameAutenticado = usernameNuevo;
+
+      // En modo visor, el canal lo decide el path — no tocamos el SSE.
+      if (this.visorUsername) return;
+
+      // Cambio real de operador (logout, login distinto, login tras logout).
+      // Limpiamos estado local efímero para que B no vea datos de A, y
+      // reabrimos el SSE para que escuche el canal del usuario nuevo (la
+      // cookie de sesión nueva la maneja el browser automáticamente).
+      if (eraReset || usernameNuevo) {
+        this.resetearEstadoLocal();
+        this.cerrarSSE();
+        this.yaConectoAlMenosUnaVez = false;
+        this.iniciarSSE();
       }
     });
 
@@ -191,19 +238,39 @@ export class BackendStatusService {
       error: () => { /* silencioso */ },
     });
 
-    // 2. Sesión activa (público — sirve para operador y visor).
-    this.http.get<SesionShowroom>('/api/showroom/sesion/activa').subscribe({
+    // 2. Sesión activa. Operador: usa /sesion/activa (autenticado). Visor:
+    //    usa /visor/{username}/sesion/activa (público) — sin esto el visor
+    //    no se enteraría del cliente en curso tras una reconexión.
+    const sesionUrl = this.visorUsername
+      ? `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/sesion/activa`
+      : '/api/showroom/sesion/activa';
+    this.http.get<SesionShowroom>(sesionUrl).subscribe({
       next: (s) => this.sesionEvents$.next(s),
       error: () => { /* silencioso */ },
     });
 
-    // 3. Carrito (autenticado — solo si hay sesión de operador).
-    if (this.auth.currentUser()) {
+    // 3. Carrito (autenticado — solo si hay sesión de operador). El visor no
+    //    necesita rehidratar el carrito: opera write-only via SSE.
+    if (!this.visorUsername && this.auth.currentUser()) {
       this.http.get<CarritoState>('/api/showroom/carrito').subscribe({
         next: (c) => this.carritoEvents$.next(c),
         error: () => { /* silencioso, el interceptor maneja 401 */ },
       });
     }
+  }
+
+  /**
+   * Reconfigura el SSE para que escuche el canal personal del operador
+   * {@code username}. Lo invoca {@code VisorPage} en su constructor con el
+   * param del path. Si el SSE ya estaba apuntando al mismo username, es
+   * no-op; si apuntaba a otro lugar (operador autenticado o un username
+   * distinto) lo cerramos y reabrimos. Idempotente.
+   */
+  conectarComoVisor(username: string): void {
+    if (this.visorUsername === username && this.source) return;
+    this.visorUsername = username;
+    this.cerrarSSE();
+    this.iniciarSSE();
   }
 
   markDisconnected(): void {
@@ -218,7 +285,13 @@ export class BackendStatusService {
     if (typeof window === 'undefined') return; // SSR safety
     if (this.source) return;
 
-    const src = new EventSource('/api/showroom/events');
+    // Si el componente VisorPage nos enchufó al canal de un operador, usamos
+    // el endpoint público de ese operador; sino, el endpoint default que
+    // toma el username de la sesión HTTP.
+    const url = this.visorUsername
+      ? `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/events`
+      : '/api/showroom/events';
+    const src = new EventSource(url);
     this.source = src;
 
     src.onopen = () => {
@@ -321,10 +394,37 @@ export class BackendStatusService {
         /* payload malformado, ignoramos */
       }
     });
+
+    src.addEventListener('pedido-actualizado', (e: MessageEvent) => {
+      try {
+        this.pedidoActualizado$.next(
+          JSON.parse(e.data) as { pedidoId: number; estado: string });
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
   }
 
   private cerrarSSE(): void {
     this.source?.close();
     this.source = null;
+  }
+
+  /** Limpia los Subjects de estado per-usuario emitiendo un valor "vacío"
+   *  para que cada pantalla suscripta resetee su UI al cambiar el operador.
+   *  Sin esto, B veria el carrito y la sesión activa del cliente que A
+   *  estaba atendiendo cuando hizo logout. */
+  private resetearEstadoLocal(): void {
+    // Carrito vacío con origen SISTEMA — equivalente a "no hay carrito".
+    this.carritoEvents$.next({ items: [], origen: 'SISTEMA' });
+    // Sesión inactiva — el badge "Cliente: X" desaparece de la toolbar.
+    this.sesionEvents$.next({
+      id: null,
+      nombre: null,
+      iniciadaAt: null,
+      finalizadaAt: null,
+      pedidoId: null,
+      cantidadEscaneados: 0,
+    });
   }
 }
