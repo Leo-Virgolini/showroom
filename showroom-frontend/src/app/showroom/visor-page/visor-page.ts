@@ -262,10 +262,11 @@ export class VisorPage {
   }
 
   /** Disparado por el botón "Agregar al carrito". Envía sku + cantidad al
-   *  backend; el backend muta el carrito server-side (único global) y emite
-   *  SSE `carrito-updated`. El response trae cuánto se sumó realmente — si
-   *  fue menor a lo pedido (carrito ya al tope), mostramos warning al cliente
-   *  con la cantidad real. */
+   *  backend pasando el username del operador propietario del visor; el
+   *  backend muta el carrito server-side de ESE operador y emite SSE
+   *  `carrito-updated` en su canal personal. El response trae cuánto se
+   *  sumó realmente — si fue menor a lo pedido (carrito ya al tope),
+   *  mostramos warning al cliente con la cantidad real. */
   agregar(): void {
     const r = this.ultimoScan();
     if (!r || !this.puedeAgregar() || this.enviandoAgregar()) return;

@@ -98,9 +98,10 @@ export interface SyncEvent {
 }
 
 /** Sesión de atención al cliente. Una sesión agrupa todos los scans entre
- *  que el operador clickea "Nuevo cliente" y cierra el pedido. Hay una sola
- *  activa a la vez (global, como el carrito). Cuando no hay activa, los
- *  campos son null y `cantidadEscaneados=0`. */
+ *  que el operador clickea "Nuevo cliente" y cierra el pedido. Hay una
+ *  sola activa a la vez POR OPERADOR (cada uno trabaja en su propio canal;
+ *  iniciar una nueva sesión solo cierra la del mismo operador, no la de
+ *  los demás). Cuando no hay activa, los campos son null y `cantidadEscaneados=0`. */
 export interface SesionShowroom {
   id: number | null;
   nombre: string | null;

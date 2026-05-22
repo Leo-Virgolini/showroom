@@ -439,8 +439,9 @@ export class ShowroomService {
   }
 
   /** Lista de clientes únicos derivados de los presupuestos guardados —
-   *  agrupados SOLO por email (los presupuestos sin email no se cuentan),
-   *  con datos canónicos del presupuesto más reciente. Sin paginar. */
+   *  agrupados por teléfono normalizado (solo dígitos) — los presupuestos
+   *  sin teléfono no se cuentan. Datos canónicos (nombre, email, rubro) del
+   *  presupuesto más reciente. Sin paginar. */
   listarClientesPresupuestos(): Observable<ClientePresupuestos[]> {
     return this.http.get<ClientePresupuestos[]>(`${this.base}/presupuesto-comercial/clientes`);
   }

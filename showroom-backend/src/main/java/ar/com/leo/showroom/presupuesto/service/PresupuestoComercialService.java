@@ -211,11 +211,20 @@ public class PresupuestoComercialService {
 
     /**
      * Lista los clientes únicos que aparecen en presupuestos guardados,
-     * agrupados por email (lowercased). El email es la identidad canónica;
-     * presupuestos sin email no se cuentan en esta vista. Toma los datos
-     * (nombre, teléfono, rubro) del presupuesto MÁS RECIENTE como canónicos
-     * — si en uno viejo el operador tipeó mal un campo, prevalece la
-     * última versión.
+     * agrupados por teléfono normalizado (solo dígitos). El teléfono es la
+     * identidad canónica del cliente — antes era el email, pero como el email
+     * dejó de ser obligatorio en {@code /presupuestos} (mayo 2026), pasamos
+     * a usar teléfono que sí lo es. Presupuestos sin teléfono no se cuentan
+     * en esta vista.
+     *
+     * <p>La normalización quita guiones, espacios y paréntesis del teléfono
+     * antes de comparar — así {@code "11-12345678"} y {@code "1112345678"}
+     * agrupan al mismo cliente aunque el operador haya tipeado distinto
+     * formato en cada presupuesto.
+     *
+     * <p>Toma los datos (nombre, email, rubro) del presupuesto MÁS RECIENTE
+     * como canónicos — si en uno viejo el operador tipeó mal un campo,
+     * prevalece la última versión.
      *
      * <p>Devuelve la lista ordenada por último presupuesto descendente
      * (cliente más reciente primero). No paginamos en SQL: la cantidad de
@@ -266,15 +275,17 @@ public class PresupuestoComercialService {
         return List.copyOf(agrupados.values());
     }
 
-    /** Clave de agrupamiento: SOLO email lowercased. El email es la identidad
-     *  canónica del cliente — dos presupuestos con mismo email son del mismo
-     *  cliente aunque el nombre o el teléfono difieran (datos actualizados).
-     *  Presupuestos sin email no aparecen en la vista de clientes. */
+    /** Clave de agrupamiento: teléfono normalizado a solo dígitos. El teléfono
+     *  es la identidad canónica del cliente — dos presupuestos con el mismo
+     *  teléfono son del mismo cliente aunque el nombre o el email difieran
+     *  (datos actualizados). La normalización (quitar guiones/espacios/
+     *  paréntesis) evita que la misma persona aparezca duplicada por usar
+     *  formatos distintos al tipear el número. Presupuestos sin teléfono no
+     *  aparecen en la vista de clientes. */
     private static String claveCliente(PresupuestoComercial p) {
-        if (StringUtils.hasText(p.getClienteEmail())) {
-            return p.getClienteEmail().trim().toLowerCase(Locale.ROOT);
-        }
-        return null;
+        if (!StringUtils.hasText(p.getClienteTelefono())) return null;
+        String soloDigitos = p.getClienteTelefono().replaceAll("\\D+", "");
+        return soloDigitos.isEmpty() ? null : soloDigitos;
     }
 
     /**

@@ -23,9 +23,9 @@ import { toastError } from '../toast.utils';
 
 /**
  * Lista de clientes únicos derivada de los presupuestos guardados. Agrupa
- * SOLO por email (lowercased): presupuestos sin email no aparecen acá. Los
- * datos canónicos (nombre, teléfono, rubro) se toman del presupuesto más
- * reciente del cliente.
+ * por teléfono normalizado (solo dígitos): presupuestos sin teléfono no
+ * aparecen acá. Los datos canónicos (nombre, email, rubro) se toman del
+ * presupuesto más reciente del cliente.
  *
  * <p>Sirve al operador como agenda informal: ver de un vistazo a quién le
  * armó presupuestos y abrir el historial filtrado por ese cliente para
@@ -99,11 +99,22 @@ export class PresupuestosClientesPage {
     this.cargar();
   }
 
-  /** Abre el historial de presupuestos filtrado por el email del cliente
-   *  (el identificador canónico — siempre presente porque agrupamos por él). */
+  /** Abre el historial de presupuestos filtrado por el teléfono del cliente
+   *  (el identificador canónico — siempre presente porque agrupamos por él).
+   *  Pasamos los ÚLTIMOS 8 DÍGITOS sin formato como `q` (no el teléfono crudo)
+   *  para que la búsqueda LIKE del backend encuentre todos los presupuestos
+   *  del cliente aunque el operador haya tipeado distinto formato en cada
+   *  uno: tanto "11-12345678" como "1112345678" contienen "12345678" al
+   *  final, así que el LIKE matchea ambos. */
   verPresupuestos(c: ClientePresupuestos): void {
+    if (!c.telefono) {
+      this.router.navigate(['/presupuestos/historial']);
+      return;
+    }
+    const soloDigitos = c.telefono.replace(/\D+/g, '');
+    const fragmento = soloDigitos.slice(-8) || soloDigitos;
     this.router.navigate(['/presupuestos/historial'], {
-      queryParams: c.email ? { q: c.email } : {},
+      queryParams: { q: fragmento },
     });
   }
 

@@ -9,9 +9,10 @@ import java.time.Instant;
  * lista de personas a las que les armó presupuestos sin tener que entrar al
  * detalle de cada uno.
  *
- * <p>Los clientes se identifican por email cuando hay; sino por teléfono. Si
- * un mismo cliente tiene varios presupuestos con nombre/teléfono distintos
- * pero mismo email, se toman los datos del presupuesto más reciente como
+ * <p>Los clientes se identifican por teléfono normalizado (solo dígitos);
+ * los presupuestos sin teléfono no aparecen en esta vista. Si un mismo
+ * cliente tiene varios presupuestos con nombre/email distintos pero el
+ * mismo teléfono, se toman los datos del presupuesto más reciente como
  * canónicos (el operador puede haber tipeado mal en uno viejo).
  */
 public record ClientePresupuestosDTO(
