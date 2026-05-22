@@ -113,16 +113,17 @@ public class WhatsappBusinessService {
             SesionShowroomRepository sesionRepository,
             SyncEventService eventService,
             ObjectMapper objectMapper,
-            ConfiguracionService configuracionService) {
+            ConfiguracionService configuracionService,
+            RestClient.Builder restClientBuilder) {
         this.pdfGenerator = pdfGenerator;
         this.sesionRepository = sesionRepository;
         this.eventService = eventService;
         this.objectMapper = objectMapper;
         this.configuracionService = configuracionService;
-        // RestClient genérico — la base URL se compone por request porque el
-        // path incluye el phone_number_id. El access_token va como Bearer header
-        // en cada llamada (set en buildRestClient bajo demanda).
-        this.restClient = RestClient.builder()
+        // Partimos del builder autoconfigurado por Spring Boot — hereda el
+        // ClientHttpRequestFactory auto-detectado y los timeouts globales de
+        // spring.http.clients.*. El access_token va como Bearer header por request.
+        this.restClient = restClientBuilder
                 .baseUrl("https://graph.facebook.com")
                 .build();
     }

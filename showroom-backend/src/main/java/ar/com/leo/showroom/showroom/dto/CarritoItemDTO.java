@@ -18,7 +18,6 @@ public record CarritoItemDTO(
         Boolean habilitado,
         String imagenUrl,
         Instant sincronizadoAt,
-        boolean stockStale,
         int cantidad
 ) {
     public static CarritoItemDTO from(ScanResultDTO scan, int cantidad) {
@@ -32,14 +31,13 @@ public record CarritoItemDTO(
                 scan.habilitado(),
                 scan.imagenUrl(),
                 scan.sincronizadoAt(),
-                scan.stockStale(),
                 cantidad);
     }
 
     public CarritoItemDTO withCantidad(int nueva) {
         return new CarritoItemDTO(
                 sku, descripcion, pvpKtGastroConIva, pvpKtGastroSinIva, porcIva,
-                stockTotal, habilitado, imagenUrl, sincronizadoAt, stockStale, nueva);
+                stockTotal, habilitado, imagenUrl, sincronizadoAt, nueva);
     }
 
     public CarritoItemDTO conScanActualizado(ScanResultDTO scan) {
@@ -53,7 +51,6 @@ public record CarritoItemDTO(
                 scan.habilitado(),
                 scan.imagenUrl(),
                 scan.sincronizadoAt(),
-                scan.stockStale(),
                 cantidad);
     }
 
@@ -78,7 +75,6 @@ public record CarritoItemDTO(
                 scan.habilitado(),
                 scan.imagenUrl(),
                 scan.sincronizadoAt(),
-                scan.stockStale(),
                 cantidad);
     }
 }

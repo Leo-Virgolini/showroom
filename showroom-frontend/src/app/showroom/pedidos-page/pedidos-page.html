@@ -266,10 +266,9 @@
                     [text]="true"
                     [rounded]="true"
                     size="small"
-                    [loading]="estaEnviandoWhatsapp(p.id)"
-                    (onClick)="reenviarWhatsapp(p)"
-                    ariaLabel="Enviar el PDF por WhatsApp al cliente"
-                    pTooltip="Enviar el PDF por WhatsApp (requiere que el cliente haya escrito en las últimas 24hs)"
+                    [disabled]="true"
+                    ariaLabel="Envío por WhatsApp deshabilitado"
+                    pTooltip="Envío por WhatsApp deshabilitado"
                     tooltipPosition="top"
                   />
                 }

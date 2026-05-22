@@ -8,7 +8,6 @@ export interface ScanResult {
   habilitado: boolean | null;
   imagenUrl: string | null;
   sincronizadoAt: string | null;
-  stockStale: boolean;
 }
 
 export interface CarritoItem extends ScanResult {

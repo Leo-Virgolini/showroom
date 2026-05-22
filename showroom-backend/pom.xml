@@ -55,6 +55,18 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Auto-configura el RestClient.Builder prototype bean + el
+             ClientHttpRequestFactory según el classpath (JDK HttpClient en
+             nuestro caso) + aplica los timeouts globales de
+             spring.http.clients.*. En Spring Boot 4 se separó de
+             spring-boot-starter-web — sin esta dep, inyectar
+             RestClient.Builder falla con NoSuchBeanDefinitionException.
+             Lo usan DuxConfig y WhatsappBusinessService. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -68,6 +80,18 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Spring Session JDBC: persiste las sesiones HTTP en MySQL en vez
+             de la memoria del Tomcat. Sin esto, cada restart del backend
+             desloguea a todos los operadores aunque el timeout configurado
+             sea de 30 días (el HashMap in-memory se pierde). Usamos el
+             STARTER (no el módulo solo) porque trae la auto-config completa
+             de Spring Boot — equivale a tener @EnableJdbcHttpSession aplicado
+             automáticamente y a interpretar `spring.session.jdbc.*`. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-session-jdbc</artifactId>
         </dependency>
 
         <dependency>

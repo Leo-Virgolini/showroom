@@ -2,13 +2,9 @@ package ar.com.leo.showroom.dux.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.time.Duration;
-
 @ConfigurationProperties(prefix = "dux")
 public record DuxProperties(
         String baseUrl,
-        Duration connectTimeout,
-        Duration readTimeout,
         double rateLimitPerSecond,
         int itemsPerPage,
         String listaPreciosNombre,
@@ -18,8 +14,6 @@ public record DuxProperties(
         if (baseUrl == null) {
             baseUrl = "https://erp.duxsoftware.com.ar/WSERP/rest/services";
         }
-        if (connectTimeout == null) connectTimeout = Duration.ofSeconds(10);
-        if (readTimeout == null) readTimeout = Duration.ofSeconds(30);
         if (rateLimitPerSecond <= 0) rateLimitPerSecond = 1.0 / 7.0;
         if (itemsPerPage <= 0) itemsPerPage = 50;
         if (listaPreciosNombre == null || listaPreciosNombre.isBlank()) listaPreciosNombre = "KT GASTRO";

@@ -48,7 +48,6 @@ import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -60,12 +59,12 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -94,9 +93,6 @@ public class ShowroomService {
     private final FormaPagoService formaPagoService;
     private final HorarioSyncSchedulerService horarioSyncService;
     private final ConfiguracionService configuracionService;
-
-    @Value("${showroom.cache.stock-stale-minutes:15}")
-    private int stockStaleMinutes;
 
     /**
      * Lookup en cache local por SKU o código de barras:
@@ -371,8 +367,18 @@ public class ShowroomService {
                 hasta,
                 PageRequest.of(pageSafe, sizeSafe, sort)
         );
+        // Bulk count de items por pedido en una sola query — accederla via
+        // p.getItems().size() explotaría con LazyInitializationException al
+        // estar OSIV desactivado (la sesión Hibernate cierra al salir del repo).
+        List<Long> ids = resultado.getContent().stream().map(PedidoShowroom::getId).toList();
+        Map<Long, Integer> cantidadItems = ids.isEmpty()
+                ? Map.of()
+                : pedidoRepository.contarItemsPorPedidoIds(ids).stream()
+                        .collect(Collectors.toMap(
+                                row -> (Long) row[0],
+                                row -> ((Number) row[1]).intValue()));
         List<PedidoListItemDTO> items = resultado.getContent().stream()
-                .map(this::toPedidoListItem)
+                .map(p -> toPedidoListItem(p, cantidadItems.getOrDefault(p.getId(), 0)))
                 .toList();
         return new PedidoListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
     }
@@ -408,7 +414,7 @@ public class ShowroomService {
         // sesiones con compra (el producto que convirtió a más clientes primero).
         Map<String, Long> sesionesConCompraPorSku = sesionRepository
                 .contarSesionesConvertidasPorSku(desde, hasta).stream()
-                .collect(java.util.stream.Collectors.toMap(
+                .collect(Collectors.toMap(
                         EstadisticaProductoDTO::sku,
                         EstadisticaProductoDTO::total,
                         (a, b) -> a));
@@ -577,8 +583,7 @@ public class ShowroomService {
         }
     }
 
-    private PedidoListItemDTO toPedidoListItem(PedidoShowroom p) {
-        int cantidadItems = p.getItems() == null ? 0 : p.getItems().size();
+    private PedidoListItemDTO toPedidoListItem(PedidoShowroom p, int cantidadItems) {
         return new PedidoListItemDTO(
                 p.getId(),
                 p.getCreadoAt(),
@@ -825,14 +830,9 @@ public class ShowroomService {
     // =====================================================
 
     /** Visible para que {@code CarritoService} (paquete distinto) reuse el mismo
-     *  mapper sin duplicar la lógica de cálculo sin-IVA, stockStale, etc. */
+     *  mapper sin duplicar la lógica de cálculo sin-IVA. */
     public ScanResultDTO toScanResult(ProductoCache pc) {
         BigDecimal sinIva = calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva());
-
-        boolean stockStale = pc.getSincronizadoAt() == null
-                || Duration.between(pc.getSincronizadoAt(), Instant.now())
-                        .toMinutes() >= stockStaleMinutes;
-
         return new ScanResultDTO(
                 pc.getSku(),
                 pc.getDescripcion(),
@@ -842,8 +842,7 @@ public class ShowroomService {
                 pc.getStockTotal(),
                 pc.getHabilitado(),
                 urlImagenLocal(pc.getSku()),
-                pc.getSincronizadoAt(),
-                stockStale
+                pc.getSincronizadoAt()
         );
     }
 

@@ -40,6 +40,12 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
     @Query("select i.sku from PedidoShowroomItem i where i.pedido.id = :pedidoId")
     List<String> findSkusByPedidoId(@Param("pedidoId") Long pedidoId);
 
+    /** Cantidad de items por pedido, en bulk — usado por el listado paginado para
+     *  evitar tocar la colección lazy {@code PedidoShowroom.items} (que requeriría
+     *  OSIV o sufriría N+1). Una sola query agrupada por pedido_id. */
+    @Query("select i.pedido.id, count(i) from PedidoShowroomItem i where i.pedido.id in :ids group by i.pedido.id")
+    List<Object[]> contarItemsPorPedidoIds(@Param("ids") Collection<Long> ids);
+
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.
      * `q` matchea como substring case-insensitive contra nro_doc (CUIT),

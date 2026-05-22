@@ -333,9 +333,9 @@
                   pTooltip="Mandar PDF de productos vistos por email"
                   tooltipPosition="left" ariaLabel="Mandar por email" />
                 <p-button icon="pi pi-whatsapp" severity="success" [text]="true" [rounded]="true" size="small"
-                  (onClick)="abrirEnvioWhatsapp(s, $event)"
-                  pTooltip="Mandar PDF de productos vistos por WhatsApp"
-                  tooltipPosition="left" ariaLabel="Mandar por WhatsApp" />
+                  [disabled]="true"
+                  pTooltip="Envío por WhatsApp deshabilitado"
+                  tooltipPosition="left" ariaLabel="Envío por WhatsApp deshabilitado" />
               }
             </td>
           </tr>

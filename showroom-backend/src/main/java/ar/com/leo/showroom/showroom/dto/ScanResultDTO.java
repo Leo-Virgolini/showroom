@@ -8,7 +8,6 @@ import java.time.Instant;
  *
  * @param pvpKtGastroSinIva PVP de la lista KT GASTRO con IVA descontado
  * @param sincronizadoAt   Instante en que el cache se actualizó por última vez
- * @param stockStale       true si el stock está más viejo que el threshold configurado
  */
 public record ScanResultDTO(
         String sku,
@@ -19,7 +18,6 @@ public record ScanResultDTO(
         Integer stockTotal,
         Boolean habilitado,
         String imagenUrl,
-        Instant sincronizadoAt,
-        boolean stockStale
+        Instant sincronizadoAt
 ) {
 }

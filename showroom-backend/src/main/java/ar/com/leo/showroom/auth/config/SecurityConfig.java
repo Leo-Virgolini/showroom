@@ -19,8 +19,13 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 /**
  * Spring Security:
  *  <ul>
- *    <li>Sesiones via cookie {@code JSESSIONID} (HttpOnly), persistidas con
- *        timeout configurado en {@code application.properties}.</li>
+ *    <li>Sesiones via cookie {@code JSESSIONID} (HttpOnly), persistidas en
+ *        MySQL via Spring Session JDBC con timeout configurado en
+ *        {@code application.properties} (30 días por default). La auto-config
+ *        del starter {@code spring-boot-starter-session-jdbc} aplica
+ *        {@code @EnableJdbcHttpSession} automáticamente — las sesiones
+ *        sobreviven a restarts del backend (deploy, crash, OOMKill) sin
+ *        desloguear a los operadores.</li>
  *    <li>Login via {@code POST /api/auth/login} (manejado por {@code AuthController}).</li>
  *    <li>Logout via {@code POST /api/auth/logout} (manejado por Spring Security).</li>
  *    <li>CSRF activo con cookie {@code XSRF-TOKEN} (header {@code X-XSRF-TOKEN}).
