@@ -98,18 +98,24 @@
               </div>
               <div class="divide-y divide-[#FF861C]/10 max-h-72 overflow-auto">
                 @for (r of resultadosBusqueda(); track r.sku) {
-                  <button type="button"
-                    class="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#FF861C]/5 transition-colors text-left"
-                    (click)="seleccionarResultado(r.sku)">
+                  <div class="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#FF861C]/5 transition-colors">
+                    <!-- Imagen como zona independiente: click abre el preview de PrimeNG
+                         en grande, sin disparar la selección del producto. -->
                     @if (r.imagenUrl) {
-                      <img [src]="r.imagenUrl" [alt]="r.sku"
-                        class="w-10 h-10 object-contain rounded border border-[#FF861C]/20 bg-white p-0.5 shrink-0"
-                        onerror="this.style.display='none'" />
+                      <span class="shrink-0" (click)="$event.stopPropagation()">
+                        <p-image [src]="r.imagenUrl" [alt]="r.sku" [preview]="true"
+                          imageClass="w-16 h-16 object-contain rounded border border-[#FF861C]/20 bg-white p-0.5 cursor-zoom-in" />
+                      </span>
                     } @else {
-                      <div class="w-10 h-10 rounded bg-[#FF861C]/10 flex items-center justify-center shrink-0">
-                        <i class="pi pi-image text-[#FF861C] text-sm"></i>
+                      <div class="w-16 h-16 rounded bg-[#FF861C]/10 flex items-center justify-center shrink-0">
+                        <i class="pi pi-image text-[#FF861C]"></i>
                       </div>
                     }
+                    <!-- Zona clickeable para seleccionar el producto — accesible por teclado
+                         (Enter / Space). Toma todo el ancho restante de la fila. -->
+                    <button type="button"
+                      class="flex-1 flex items-center gap-3 text-left min-w-0 bg-transparent border-0 cursor-pointer p-0"
+                      (click)="seleccionarResultado(r.sku)">
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="kt-sku-pill">{{ r.sku }}</span>
@@ -149,7 +155,8 @@
                       </div>
                       <div class="text-[10px] text-muted-color">s/IVA</div>
                     </div>
-                  </button>
+                    </button>
+                  </div>
                 }
               </div>
               @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
@@ -234,11 +241,10 @@
                 <tr>
                   <td>
                     @if (it.imagenUrl) {
-                      <img [src]="it.imagenUrl" [alt]="it.sku"
-                        class="w-12 h-12 object-contain rounded-lg border border-[#FF861C]/30 bg-white p-0.5"
-                        onerror="this.style.display='none'" />
+                      <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
+                        imageClass="w-14 h-14 object-contain rounded-lg border border-[#FF861C]/30 bg-white p-0.5 cursor-zoom-in" />
                     } @else {
-                      <div class="w-12 h-12 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
+                      <div class="w-14 h-14 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
                         <i class="pi pi-image text-[#FF861C]"></i>
                       </div>
                     }

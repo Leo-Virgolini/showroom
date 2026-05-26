@@ -19,6 +19,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
+import { ImageModule } from 'primeng/image';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -90,6 +91,7 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
     CardModule,
     DialogModule,
     IconFieldModule,
+    ImageModule,
     InputIconModule,
     InputMaskModule,
     InputNumberModule,
