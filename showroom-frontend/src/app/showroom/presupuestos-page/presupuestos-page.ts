@@ -45,6 +45,12 @@ import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
 
+/** Redondeo HALF_UP a 2 decimales para que el preview en pantalla coincida
+ *  con el `BigDecimal.setScale(2, HALF_UP)` que aplica el backend al generar
+ *  el PDF. Evita discrepancias de centavos en formas de pago con muchos
+ *  decimales (ej. 99.99 × 1.15 = 114.9885). */
+const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
+
 /** Dominios sugeridos al tipear el email — mismo set que el dialog de pedidos
  *  para mantener consistencia visual y de comportamiento entre ambos flujos. */
 const DOMINIOS_EMAIL_SUGERIDOS = [
@@ -262,7 +268,12 @@ export class PresupuestosPage implements AfterViewInit {
   });
 
   /** Snapshots de las formas de pago con el precio final ya calculado, listo
-   *  para mandar al backend al generar el PDF. */
+   *  para mandar al backend al generar el PDF.
+   *
+   *  El "recargo %" se interpreta como **descuento por pago contado**, no
+   *  como sobrecargo aditivo: el efectivo es un X% menos que el precio en
+   *  esa forma, así que el precio = `efectivo / (1 - X/100)`. Para 12 cuotas
+   *  al 28%, el factor real es 1/0,72 ≈ 1,389 (no 1,28). */
   readonly formasPagoCalculadas = computed<PresupuestoFormaPagoSnapshot[]>(() => {
     const baseConIva = this.totalConIva();
     const baseSinIva = this.totalSinIva();
@@ -270,7 +281,7 @@ export class PresupuestosPage implements AfterViewInit {
       const recargo = (f.recargoPorcentaje ?? 0) / 100;
       const aplicaIva = f.aplicaIva ?? true;
       const base = aplicaIva ? baseConIva : baseSinIva;
-      const precioFinal = base * (1 + recargo);
+      const precioFinal = redondearMoneda(base / (1 - recargo));
       return {
         id: f.id,
         nombre: f.nombre,
@@ -308,7 +319,7 @@ export class PresupuestosPage implements AfterViewInit {
         const recargo = (f.recargoPorcentaje ?? 0) / 100;
         const aplicaIva = f.aplicaIva ?? true;
         const base = aplicaIva ? totalConIva : totalSinIva;
-        const precioFinal = base * (1 + recargo);
+        const precioFinal = redondearMoneda(base / (1 - recargo));
         return {
           id: f.id,
           nombre: f.nombre,

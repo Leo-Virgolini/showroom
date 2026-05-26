@@ -469,8 +469,11 @@ public class PresupuestoComercialService {
                     : f.recargoPorcentaje().movePointLeft(2);
             boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
             BigDecimal base = aplicaIva ? subtotalConIva : subtotalSinIva;
-            BigDecimal precioFinal = base.multiply(BigDecimal.ONE.add(recargo))
-                    .setScale(2, RoundingMode.HALF_UP);
+            // El "recargo %" representa el descuento por pago contado, no un
+            // sobrecargo aditivo: precio = base / (1 - recargo). Para 12 cuotas
+            // al 28%, el factor real es 1/0,72 ≈ 1,389 (no 1,28).
+            BigDecimal precioFinal = base.divide(
+                    BigDecimal.ONE.subtract(recargo), 2, RoundingMode.HALF_UP);
             formasAgregadas.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
                     f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
                     f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),
@@ -504,8 +507,8 @@ public class PresupuestoComercialService {
                         : f.recargoPorcentaje().movePointLeft(2);
                 boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
                 BigDecimal base = aplicaIva ? totalItemConIva : totalItemSinIva;
-                BigDecimal precioFinal = base.multiply(BigDecimal.ONE.add(recargo))
-                        .setScale(2, RoundingMode.HALF_UP);
+                BigDecimal precioFinal = base.divide(
+                        BigDecimal.ONE.subtract(recargo), 2, RoundingMode.HALF_UP);
                 formasIndividuales.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
                         f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
                         f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),

@@ -113,19 +113,6 @@ public class PresupuestoPdfGenerator {
 
     private final ImagenLocalService imagenLocalService;
 
-    public byte[] generar(PedidoShowroom pedido) {
-        // PDF de los items COMPRADOS (a partir del pedido). Usado por el endpoint
-        // GET /pedidos/{id}/pdf. El PDF muestra el precio base del producto (el
-        // mismo del scan, s/IVA), sin recargo financiero — para eso "deshacemos"
-        // el recargo y el flag aplicaIva del precio guardado.
-        boolean precioConIva = !Boolean.FALSE.equals(pedido.getFormaPagoAplicaIva());
-        BigDecimal recargoPorc = pedido.getRecargoPorcentaje();
-        List<ItemView> views = pedido.getItems().stream()
-                .map(it -> fromPedidoItem(it, precioConIva, recargoPorc))
-                .toList();
-        return generarConItems(pedido, views);
-    }
-
     /**
      * PDF del historial de scans para un pedido: lo que el cliente VIO durante
      * la sesión, EXCLUYENDO lo que realmente compró. Misma portada y mismo
@@ -220,37 +207,8 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    /** Vista de un item para renderizar — solo los campos que necesita el block.
-     *  Permite reusar el mismo template para PedidoShowroomItem y SesionScanItem. */
+    /** Vista de un item para renderizar — solo los campos que necesita el block. */
     private record ItemView(String sku, String descripcion, java.math.BigDecimal precioConIva, java.math.BigDecimal porcIva) {}
-
-    /**
-     * Reconstruye el precio base del producto (el del scan, c/IVA, sin recargo
-     * financiero) a partir del precio guardado en el pedido. Pasos:
-     *  <ul>
-     *    <li>Si {@code precioYaConIva=false} (forma "no aplica IVA"), suma IVA
-     *        para llevarlo a c/IVA.</li>
-     *    <li>Si hubo {@code recargoPorc>0}, multiplica por {@code (1 - recargo/100)}
-     *        para deshacer el recargo (el {@code precioUnitario} se calculó
-     *        dividiendo por ese mismo factor).</li>
-     *  </ul>
-     * El render del PDF aplica luego {@code sinIva()}, igual que para los items
-     * de sesión — así el cliente ve el mismo precio que vio al escanear el
-     * producto, sin descuentos de escala ni recargos.
-     */
-    private static ItemView fromPedidoItem(PedidoShowroomItem it, boolean precioYaConIva, BigDecimal recargoPorc) {
-        BigDecimal precio = it.getPrecioUnitario();
-        BigDecimal porcIva = it.getPorcIva();
-        if (precio != null && !precioYaConIva && porcIva != null && porcIva.signum() > 0) {
-            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            precio = precio.multiply(ivaFactor);
-        }
-        if (precio != null && recargoPorc != null && recargoPorc.signum() > 0) {
-            BigDecimal factorSinRecargo = BigDecimal.ONE.subtract(recargoPorc.movePointLeft(2));
-            precio = precio.multiply(factorSinRecargo);
-        }
-        return new ItemView(it.getSku(), it.getDescripcion(), precio, porcIva);
-    }
 
     private static ItemView fromSesionItem(SesionScanItem it) {
         return new ItemView(it.getSku(), it.getDescripcion(), it.getPrecioConIva(), it.getPorcIva());

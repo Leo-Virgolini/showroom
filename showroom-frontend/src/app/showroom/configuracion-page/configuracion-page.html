@@ -134,10 +134,68 @@
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
         <div class="text-sm text-surface-700 dark:text-surface-200">
-          Formas de pago que el operador ofrece al armar el pedido. Cada una tiene un <strong>recargo %</strong> que se aplica al total del carrito (típico para financiación).
+          Formas de pago que el operador ofrece al armar el pedido. Cada una tiene un <strong>recargo %</strong> que representa el descuento por pago contado: el efectivo sale ese % menos que pagar con esta forma.
         </div>
         <div class="text-xs text-muted-color">
           Si desactivás una forma, deja de aparecer en el selector pero los pedidos viejos que la usaron siguen mostrándola en el detalle. Los pedidos snapshotean nombre + recargo, así sobreviven a cambios futuros.
+        </div>
+      </div>
+
+      <!-- Panel informativo: cómo se calcula el precio en función del % -->
+      <div class="mb-4 p-3 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30">
+        <div class="flex items-start gap-2.5">
+          <i class="pi pi-info-circle text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" aria-hidden="true"></i>
+          <div class="flex flex-col gap-2 flex-1 min-w-0">
+            <div class="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              ¿Cómo se calcula el precio según el recargo %?
+            </div>
+            <div class="text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90">
+              El <strong>%</strong> cargado representa cuánto <strong>menos</strong> sale pagando en efectivo (descuento por pago contado),
+              <strong>no</strong> un sobrecargo sumado encima. La fórmula real es:
+            </div>
+            <div class="font-mono text-sm bg-white/70 dark:bg-surface-900/60 border border-amber-200 dark:border-amber-900/60 rounded px-3 py-2 text-amber-900 dark:text-amber-200">
+              precio = precio_efectivo / (1 − %/100)
+            </div>
+            <div class="text-xs text-amber-900/80 dark:text-amber-100/80">
+              Por ejemplo, con efectivo a <strong>$100.000</strong>:
+            </div>
+            <div class="overflow-x-auto">
+              <table class="text-xs tabular-nums w-full">
+                <thead>
+                  <tr class="border-b border-amber-200 dark:border-amber-900/60 text-amber-900/70 dark:text-amber-100/70">
+                    <th class="text-left font-medium py-1 pr-3">Recargo cargado</th>
+                    <th class="text-left font-medium py-1 pr-3">Cálculo</th>
+                    <th class="text-right font-medium py-1">Precio cliente</th>
+                  </tr>
+                </thead>
+                <tbody class="text-amber-900 dark:text-amber-100">
+                  <tr class="border-b border-amber-100 dark:border-amber-900/40">
+                    <td class="py-1 pr-3">5 %</td>
+                    <td class="py-1 pr-3 font-mono">100.000 / 0,95</td>
+                    <td class="py-1 text-right font-semibold">$ 105.263</td>
+                  </tr>
+                  <tr class="border-b border-amber-100 dark:border-amber-900/40">
+                    <td class="py-1 pr-3">10 %</td>
+                    <td class="py-1 pr-3 font-mono">100.000 / 0,90</td>
+                    <td class="py-1 text-right font-semibold">$ 111.111</td>
+                  </tr>
+                  <tr class="border-b border-amber-100 dark:border-amber-900/40">
+                    <td class="py-1 pr-3">17 %</td>
+                    <td class="py-1 pr-3 font-mono">100.000 / 0,83</td>
+                    <td class="py-1 text-right font-semibold">$ 120.482</td>
+                  </tr>
+                  <tr>
+                    <td class="py-1 pr-3">28 %</td>
+                    <td class="py-1 pr-3 font-mono">100.000 / 0,72</td>
+                    <td class="py-1 text-right font-semibold">$ 138.889</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="text-xs text-amber-900/80 dark:text-amber-100/80">
+              El IVA se aplica <strong>después</strong> según el flag <span class="font-semibold">CON IVA / SIN IVA</span> de cada forma. Los descuentos individuales del carrito se restan <strong>antes</strong> de aplicar el recargo.
+            </div>
+          </div>
         </div>
       </div>
 
@@ -890,11 +948,17 @@
         [ngModel]="formRecargo()"
         (ngModelChange)="formRecargo.set($event)"
         [min]="0"
+        [max]="99.99"
         [maxFractionDigits]="2"
         suffix=" %"
         [disabled]="guardandoForma()"
         class="w-full"
         inputStyleClass="w-full" />
+      <span class="text-xs text-muted-color leading-relaxed">
+        Representa el <strong>descuento por pago contado</strong>: el efectivo sale ese % menos
+        que esta forma. Fórmula: <code class="font-mono">precio = efectivo / (1 − %/100)</code>.
+        Ej: 10% → factor 1/0,90 ≈ 1,111; 28% → factor 1/0,72 ≈ 1,389.
+      </span>
     </div>
 
     <div class="flex flex-col gap-1.5">
