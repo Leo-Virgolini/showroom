@@ -294,10 +294,12 @@
                   <td class="text-center">
                     <p-inputNumber [ngModel]="it.cantidad"
                       (ngModelChange)="actualizarCantidad(it, $event)"
-                      [min]="1" [showButtons]="true" buttonLayout="horizontal"
+                      [min]="1"
+                      [max]="cantidadMaximaDe(it)"
+                      [showButtons]="true" buttonLayout="horizontal"
                       spinnerMode="horizontal"
                       decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                      inputStyleClass="w-12 text-center" [allowEmpty]="false" />
+                      inputStyleClass="w-16 text-center" [allowEmpty]="false" />
                   </td>
                   <td class="text-right">
                     <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">

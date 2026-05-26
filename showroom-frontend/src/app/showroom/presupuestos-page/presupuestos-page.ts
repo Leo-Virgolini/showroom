@@ -556,8 +556,19 @@ export class PresupuestosPage implements AfterViewInit {
   // ============================================================
   actualizarCantidad(it: PresupuestoItem, valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) valor = 1;
+    const tope = this.cantidadMaximaDe(it);
+    if (tope != null && valor > tope) valor = tope;
     it.cantidad = valor;
     this.itemsTick.update((v) => v + 1);
+  }
+
+  /** Tope de cantidad para el input: el stock disponible cuando está
+   *  sincronizado con DUX (> 0). Si el stock es null (no sincronizado) o 0
+   *  (sin stock) devolvemos null para no aplicar tope — el operador puede
+   *  cargar la cantidad que quiera y un pill amarillo le avisa que excede
+   *  el disponible. */
+  cantidadMaximaDe(it: PresupuestoItem): number | null {
+    return it.stockTotal != null && it.stockTotal > 0 ? it.stockTotal : null;
   }
 
   actualizarDescuento(it: PresupuestoItem, valor: number): void {
