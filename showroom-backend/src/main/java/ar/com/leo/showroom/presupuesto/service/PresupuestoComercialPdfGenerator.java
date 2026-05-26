@@ -385,15 +385,17 @@ public class PresupuestoComercialPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
                 .setTextAlignment(TextAlignment.CENTER);
-        Image img = cargarImagenProducto(item.sku(), 260f);
+        Image img = cargarImagenProducto(item.sku(), 230f);
         if (img == null && sinImagen != null) {
             img = new Image(sinImagen);
         }
         if (img != null) {
             img.setAutoScale(false);
-            // 200×260 da bastante espacio para que se vea el producto sin
-            // dominar la hoja; iText mantiene el aspect ratio.
-            img.scaleToFit(200f, 260f);
+            // 200×230: con el recorte de bordes blancos, el producto ocupa toda
+            // la caja útil. Antes había mucho margen blanco dentro de la foto,
+            // ahora no — así que bajamos el alto máximo para dejar espacio
+            // suficiente al grid de formas de pago en la misma página.
+            img.scaleToFit(200f, 230f);
             img.setHorizontalAlignment(HorizontalAlignment.CENTER);
             celdaFoto.add(img);
         }
