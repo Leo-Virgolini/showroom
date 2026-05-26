@@ -242,10 +242,10 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontColor(ColorConstants.WHITE)
                 .setBackgroundColor(KT_NARANJA)
                 .setBorderRadius(new BorderRadius(8f))
-                .setPaddings(4, 12, 4, 12)
+                .setPaddings(3, 12, 3, 12)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(8)
-                .setMarginBottom(4)
+                .setMarginTop(4)
+                .setMarginBottom(2)
                 .setHorizontalAlignment(HorizontalAlignment.LEFT)
                 .setWidth(UnitValue.createPercentValue(40))
                 .setKeepWithNext(true);
@@ -385,17 +385,15 @@ public class PresupuestoComercialPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
                 .setTextAlignment(TextAlignment.CENTER);
-        Image img = cargarImagenProducto(item.sku(), 230f);
+        Image img = cargarImagenProducto(item.sku(), 260f);
         if (img == null && sinImagen != null) {
             img = new Image(sinImagen);
         }
         if (img != null) {
             img.setAutoScale(false);
-            // 200×230: con el recorte de bordes blancos, el producto ocupa toda
-            // la caja útil. Antes había mucho margen blanco dentro de la foto,
-            // ahora no — así que bajamos el alto máximo para dejar espacio
-            // suficiente al grid de formas de pago en la misma página.
-            img.scaleToFit(200f, 230f);
+            // 200×260 da bastante espacio para que se vea el producto sin
+            // dominar la hoja; iText mantiene el aspect ratio.
+            img.scaleToFit(200f, 260f);
             img.setHorizontalAlignment(HorizontalAlignment.CENTER);
             celdaFoto.add(img);
         }
@@ -651,22 +649,21 @@ public class PresupuestoComercialPdfGenerator {
                 .setMarginTop(0);
 
         // === Izquierda: logo sobre fondo blanco/crema ===
-        // Padding reducido para que el logo aproveche al máximo el alto
-        // disponible — el logo es lo dominante de la cabecera, no debe
-        // verse perdido en el medio de un mar blanco como pasaba antes.
+        // Padding y altura del logo comprimidos respecto a la versión inicial
+        // para liberar espacio vertical en la primera hoja (el header sólo
+        // aparece en la pág. 1 y empujaba el primer producto a romper a la
+        // página 2 en modo cotización individual con varias formas de pago).
         Cell izq = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setBackgroundColor(ColorConstants.WHITE)
-                .setPaddings(10, 18, 10, 20);
+                .setPaddings(4, 14, 4, 16);
         if (logoHeader != null) {
             Image logo = new Image(logoHeader);
             // Altura fija — el ancho lo ajusta iText con el aspect ratio
             // real del PNG, evitando deformación si en algún futuro se
             // reemplaza la imagen por otra de proporciones distintas.
-            // 72pt × ratio 3.42 = ~246pt de ancho, encaja en la celda
-            // izquierda (≈266pt útiles después del padding).
-            logo.setHeight(72f);
+            logo.setHeight(56f);
             logo.setHorizontalAlignment(HorizontalAlignment.LEFT);
             izq.add(logo);
         } else {
@@ -696,7 +693,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setBackgroundColor(KT_MARRON)
-                .setPaddings(18, 22, 18, 22)
+                .setPaddings(8, 22, 8, 22)
                 .setTextAlignment(TextAlignment.RIGHT)
                 .add(new Paragraph("PRESUPUESTO")
                         .setFontColor(KT_NARANJA)
@@ -706,7 +703,7 @@ public class PresupuestoComercialPdfGenerator {
                         .setMargin(0))
                 .add(new Paragraph(numero)
                         .simulateBold()
-                        .setFontSize(30)
+                        .setFontSize(26)
                         .setFontColor(ColorConstants.WHITE)
                         .setMargin(0)
                         .setMarginTop(2));
@@ -749,11 +746,11 @@ public class PresupuestoComercialPdfGenerator {
         // modo cotización individual (la queja típica era que una forma de
         // pago quedaba en una hoja extra).
         Div card = new Div()
-                .setMarginTop(8)
+                .setMarginTop(4)
                 .setBackgroundColor(ColorConstants.WHITE)
                 .setBorder(new SolidBorder(GRIS_LINEA, 1f))
                 .setBorderRadius(new BorderRadius(10f))
-                .setPadding(8);
+                .setPadding(6);
 
         Table grid = new Table(UnitValue.createPercentArray(new float[]{1.8f, 1f}))
                 .useAllAvailableWidth()
