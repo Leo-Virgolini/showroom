@@ -8,7 +8,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
@@ -67,6 +67,7 @@ export class PresupuestosClientesPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly router = inject(Router);
+  private readonly confirmationService = inject(ConfirmationService);
 
   readonly screenLg = signal(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
@@ -75,6 +76,10 @@ export class PresupuestosClientesPage {
   readonly cargando = signal(false);
   readonly clientes = signal<ClientePresupuestos[]>([]);
   readonly busqueda = signal('');
+
+  /** Teléfonos en proceso de soft-delete — se usa para mostrar spinner en el
+   *  botón de borrar y evitar doble click mientras la request está en vuelo. */
+  readonly eliminando = signal<Set<string>>(new Set());
 
   // ---------- Dialog "Editar cliente" ----------
   // El operador puede corregir nombre/email/rubro/notas del cliente sin
@@ -137,6 +142,68 @@ export class PresupuestosClientesPage {
 
   refrescar(): void {
     this.cargar();
+  }
+
+  estaEliminando(telefono: string | null | undefined): boolean {
+    return telefono != null && this.eliminando().has(telefono);
+  }
+
+  /** Pide confirmación antes del soft-delete — el cliente se oculta de esta
+   *  vista pero los presupuestos/pedidos históricos siguen intactos en sus
+   *  propias pantallas. Reactivable editando el cliente. */
+  confirmarEliminar(c: ClientePresupuestos): void {
+    if (!c.telefono || this.estaEliminando(c.telefono)) return;
+    const refNombre = c.nombre ? ` "${c.nombre}"` : '';
+    const resumenMov: string[] = [];
+    if (c.cantidadPresupuestos > 0) {
+      resumenMov.push(`${c.cantidadPresupuestos} presupuesto${c.cantidadPresupuestos === 1 ? '' : 's'}`);
+    }
+    if (c.cantidadPedidos > 0) {
+      resumenMov.push(`${c.cantidadPedidos} pedido${c.cantidadPedidos === 1 ? '' : 's'}`);
+    }
+    const aviso = resumenMov.length > 0
+      ? `Tiene ${resumenMov.join(' y ')} en el historial — esos registros NO se borran, solo se oculta al cliente de esta lista.`
+      : 'Se va a ocultar al cliente de esta lista.';
+    this.confirmationService.confirm({
+      header: '¿Eliminar cliente?',
+      message: `Vas a eliminar al cliente${refNombre}. ${aviso} ¿Confirmás?`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: { label: 'Eliminar', severity: 'danger', icon: 'pi pi-trash' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => this.ejecutarEliminar(c),
+    });
+  }
+
+  private ejecutarEliminar(c: ClientePresupuestos): void {
+    const telefono = c.telefono;
+    if (!telefono) return;
+    this.eliminando.update((s) => new Set([...s, telefono]));
+    this.api.eliminarClienteMaster(telefono).subscribe({
+      next: () => {
+        this.eliminando.update((s) => {
+          const ns = new Set(s);
+          ns.delete(telefono);
+          return ns;
+        });
+        // Update optimista: lo sacamos del listado local sin pedir refetch.
+        this.clientes.set(this.clientes().filter((x) => x.telefono !== telefono));
+        this.toast.add({
+          severity: 'success',
+          summary: 'Cliente eliminado',
+          detail: 'Ya no aparece en el listado. El historial sigue intacto.',
+          life: 3500,
+        });
+      },
+      error: (err) => {
+        this.eliminando.update((s) => {
+          const ns = new Set(s);
+          ns.delete(telefono);
+          return ns;
+        });
+        toastError(this.toast, 'Eliminar cliente', err,
+          'No se pudo eliminar el cliente.');
+      },
+    });
   }
 
   /** Calcula un fragmento del teléfono útil como query LIKE en backend —

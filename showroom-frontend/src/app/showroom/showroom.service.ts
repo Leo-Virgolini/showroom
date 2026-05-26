@@ -458,6 +458,14 @@ export class ShowroomService {
     return this.http.put<void>(`${this.base}/cliente-master`, payload);
   }
 
+  /** Soft-delete del cliente: lo oculta del listado de /clientes pero deja
+   *  intactos los presupuestos/pedidos históricos. Si el operador edita el
+   *  cliente desde el dialog luego de borrarlo, queda reactivado. */
+  eliminarClienteMaster(telefono: string): Observable<void> {
+    return this.http.delete<void>(
+      `${this.base}/cliente-master/${encodeURIComponent(telefono)}`);
+  }
+
   /** Elimina (soft-delete) un presupuesto del historial. El registro
    *  físicamente persiste en la DB con `eliminado_at` poblado, pero deja
    *  de aparecer en el listado del historial. */

@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
 import com.itextpdf.io.image.ImageData;
@@ -384,7 +385,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
                 .setTextAlignment(TextAlignment.CENTER);
-        Image img = cargarImagenProducto(item.sku());
+        Image img = cargarImagenProducto(item.sku(), 260f);
         if (img == null && sinImagen != null) {
             img = new Image(sinImagen);
         }
@@ -849,7 +850,7 @@ public class PresupuestoComercialPdfGenerator {
                     .setPadding(6)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
                     .setHorizontalAlignment(HorizontalAlignment.CENTER);
-            Image img = cargarImagenProducto(it.sku());
+            Image img = cargarImagenProducto(it.sku(), 48f);
             // Si no hay foto local, mostramos el placeholder genérico para
             // que la columna no quede vacía y la fila luzca completa.
             if (img == null && sinImagen != null) {
@@ -1391,17 +1392,13 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0);
     }
 
-    private Image cargarImagenProducto(String sku) {
+    /** Carga la imagen del producto preprocesada (recorte de bordes blancos +
+     *  resize a la resolución útil + recompresión JPEG) vía {@link PdfImagenUtils}.
+     *  Devuelve {@code null} si no hay imagen local — el caller aplica su fallback. */
+    private Image cargarImagenProducto(String sku, float displaySizePt) {
         if (sku == null) return null;
-        Optional<File> fileOpt = imagenLocalService.buscar(sku);
-        if (fileOpt.isEmpty()) return null;
-        try {
-            return new Image(ImageDataFactory.create(fileOpt.get().toString()));
-        } catch (Exception e) {
-            log.warn("No se pudo cargar la imagen del producto {} ({}): {}",
-                    sku, fileOpt.get(), e.getMessage());
-            return null;
-        }
+        File archivo = imagenLocalService.buscar(sku).orElse(null);
+        return PdfImagenUtils.cargarImagenProducto(archivo, null, displaySizePt);
     }
 
     private ImageData cargarRecurso(String resourcePath) {

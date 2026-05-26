@@ -276,8 +276,14 @@ public class PresupuestoComercialService {
         Map<String, ClienteMaster> masters = clienteMasterService.cargarTodosIndexados();
 
         // Convertimos a DTO ordenando por última actividad descendente (cliente
-        // más reciente arriba), independiente del orden de inserción.
+        // más reciente arriba), independiente del orden de inserción. Excluimos
+        // los clientes con master marcado como eliminado (soft-delete) — el
+        // historial sigue intacto, solo desaparecen de esta vista.
         return agrupados.entrySet().stream()
+                .filter(e -> {
+                    ClienteMaster m = masters.get(e.getKey());
+                    return m == null || m.getEliminadoAt() == null;
+                })
                 .map(e -> aplicarMaster(e.getValue().toDTO(), masters.get(e.getKey())))
                 .sorted((a, b) -> {
                     if (a.ultimoMovimientoAt() == null) return 1;

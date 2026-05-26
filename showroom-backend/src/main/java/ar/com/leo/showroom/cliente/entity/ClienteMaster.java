@@ -70,4 +70,11 @@ public class ClienteMaster {
 
     @Column(name = "actualizado_at", nullable = false)
     private Instant actualizadoAt;
+
+    /** Soft-delete: si está seteado, el cliente queda oculto del listado de
+     *  /clientes aunque tenga historial. No se toca el historial — los
+     *  presupuestos/pedidos previos siguen visibles en sus propias pantallas.
+     *  Reactivar = setear a null (o editar el cliente, que limpia este flag). */
+    @Column(name = "eliminado_at")
+    private Instant eliminadoAt;
 }

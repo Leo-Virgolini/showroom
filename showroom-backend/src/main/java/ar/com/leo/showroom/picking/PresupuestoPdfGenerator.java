@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.sesion.entity.SesionScanItem;
@@ -38,15 +39,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.plugins.jpeg.JPEGImageWriteParam;
-import javax.imageio.stream.ImageOutputStream;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.math.BigDecimal;
@@ -56,7 +48,6 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 /**
  * Genera un PDF de presupuesto con tema KT GASTRO para mandarle al cliente.
@@ -72,20 +63,6 @@ import java.util.Optional;
 public class PresupuestoPdfGenerator {
 
     private static final int PRODUCTOS_POR_PAGINA = 4;
-
-    /** DPI objetivo para las imágenes de productos embebidas. 200 DPI alcanza
-     *  para visualización en pantalla/mobile sin pixelado al hacer zoom medio
-     *  (a 140pt de celda → 389×389 px, vs ~186 px que se ven realmente).
-     *  El catalog generator usa 400 DPI pero ese PDF es para impresión; este
-     *  va por SMTP a Gmail, que en uploads de 18+ MB cierra el socket antes
-     *  del ACK 250 y termina en SocketTimeoutException. */
-    private static final float TARGET_DPI = 200f;
-
-    /** Calidad JPEG de las imágenes de productos. 0.78 es imperceptible para
-     *  fotos de producto típicas (fondo blanco, pocos detalles finos) y reduce
-     *  ~25% extra de bytes vs 0.85. El catalog generator usa 0.95 pero ese
-     *  PDF es para impresión; este es para email/pantalla. */
-    private static final float JPEG_QUALITY = 0.78f;
 
     // Tema KT (colores extraídos de KitchenToolsTheme del catalog generator).
     private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
@@ -458,146 +435,11 @@ public class PresupuestoPdfGenerator {
     // Helpers
     // =====================================================
 
-    /**
-     * Carga la imagen del producto y la prepara para embeber en el PDF:
-     * <ol>
-     *   <li>Recorta los bordes blancos (R/G/B &gt;= 240) con 50px de margen
-     *       vertical extra — aprovecha mejor la celda cuando la foto tiene
-     *       mucho fondo blanco.</li>
-     *   <li>Redimensiona con interpolación bicúbica a {@code displaySizePt × TARGET_DPI / 72}
-     *       — embebir 3000×3000 px para mostrar a 140 pt es 16× más bytes de
-     *       lo que el PDF puede mostrar. Esto es donde más se gana en tamaño.</li>
-     *   <li>Encodea como JPEG con Huffman tables optimizadas — ~10–15% extra
-     *       de compresión a misma calidad visual.</li>
-     * </ol>
-     * Receta portada del {@code java-pdf-catalog-generator} (proyecto hermano).
-     *
-     * <p>Si {@code ImageIO} no puede leer el formato (ej. webp animado),
-     * carga el archivo tal cual sin recortar — iText soporta más formatos
-     * que ImageIO. Si la imagen es completamente blanca o falla el procesado,
-     * cae al fallback (SINIMAGEN).
-     *
-     * @param displaySizePt tamaño máximo de la imagen en puntos PDF — define el
-     *                      target en píxeles vía {@link #TARGET_DPI}.
-     */
+    /** Carga la imagen del producto preprocesada (recorte + resize + JPEG)
+     *  vía {@link PdfImagenUtils}. Si no hay imagen local cae al fallback. */
     private Image cargarImagenProducto(String sku, ImageData fallback, float displaySizePt) {
-        Optional<File> fileOpt = imagenLocalService.buscar(sku);
-        if (fileOpt.isEmpty()) {
-            return fallback != null ? new Image(fallback) : null;
-        }
-        File file = fileOpt.get();
-        try {
-            BufferedImage original = ImageIO.read(file);
-            if (original == null) {
-                // ImageIO no soporta el formato — lo cargamos tal cual via iText.
-                return new Image(ImageDataFactory.create(file.toString()));
-            }
-            BufferedImage recortada = recortarBordesBlancos(original);
-            if (recortada == null) {
-                log.warn("Imagen sin contenido visible (toda blanca): {}", file.getName());
-                return fallback != null ? new Image(fallback) : null;
-            }
-            int targetPx = Math.max(1, Math.round(displaySizePt * TARGET_DPI / 72f));
-            BufferedImage preparada = redimensionarParaJpeg(recortada, targetPx);
-            byte[] jpeg = encodeJpeg(preparada, JPEG_QUALITY);
-            return new Image(ImageDataFactory.create(jpeg));
-        } catch (Exception e) {
-            log.warn("Error procesando imagen {}: {}", file.getName(), e.getMessage());
-            return fallback != null ? new Image(fallback) : null;
-        }
-    }
-
-    /**
-     * Reduce la imagen a {@code maxDim} píxeles en su dimensión más larga
-     * (manteniendo aspect ratio) y la aplana contra fondo blanco para que
-     * sea válida como JPEG. Usa interpolación bicúbica + antialiasing para
-     * mantener nitidez en el downscale.
-     *
-     * <p>Si la imagen ya es ≤ maxDim en ambos lados, igual se copia a un
-     * {@code TYPE_INT_RGB} (necesario para JPEG; aplana el alpha).
-     */
-    private static BufferedImage redimensionarParaJpeg(BufferedImage src, int maxDim) {
-        int w = src.getWidth();
-        int h = src.getHeight();
-        int largest = Math.max(w, h);
-        int targetW, targetH;
-        if (largest > maxDim) {
-            double scale = (double) maxDim / largest;
-            targetW = Math.max(1, (int) Math.round(w * scale));
-            targetH = Math.max(1, (int) Math.round(h * scale));
-        } else {
-            targetW = w;
-            targetH = h;
-        }
-        BufferedImage out = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = out.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(java.awt.Color.WHITE);
-        g.fillRect(0, 0, targetW, targetH);
-        g.drawImage(src, 0, 0, targetW, targetH, null);
-        g.dispose();
-        return out;
-    }
-
-    /**
-     * Encodea un {@link BufferedImage} a JPEG con la calidad indicada y Huffman
-     * tables optimizadas. El input debe ser {@code TYPE_INT_RGB} (sin alpha) —
-     * {@link #redimensionarParaJpeg} se encarga de la conversión.
-     */
-    private static byte[] encodeJpeg(BufferedImage img, float quality) throws java.io.IOException {
-        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
-            writer.setOutput(ios);
-            ImageWriteParam param = writer.getDefaultWriteParam();
-            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            param.setCompressionQuality(quality);
-            if (param instanceof JPEGImageWriteParam) {
-                ((JPEGImageWriteParam) param).setOptimizeHuffmanTables(true);
-            }
-            writer.write(null, new IIOImage(img, null, null), param);
-            return baos.toByteArray();
-        } finally {
-            writer.dispose();
-        }
-    }
-
-    /**
-     * Detecta el bounding box de píxeles "no blancos" (R, G o B &lt; 240) y
-     * devuelve la subimagen recortada con 50px de margen vertical extra arriba
-     * y abajo (para que el producto no quede pegado al borde de la celda).
-     * Devuelve {@code null} si la imagen es completamente blanca.
-     */
-    private static BufferedImage recortarBordesBlancos(BufferedImage original) {
-        final int width = original.getWidth();
-        final int height = original.getHeight();
-        final int threshold = 240;
-        // Lectura masiva de píxeles — mucho más rápido que getRGB(x,y) por píxel.
-        int[] pixels = original.getRGB(0, 0, width, height, null, 0, width);
-        int left = width, right = -1, top = height, bottom = -1;
-        for (int y = 0, idx = 0; y < height; y++) {
-            for (int x = 0; x < width; x++, idx++) {
-                int rgb = pixels[idx];
-                int r = (rgb >> 16) & 0xff;
-                int g = (rgb >> 8) & 0xff;
-                int b = rgb & 0xff;
-                if (r < threshold || g < threshold || b < threshold) {
-                    if (x < left) left = x;
-                    if (x > right) right = x;
-                    if (y < top) top = y;
-                    if (y > bottom) bottom = y;
-                }
-            }
-        }
-        if (right < left || bottom < top) {
-            return null;
-        }
-        final int marginVertical = 50;
-        top = Math.max(0, top - marginVertical);
-        bottom = Math.min(height - 1, bottom + marginVertical);
-        return original.getSubimage(left, top, right - left + 1, bottom - top + 1);
+        File archivo = imagenLocalService.buscar(sku).orElse(null);
+        return PdfImagenUtils.cargarImagenProducto(archivo, fallback, displaySizePt);
     }
 
     private ImageData cargarRecurso(String resourcePath) {

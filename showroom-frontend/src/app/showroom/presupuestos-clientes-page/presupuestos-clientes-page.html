@@ -166,6 +166,14 @@
                   [disabled]="c.cantidadPedidos === 0"
                   (onClick)="verPedidos(c)"
                   pTooltip="Ver pedidos de este cliente" tooltipPosition="top" />
+                <p-button icon="pi pi-trash" size="small" severity="danger"
+                  [outlined]="true" [rounded]="true"
+                  [disabled]="!c.telefono"
+                  [loading]="estaEliminando(c.telefono)"
+                  (onClick)="confirmarEliminar(c)"
+                  pTooltip="Eliminar cliente (no borra el historial)"
+                  tooltipPosition="top"
+                  ariaLabel="Eliminar cliente" />
               </div>
             </td>
           </tr>

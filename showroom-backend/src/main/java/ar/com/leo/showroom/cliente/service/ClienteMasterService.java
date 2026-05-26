@@ -30,7 +30,9 @@ public class ClienteMasterService {
     private final UsuarioRepository usuarioRepository;
 
     /** Upsert: si existe master para ese teléfono lo actualiza, sino crea uno.
-     *  Devuelve la entidad final persistida. */
+     *  Si el master estaba marcado como eliminado, al editarlo se reactiva
+     *  (un edit explícito desde la UI indica que el operador quiere volver
+     *  a ver al cliente). Devuelve la entidad final persistida. */
     @Transactional
     public ClienteMaster upsert(ActualizarClienteRequestDTO datos, String username) {
         String telefonoNorm = normalizar(datos.telefono());
@@ -48,7 +50,28 @@ public class ClienteMasterService {
         master.setNotas(blankToNull(datos.notas()));
         master.setActualizadoPorUsuarioId(usuarioIdDe(username));
         master.setActualizadoAt(Instant.now());
+        master.setEliminadoAt(null);
         return repository.save(master);
+    }
+
+    /** Soft-delete por teléfono normalizado: oculta al cliente del listado de
+     *  /clientes sin tocar el historial. Si todavía no había un master para
+     *  ese teléfono, se crea uno solo con la marca de eliminado. */
+    @Transactional
+    public void eliminar(String telefono, String username) {
+        String telefonoNorm = normalizar(telefono);
+        if (telefonoNorm == null) {
+            throw new IllegalArgumentException(
+                    "El teléfono debe tener al menos un dígito para identificar al cliente.");
+        }
+        ClienteMaster master = repository.findByTelefonoNormalizado(telefonoNorm)
+                .orElseGet(() -> ClienteMaster.builder()
+                        .telefonoNormalizado(telefonoNorm)
+                        .build());
+        master.setActualizadoPorUsuarioId(usuarioIdDe(username));
+        master.setActualizadoAt(Instant.now());
+        master.setEliminadoAt(Instant.now());
+        repository.save(master);
     }
 
     /** Devuelve TODOS los masters indexados por teléfono normalizado, para
