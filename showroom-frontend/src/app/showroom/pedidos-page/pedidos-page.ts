@@ -8,7 +8,6 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -36,6 +35,7 @@ import {
   PedidoListItem,
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
+import { dispararDescargaBlob } from '../download.utils';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -587,7 +587,7 @@ export class PedidosPage {
     this.api.descargarPdfPedido(p.id).subscribe({
       next: (resp) => {
         this.marcarDescarga(this.descargandoPdf, p.id, false);
-        this.dispararDescarga(resp, `pedido-${p.id}.pdf`);
+        dispararDescargaBlob(resp, `pedido-${p.id}.pdf`);
       },
       error: async (err) => {
         this.marcarDescarga(this.descargandoPdf, p.id, false);
@@ -617,30 +617,6 @@ export class PedidosPage {
     sig.set(next);
   }
 
-  /** Dispara la descarga del blob usando un <a download> efímero. El nombre lo
-   *  saca del header Content-Disposition; si no viene, usa el fallback. */
-  private dispararDescarga(resp: HttpResponse<Blob>, fallbackName: string): void {
-    const blob = resp.body;
-    if (!blob) return;
-    const filename = this.parsearFilename(resp.headers.get('Content-Disposition')) ?? fallbackName;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  }
-
-  private parsearFilename(contentDisposition: string | null): string | null {
-    if (!contentDisposition) return null;
-    // Soporta: filename="x.pdf", filename=x.pdf, filename*=UTF-8''x.pdf
-    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(contentDisposition);
-    if (utf8?.[1]) return decodeURIComponent(utf8[1].trim());
-    const ascii = /filename="?([^";]+)"?/i.exec(contentDisposition);
-    return ascii?.[1]?.trim() ?? null;
-  }
 }
 
 /** Cuando un request HTTP usa {@code responseType:'blob'}, el body de error

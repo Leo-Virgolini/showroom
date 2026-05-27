@@ -37,6 +37,7 @@ import {
   SesionDetalle,
   SesionListItem,
 } from '../models';
+import { dispararDescargaBlob } from '../download.utils';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -443,6 +444,58 @@ export class HistorialPage {
           'No se pudo encolar el envío');
       },
     });
+  }
+
+  // =====================================================
+  // Descarga directa del PDF de "productos vistos no comprados".
+  // Aplica a cualquier sesión finalizada con items (con o sin pedido): el
+  // backend filtra lo comprado cuando hay un pedido asociado.
+  // =====================================================
+
+  /** Sesiones en las que se está generando el PDF (loading del botón). */
+  readonly descargandoPdf = signal<Set<number>>(new Set());
+
+  estaDescargandoPdf(id: number): boolean {
+    return this.descargandoPdf().has(id);
+  }
+
+  /** True para sesiones finalizadas con al menos un item escaneado. */
+  puedeDescargarPdf(s: SesionListItem): boolean {
+    return s.finalizadaAt != null && s.cantidadEscaneados > 0;
+  }
+
+  descargarPdfSesion(s: SesionListItem, event: Event): void {
+    event.stopPropagation();
+    if (!this.puedeDescargarPdf(s) || this.estaDescargandoPdf(s.id)) return;
+    this.marcarDescarga(s.id, true);
+    this.api.descargarPdfSesion(s.id).subscribe({
+      next: (resp) => {
+        this.marcarDescarga(s.id, false);
+        dispararDescargaBlob(resp, `items-de-interes-sesion-${s.id}.pdf`);
+      },
+      error: (err) => {
+        this.marcarDescarga(s.id, false);
+        // 404 = "compró todo lo que vio" — caso esperado, no error técnico.
+        // El body de error viene como Blob (responseType:'blob'), pero el
+        // status alcanza para distinguirlo sin parsearlo.
+        if (err?.status === 404) {
+          this.toast.add({
+            severity: 'info',
+            summary: 'No hay PDF para esta sesión',
+            detail: 'El cliente compró todo lo que vio — no quedan productos no comprados.',
+            life: 5000,
+          });
+          return;
+        }
+        toastError(this.toast, 'PDF', err, 'No se pudo generar el PDF');
+      },
+    });
+  }
+
+  private marcarDescarga(id: number, on: boolean): void {
+    const next = new Set(this.descargandoPdf());
+    if (on) next.add(id); else next.delete(id);
+    this.descargandoPdf.set(next);
   }
 
   trackById = (_: number, it: SesionListItem) => it.id;

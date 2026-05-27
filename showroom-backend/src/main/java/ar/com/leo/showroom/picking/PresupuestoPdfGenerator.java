@@ -118,39 +118,6 @@ public class PresupuestoPdfGenerator {
         return generarConItems(pedido, views);
     }
 
-    /**
-     * PDF de TODOS los items escaneados durante una sesión, sin filtrar por
-     * compra — para sesiones ABANDONADAS donde el cliente miró productos pero
-     * no derivó en pedido. La portada usa el nombre y fecha de la sesión.
-     *
-     * @return null si la sesión no tiene items (no hay nada que mandar).
-     */
-    public byte[] generarHistorialSesion(SesionShowroom sesion) {
-        List<ItemView> views = sesion.getItems().stream()
-                .map(PresupuestoPdfGenerator::fromSesionItem)
-                .toList();
-        if (views.isEmpty()) {
-            return null;
-        }
-        // Stub de PedidoShowroom para reusar la portada — solo necesitamos
-        // nombre y fecha. CUIT queda null (sin pedido no hay cliente registrado).
-        PedidoShowroom stub = PedidoShowroom.builder()
-                .nombre(sesion.getNombre())
-                .creadoAt(sesion.getIniciadaAt())
-                .build();
-        return generarConItems(stub, views);
-    }
-
-    /** Filename para sesión sin pedido — usa el id de la sesión en vez del id de pedido. */
-    public String nombreArchivoSesion(SesionShowroom sesion) {
-        LocalDate fecha = sesion.getIniciadaAt() != null
-                ? sesion.getIniciadaAt().atZone(TZ_AR).toLocalDate()
-                : LocalDate.now(TZ_AR);
-        String cliente = NombreArchivoUtils.sanitizar(sesion.getNombre());
-        return "presupuesto-" + cliente + "-sesion-" + sesion.getId() + "-"
-                + fecha.format(DateTimeFormatter.ofPattern("ddMMyyyy")) + ".pdf";
-    }
-
     /** Pipeline común: portada con datos del pedido + N páginas con los items. */
     private byte[] generarConItems(PedidoShowroom pedido, List<ItemView> items) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();

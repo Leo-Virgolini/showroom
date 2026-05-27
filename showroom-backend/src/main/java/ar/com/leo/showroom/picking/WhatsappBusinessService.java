@@ -87,7 +87,10 @@ public class WhatsappBusinessService {
      *  hay que revisar permisos del token en Business Settings. */
     private static final int META_ERROR_PERMISSIONS = 200;
 
-    private final PresupuestoPdfGenerator pdfGenerator;
+    /** PDF de "ítems de interés" (productos vistos pero no comprados) en formato
+     *  agregado liviano — se usa tanto para sesiones abandonadas como para el
+     *  follow-up tras pedido por WhatsApp. */
+    private final ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator itemsDeInteresPdfGenerator;
     private final SesionShowroomRepository sesionRepository;
     private final SyncEventService eventService;
     private final ObjectMapper objectMapper;
@@ -113,14 +116,14 @@ public class WhatsappBusinessService {
     private String defaultCountryCode;
 
     public WhatsappBusinessService(
-            PresupuestoPdfGenerator pdfGenerator,
+            ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator itemsDeInteresPdfGenerator,
             SesionShowroomRepository sesionRepository,
             SyncEventService eventService,
             ObjectMapper objectMapper,
             ConfiguracionService configuracionService,
             RestClient.Builder restClientBuilder,
             UsuarioRepository usuarioRepository) {
-        this.pdfGenerator = pdfGenerator;
+        this.itemsDeInteresPdfGenerator = itemsDeInteresPdfGenerator;
         this.sesionRepository = sesionRepository;
         this.eventService = eventService;
         this.objectMapper = objectMapper;
@@ -240,8 +243,8 @@ public class WhatsappBusinessService {
                 : usernameDe(pedido.getUsuarioId());
         return enviarPdfInterno(
                 telefonoRaw,
-                () -> pdfGenerator.generarHistorial(sesion, pedido),
-                () -> pdfGenerator.nombreArchivo(pedido),
+                () -> itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion, pedido),
+                () -> itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion),
                 pedido.getNombreCompleto(),
                 "pedido " + pedido.getId(),
                 factories,
@@ -275,8 +278,8 @@ public class WhatsappBusinessService {
                 : usernameDe(sesion.getUsuarioId());
         enviarPdfInterno(
                 telefonoRaw,
-                () -> pdfGenerator.generarHistorialSesion(sesion),
-                () -> pdfGenerator.nombreArchivoSesion(sesion),
+                () -> itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion),
+                () -> itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion),
                 sesion.getNombre(),
                 "sesión " + sesion.getId(),
                 factories,

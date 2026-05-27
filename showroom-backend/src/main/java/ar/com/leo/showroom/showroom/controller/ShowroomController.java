@@ -16,7 +16,7 @@ import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.PerfilEtiquetasService;
 import ar.com.leo.showroom.picking.PickingEmailService;
 import ar.com.leo.showroom.picking.WhatsappBusinessService;
-import ar.com.leo.showroom.picking.PresupuestoPdfGenerator;
+import ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.presupuesto.dto.EnviarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
@@ -90,7 +90,7 @@ public class ShowroomController {
     private final ProductoCacheRepository productoCacheRepository;
     private final UbicacionService ubicacionService;
     private final PedidoShowroomRepository pedidoRepository;
-    private final PresupuestoPdfGenerator pdfGenerator;
+    private final PresupuestoComercialPdfGenerator itemsDeInteresPdfGenerator;
     private final PickingEmailService pickingEmailService;
     private final WhatsappBusinessService whatsappBusinessService;
     private final FormaPagoService formaPagoService;
@@ -509,7 +509,7 @@ public class ShowroomController {
         SesionShowroom sesion = sesionRepository.findByPedidoIdWithItems(id)
                 .orElseThrow(() -> new NotFoundException(
                         "Este pedido no tiene sesión asociada — no hay PDF de follow-up para descargar."));
-        byte[] body = pdfGenerator.generarHistorial(sesion, pedido);
+        byte[] body = itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion, pedido);
         if (body == null) {
             throw new NotFoundException(
                     "El cliente compró todo lo que vio — no hay PDF de productos extra.");
@@ -517,7 +517,42 @@ public class ShowroomController {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + pdfGenerator.nombreArchivo(pedido) + "\"")
+                        "attachment; filename=\"" + itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion) + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .body(body);
+    }
+
+    /**
+     * Descarga el PDF de "productos vistos pero no comprados" de una SESIÓN —
+     * para el botón del Historial de atenciones. Unifica los dos casos:
+     * <ul>
+     *   <li>Sesión con pedido: muestra lo visto MENOS lo comprado.</li>
+     *   <li>Sesión abandonada (sin pedido): muestra TODO lo visto.</li>
+     * </ul>
+     * 404 si la sesión no existe o si no quedan productos (compró todo).
+     */
+    @GetMapping("/sesiones/{id}/pdf")
+    public ResponseEntity<byte[]> descargarPdfSesion(@PathVariable Long id) {
+        SesionShowroom sesion = sesionRepository.findByIdWithItems(id)
+                .orElseThrow(() -> new NotFoundException("Sesión no encontrada: " + id));
+        byte[] body;
+        if (sesion.getPedidoId() != null) {
+            PedidoShowroom pedido = pedidoRepository.findByIdWithItems(sesion.getPedidoId())
+                    .orElse(null);
+            body = pedido != null
+                    ? itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion, pedido)
+                    : itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion);
+        } else {
+            body = itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion);
+        }
+        if (body == null) {
+            throw new NotFoundException(
+                    "El cliente compró todo lo que vio — no hay PDF de productos vistos no comprados.");
+        }
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion) + "\"")
                 .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
                 .body(body);
     }

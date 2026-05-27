@@ -2,8 +2,12 @@ package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
+import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
+import ar.com.leo.showroom.sesion.entity.SesionScanItem;
+import ar.com.leo.showroom.sesion.entity.SesionShowroom;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.Color;
@@ -32,9 +36,11 @@ import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.element.Text;
 import com.itextpdf.layout.properties.BorderRadius;
 import com.itextpdf.layout.properties.HorizontalAlignment;
+import com.itextpdf.layout.properties.Property;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import com.itextpdf.layout.properties.VerticalAlignment;
+import com.itextpdf.layout.splitting.ISplitCharacters;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,12 +50,15 @@ import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Genera el PDF de presupuesto comercial — el que el operador arma en la
@@ -83,6 +92,11 @@ public class PresupuestoComercialPdfGenerator {
     private static final Color GRIS_MEDIO = new DeviceRgb(110, 110, 110);
     private static final Color GRIS_CLARO = new DeviceRgb(243, 244, 246);
     private static final Color GRIS_LINEA = new DeviceRgb(225, 225, 230);
+    /** Fondo de las filas pares en la tabla de ítems de interés (zebra). Gris
+     *  perceptible sobre el blanco; el pill del código (GRIS_CLARO, más claro)
+     *  queda como un rectángulo apenas más claro y el texto azul se sigue
+     *  leyendo sin problema. */
+    private static final Color ZEBRA_FILA = new DeviceRgb(234, 237, 242);
 
     /** Fondos suaves para los chips de cantidad/descuento/unitario que
      *  aparecen en el header de cada hoja en modo cotización individual.
@@ -122,10 +136,34 @@ public class PresupuestoComercialPdfGenerator {
         PESO_FMT.setMinimumFractionDigits(0);
     }
 
+    /** Split-characters que nunca permite cortar el texto: se aplica al pill del
+     *  código para que un SKU largo no se parta en dos líneas dentro de la celda
+     *  angosta — queda siempre en una sola línea. */
+    private static final ISplitCharacters CODIGO_NO_SPLIT = (text, glyphPos) -> false;
+
     private final ImagenLocalService imagenLocalService;
 
     public byte[] generar(PresupuestoComercial presupuesto,
                           GenerarPresupuestoRequestDTO datos) {
+        return construir(presupuesto, datos, "PRESUPUESTO", true, true);
+    }
+
+    /**
+     * Construcción común del PDF, parametrizada para reusar el mismo layout en
+     * dos contextos:
+     * <ul>
+     *   <li><b>Presupuesto comercial</b>: título "PRESUPUESTO", con número y con
+     *       la sección de totales + formas de pago ({@link #generar}).</li>
+     *   <li><b>Ítems de interés</b> (productos vistos en una sesión sin compra):
+     *       título custom, sin número y sin totales/formas — solo header + card
+     *       del cliente + tabla de productos ({@link #generarItemsDeInteres}).</li>
+     * </ul>
+     */
+    private byte[] construir(PresupuestoComercial presupuesto,
+                             GenerarPresupuestoRequestDTO datos,
+                             String tituloHeader,
+                             boolean mostrarNumero,
+                             boolean mostrarTotalesYFormas) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
              PdfWriter writer = new PdfWriter(out);
              PdfDocument pdfDoc = new PdfDocument(writer);
@@ -162,7 +200,7 @@ public class PresupuestoComercialPdfGenerator {
                 // segunda hoja. Ahora el primer producto comparte página con
                 // los datos del cliente, y el resto va detrás (un producto
                 // por hoja vía AreaBreak entre items).
-                agregarHeader(doc, presupuesto, logoHeader);
+                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, mostrarNumero);
                 agregarCardCliente(doc, presupuesto);
                 List<GenerarPresupuestoRequestDTO.Item> items = datos.items();
                 for (int i = 0; i < items.size(); i++) {
@@ -178,13 +216,21 @@ public class PresupuestoComercialPdfGenerator {
                     agregarObservaciones(doc, datos);
                 }
             } else {
-                // Modo agregado: tabla detalle + total + formas de pago globales,
-                // todo en una sola hoja (la layout histórico).
-                agregarHeader(doc, presupuesto, logoHeader);
+                // Modo agregado: header + card cliente + tabla, todo en una hoja.
+                // Presupuesto (mostrarTotalesYFormas=true): tabla con
+                // cant/precio/desc/total + sección de totales y formas de pago.
+                // Ítems de interés (false): tabla simple (solo el monto por
+                // producto) y sin totales/formas — cada ítem va de a 1 y sin
+                // descuento, así que esas columnas serían ruido.
+                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, mostrarNumero);
                 agregarCardCliente(doc, presupuesto);
-                agregarTablaDetalle(doc, datos.items(), sinImagen);
-                agregarTotalesAgregado(doc, datos);
-                agregarFormasPago(doc, datos.formasPago());
+                if (mostrarTotalesYFormas) {
+                    agregarTablaDetalle(doc, datos.items(), sinImagen);
+                    agregarTotalesAgregado(doc, datos);
+                    agregarFormasPago(doc, datos.formasPago());
+                } else {
+                    agregarTablaItemsInteres(doc, datos.items(), sinImagen);
+                }
                 agregarObservaciones(doc, datos);
             }
 
@@ -209,6 +255,96 @@ public class PresupuestoComercialPdfGenerator {
                 ? "N" + presupuesto.getId()
                 : "borrador";
         return "presupuesto-" + cliente + "-" + numero
+                + (fecha.isEmpty() ? "" : "-" + fecha) + ".pdf";
+    }
+
+    // =====================================================
+    // Ítems de interés — PDF de productos vistos en una sesión sin compra.
+    // Reusa el layout agregado del presupuesto (mismo look, PDF liviano) pero
+    // con header "ÍTEMS DE INTERÉS" (sin número) y SIN totales/formas de pago:
+    // no es una cotización cerrada, solo el registro de lo que miró el cliente.
+    // =====================================================
+
+    /**
+     * PDF de "ítems de interés" con TODOS los productos escaneados en la sesión
+     * — para sesiones ABANDONADAS (sin pedido).
+     *
+     * @return null si la sesión no tiene items escaneados.
+     */
+    public byte[] generarItemsDeInteres(SesionShowroom sesion) {
+        return construirItemsDeInteres(
+                sesion.getItems(), sesion.getNombre(), sesion.getIniciadaAt());
+    }
+
+    /**
+     * PDF de "ítems de interés" con los productos que el cliente vio pero NO
+     * compró — para el follow-up tras un pedido. Filtra de los scans de la
+     * sesión los SKUs que terminaron en el pedido.
+     *
+     * @return null si el cliente compró todo lo que vio (no quedan sobrantes).
+     */
+    public byte[] generarItemsDeInteres(SesionShowroom sesion, PedidoShowroom pedido) {
+        Set<String> comprados = new HashSet<>();
+        if (pedido.getItems() != null) {
+            for (PedidoShowroomItem it : pedido.getItems()) {
+                if (it.getSku() != null) comprados.add(it.getSku());
+            }
+        }
+        List<SesionScanItem> sobrantes = new ArrayList<>();
+        if (sesion.getItems() != null) {
+            for (SesionScanItem s : sesion.getItems()) {
+                if (!comprados.contains(s.getSku())) sobrantes.add(s);
+            }
+        }
+        return construirItemsDeInteres(sobrantes, sesion.getNombre(), sesion.getIniciadaAt());
+    }
+
+    /**
+     * Construye el PDF de ítems de interés a partir de una lista de scans ya
+     * resuelta (todos los de la sesión, o filtrada por lo comprado). Cada ítem
+     * va con cantidad 1 y sin descuento — la sesión no captura esos datos (solo
+     * SKU, descripción, precio e IVA del momento del scan).
+     *
+     * @return null si la lista viene vacía (no hay nada que mandar).
+     */
+    private byte[] construirItemsDeInteres(List<SesionScanItem> scans,
+                                           String clienteNombre, Instant fechaSesion) {
+        if (scans == null || scans.isEmpty()) return null;
+
+        List<GenerarPresupuestoRequestDTO.Item> items = new ArrayList<>(scans.size());
+        for (SesionScanItem s : scans) {
+            items.add(new GenerarPresupuestoRequestDTO.Item(
+                    s.getSku(),
+                    s.getDescripcion(),
+                    BigDecimal.ONE,
+                    s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
+                    s.getPorcIva(),
+                    BigDecimal.ZERO));
+        }
+
+        GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(
+                clienteNombre, null, null, null, null,
+                BigDecimal.ZERO, Boolean.FALSE, items, List.of());
+
+        // Stub con los únicos campos que usa el layout: nombre + fecha. id null
+        // → el header no imprime número.
+        PresupuestoComercial stub = PresupuestoComercial.builder()
+                .clienteNombre(clienteNombre)
+                .creadoAt(fechaSesion)
+                .build();
+
+        return construir(stub, datos, "ÍTEMS DE INTERÉS", false, false);
+    }
+
+    /** Filename: items-de-interes-{cliente}-{idSesion}-ddMMyyyy.pdf. */
+    public String nombreArchivoItemsDeInteres(SesionShowroom sesion) {
+        String cliente = sanitizar(Optional.ofNullable(sesion.getNombre()).orElse(""));
+        String fecha = sesion.getIniciadaAt() != null
+                ? sesion.getIniciadaAt().atZone(TZ_AR).toLocalDate()
+                        .format(DateTimeFormatter.ofPattern("ddMMyyyy"))
+                : "";
+        return "items-de-interes-" + cliente
+                + (sesion.getId() != null ? "-" + sesion.getId() : "")
                 + (fecha.isEmpty() ? "" : "-" + fecha) + ".pdf";
     }
 
@@ -627,7 +763,8 @@ public class PresupuestoComercialPdfGenerator {
     //         que conserve sus colores originales (naranja + negro).
     //       · Derecha marrón oscuro: "PRESUPUESTO" + "#N" + fecha.
     // =====================================================
-    private void agregarHeader(Document doc, PresupuestoComercial p, ImageData logoHeader) {
+    private void agregarHeader(Document doc, PresupuestoComercial p, ImageData logoHeader,
+                               String tituloHeader, boolean mostrarNumero) {
         // 1) Banda decorativa superior (gradient naranja → amarillo → verde).
         Table banda = new Table(UnitValue.createPercentArray(new float[]{1f, 1f, 1f}))
                 .useAllAvailableWidth()
@@ -682,8 +819,7 @@ public class PresupuestoComercialPdfGenerator {
                     .setMargin(0));
         }
 
-        // === Derecha: "PRESUPUESTO" + "#N" + fecha en fondo marrón ===
-        String numero = p.getId() != null ? "#" + p.getId() : "—";
+        // === Derecha: título + (opcional) "#N" + fecha en fondo marrón ===
         String fechaCorta = p.getCreadoAt() != null
                 ? p.getCreadoAt().atZone(TZ_AR).toLocalDate()
                         .format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
@@ -695,18 +831,23 @@ public class PresupuestoComercialPdfGenerator {
                 .setBackgroundColor(KT_MARRON)
                 .setPaddings(8, 22, 8, 22)
                 .setTextAlignment(TextAlignment.RIGHT)
-                .add(new Paragraph("PRESUPUESTO")
+                .add(new Paragraph(tituloHeader)
                         .setFontColor(KT_NARANJA)
                         .simulateBold()
                         .setFontSize(10)
                         .setCharacterSpacing(3f)
-                        .setMargin(0))
-                .add(new Paragraph(numero)
-                        .simulateBold()
-                        .setFontSize(26)
-                        .setFontColor(ColorConstants.WHITE)
-                        .setMargin(0)
-                        .setMarginTop(2));
+                        .setMargin(0));
+        // El número solo aplica a presupuestos comerciales; en el PDF de ítems
+        // de interés se omite (mostrarNumero=false). Sin id (preview/borrador)
+        // mostramos "—" para preservar el layout histórico del presupuesto.
+        if (mostrarNumero) {
+            der.add(new Paragraph(p.getId() != null ? "#" + p.getId() : "—")
+                    .simulateBold()
+                    .setFontSize(26)
+                    .setFontColor(ColorConstants.WHITE)
+                    .setMargin(0)
+                    .setMarginTop(2));
+        }
         if (!fechaCorta.isEmpty()) {
             der.add(new Paragraph(fechaCorta)
                     .setFontColor(ColorConstants.LIGHT_GRAY)
@@ -814,8 +955,10 @@ public class PresupuestoComercialPdfGenerator {
         seccion.add(tituloSeccion);
 
         // Columnas: foto | código | descripción | cant | precio | desc | total
+        // El código va un poco más ancho que antes (1.15 vs 0.9) para que SKUs
+        // largos no se partan en dos líneas dentro del pill.
         Table tabla = new Table(UnitValue.createPercentArray(
-                new float[]{0.8f, 0.9f, 2.6f, 0.55f, 0.95f, 0.6f, 1.05f}))
+                new float[]{0.8f, 1.15f, 2.35f, 0.55f, 0.95f, 0.6f, 1.05f}))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER);
 
@@ -828,7 +971,12 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
+        int idx = 0;
         for (GenerarPresupuestoRequestDTO.Item it : items) {
+            // Fondo zebra en las filas pares — mismo criterio que el PDF de ítems
+            // de interés. Las impares quedan blancas (= fondo de la sección).
+            Color fondoFila = (idx % 2 == 1) ? ZEBRA_FILA : ColorConstants.WHITE;
+            idx++;
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
@@ -845,6 +993,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Foto
             Cell celdaFoto = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
@@ -863,24 +1012,29 @@ public class PresupuestoComercialPdfGenerator {
             }
             tabla.addCell(celdaFoto);
 
-            // Código (pill)
+            // Código (pill). CODIGO_NO_SPLIT + la columna más ancha evitan que
+            // un SKU largo se parta en dos líneas dentro del pill.
+            Paragraph codigoPill = new Paragraph(safe(it.sku(), "—"))
+                    .simulateBold()
+                    .setFontSize(9)
+                    .setBackgroundColor(GRIS_CLARO)
+                    .setFontColor(KT_AZUL_CODIGO_TEXTO)
+                    .setBorderRadius(new BorderRadius(10f))
+                    .setPaddings(2, 5, 2, 5)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMargin(0);
+            codigoPill.setProperty(Property.SPLIT_CHARACTERS, CODIGO_NO_SPLIT);
             Cell celdaCodigo = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
-                    .add(new Paragraph(safe(it.sku(), "—"))
-                            .simulateBold()
-                            .setFontSize(9)
-                            .setBackgroundColor(GRIS_CLARO)
-                            .setFontColor(KT_AZUL_CODIGO_TEXTO)
-                            .setBorderRadius(new BorderRadius(10f))
-                            .setPaddings(2, 6, 2, 6)
-                            .setTextAlignment(TextAlignment.CENTER)
-                            .setMargin(0));
+                    .add(codigoPill);
             tabla.addCell(celdaCodigo);
 
             // Descripción
             Cell celdaDesc = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setVerticalAlignment(VerticalAlignment.MIDDLE)
@@ -893,6 +1047,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Cantidad
             Cell celdaCant = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.CENTER)
@@ -911,6 +1066,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Precio
             Cell celdaPrecio = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
@@ -931,6 +1087,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Descuento %
             Cell celdaDescuento = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
@@ -951,6 +1108,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Total línea
             Cell celdaTotal = new Cell()
+                    .setBackgroundColor(fondoFila)
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
                     .setTextAlignment(TextAlignment.RIGHT)
@@ -969,6 +1127,139 @@ public class PresupuestoComercialPdfGenerator {
                         .setMargin(0));
             }
             tabla.addCell(celdaTotal);
+        }
+
+        seccion.add(tabla);
+        doc.add(seccion);
+    }
+
+    /**
+     * Tabla simplificada para el PDF de ítems de interés: foto | código |
+     * descripción | total. Sin columnas de cantidad/precio/descuento — cada
+     * ítem va de a 1 y sin descuento, así que "precio" y "total" coincidirían
+     * y cantidad/descuento serían siempre "1"/"—". Mostramos solo el monto
+     * (precio s/IVA) por producto, o "Consultar" si no tiene precio cargado.
+     */
+    private void agregarTablaItemsInteres(Document doc,
+                                          List<GenerarPresupuestoRequestDTO.Item> items,
+                                          ImageData sinImagen) {
+        Div seccion = new Div()
+                .setMarginTop(12)
+                .setBackgroundColor(ColorConstants.WHITE)
+                .setBorder(new SolidBorder(GRIS_LINEA, 1f))
+                .setBorderRadius(new BorderRadius(12f))
+                .setPadding(14);
+
+        Paragraph tituloSeccion = new Paragraph()
+                .add(buntoColor(KT_NARANJA))
+                .add("  DETALLE DE PRODUCTOS")
+                .simulateBold()
+                .setFontSize(10)
+                .setCharacterSpacing(1.5f)
+                .setFontColor(GRIS_OSCURO)
+                .setMargin(0)
+                .setMarginBottom(8);
+        seccion.add(tituloSeccion);
+
+        // Columnas: foto | código | descripción | total
+        Table tabla = new Table(UnitValue.createPercentArray(
+                new float[]{0.8f, 1.15f, 3.5f, 1.2f}))
+                .useAllAvailableWidth()
+                .setBorder(Border.NO_BORDER);
+
+        tabla.addHeaderCell(celdaHeader(""));
+        tabla.addHeaderCell(celdaHeader("CÓDIGO"));
+        tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
+        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
+
+        int idx = 0;
+        for (GenerarPresupuestoRequestDTO.Item it : items) {
+            // Fondo zebra en las filas pares (2da, 4ta, …) — ayuda a seguir la
+            // línea del producto hasta su precio en listas largas.
+            Color fondoFila = (idx % 2 == 1) ? ZEBRA_FILA : null;
+            idx++;
+
+            BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+            BigDecimal precioSinIva = precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+            boolean sinPrecio = precioSinIva.signum() <= 0;
+
+            // Foto
+            Cell celdaFoto = new Cell()
+                    .setBorder(Border.NO_BORDER)
+                    .setPadding(6)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .setHorizontalAlignment(HorizontalAlignment.CENTER);
+            Image img = cargarImagenProducto(it.sku(), 48f);
+            if (img == null && sinImagen != null) {
+                img = new Image(sinImagen);
+            }
+            if (img != null) {
+                img.setAutoScale(false);
+                img.scaleToFit(48, 48);
+                img.setHorizontalAlignment(HorizontalAlignment.CENTER);
+                celdaFoto.add(img);
+            }
+
+            // Código (pill, una sola línea)
+            Paragraph codigoPill = new Paragraph(safe(it.sku(), "—"))
+                    .simulateBold()
+                    .setFontSize(9)
+                    .setBackgroundColor(GRIS_CLARO)
+                    .setFontColor(KT_AZUL_CODIGO_TEXTO)
+                    .setBorderRadius(new BorderRadius(10f))
+                    .setPaddings(2, 5, 2, 5)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMargin(0);
+            codigoPill.setProperty(Property.SPLIT_CHARACTERS, CODIGO_NO_SPLIT);
+            Cell celdaCodigo = new Cell()
+                    .setBorder(Border.NO_BORDER)
+                    .setPadding(6)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .add(codigoPill);
+
+            // Descripción
+            Cell celdaDesc = new Cell()
+                    .setBorder(Border.NO_BORDER)
+                    .setPadding(6)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .add(new Paragraph(safe(it.descripcion(), "—"))
+                            .simulateBold()
+                            .setFontSize(10)
+                            .setFontColor(GRIS_OSCURO)
+                            .setMargin(0));
+
+            // Precio (s/IVA) o "Consultar" si no tiene precio cargado.
+            Cell celdaPrecio = new Cell()
+                    .setBorder(Border.NO_BORDER)
+                    .setPadding(6)
+                    .setTextAlignment(TextAlignment.RIGHT)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE);
+            if (sinPrecio) {
+                celdaPrecio.add(new Paragraph("Consultar")
+                        .simulateBold()
+                        .setFontSize(9)
+                        .setFontColor(KT_NARANJA)
+                        .setMargin(0));
+            } else {
+                celdaPrecio.add(new Paragraph(formatPesos(precioSinIva))
+                        .simulateBold()
+                        .setFontSize(11)
+                        .setFontColor(VERDE_PRECIO)
+                        .setMargin(0));
+            }
+
+            if (fondoFila != null) {
+                celdaFoto.setBackgroundColor(fondoFila);
+                celdaCodigo.setBackgroundColor(fondoFila);
+                celdaDesc.setBackgroundColor(fondoFila);
+                celdaPrecio.setBackgroundColor(fondoFila);
+            }
+            tabla.addCell(celdaFoto);
+            tabla.addCell(celdaCodigo);
+            tabla.addCell(celdaDesc);
+            tabla.addCell(celdaPrecio);
         }
 
         seccion.add(tabla);

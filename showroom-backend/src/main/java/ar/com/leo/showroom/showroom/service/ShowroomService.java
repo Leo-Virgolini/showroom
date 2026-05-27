@@ -55,6 +55,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 import tools.jackson.databind.ObjectMapper;
 
@@ -852,7 +854,26 @@ public class ShowroomService {
                 // PDF al cliente: WhatsApp primero (si tiene teléfono), email
                 // como fallback si WhatsApp no llegó (ventana 24hs cerrada,
                 // error, etc.) o no hay teléfono. Lógica en el orquestador.
-                pdfFollowupOrchestrator.enviarTrasPedido(pedido);
+                //
+                // OJO: el orquestador resuelve la sesión por pedidoId
+                // (findByPedidoIdWithItems), pero `finalizarConPedido` recién la
+                // asoció en ESTA transacción aún sin commitear. Si lo disparamos
+                // ya, su @Async corre en otra conexión que todavía ve
+                // pedido_id=NULL → cree que "el cliente compró todo lo que vio"
+                // y no manda nada. Lo diferimos al afterCommit para que la
+                // asociación sesión→pedido ya sea visible.
+                final PedidoShowroom pedidoFollowup = pedido;
+                if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                    TransactionSynchronizationManager.registerSynchronization(
+                            new TransactionSynchronization() {
+                                @Override
+                                public void afterCommit() {
+                                    pdfFollowupOrchestrator.enviarTrasPedido(pedidoFollowup);
+                                }
+                            });
+                } else {
+                    pdfFollowupOrchestrator.enviarTrasPedido(pedido);
+                }
                 pickitExternoService.generarAsync(pedido, clientId);
 
                 return new CrearPedidoResponseDTO(

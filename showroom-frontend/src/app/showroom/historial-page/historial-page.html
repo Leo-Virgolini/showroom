@@ -342,6 +342,13 @@
               }
             </td>
             <td class="text-center whitespace-nowrap">
+              @if (puedeDescargarPdf(s)) {
+                <p-button icon="pi pi-file-pdf" severity="danger" [text]="true" [rounded]="true" size="small"
+                  [loading]="estaDescargandoPdf(s.id)"
+                  (onClick)="descargarPdfSesion(s, $event)"
+                  pTooltip="Descargar PDF de productos vistos no comprados"
+                  tooltipPosition="left" ariaLabel="Descargar PDF de productos vistos" />
+              }
               @if (puedeEnviarPdfSesion(s)) {
                 <p-button icon="pi pi-envelope" severity="info" [text]="true" [rounded]="true" size="small"
                   (onClick)="abrirEnvioEmail(s, $event)"

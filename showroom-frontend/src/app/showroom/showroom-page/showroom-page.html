@@ -25,7 +25,7 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
+<p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '42rem' }" [breakpoints]="{ '640px': '95vw' }"
   [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true" (onHide)="focusInput()">
   <div class="flex flex-col items-center gap-3 py-1 px-1">
     <div class="flex flex-col items-center gap-1">
@@ -42,7 +42,7 @@
          efectivo es ~700–800 px). object-contain mantiene la proporción del
          QR para que siga siendo escaneable. -->
     <img src="opinion-google.png" alt="QR para reseña en Google"
-      class="w-full max-h-[70vh] object-contain rounded-xl shadow-sm" />
+      class="w-full max-h-[80vh] object-contain rounded-xl shadow-sm" />
   </div>
   <ng-template #footer>
     <p-button label="Listo" icon="pi pi-check" severity="secondary" [outlined]="true"

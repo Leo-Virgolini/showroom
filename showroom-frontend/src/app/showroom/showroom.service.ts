@@ -328,6 +328,16 @@ export class ShowroomService {
     });
   }
 
+  /** Descarga el PDF de "productos vistos pero no comprados" de una sesión —
+   *  para el botón del Historial. Sirve tanto para sesiones con pedido (vistos
+   *  menos comprados) como abandonadas (todos los vistos). 404 si compró todo. */
+  descargarPdfSesion(sesionId: number): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/sesiones/${sesionId}/pdf`, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
   reenviarEmailPedido(id: number): Observable<{ message: string; pedidoId: number }> {
     return this.http.post<{ message: string; pedidoId: number }>(
       `${this.base}/pedidos/${id}/email`,

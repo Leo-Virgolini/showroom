@@ -50,7 +50,10 @@ public class PickingEmailService {
     private static final String SSE_EVENT = "picking-email";
     private static final String SUBJECT = "KT GASTRO — Productos que viste en el showroom";
 
-    private final PresupuestoPdfGenerator pdfGenerator;
+    /** Genera el PDF de "ítems de interés" (productos vistos pero no comprados)
+     *  en el formato agregado liviano — se usa tanto para sesiones abandonadas
+     *  como para el follow-up tras pedido. */
+    private final ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator itemsDeInteresPdfGenerator;
     private final JavaMailSender mailSender;
     private final SyncEventService eventService;
     private final SesionShowroomRepository sesionRepository;
@@ -74,12 +77,12 @@ public class PickingEmailService {
      * el bean podría no existir — usamos ObjectProvider para tolerar el caso.
      */
     public PickingEmailService(
-            PresupuestoPdfGenerator pdfGenerator,
+            ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator itemsDeInteresPdfGenerator,
             org.springframework.beans.factory.ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
             SesionShowroomRepository sesionRepository,
             UsuarioRepository usuarioRepository) {
-        this.pdfGenerator = pdfGenerator;
+        this.itemsDeInteresPdfGenerator = itemsDeInteresPdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.sesionRepository = sesionRepository;
@@ -200,7 +203,7 @@ public class PickingEmailService {
                 (emailDest, detalle) -> PickingEmailEvent.ambiguoPedido(pedido.getId(), cuit, emailDest, detalle);
 
         byte[] pdf = generarPdfSeguro(
-                () -> pdfGenerator.generarHistorial(sesion, pedido),
+                () -> itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion, pedido),
                 "pedido " + pedido.getId(),
                 emailCliente,
                 failedFactory,
@@ -221,7 +224,7 @@ public class PickingEmailService {
                 emailCliente,
                 pedido.getNombreCompleto(),
                 pdf,
-                pdfGenerator.nombreArchivo(pedido),
+                itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion),
                 "pedido " + pedido.getId(),
                 sentFactory,
                 failedFactory,
@@ -269,7 +272,7 @@ public class PickingEmailService {
         }
 
         byte[] pdf = generarPdfSeguro(
-                () -> pdfGenerator.generarHistorialSesion(sesion),
+                () -> itemsDeInteresPdfGenerator.generarItemsDeInteres(sesion),
                 "sesión " + sesion.getId(),
                 emailDestinatario,
                 failedFactory,
@@ -285,7 +288,7 @@ public class PickingEmailService {
                 emailDestinatario,
                 sesion.getNombre(),
                 pdf,
-                pdfGenerator.nombreArchivoSesion(sesion),
+                itemsDeInteresPdfGenerator.nombreArchivoItemsDeInteres(sesion),
                 "sesión " + sesion.getId(),
                 sentFactory,
                 failedFactory,
