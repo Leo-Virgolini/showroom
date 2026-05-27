@@ -230,6 +230,7 @@ public class PresupuestoComercialPdfGenerator {
                     agregarFormasPago(doc, datos.formasPago());
                 } else {
                     agregarTablaItemsInteres(doc, datos.items(), sinImagen);
+                    agregarNotaMediosPago(doc);
                 }
                 agregarObservaciones(doc, datos);
             }
@@ -1161,16 +1162,16 @@ public class PresupuestoComercialPdfGenerator {
                 .setMarginBottom(8);
         seccion.add(tituloSeccion);
 
-        // Columnas: foto | código | descripción | total
+        // Columnas: foto | código | descripción | precio efectivo
         Table tabla = new Table(UnitValue.createPercentArray(
-                new float[]{0.8f, 1.15f, 3.5f, 1.2f}))
+                new float[]{0.8f, 1.15f, 3.15f, 1.55f}))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER);
 
         tabla.addHeaderCell(celdaHeader(""));
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
-        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
+        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
 
         int idx = 0;
         for (GenerarPresupuestoRequestDTO.Item it : items) {
@@ -1264,6 +1265,26 @@ public class PresupuestoComercialPdfGenerator {
 
         seccion.add(tabla);
         doc.add(seccion);
+    }
+
+    /**
+     * Cintillo al pie del PDF de ítems de interés que invita a consultar otras
+     * formas de pago — complementa el "PRECIO EFECTIVO" del encabezado para que
+     * el cliente sepa que ese precio es el de contado y que hay alternativas.
+     */
+    private void agregarNotaMediosPago(Document doc) {
+        Paragraph nota = new Paragraph("Consultá por nuestros otros medios de pago")
+                .simulateBold()
+                .setFontSize(11)
+                .setFontColor(KT_MARRON)
+                .setBackgroundColor(CHIP_BG_NARANJA)
+                .setBorderRadius(new BorderRadius(20f))
+                .setPaddings(10, 18, 10, 18)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(14)
+                .setHorizontalAlignment(HorizontalAlignment.CENTER)
+                .setWidth(UnitValue.createPercentValue(70));
+        doc.add(nota);
     }
 
     /**
