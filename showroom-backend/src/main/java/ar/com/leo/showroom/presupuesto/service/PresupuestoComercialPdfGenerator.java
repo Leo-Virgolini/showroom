@@ -170,7 +170,7 @@ public class PresupuestoComercialPdfGenerator {
 
     public byte[] generar(PresupuestoComercial presupuesto,
                           GenerarPresupuestoRequestDTO datos) {
-        return construir(presupuesto, datos, "PRESUPUESTO", true, true);
+        return construir(presupuesto, datos, "PRESUPUESTO", "Precios sujetos a modificación", true, true);
     }
 
     /**
@@ -187,6 +187,7 @@ public class PresupuestoComercialPdfGenerator {
     private byte[] construir(PresupuestoComercial presupuesto,
                              GenerarPresupuestoRequestDTO datos,
                              String tituloHeader,
+                             String subtituloHeader,
                              boolean mostrarNumero,
                              boolean mostrarTotalesYFormas) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -225,7 +226,7 @@ public class PresupuestoComercialPdfGenerator {
                 // segunda hoja. Ahora el primer producto comparte página con
                 // los datos del cliente, y el resto va detrás (un producto
                 // por hoja vía AreaBreak entre items).
-                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, mostrarNumero);
+                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, subtituloHeader, mostrarNumero);
                 agregarCardCliente(doc, presupuesto);
                 List<GenerarPresupuestoRequestDTO.Item> items = datos.items();
                 for (int i = 0; i < items.size(); i++) {
@@ -247,7 +248,7 @@ public class PresupuestoComercialPdfGenerator {
                 // Ítems de interés (false): tabla simple (solo el monto por
                 // producto) y sin totales/formas — cada ítem va de a 1 y sin
                 // descuento, así que esas columnas serían ruido.
-                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, mostrarNumero);
+                agregarHeader(doc, presupuesto, logoHeader, tituloHeader, subtituloHeader, mostrarNumero);
                 agregarCardCliente(doc, presupuesto);
                 if (mostrarTotalesYFormas) {
                     agregarTablaDetalle(doc, datos.items(), sinImagen);
@@ -361,7 +362,7 @@ public class PresupuestoComercialPdfGenerator {
                 .creadoAt(fechaSesion)
                 .build();
 
-        return construir(stub, datos, "ÍTEMS DE INTERÉS", false, false);
+        return construir(stub, datos, "ÍTEMS DE INTERÉS", "Productos que viste en tu visita", false, false);
     }
 
     /** Filename: items-de-interes-{cliente}-{idSesion}-ddMMyyyy.pdf. */
@@ -792,7 +793,7 @@ public class PresupuestoComercialPdfGenerator {
     //       · Derecha marrón oscuro: "PRESUPUESTO" + "#N" + fecha.
     // =====================================================
     private void agregarHeader(Document doc, PresupuestoComercial p, ImageData logoHeader,
-                               String tituloHeader, boolean mostrarNumero) {
+                               String tituloHeader, String subtituloHeader, boolean mostrarNumero) {
         // 1) Banda decorativa superior (gradient naranja → amarillo → verde).
         Table banda = new Table(UnitValue.createPercentArray(new float[]{1f, 1f, 1f}))
                 .useAllAvailableWidth()
@@ -847,12 +848,7 @@ public class PresupuestoComercialPdfGenerator {
                     .setMargin(0));
         }
 
-        // === Derecha: título + (opcional) "#N" + fecha en fondo marrón ===
-        String fechaCorta = p.getCreadoAt() != null
-                ? p.getCreadoAt().atZone(TZ_AR).toLocalDate()
-                        .format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
-                : "";
-
+        // === Derecha: título + (opcional) "#N" + subtítulo en fondo marrón ===
         Cell der = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
@@ -876,13 +872,13 @@ public class PresupuestoComercialPdfGenerator {
                     .setMargin(0)
                     .setMarginTop(2));
         }
-        if (!fechaCorta.isEmpty()) {
-            der.add(new Paragraph(fechaCorta)
+        if (esTextoValido(subtituloHeader)) {
+            der.add(new Paragraph(subtituloHeader)
                     .setFontColor(ColorConstants.LIGHT_GRAY)
                     .setFontSize(9)
-                    .setCharacterSpacing(1f)
+                    .setCharacterSpacing(0.5f)
                     .setMargin(0)
-                    .setMarginTop(2));
+                    .setMarginTop(mostrarNumero ? 2 : 6));
         }
 
         header.addCell(izq);
