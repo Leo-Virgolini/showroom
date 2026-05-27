@@ -979,6 +979,11 @@ export class ShowroomPage implements AfterViewInit {
    *  visor. Si el QR aún no se generó (dialog nunca abierto), queda null. */
   readonly qrVisorDataUrl = signal<string | null>(null);
 
+  /** True mientras se está generando el QR del visor. Permite distinguir en el
+   *  HTML el estado "cargando" (spinner) del estado "falló" (URL como texto de
+   *  fallback) — sin esto, un fallo dejaba el spinner girando para siempre. */
+  readonly qrVisorGenerando = signal(false);
+
   /**
    * Abre el dialog "QR para celular" y genera (perezosamente) el QR del visor
    * del operador logueado apuntando al host actual.
@@ -994,21 +999,29 @@ export class ShowroomPage implements AfterViewInit {
       this.qrVisorDataUrl.set(null);
       return;
     }
-    // Carga dinámica para no inflar el bundle inicial — el dialog rara vez
-    // se abre y la lib pesa varios KB.
-    const QRCode = await import('qrcode');
     const url = `${window.location.origin}/visor/${encodeURIComponent(username)}`;
+    this.qrVisorGenerando.set(true);
     try {
+      // Carga dinámica para no inflar el bundle inicial — el dialog rara vez
+      // se abre y la lib pesa varios KB. `qrcode` es CommonJS: según el interop
+      // de esbuild las funciones pueden quedar bajo `.default` en vez de la raíz
+      // del namespace, así que normalizamos antes de usar `toDataURL`.
+      const mod = await import('qrcode');
+      const QRCode = ((mod as { default?: typeof import('qrcode') }).default ??
+        mod) as typeof import('qrcode');
       const dataUrl = await QRCode.toDataURL(url, {
         errorCorrectionLevel: 'M',
         margin: 1,
         width: 512,
       });
       this.qrVisorDataUrl.set(dataUrl);
-    } catch {
+    } catch (err) {
       // Si el browser no logra generar (raro), mostramos la URL como texto
       // de fallback en el HTML.
+      console.error('No se pudo generar el QR del visor', err);
       this.qrVisorDataUrl.set(null);
+    } finally {
+      this.qrVisorGenerando.set(false);
     }
   }
 

@@ -78,9 +78,17 @@
       <div class="text-[10px] font-mono text-muted-color break-all text-center max-w-full select-all">
         {{ visorUrl() }}
       </div>
-      } @else {
+      } @else if (qrVisorGenerando()) {
       <div class="w-full aspect-square max-h-[70vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
         <i class="pi pi-spin pi-spinner text-3xl text-muted-color"></i>
+      </div>
+      } @else {
+      <!-- No se pudo generar el QR — mostramos la URL como fallback para que el
+           cliente la pueda tipear/copiar a mano. -->
+      <div class="w-full aspect-square max-h-[70vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex flex-col items-center justify-center gap-2 p-4 text-center">
+        <i class="pi pi-exclamation-triangle text-2xl text-muted-color"></i>
+        <span class="text-xs text-muted-color">No se pudo generar el QR. Ingresá esta dirección en el celular:</span>
+        <span class="text-xs font-mono text-color break-all select-all">{{ visorUrl() }}</span>
       </div>
       }
     </div>
