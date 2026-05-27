@@ -53,6 +53,7 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
+import ar.com.leo.showroom.showroom.dto.VisorConfigDTO;
 import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.VisorService;
@@ -1044,6 +1045,22 @@ public class ShowroomController {
     @PutMapping("/config/whatsapp-mensaje")
     public WhatsappMensajeConfigDTO actualizarWhatsappMensaje(@RequestBody WhatsappMensajeConfigDTO body) {
         return service.saveWhatsappMensaje(body);
+    }
+
+    /**
+     * URL base con la que el frontend arma el QR del visor (ej.
+     * {@code http://192.168.1.50:4200}). Necesaria cuando el operador entra a la
+     * app por hostname/DNS que los celulares no resuelven. Vacío → el frontend
+     * cae a {@code window.location.origin}.
+     */
+    @GetMapping("/config/visor")
+    public VisorConfigDTO obtenerVisorConfig() {
+        return new VisorConfigDTO(service.getVisorBaseUrl());
+    }
+
+    @PutMapping("/config/visor")
+    public VisorConfigDTO actualizarVisorConfig(@RequestBody VisorConfigDTO body) {
+        return new VisorConfigDTO(service.saveVisorBaseUrl(body.baseUrl()));
     }
 
     /**

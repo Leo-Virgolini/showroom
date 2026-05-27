@@ -35,6 +35,7 @@ import {
   SesionDetalle,
   SesionListPage,
   SesionShowroom,
+  VisorConfig,
   WhatsappMensajeConfig,
 } from './models';
 
@@ -258,6 +259,19 @@ export class ShowroomService {
    *  mandar sin caption hasta que el operador configure uno nuevo. */
   guardarWhatsappMensaje(cfg: WhatsappMensajeConfig): Observable<WhatsappMensajeConfig> {
     return this.http.put<WhatsappMensajeConfig>(`${this.base}/config/whatsapp-mensaje`, cfg);
+  }
+
+  /** URL base para el QR del visor (ej. http://192.168.1.50:4200). Necesaria
+   *  cuando el operador entra por hostname/DNS que los celulares no resuelven.
+   *  `baseUrl` vacío → el QR cae a `window.location.origin`. */
+  obtenerVisorConfig(): Observable<VisorConfig> {
+    return this.http.get<VisorConfig>(`${this.base}/config/visor`);
+  }
+
+  /** Guarda la URL base. Pasar `baseUrl: ''` borra la fila — el QR vuelve a
+   *  heredar el origin del navegador. */
+  guardarVisorConfig(cfg: VisorConfig): Observable<VisorConfig> {
+    return this.http.put<VisorConfig>(`${this.base}/config/visor`, cfg);
   }
 
   /** Regenera el pickit externo manualmente para un pedido ya existente. El

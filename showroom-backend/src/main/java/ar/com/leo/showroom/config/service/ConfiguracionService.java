@@ -48,6 +48,13 @@ public class ConfiguracionService {
      *  el placeholder {nombre}. Sin valor en DB → el PDF se manda sin caption. */
     public static final String CLAVE_WHATSAPP_MENSAJE_CUERPO = "whatsapp.mensaje-cuerpo";
 
+    /** URL base con la que se arma el QR del visor (ej. {@code http://192.168.1.50:4200}).
+     *  El frontend la usa en lugar de {@code window.location.origin} para que el QR
+     *  apunte a una dirección alcanzable desde el celular del cliente. Necesaria
+     *  cuando el operador entra a la app por hostname/DNS (ej. "servidor") que los
+     *  celulares no resuelven. Sin valor → el frontend cae al origin del navegador. */
+    public static final String CLAVE_VISOR_BASE_URL = "visor.base-url";
+
     private final ConfiguracionRepository repository;
 
     /**
@@ -204,6 +211,40 @@ public class ConfiguracionService {
                 mensaje.isEmpty() ? "BORRADO" : "actualizado",
                 mensaje.length());
         return getWhatsappMensaje();
+    }
+
+    // =====================================================================
+    // URL base del visor (para el QR) — editable desde /configuracion
+    // =====================================================================
+
+    /**
+     * Devuelve la URL base configurada para el QR del visor, o cadena vacía si
+     * no se cargó ninguna (el frontend cae a {@code window.location.origin}).
+     */
+    @Transactional(readOnly = true)
+    public String getVisorBaseUrl() {
+        return leer(CLAVE_VISOR_BASE_URL);
+    }
+
+    /**
+     * Persiste la URL base del visor. Normaliza quitando espacios y la barra
+     * final. Pasar vacío borra la fila (el QR vuelve a heredar el origin del
+     * navegador). Si hay valor, valida que sea http(s):// para evitar guardar
+     * algo que el celular no pueda abrir.
+     */
+    @Transactional
+    public String saveVisorBaseUrl(String baseUrl) {
+        String v = trim(baseUrl);
+        while (v.endsWith("/")) {
+            v = v.substring(0, v.length() - 1);
+        }
+        if (!v.isEmpty() && !v.startsWith("http://") && !v.startsWith("https://")) {
+            throw new IllegalArgumentException(
+                    "La dirección debe empezar con http:// o https:// (ej. http://192.168.1.50:4200).");
+        }
+        guardar(CLAVE_VISOR_BASE_URL, v);
+        log.info("Config visor base-url {}", v.isEmpty() ? "BORRADA (usa origin del navegador)" : "= " + v);
+        return v;
     }
 
     private String leer(String clave) {

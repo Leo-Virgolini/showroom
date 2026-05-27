@@ -230,6 +230,19 @@ export class ConfiguracionPage {
   readonly syncAutoHabilitada = signal<boolean | null>(null);
 
   // ============================================================
+  // URL base del visor (para el QR) — editable
+  // ============================================================
+  readonly cargandoVisor = signal(false);
+  readonly guardandoVisor = signal(false);
+  /** Dirección con la que se arma el QR del visor. Vacío = usa el origin del
+   *  navegador (la dirección con la que el operador abrió la app). */
+  readonly visorBaseUrl = signal('');
+  private readonly visorBaseUrlOriginal = signal('');
+  readonly hayCambiosVisor = computed(
+    () => this.visorBaseUrl().trim() !== this.visorBaseUrlOriginal().trim(),
+  );
+
+  // ============================================================
   // Formas de pago — CRUD
   // ============================================================
   readonly cargandoFormasPago = signal(false);
@@ -257,6 +270,63 @@ export class ConfiguracionPage {
     this.cargarNotificacionesAuto();
     this.cargarSyncAuto();
     this.cargarWhatsappMensaje();
+    this.cargarVisor();
+  }
+
+  // ============================================================
+  // URL base del visor — métodos
+  // ============================================================
+
+  private cargarVisor(): void {
+    this.cargandoVisor.set(true);
+    this.api.obtenerVisorConfig().subscribe({
+      next: (cfg) => {
+        this.cargandoVisor.set(false);
+        this.visorBaseUrl.set(cfg.baseUrl ?? '');
+        this.visorBaseUrlOriginal.set(cfg.baseUrl ?? '');
+      },
+      error: (err) => {
+        this.cargandoVisor.set(false);
+        toastError(this.toast, 'Visor', err, 'No se pudo cargar la dirección del visor');
+      },
+    });
+  }
+
+  descartarCambiosVisor(): void {
+    this.visorBaseUrl.set(this.visorBaseUrlOriginal());
+  }
+
+  guardarVisor(): void {
+    const baseUrl = this.visorBaseUrl().trim();
+    if (baseUrl && !/^https?:\/\//i.test(baseUrl)) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Dirección inválida',
+        detail: 'Debe empezar con http:// o https:// (ej. http://192.168.1.50:4200).',
+        life: 4000,
+      });
+      return;
+    }
+    this.guardandoVisor.set(true);
+    this.api.guardarVisorConfig({ baseUrl }).subscribe({
+      next: (cfg) => {
+        this.guardandoVisor.set(false);
+        this.visorBaseUrl.set(cfg.baseUrl ?? '');
+        this.visorBaseUrlOriginal.set(cfg.baseUrl ?? '');
+        this.toast.add({
+          severity: 'success',
+          summary: 'Dirección del visor guardada',
+          detail: cfg.baseUrl
+            ? `El QR del visor va a apuntar a ${cfg.baseUrl}`
+            : 'Sin dirección — el QR usa la dirección con la que abrís la app.',
+          life: 3500,
+        });
+      },
+      error: (err) => {
+        this.guardandoVisor.set(false);
+        toastError(this.toast, 'Guardar visor', err, 'No se pudo guardar la dirección del visor');
+      },
+    });
   }
 
   // ============================================================

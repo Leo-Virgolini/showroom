@@ -15,7 +15,7 @@ import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { EMPTY, Subject, Subscription } from 'rxjs';
+import { EMPTY, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
@@ -974,9 +974,10 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   /** QR (data URL) del visor del operador logueado — se genera al abrir el
-   *  dialog. Apunta a {@code /visor/{username}} contra el host actual, así
-   *  cada operador tiene un QR único que enlaza a su canal personal del
-   *  visor. Si el QR aún no se generó (dialog nunca abierto), queda null. */
+   *  dialog. Apunta a {@code /visor/{username}} sobre la base configurada en
+   *  /configuracion (o el host actual si no hay ninguna), así cada operador
+   *  tiene un QR único que enlaza a su canal personal del visor. Si el QR aún
+   *  no se generó (dialog nunca abierto), queda null. */
   readonly qrVisorDataUrl = signal<string | null>(null);
 
   /** True mientras se está generando el QR del visor. Permite distinguir en el
@@ -984,13 +985,22 @@ export class ShowroomPage implements AfterViewInit {
    *  fallback) — sin esto, un fallo dejaba el spinner girando para siempre. */
   readonly qrVisorGenerando = signal(false);
 
+  /** URL base configurada en /configuracion para el QR del visor. Vacío → se usa
+   *  `window.location.origin`. Sirve para cuando el operador entra a la app por
+   *  hostname/DNS (ej. "servidor") que los celulares no resuelven: con la IP
+   *  configurada el QR queda alcanzable desde el celular del cliente. Se refresca
+   *  al abrir el dialog. */
+  private readonly visorBaseConfig = signal('');
+
   /**
    * Abre el dialog "QR para celular" y genera (perezosamente) el QR del visor
-   * del operador logueado apuntando al host actual.
+   * del operador logueado. La URL usa la base configurada en /configuracion
+   * (campo "Dirección del visor"); si no hay ninguna, cae al host actual.
    *
-   * <p>El QR se regenera en cada apertura para que, si el operador cambia de
-   * cuenta (logout + login) o si la app se sirve detrás de hostnames
-   * distintos (LAN vs. túnel), siempre refleje la URL correcta.
+   * <p>El QR y la base se refrescan en cada apertura para que, si el operador
+   * cambia de cuenta (logout + login), si se editó la dirección configurada, o
+   * si la app se sirve detrás de hostnames distintos (LAN vs. túnel), siempre
+   * refleje la URL correcta.
    */
   async abrirDialogVisor(): Promise<void> {
     this.mostrarDialogVisor.set(true);
@@ -999,8 +1009,17 @@ export class ShowroomPage implements AfterViewInit {
       this.qrVisorDataUrl.set(null);
       return;
     }
-    const url = `${window.location.origin}/visor/${encodeURIComponent(username)}`;
     this.qrVisorGenerando.set(true);
+    // Refrescamos la base configurada en /configuracion (puede haber cambiado).
+    // Si falla la lectura, caemos al origin del navegador.
+    try {
+      const cfg = await firstValueFrom(this.api.obtenerVisorConfig());
+      this.visorBaseConfig.set(cfg.baseUrl ?? '');
+    } catch {
+      this.visorBaseConfig.set('');
+    }
+    const base = this.visorBaseConfig() || window.location.origin;
+    const url = `${base}/visor/${encodeURIComponent(username)}`;
     try {
       // Carga dinámica para no inflar el bundle inicial — el dialog rara vez
       // se abre y la lib pesa varios KB. `qrcode` es CommonJS: según el interop
@@ -1025,11 +1044,13 @@ export class ShowroomPage implements AfterViewInit {
     }
   }
 
-  /** URL completa del visor del operador — para mostrar como texto debajo del QR. */
+  /** URL completa del visor del operador — para mostrar como texto debajo del QR.
+   *  Usa la base configurada en /configuracion si existe, sino el origin actual. */
   readonly visorUrl = computed(() => {
     const username = this.auth.currentUser()?.username;
     if (!username || typeof window === 'undefined') return '';
-    return `${window.location.origin}/visor/${encodeURIComponent(username)}`;
+    const base = this.visorBaseConfig() || window.location.origin;
+    return `${base}/visor/${encodeURIComponent(username)}`;
   });
 
   /** Cierra la sesión y redirige al login. */

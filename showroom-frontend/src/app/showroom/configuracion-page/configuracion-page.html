@@ -839,6 +839,57 @@
           [disabled]="!hayCambiosPickit()" />
       </div>
     </p-card>
+
+    <!-- ============================================================
+         Dirección del visor (para el QR que escanea el cliente)
+         ============================================================ -->
+    <p-card>
+      <div class="flex flex-col gap-2 mb-4">
+        <h3 class="text-base font-semibold m-0">Dirección del visor (QR)</h3>
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          El QR de "Ver los precios" que escanea el cliente apunta a esta dirección.
+          Si la dejás <strong>vacía</strong>, el QR usa la dirección con la que abriste la app
+          en el navegador.
+        </div>
+        <div class="text-xs text-muted-color">
+          Importante: si entrás a la app por un nombre (ej. <code>http://servidor:4200</code>) o por
+          <code>localhost</code>, el celular del cliente <strong>no</strong> va a poder abrir el QR —
+          los celulares no resuelven el DNS interno. Cargá acá la <strong>IP de red local</strong> del
+          servidor para que el QR sea alcanzable desde el WiFi.
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5 max-w-2xl">
+        <label for="visorBaseUrl" class="text-sm font-medium text-muted-color">URL base del visor</label>
+        <input
+          pInputText
+          id="visorBaseUrl"
+          [ngModel]="visorBaseUrl()"
+          (ngModelChange)="visorBaseUrl.set($event)"
+          placeholder="http://192.168.1.50:4200"
+          class="w-full font-mono text-sm"
+          [disabled]="cargandoVisor() || guardandoVisor()" />
+        <span class="text-xs text-muted-color">Dejar vacío para usar la dirección actual del navegador.</span>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4">
+        @if (hayCambiosVisor()) {
+          <p-button
+            label="Descartar cambios"
+            severity="secondary"
+            [outlined]="true"
+            icon="pi pi-undo"
+            (onClick)="descartarCambiosVisor()"
+            [disabled]="guardandoVisor()" />
+        }
+        <p-button
+          label="Guardar"
+          icon="pi pi-check"
+          (onClick)="guardarVisor()"
+          [loading]="guardandoVisor()"
+          [disabled]="!hayCambiosVisor()" />
+      </div>
+    </p-card>
       </p-tabpanel>
 
       </p-tabpanels>

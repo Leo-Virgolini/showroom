@@ -212,6 +212,16 @@ public class ShowroomService {
         return configuracionService.saveWhatsappMensaje(cfg);
     }
 
+    /** URL base para el QR del visor (ej. http://192.168.1.50:4200). Vacío →
+     *  el frontend cae a window.location.origin. */
+    public String getVisorBaseUrl() {
+        return configuracionService.getVisorBaseUrl();
+    }
+
+    public String saveVisorBaseUrl(String baseUrl) {
+        return configuracionService.saveVisorBaseUrl(baseUrl);
+    }
+
 
     /**
      * Búsqueda paginada en el cache local (sin tocar DUX).

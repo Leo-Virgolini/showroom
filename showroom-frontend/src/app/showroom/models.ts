@@ -353,6 +353,14 @@ export interface WhatsappMensajeConfig {
   personalizado: boolean;
 }
 
+/** URL base con la que el frontend arma el QR del visor (ej.
+ *  `http://192.168.1.50:4200`). Necesaria cuando el operador entra a la app por
+ *  hostname/DNS que los celulares no resuelven. Vacío → el QR cae a
+ *  `window.location.origin`. */
+export interface VisorConfig {
+  baseUrl: string;
+}
+
 /** Punto de un ranking de productos del historial (top escaneados / top comprados). */
 export interface EstadisticaProducto {
   sku: string;
