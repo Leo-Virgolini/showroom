@@ -2,6 +2,8 @@ package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
+import ar.com.leo.showroom.config.entity.EscalaDescuento;
+import ar.com.leo.showroom.config.service.EscalaDescuentoService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
@@ -128,6 +130,28 @@ public class PresupuestoComercialPdfGenerator {
             new DeviceRgb(217, 119, 6),     // ámbar oscuro
     };
 
+    /** Paleta para las columnas de descuento del PDF de ítems de interés: un
+     *  par (texto fuerte, fondo suave) por escalón. El encabezado y la badge
+     *  del precio rebajado comparten color para que el cliente asocie de un
+     *  vistazo cada columna con su descuento. Ciclan si hay más escalones que
+     *  colores. */
+    // Sin verde: ese color lo usa la columna PRECIO EFECTIVO y se confundiría
+    // con el primer escalón.
+    private static final Color[] DESC_FG = new Color[]{
+            new DeviceRgb(29, 78, 216),    // azul
+            new DeviceRgb(126, 34, 206),   // púrpura
+            new DeviceRgb(180, 83, 9),     // ámbar
+            new DeviceRgb(190, 24, 93),    // rosa
+            new DeviceRgb(8, 145, 178),    // cian
+    };
+    private static final Color[] DESC_BG = new Color[]{
+            new DeviceRgb(219, 234, 254),  // azul claro
+            new DeviceRgb(243, 232, 255),  // púrpura claro
+            new DeviceRgb(255, 237, 213),  // ámbar claro
+            new DeviceRgb(252, 231, 243),  // rosa claro
+            new DeviceRgb(207, 250, 254),  // cian claro
+    };
+
     private static final ZoneId TZ_AR = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter FECHA_HORA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final NumberFormat PESO_FMT = NumberFormat.getCurrencyInstance(Locale.of("es", "AR"));
@@ -142,6 +166,7 @@ public class PresupuestoComercialPdfGenerator {
     private static final ISplitCharacters CODIGO_NO_SPLIT = (text, glyphPos) -> false;
 
     private final ImagenLocalService imagenLocalService;
+    private final EscalaDescuentoService escalaDescuentoService;
 
     public byte[] generar(PresupuestoComercial presupuesto,
                           GenerarPresupuestoRequestDTO datos) {
@@ -229,7 +254,9 @@ public class PresupuestoComercialPdfGenerator {
                     agregarTotalesAgregado(doc, datos);
                     agregarFormasPago(doc, datos.formasPago());
                 } else {
-                    agregarTablaItemsInteres(doc, datos.items(), sinImagen);
+                    List<EscalaDescuento> escalones = escalaDescuentoService.listar();
+                    agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones);
+                    agregarNotaPreciosEfectivo(doc, !escalones.isEmpty());
                     agregarNotaMediosPago(doc);
                 }
                 agregarObservaciones(doc, datos);
@@ -1143,7 +1170,8 @@ public class PresupuestoComercialPdfGenerator {
      */
     private void agregarTablaItemsInteres(Document doc,
                                           List<GenerarPresupuestoRequestDTO.Item> items,
-                                          ImageData sinImagen) {
+                                          ImageData sinImagen,
+                                          List<EscalaDescuento> escalones) {
         Div seccion = new Div()
                 .setMarginTop(12)
                 .setBackgroundColor(ColorConstants.WHITE)
@@ -1162,16 +1190,54 @@ public class PresupuestoComercialPdfGenerator {
                 .setMarginBottom(8);
         seccion.add(tituloSeccion);
 
-        // Columnas: foto | código | descripción | precio efectivo
-        Table tabla = new Table(UnitValue.createPercentArray(
-                new float[]{0.8f, 1.15f, 3.15f, 1.55f}))
+        // Escalones de descuento configurados (umbral + %, ordenados por umbral
+        // ascendente): se agrega una columna por cada uno con el precio efectivo
+        // rebajado ese %.
+        int nDesc = escalones.size();
+
+        // Columnas: foto | código | descripción | precio efectivo | (rebaja por
+        // escalón). La descripción cede ancho a medida que se suman columnas de
+        // descuento para que la tabla no se desborde del ancho útil A4.
+        float wDesc = nDesc == 0 ? 3.15f : Math.max(1.7f, 3.15f - 0.45f * nDesc);
+        float[] cols = new float[4 + nDesc];
+        cols[0] = 0.7f;   // foto
+        cols[1] = 1.05f;  // código
+        cols[2] = wDesc;  // descripción
+        cols[3] = 1.2f;   // precio efectivo
+        for (int k = 0; k < nDesc; k++) cols[4 + k] = 1.2f;
+
+        Table tabla = new Table(UnitValue.createPercentArray(cols))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER);
+
+        // Cuando hay escalones, una fila de header superior agrupa sus columnas
+        // bajo el rótulo "DESCUENTOS": una celda vacía con colspan sobre las 4
+        // primeras columnas + el título con colspan sobre las de escalón.
+        if (nDesc > 0) {
+            tabla.addHeaderCell(new Cell(1, 4).setBorder(Border.NO_BORDER));
+            tabla.addHeaderCell(new Cell(1, nDesc)
+                    .setBorder(Border.NO_BORDER)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setPaddingTop(4)
+                    .setPaddingBottom(0)
+                    .add(new Paragraph("DESCUENTOS")
+                            .simulateBold()
+                            .setFontSize(8)
+                            .setCharacterSpacing(1.5f)
+                            .setFontColor(GRIS_MEDIO)
+                            .setMargin(0)));
+        }
 
         tabla.addHeaderCell(celdaHeader(""));
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
+        for (int k = 0; k < nDesc; k++) {
+            EscalaDescuento e = escalones.get(k);
+            tabla.addHeaderCell(celdaHeaderDescuento(
+                    e.getPorcentaje(), e.getUmbralMin(),
+                    DESC_FG[k % DESC_FG.length], DESC_BG[k % DESC_BG.length]));
+        }
 
         int idx = 0;
         for (GenerarPresupuestoRequestDTO.Item it : items) {
@@ -1251,16 +1317,51 @@ public class PresupuestoComercialPdfGenerator {
                         .setMargin(0));
             }
 
+            // Precio efectivo rebajado por cada escalón. Misma base que la
+            // columna "PRECIO EFECTIVO" (s/IVA), multiplicada por (1 - %/100).
+            // Si el producto no tiene precio, la celda queda en "—" igual que
+            // el resto.
+            List<Cell> celdasRebaja = new ArrayList<>(nDesc);
+            for (int k = 0; k < nDesc; k++) {
+                EscalaDescuento e = escalones.get(k);
+                Cell celdaRebaja = new Cell()
+                        .setBorder(Border.NO_BORDER)
+                        .setPadding(6)
+                        .setTextAlignment(TextAlignment.CENTER)
+                        .setVerticalAlignment(VerticalAlignment.MIDDLE);
+                if (sinPrecio) {
+                    celdaRebaja.add(new Paragraph("—")
+                            .setFontSize(10)
+                            .setFontColor(GRIS_MEDIO)
+                            .setMargin(0));
+                } else {
+                    BigDecimal factor = BigDecimal.ONE.subtract(e.getPorcentaje().movePointLeft(2));
+                    BigDecimal precioRebajado = precioSinIva.multiply(factor)
+                            .setScale(2, RoundingMode.HALF_UP);
+                    // Texto plano en el color del escalón — mismo color que la
+                    // badge de su encabezado, para vincularlos visualmente.
+                    celdaRebaja.add(new Paragraph(formatPesos(precioRebajado))
+                            .simulateBold()
+                            .setFontSize(10)
+                            .setFontColor(DESC_FG[k % DESC_FG.length])
+                            .setTextAlignment(TextAlignment.CENTER)
+                            .setMargin(0));
+                }
+                celdasRebaja.add(celdaRebaja);
+            }
+
             if (fondoFila != null) {
                 celdaFoto.setBackgroundColor(fondoFila);
                 celdaCodigo.setBackgroundColor(fondoFila);
                 celdaDesc.setBackgroundColor(fondoFila);
                 celdaPrecio.setBackgroundColor(fondoFila);
+                for (Cell c : celdasRebaja) c.setBackgroundColor(fondoFila);
             }
             tabla.addCell(celdaFoto);
             tabla.addCell(celdaCodigo);
             tabla.addCell(celdaDesc);
             tabla.addCell(celdaPrecio);
+            for (Cell c : celdasRebaja) tabla.addCell(c);
         }
 
         seccion.add(tabla);
@@ -1272,19 +1373,77 @@ public class PresupuestoComercialPdfGenerator {
      * formas de pago — complementa el "PRECIO EFECTIVO" del encabezado para que
      * el cliente sepa que ese precio es el de contado y que hay alternativas.
      */
+    /**
+     * Aclaraciones finas debajo de la tabla de ítems de interés: los montos son
+     * de contado y sin IVA, y (si hay escalones) cómo aplican los descuentos —
+     * sobre el total de la compra y no acumulables, para que el cliente no
+     * interprete que un solo producto ya accede al escalón mayor.
+     */
+    private void agregarNotaPreciosEfectivo(Document doc, boolean hayDescuentos) {
+        doc.add(new Paragraph("Precios en efectivo — no incluyen IVA")
+                .setFontSize(9)
+                .setCharacterSpacing(0.3f)
+                .setFontColor(GRIS_MEDIO)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(10)
+                .setMarginBottom(0));
+        if (hayDescuentos) {
+            doc.add(new Paragraph(
+                    "Descuentos sobre el total de la compra al alcanzar el monto indicado")
+                    .setFontSize(8)
+                    .setFontColor(GRIS_MEDIO)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(2)
+                    .setMarginBottom(0));
+        }
+    }
+
     private void agregarNotaMediosPago(Document doc) {
-        Paragraph nota = new Paragraph("Consultá por nuestros otros medios de pago")
-                .simulateBold()
-                .setFontSize(11)
-                .setFontColor(KT_MARRON)
+        Paragraph nota = new Paragraph()
                 .setBackgroundColor(CHIP_BG_NARANJA)
                 .setBorderRadius(new BorderRadius(20f))
                 .setPaddings(10, 18, 10, 18)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(14)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER)
-                .setWidth(UnitValue.createPercentValue(70));
+                .setWidth(UnitValue.createPercentValue(72));
+
+        // Íconos de medios de pago (banco · efectivo · tarjeta) inline. Si algún
+        // PNG no carga, se omite ese ícono y el cintillo igual sale con el texto
+        // — los íconos son decorativos.
+        float iconSize = 14f;
+        boolean algunIcono = false;
+        for (String png : new String[]{
+                "/images/medio-pago-banco.png",
+                "/images/medio-pago-efectivo.png",
+                "/images/medio-pago-tarjeta.png"}) {
+            Image icono = cargarIcono(png, iconSize);
+            if (icono != null) {
+                nota.add(icono);
+                nota.add(new Text("  "));
+                algunIcono = true;
+            }
+        }
+        if (algunIcono) nota.add(new Text("  "));
+
+        nota.add(new Text("Consultá por nuestros otros medios de pago")
+                .simulateBold()
+                .setFontSize(11)
+                .setFontColor(KT_MARRON));
         doc.add(nota);
+    }
+
+    /** Carga un ícono PNG del classpath como {@link Image} de iText, escalado a
+     *  una altura de {@code size} pt manteniendo su proporción (la tarjeta es
+     *  apaisada). Devuelve {@code null} si el recurso no existe — el caller
+     *  decide el fallback (los íconos del cintillo son decorativos). */
+    private Image cargarIcono(String resourcePath, float size) {
+        ImageData data = cargarRecurso(resourcePath);
+        if (data == null) return null;
+        Image img = new Image(data);
+        // Límite de ancho amplio → el alto manda y todos quedan a la misma altura.
+        img.scaleToFit(1000f, size);
+        return img;
     }
 
     /**
@@ -1677,6 +1836,35 @@ public class PresupuestoComercialPdfGenerator {
                         .setFontColor(GRIS_MEDIO)
                         .simulateBold()
                         .setMargin(0));
+    }
+
+    /** Header de dos líneas para una columna de descuento por escalón: el "-X%"
+     *  va en una badge con el color del escalón (fondo suave + texto fuerte) y
+     *  debajo "desde $Umbral" en gris chico — el umbral aclara a partir de qué
+     *  subtotal aplica. */
+    private static Cell celdaHeaderDescuento(BigDecimal porcentaje, BigDecimal umbral,
+                                             Color fg, Color bg) {
+        Cell c = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setBorderBottom(new SolidBorder(GRIS_LINEA, 1f))
+                .setPadding(6)
+                .setTextAlignment(TextAlignment.CENTER);
+        c.add(new Paragraph("-" + formatPorcentaje(porcentaje) + "%")
+                .simulateBold()
+                .setFontSize(8.5f)
+                .setCharacterSpacing(0.5f)
+                .setFontColor(fg)
+                .setBackgroundColor(bg)
+                .setBorderRadius(new BorderRadius(8f))
+                .setPaddings(2, 6, 2, 6)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0));
+        c.add(new Paragraph("desde " + formatPesos(umbral))
+                .setFontSize(6)
+                .setFontColor(GRIS_MEDIO)
+                .setMargin(0)
+                .setMarginTop(2));
+        return c;
     }
 
     private static Paragraph labelChico(String txt) {
