@@ -48,11 +48,13 @@ export class MoreMenu {
   readonly items: MenuItem[] = [
     { label: 'Herramientas', items: [
       { label: 'Armar presupuesto', icon: 'pi pi-file-edit', routerLink: '/presupuestos' },
+      { label: 'Cotizador de financiación', icon: 'pi pi-calculator', routerLink: '/cotizador' },
       { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags', routerLink: '/etiquetas' },
     ]},
     { label: 'Consultas', items: [
       { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
       { label: 'Historial de presupuestos', icon: 'pi pi-file', routerLink: '/presupuestos/historial' },
+      { label: 'Historial de cotizaciones', icon: 'pi pi-file-o', routerLink: '/cotizador/historial' },
       { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
       { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
       { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },

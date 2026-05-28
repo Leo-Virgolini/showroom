@@ -1080,6 +1080,8 @@ export class ShowroomPage implements AfterViewInit {
     if (!query) return;
     this.skuInput.set('');
     this.resultadosBusqueda.set([]);
+    // Reset de cantidades tipeadas — corresponden a la búsqueda anterior.
+    this.cantidadesResultados.set({});
 
     // Cada nuevo scan/búsqueda recibe un número de secuencia. Si llega la
     // respuesta de uno anterior (más lento), la descartamos.
@@ -1202,10 +1204,106 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   /** Cierra la lista de resultados de búsqueda y vuelve a enfocar el input.
-   *  Lo usa el botón "✕" del header de resultados. */
+   *  Lo usa el botón "✕" del header de resultados. También resetea las
+   *  cantidades tipeadas — si el operador vuelve a buscar otra cosa, los
+   *  inputs arrancan en 1. */
   cerrarResultadosBusqueda(): void {
     this.resultadosBusqueda.set([]);
+    this.cantidadesResultados.set({});
     this.focusInput();
+  }
+
+  /** Cantidades tipeadas en cada fila de resultados (por SKU). Vive aparte
+   *  del array `resultadosBusqueda()` para no mutar el `CatalogoItem`
+   *  recibido del backend. Se limpia al cerrar la lista. */
+  readonly cantidadesResultados = signal<Record<string, number>>({});
+
+  cantidadResultado(sku: string): number {
+    return this.cantidadesResultados()[sku] ?? 1;
+  }
+
+  setCantidadResultado(sku: string, cantidad: number): void {
+    if (!Number.isFinite(cantidad) || cantidad <= 0) cantidad = 1;
+    this.cantidadesResultados.set({
+      ...this.cantidadesResultados(),
+      [sku]: Math.floor(cantidad),
+    });
+  }
+
+  /** Tope de cantidad para el input de la lista de resultados: stock
+   *  disponible cuando está sincronizado y es > 0. Null cuando el stock es
+   *  desconocido (no se sincronizó) o cuando no hay stock — en esos casos
+   *  el input queda sin tope (el agregado se bloquea aparte por
+   *  {@link agregarResultadoAlCarrito} si no hay precio/no está habilitado).
+   *  En el showroom-page, los productos sin stock se agregan vía el flujo
+   *  de scan unitario que sí permite forzar; desde la lista se evita. */
+  cantidadMaximaResultado(it: CatalogoItem): number | null {
+    return it.stockTotal != null && it.stockTotal > 0 ? it.stockTotal : null;
+  }
+
+  /** Agregar directo al carrito desde la lista de resultados — saltea la
+   *  pantalla de tiles. Útil cuando el operador ya sabe qué cantidad necesita
+   *  y no quiere tener que seleccionar + ver tiles + agregar. Si el producto
+   *  no tiene stock se manda `forzar=true` (mismo comportamiento que
+   *  `agregarAlCarrito()` después de un scan). */
+  agregarResultadoAlCarrito(it: CatalogoItem): void {
+    if (it.habilitado === false) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No se puede agregar',
+        detail: `${it.sku}: el producto está deshabilitado.`,
+      });
+      return;
+    }
+    if (!it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No se puede agregar',
+        detail: `${it.sku}: no tiene precio cargado en la lista KT GASTRO.`,
+      });
+      return;
+    }
+    const cant = this.cantidadResultado(it.sku);
+    const forzar = it.stockTotal != null && it.stockTotal <= 0;
+    this.api.agregarItemCarrito(it.sku, cant, forzar).subscribe({
+      next: (res) => {
+        this.carrito.set(res.carrito.items);
+        const itemToast = [{
+          sku: it.sku,
+          descripcion: it.descripcion ?? null,
+          cantidad: res.cantidadAgregada,
+        }];
+        if (res.cantidadAgregada === 0) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Sin stock',
+            detail: `${it.sku}: ${res.motivo ?? 'no se pudieron sumar unidades.'}`,
+          });
+        } else if (forzar) {
+          this.toast.add({
+            key: 'carrito-add',
+            severity: 'warn',
+            summary: 'Agregado sin stock',
+            detail: 'Queda como pendiente de reposición.',
+            data: itemToast,
+            life: 4000,
+          });
+          this.flashItemCarrito(it.sku);
+        } else {
+          this.toast.add({
+            key: 'carrito-add',
+            severity: res.recortado ? 'warn' : 'success',
+            summary: res.recortado ? 'Cantidad ajustada al stock' : 'Agregado al carrito',
+            detail: res.recortado ? `Tope disponible: ${it.stockTotal}.` : undefined,
+            data: itemToast,
+            life: res.recortado ? 3500 : 2500,
+          });
+          this.flashItemCarrito(it.sku);
+        }
+        this.focusInput();
+      },
+      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo agregar al carrito.'),
+    });
   }
 
   /** Cuando el operador click un item de la lista de resultados, lo cargamos

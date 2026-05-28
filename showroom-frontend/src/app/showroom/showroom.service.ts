@@ -27,6 +27,12 @@ import {
   PedidoListPage,
   PerfilEtiquetas,
   PickitConfig,
+  CotizacionDetalle,
+  CotizacionListPage,
+  EnviarCotizacionRequest,
+  GenerarCotizacionRequest,
+  ListarCotizacionesParams,
+  PresupuestoDetalle,
   PresupuestoListPage,
   ProductoListPage,
   Provincia,
@@ -490,11 +496,49 @@ export class ShowroomService {
       `${this.base}/cliente-master/${encodeURIComponent(telefono)}`);
   }
 
+  /** Marca un presupuesto como transformado en pedido — el backend registra
+   *  `convertidoEnPedidoId` y el historial muestra el pill "→ Pedido #N".
+   *  Se llama después del POST a /pedido-dux con respuesta OK. */
+  marcarPresupuestoConvertido(presupuestoId: number, pedidoId: number): Observable<void> {
+    const params = new HttpParams().set('pedidoId', pedidoId);
+    return this.http.put<void>(
+      `${this.base}/presupuesto-comercial/${presupuestoId}/marcar-convertido`,
+      {},
+      { params },
+    );
+  }
+
   /** Elimina (soft-delete) un presupuesto del historial. El registro
    *  físicamente persiste en la DB con `eliminado_at` poblado, pero deja
    *  de aparecer en el listado del historial. */
   eliminarPresupuestoComercial(id: number): Observable<void> {
     return this.http.delete<void>(`${this.base}/presupuesto-comercial/${id}`);
+  }
+
+  /** Snapshot completo de un presupuesto guardado — para pre-llenar la
+   *  pantalla `/presupuestos/editar/:id`. */
+  obtenerDetallePresupuestoComercial(id: number): Observable<PresupuestoDetalle> {
+    return this.http.get<PresupuestoDetalle>(
+      `${this.base}/presupuesto-comercial/${id}/detalle`);
+  }
+
+  /** Actualiza in-place un presupuesto existente. Devuelve el PDF
+   *  regenerado (mismo shape que `previewPresupuestoComercial`). El backend
+   *  conserva el id + `creadoAt` y setea `modificadoAt = now()`. */
+  actualizarPresupuestoComercial(id: number, req: GenerarPresupuestoRequest):
+      Observable<HttpResponse<Blob>> {
+    return this.http.put(`${this.base}/presupuesto-comercial/${id}`, req, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
+  /** Actualiza in-place + dispara el envío del email (async — el toast
+   *  llega vía SSE `presupuesto-comercial-email`). */
+  actualizarYEnviarPresupuestoComercial(id: number, req: EnviarPresupuestoRequest):
+      Observable<{ message: string; presupuestoId: number; email: string }> {
+    return this.http.put<{ message: string; presupuestoId: number; email: string }>(
+      `${this.base}/presupuesto-comercial/${id}/enviar`, req);
   }
 
   /** Descarga el PDF de un presupuesto persistido (regenerado desde los
@@ -514,6 +558,73 @@ export class ShowroomService {
       responseType: 'blob',
       params,
     });
+  }
+
+  // =====================================================
+  // Cotización financiera — pantalla /cotizador
+  // =====================================================
+
+  /** Genera el PDF de cotización (persiste + devuelve blob). El header
+   *  `X-Cotizacion-Id` trae el número asignado. */
+  previewCotizacionFinanciera(req: GenerarCotizacionRequest): Observable<HttpResponse<Blob>> {
+    return this.http.post(`${this.base}/cotizacion-financiera/preview`, req, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
+  /** Genera + persiste + envía PDF por email (async — SSE
+   *  `cotizacion-financiera-email`). */
+  enviarCotizacionFinanciera(req: EnviarCotizacionRequest):
+      Observable<{ message: string; cotizacionId: number; email: string }> {
+    return this.http.post<{ message: string; cotizacionId: number; email: string }>(
+      `${this.base}/cotizacion-financiera/enviar`, req);
+  }
+
+  /** Listado paginado del historial. */
+  listarCotizacionesFinancieras(opts: ListarCotizacionesParams = {}): Observable<CotizacionListPage> {
+    let params = new HttpParams()
+      .set('page', opts.page ?? 0)
+      .set('size', opts.size ?? 50);
+    if (opts.id != null) params = params.set('id', opts.id);
+    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    if (opts.desde) params = params.set('desde', opts.desde);
+    if (opts.hasta) params = params.set('hasta', opts.hasta);
+    return this.http.get<CotizacionListPage>(`${this.base}/cotizacion-financiera`, { params });
+  }
+
+  /** Soft-delete del historial. */
+  eliminarCotizacionFinanciera(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/cotizacion-financiera/${id}`);
+  }
+
+  /** Descarga el PDF regenerado desde el historial. */
+  descargarPdfCotizacionFinanciera(id: number): Observable<HttpResponse<Blob>> {
+    return this.http.get(`${this.base}/cotizacion-financiera/${id}/pdf`, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
+  /** Detalle completo para pre-llenar la pantalla de edición. */
+  obtenerDetalleCotizacionFinanciera(id: number): Observable<CotizacionDetalle> {
+    return this.http.get<CotizacionDetalle>(`${this.base}/cotizacion-financiera/${id}/detalle`);
+  }
+
+  /** Actualiza in-place y devuelve el PDF regenerado. */
+  actualizarCotizacionFinanciera(id: number, req: GenerarCotizacionRequest):
+      Observable<HttpResponse<Blob>> {
+    return this.http.put(`${this.base}/cotizacion-financiera/${id}`, req, {
+      observe: 'response',
+      responseType: 'blob',
+    });
+  }
+
+  /** Actualiza + envía por email (async). */
+  actualizarYEnviarCotizacionFinanciera(id: number, req: EnviarCotizacionRequest):
+      Observable<{ message: string; cotizacionId: number; email: string }> {
+    return this.http.put<{ message: string; cotizacionId: number; email: string }>(
+      `${this.base}/cotizacion-financiera/${id}/enviar`, req);
   }
 
   // El stream SSE de /events lo maneja BackendStatusService — su Subject

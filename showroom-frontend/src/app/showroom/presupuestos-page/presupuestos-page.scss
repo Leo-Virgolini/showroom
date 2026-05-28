@@ -55,6 +55,29 @@ $kt-amarillo: #a2ab00;
   }
 }
 
+// Card "Detalle del presupuesto" — borde izquierdo verde KT marcado para
+// distinguirla visualmente de la card de búsqueda (paleta sky). El operador
+// debe ver de un vistazo: "azul = explorando, verde = elegido y firme".
+:host ::ng-deep .kt-card-detalle {
+  .p-card {
+    border-left: 4px solid $kt-verde;
+  }
+
+  .p-card-title {
+    background: linear-gradient(
+      to right,
+      rgba($kt-verde, 0.08),
+      transparent 60%
+    );
+    border-bottom-color: rgba($kt-verde, 0.15);
+  }
+}
+
+// Ícono del título del detalle en verde KT (no naranja como el resto).
+:host ::ng-deep .kt-card-title-detalle > i {
+  color: $kt-verde;
+}
+
 // =====================================================
 // Título de card: ícono naranja + texto marrón
 // =====================================================

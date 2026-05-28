@@ -44,6 +44,14 @@ public class PresupuestoComercial {
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;
 
+    /** Timestamp de la última edición — null mientras el presupuesto no se
+     *  haya tocado desde que se generó. Se setea al ejecutar PUT
+     *  {@code /presupuesto-comercial/{id}}. El historial muestra esta fecha
+     *  como pill secundario cuando está presente, para que el operador note
+     *  que el PDF no coincide con el original. */
+    @Column(name = "modificado_at")
+    private Instant modificadoAt;
+
     @Column(name = "cliente_nombre", length = 150)
     private String clienteNombre;
 
@@ -96,4 +104,12 @@ public class PresupuestoComercial {
      *  desde la DB si el operador borra por error. */
     @Column(name = "eliminado_at")
     private Instant eliminadoAt;
+
+    /** Id del pedido DUX creado a partir de este presupuesto, si el operador
+     *  lo transformó (botón "Crear pedido" del historial). Null = todavía no
+     *  se generó. El historial muestra el pill "→ Pedido #N" cuando hay
+     *  valor — sirve para rastreabilidad y para evitar duplicar la creación
+     *  del pedido al volver al historial después. */
+    @Column(name = "convertido_en_pedido_id")
+    private Long convertidoEnPedidoId;
 }

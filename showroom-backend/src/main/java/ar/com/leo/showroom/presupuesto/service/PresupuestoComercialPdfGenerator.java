@@ -935,19 +935,32 @@ public class PresupuestoComercialPdfGenerator {
         grid.addCell(celdaCliente);
 
         // Columna 2: fecha y hora.
+        // Si el presupuesto fue editado (modificadoAt != null), mostramos esa
+        // fecha como principal — es la que refleja el contenido vigente del
+        // PDF — y la creación original debajo en un tamaño menor, para que
+        // el cliente sepa que el presupuesto fue actualizado.
         Cell celdaMeta = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(2);
-        celdaMeta.add(labelChico("FECHA Y HORA"));
-        String fechaHora = p.getCreadoAt() != null
-                ? p.getCreadoAt().atZone(TZ_AR).format(FECHA_HORA_FMT)
+        boolean fueEditado = p.getModificadoAt() != null;
+        celdaMeta.add(labelChico(fueEditado ? "ACTUALIZADO" : "FECHA Y HORA"));
+        Instant fechaPrincipal = fueEditado ? p.getModificadoAt() : p.getCreadoAt();
+        String fechaHora = fechaPrincipal != null
+                ? fechaPrincipal.atZone(TZ_AR).format(FECHA_HORA_FMT)
                 : "";
         celdaMeta.add(new Paragraph(fechaHora)
                 .simulateBold()
                 .setFontSize(11)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
+        if (fueEditado && p.getCreadoAt() != null) {
+            celdaMeta.add(new Paragraph("Emitido " + p.getCreadoAt().atZone(TZ_AR).format(FECHA_HORA_FMT))
+                    .setFontSize(7.5f)
+                    .setFontColor(GRIS_LINEA)
+                    .setMarginTop(1f)
+                    .setMargin(0));
+        }
         grid.addCell(celdaMeta);
 
         card.add(grid);

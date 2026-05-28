@@ -44,6 +44,7 @@ import { provideServiceWorker } from '@angular/service-worker';
 import { backendStatusInterceptor } from './showroom/backend-status.interceptor';
 import { clientIdInterceptor } from './showroom/client-id.interceptor';
 import { authInterceptor } from './auth/auth.interceptor';
+import { PRIMENG_LOCALE_ES } from './primeng-locale-es';
 
 // Registramos los datos del locale es-AR para que pipes como currency, date,
 // number y decimal usen formato argentino sin tener que pasar el locale en cada
@@ -84,6 +85,10 @@ export const appConfig: ApplicationConfig = {
         },
       },
       ripple: true,
+      // Locale en español para todos los componentes de PrimeNG (datepicker,
+      // paginator, file upload, etc.). Source de verdad: primefaces/primelocale
+      // (es.json). Sin esto los labels propios de PrimeNG aparecen en inglés.
+      translation: PRIMENG_LOCALE_ES,
     }),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),

@@ -20,7 +20,12 @@ import ar.com.leo.showroom.presupuesto.service.PresupuestoComercialPdfGenerator;
 import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.presupuesto.dto.EnviarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
+import ar.com.leo.showroom.presupuesto.dto.PresupuestoDetalleDTO;
 import ar.com.leo.showroom.presupuesto.service.PresupuestoComercialService;
+import ar.com.leo.showroom.cotizacion.dto.CotizacionDetalleDTO;
+import ar.com.leo.showroom.cotizacion.dto.EnviarCotizacionRequestDTO;
+import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
+import ar.com.leo.showroom.cotizacion.service.CotizacionFinancieraService;
 import ar.com.leo.showroom.sesion.dto.IniciarSesionRequestDTO;
 import ar.com.leo.showroom.sesion.dto.SesionDetalleDTO;
 import ar.com.leo.showroom.sesion.dto.SesionEnvioEmailRequestDTO;
@@ -101,6 +106,7 @@ public class ShowroomController {
     private final SesionShowroomService sesionShowroomService;
     private final SesionShowroomRepository sesionRepository;
     private final PresupuestoComercialService presupuestoComercialService;
+    private final CotizacionFinancieraService cotizacionFinancieraService;
 
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -812,6 +818,68 @@ public class ShowroomController {
     }
 
     /**
+     * Snapshot completo de un presupuesto persistido — todo lo necesario
+     * para que el frontend pre-llene la pantalla de edición (cliente, items,
+     * formas de pago, observaciones, modo cotización). El PDF se obtiene
+     * aparte via {@code GET /presupuesto-comercial/{id}/pdf}.
+     */
+    @GetMapping("/presupuesto-comercial/{id}/detalle")
+    public PresupuestoDetalleDTO obtenerDetallePresupuesto(@PathVariable Long id) {
+        return presupuestoComercialService.obtenerDetalle(id);
+    }
+
+    /**
+     * Actualiza in-place un presupuesto existente y devuelve el PDF
+     * regenerado. Conserva id + {@code creadoAt}, setea {@code modificadoAt
+     * = now()} y reemplaza todos los demás campos con el nuevo payload.
+     *
+     * <p>Mismo formato de respuesta que {@code POST /preview}: PDF como
+     * adjunto + header {@code X-Presupuesto-Id} con el id. El frontend usa
+     * este endpoint desde la pantalla {@code /presupuestos/editar/:id}.
+     */
+    @PutMapping(value = "/presupuesto-comercial/{id}",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> actualizarPresupuesto(
+            @PathVariable Long id,
+            @RequestBody @Valid GenerarPresupuestoRequestDTO body,
+            Authentication auth) {
+        PresupuestoComercialService.Resultado r =
+                presupuestoComercialService.actualizar(id, body, auth.getName());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .header("X-Presupuesto-Id", String.valueOf(r.presupuesto().getId()))
+                .body(r.pdf());
+    }
+
+    /**
+     * Actualiza in-place + dispara el envío del PDF por email (async). Mismo
+     * patrón que {@code POST /enviar} pero sobre un presupuesto existente
+     * (el id NO cambia). El toast de resultado real llega vía SSE
+     * {@code presupuesto-comercial-email}.
+     */
+    @PutMapping("/presupuesto-comercial/{id}/enviar")
+    public ResponseEntity<Map<String, Object>> actualizarYEnviarPresupuesto(
+            @PathVariable Long id,
+            @RequestBody @Valid EnviarPresupuestoRequestDTO body,
+            Authentication auth) {
+        java.util.Optional<String> motivo = presupuestoComercialService.motivoEmailNoConfigurado();
+        if (motivo.isPresent()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", motivo.get()));
+        }
+        PresupuestoComercialService.Resultado r =
+                presupuestoComercialService.actualizarYEnviarPorEmail(
+                        id, body.email(), body.presupuesto(), auth.getName());
+        return ResponseEntity.accepted().body(Map.of(
+                "message", "Cambios guardados y envío encolado — el toast confirmará cuando salga.",
+                "presupuestoId", r.presupuesto().getId(),
+                "email", body.email()));
+    }
+
+    /**
      * Genera + persiste + dispara el envío del email al cliente. Async — el
      * resultado real (SENT/FAILED) llega vía SSE {@code presupuesto-comercial-email}.
      * Devuelve 202 con el número de presupuesto asignado.
@@ -831,6 +899,146 @@ public class ShowroomController {
         return ResponseEntity.accepted().body(Map.of(
                 "message", "Envío encolado — el toast confirmará cuando salga.",
                 "presupuestoId", r.presupuesto().getId(),
+                "email", body.email()));
+    }
+
+    /**
+     * Marca un presupuesto como "convertido en pedido" — el operador apretó
+     * "Crear pedido" desde el historial, el pedido se creó correctamente
+     * en DUX, y ahora registramos el {@code pedidoId} para que el historial
+     * muestre el pill "→ Pedido #N" en lugar del botón.
+     *
+     * <p>El frontend lo invoca DESPUÉS de que el POST a {@code /pedido-dux}
+     * devolvió OK. Si no se llama, el presupuesto queda visible como
+     * pendiente (no se rompe nada).
+     */
+    @PutMapping("/presupuesto-comercial/{id}/marcar-convertido")
+    public ResponseEntity<Void> marcarPresupuestoConvertido(
+            @PathVariable Long id,
+            @RequestParam("pedidoId") Long pedidoId) {
+        presupuestoComercialService.marcarConvertido(id, pedidoId);
+        return ResponseEntity.noContent().build();
+    }
+
+    // =====================================================
+    // Cotización financiera (pantalla /cotizador) — PDF al cliente
+    // con monto base + formas de pago, sin productos. NO toca DUX.
+    // =====================================================
+
+    /**
+     * Genera el PDF de la cotización, persiste con número definitivo y lo
+     * devuelve para descargar. Cada llamada consume un número.
+     */
+    @PostMapping(value = "/cotizacion-financiera/preview",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> previewCotizacion(
+            @RequestBody @Valid GenerarCotizacionRequestDTO body,
+            Authentication auth) {
+        CotizacionFinancieraService.Resultado r =
+                cotizacionFinancieraService.generarYPersistir(body, auth.getName());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .header("X-Cotizacion-Id", String.valueOf(r.cotizacion().getId()))
+                .body(r.pdf());
+    }
+
+    /** Listado paginado del historial. */
+    @GetMapping("/cotizacion-financiera")
+    public ar.com.leo.showroom.cotizacion.dto.CotizacionListPageDTO listarCotizaciones(
+            @RequestParam(value = "id", required = false) Long id,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "desde", required = false) Instant desde,
+            @RequestParam(value = "hasta", required = false) Instant hasta,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "50") int size) {
+        return cotizacionFinancieraService.listar(id, q, desde, hasta, page, size);
+    }
+
+    /** Descarga el PDF regenerado de una cotización persistida. */
+    @GetMapping(value = "/cotizacion-financiera/{id}/pdf",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> descargarPdfCotizacion(@PathVariable Long id) {
+        CotizacionFinancieraService.Resultado r = cotizacionFinancieraService.regenerarPdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .body(r.pdf());
+    }
+
+    /** Soft-delete del historial. */
+    @DeleteMapping("/cotizacion-financiera/{id}")
+    public ResponseEntity<Void> eliminarCotizacion(@PathVariable Long id) {
+        cotizacionFinancieraService.eliminar(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Detalle completo para pre-llenar la pantalla de edición. */
+    @GetMapping("/cotizacion-financiera/{id}/detalle")
+    public CotizacionDetalleDTO obtenerDetalleCotizacion(@PathVariable Long id) {
+        return cotizacionFinancieraService.obtenerDetalle(id);
+    }
+
+    /** Edición in-place: conserva id + creadoAt, setea modificadoAt y
+     *  reemplaza el resto. Devuelve el PDF regenerado. */
+    @PutMapping(value = "/cotizacion-financiera/{id}",
+            produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> actualizarCotizacion(
+            @PathVariable Long id,
+            @RequestBody @Valid GenerarCotizacionRequestDTO body,
+            Authentication auth) {
+        CotizacionFinancieraService.Resultado r =
+                cotizacionFinancieraService.actualizar(id, body, auth.getName());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + r.nombreArchivo() + "\"")
+                .header(HttpHeaders.ACCESS_CONTROL_EXPOSE_HEADERS, HttpHeaders.CONTENT_DISPOSITION)
+                .header("X-Cotizacion-Id", String.valueOf(r.cotizacion().getId()))
+                .body(r.pdf());
+    }
+
+    /** Edita + envía el PDF por email (async). Resultado por SSE
+     *  {@code cotizacion-financiera-email}. */
+    @PutMapping("/cotizacion-financiera/{id}/enviar")
+    public ResponseEntity<Map<String, Object>> actualizarYEnviarCotizacion(
+            @PathVariable Long id,
+            @RequestBody @Valid EnviarCotizacionRequestDTO body,
+            Authentication auth) {
+        java.util.Optional<String> motivo = cotizacionFinancieraService.motivoEmailNoConfigurado();
+        if (motivo.isPresent()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", motivo.get()));
+        }
+        CotizacionFinancieraService.Resultado r =
+                cotizacionFinancieraService.actualizarYEnviarPorEmail(
+                        id, body.email(), body.cotizacion(), auth.getName());
+        return ResponseEntity.accepted().body(Map.of(
+                "message", "Cambios guardados y envío encolado — el toast confirmará cuando salga.",
+                "cotizacionId", r.cotizacion().getId(),
+                "email", body.email()));
+    }
+
+    /** Genera + persiste + dispara envío por email (async). */
+    @PostMapping("/cotizacion-financiera/enviar")
+    public ResponseEntity<Map<String, Object>> enviarCotizacion(
+            @RequestBody @Valid EnviarCotizacionRequestDTO body,
+            Authentication auth) {
+        java.util.Optional<String> motivo = cotizacionFinancieraService.motivoEmailNoConfigurado();
+        if (motivo.isPresent()) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", motivo.get()));
+        }
+        CotizacionFinancieraService.Resultado r =
+                cotizacionFinancieraService.generarYEnviarPorEmail(
+                        body.email(), body.cotizacion(), auth.getName());
+        return ResponseEntity.accepted().body(Map.of(
+                "message", "Envío encolado — el toast confirmará cuando salga.",
+                "cotizacionId", r.cotizacion().getId(),
                 "email", body.email()));
     }
 

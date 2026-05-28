@@ -8,6 +8,7 @@ import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
+import ar.com.leo.showroom.presupuesto.dto.PresupuestoDetalleDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListItemDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListPageDTO;
 import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
@@ -164,6 +165,67 @@ public class PresupuestoComercialService {
                 r.presupuesto().getClienteNombre(), r.pdf(), r.nombreArchivo(),
                 username);
         return r;
+    }
+
+    /**
+     * Actualiza in-place un presupuesto existente: pisa todos los campos
+     * (cliente, items, formas, descuento, observaciones) con el nuevo payload,
+     * setea {@code modificadoAt = now()} y regenera el PDF con los nuevos datos.
+     *
+     * <p>Conserva el id y {@code creadoAt} originales — el número de presupuesto
+     * y el slot del historial NO cambian. El operador que editó queda como
+     * {@code modificadoPor} en el SSE pero la entity sigue atribuida al creador
+     * original ({@code usuarioId}).
+     */
+    @Transactional
+    public Resultado actualizar(Long id, GenerarPresupuestoRequestDTO datos, String username) {
+        PresupuestoComercial p = obtener(id);
+        aplicarDatos(p, datos);
+        p.setModificadoAt(Instant.now());
+        p = repository.save(p);
+        byte[] pdf = pdfGenerator.generar(p, datos);
+        return new Resultado(p, pdf, pdfGenerator.nombreArchivo(p));
+    }
+
+    /**
+     * Versión de {@link #actualizar} que además dispara el envío del PDF por
+     * email en background. Mismo patrón que
+     * {@link #generarYEnviarPorEmail} pero sobre un presupuesto existente —
+     * el id NO cambia.
+     */
+    @Transactional
+    public Resultado actualizarYEnviarPorEmail(Long id, String destinatario,
+                                               GenerarPresupuestoRequestDTO datos,
+                                               String username) {
+        Resultado r = actualizar(id, datos, username);
+        self.enviarPorEmailAsync(destinatario, r.presupuesto().getId(),
+                r.presupuesto().getClienteNombre(), r.pdf(), r.nombreArchivo(),
+                username);
+        return r;
+    }
+
+    /**
+     * Snapshot completo del presupuesto persistido — usado por el frontend
+     * para pre-llenar la pantalla de edición. Reusa el {@link #rehidratarDatos}
+     * que ya sabe deserializar los JSONs y inferir el modo {@code
+     * cotizacionIndividual}.
+     */
+    public PresupuestoDetalleDTO obtenerDetalle(Long id) {
+        PresupuestoComercial p = obtener(id);
+        GenerarPresupuestoRequestDTO datos = rehidratarDatos(p);
+        return new PresupuestoDetalleDTO(
+                p.getId(),
+                p.getCreadoAt(),
+                p.getModificadoAt(),
+                p.getClienteNombre(),
+                p.getClienteTelefono(),
+                p.getClienteEmail(),
+                p.getRubro(),
+                p.getObservaciones(),
+                p.getDescuentoGlobalPorcentaje(),
+                datos.cotizacionIndividual(),
+                datos.items(),
+                datos.formasPago());
     }
 
     public PresupuestoComercial obtener(Long id) {
@@ -589,13 +651,29 @@ public class PresupuestoComercialService {
         return new PresupuestoListItemDTO(
                 p.getId(),
                 p.getCreadoAt(),
+                p.getModificadoAt(),
                 p.getClienteNombre(),
                 p.getClienteTelefono(),
                 p.getClienteEmail(),
                 p.getRubro(),
                 p.getSubtotalSinIva(),
                 p.getDescuentoGlobalPorcentaje(),
-                creadoPor);
+                creadoPor,
+                p.getConvertidoEnPedidoId());
+    }
+
+    /**
+     * Marca este presupuesto como "convertido en pedido" — registra el id
+     * del pedido DUX que se creó a partir del presupuesto. Idempotente: si
+     * ya estaba marcado con otro pedidoId, lo PISA (caso: el operador
+     * canceló el pedido en DUX y volvió a crear uno nuevo desde el mismo
+     * presupuesto). El historial muestra el pill "→ Pedido #N".
+     */
+    @Transactional
+    public void marcarConvertido(Long presupuestoId, Long pedidoId) {
+        PresupuestoComercial p = obtener(presupuestoId);
+        p.setConvertidoEnPedidoId(pedidoId);
+        repository.save(p);
     }
 
     public Optional<String> motivoEmailNoConfigurado() {
@@ -679,9 +757,19 @@ public class PresupuestoComercialService {
     }
 
     private PresupuestoComercial construirEntidad(GenerarPresupuestoRequestDTO datos) {
-        // Total final = suma de cada línea con su descuento individual aplicado.
-        // El campo "descuentoGlobalPorcentaje" del DTO es solo informativo
-        // (% efectivo) y NO se reaplica acá — ver feedback del 2026-05-20.
+        PresupuestoComercial p = new PresupuestoComercial();
+        p.setCreadoAt(Instant.now());
+        aplicarDatos(p, datos);
+        return p;
+    }
+
+    /** Copia los campos editables del DTO sobre la entity (cliente, items,
+     *  formas, totales). NO toca {@code id}, {@code creadoAt},
+     *  {@code modificadoAt}, {@code usuarioId} ni {@code eliminadoAt} — esos
+     *  son responsabilidad del caller según el flujo (creación vs edición).
+     *  El total se recalcula a partir de los items con sus descuentos
+     *  individuales aplicados (ver feedback del 2026-05-20). */
+    private void aplicarDatos(PresupuestoComercial p, GenerarPresupuestoRequestDTO datos) {
         BigDecimal subtotalSinIva = BigDecimal.ZERO;
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
@@ -696,23 +784,19 @@ public class PresupuestoComercialService {
                     .divide(divisor, 4, RoundingMode.HALF_UP);
             subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
         }
-        BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
         BigDecimal descGlobal = datos.descuentoGlobalPorcentaje() == null
                 ? BigDecimal.ZERO
                 : datos.descuentoGlobalPorcentaje();
 
-        return PresupuestoComercial.builder()
-                .creadoAt(Instant.now())
-                .clienteNombre(blankToNull(datos.clienteNombre()))
-                .clienteTelefono(blankToNull(datos.clienteTelefono()))
-                .clienteEmail(blankToNull(datos.clienteEmail()))
-                .rubro(blankToNull(datos.rubro()))
-                .observaciones(blankToNull(datos.observaciones()))
-                .descuentoGlobalPorcentaje(descGlobal)
-                .subtotalSinIva(totalSinIva)
-                .itemsJson(escribirJson(datos.items()))
-                .formasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()))
-                .build();
+        p.setClienteNombre(blankToNull(datos.clienteNombre()));
+        p.setClienteTelefono(blankToNull(datos.clienteTelefono()));
+        p.setClienteEmail(blankToNull(datos.clienteEmail()));
+        p.setRubro(blankToNull(datos.rubro()));
+        p.setObservaciones(blankToNull(datos.observaciones()));
+        p.setDescuentoGlobalPorcentaje(descGlobal);
+        p.setSubtotalSinIva(subtotalSinIva.setScale(2, RoundingMode.HALF_UP));
+        p.setItemsJson(escribirJson(datos.items()));
+        p.setFormasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()));
     }
 
     private String escribirJson(Object o) {

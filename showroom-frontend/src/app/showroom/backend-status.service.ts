@@ -7,6 +7,7 @@ import {
   Health,
   PickingEmailEvent,
   PickitExternoEvent,
+  CotizacionEmailEvent,
   PresupuestoEmailEvent,
   ScanResult,
   ScanVisorError,
@@ -53,6 +54,8 @@ export class BackendStatusService {
   /** Resultado del envío del PDF de presupuesto comercial (/presupuestos).
    *  Se dispara al tocar el botón "Enviar por email" en la pantalla. */
   readonly presupuestoEmailEvents$ = new Subject<PresupuestoEmailEvent>();
+  /** Resultado del envío del PDF de cotización financiera (/cotizador). */
+  readonly cotizacionEmailEvents$ = new Subject<CotizacionEmailEvent>();
   /** Scans publicados al visor (pantalla espejo en celular). El backend
    *  emite uno cada vez que el operador escanea desde la página principal. */
   readonly scanVisorEvents$ = new Subject<ScanResult>();
@@ -350,6 +353,14 @@ export class BackendStatusService {
     src.addEventListener('presupuesto-comercial-email', (e: MessageEvent) => {
       try {
         this.presupuestoEmailEvents$.next(JSON.parse(e.data) as PresupuestoEmailEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('cotizacion-financiera-email', (e: MessageEvent) => {
+      try {
+        this.cotizacionEmailEvents$.next(JSON.parse(e.data) as CotizacionEmailEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

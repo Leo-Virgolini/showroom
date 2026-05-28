@@ -1,0 +1,335 @@
+<div class="page-container flex flex-col bg-orange-50/60 dark:bg-surface-950 min-h-screen">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <!-- ============= TOOLBAR ============= -->
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
+    <ng-template #start>
+      <div class="flex items-center gap-2 sm:gap-3">
+        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
+          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
+          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
+        </a>
+        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
+          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+            <i class="pi pi-calculator text-[#FF861C]"></i>
+            @if (esModoEdicion()) {
+              Editando cotización #{{ cotizacionEditandoId() }}
+            } @else {
+              Cotizador de financiación
+            }
+          </span>
+          <span class="text-[0.65rem] text-muted-color">
+            Monto + formas de pago, sin productos
+          </span>
+        </div>
+      </div>
+    </ng-template>
+
+    <ng-template #end>
+      <div class="inline-flex gap-2 items-center">
+        @if (cargandoEdicion()) {
+          <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
+            <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
+            Cargando cotización…
+          </span>
+        }
+        <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar"
+          class="btn-kt-rojo" (onClick)="vaciar()"
+          [disabled]="!hayMonto()"
+          pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
+        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-download'"
+          [label]="screenLg() ? (esModoEdicion() ? 'Guardar cambios' : 'Generar PDF') : ''"
+          class="btn-kt-marron" [disabled]="!hayMonto() || generandoPreview()"
+          [loading]="generandoPreview()" (onClick)="previsualizar()"
+          [pTooltip]="esModoEdicion()
+              ? 'Guarda los cambios y descarga el PDF actualizado'
+              : 'Genera, descarga y guarda la cotización en el historial'"
+          tooltipPosition="bottom" />
+        <p-button icon="pi pi-send"
+          [label]="screenLg() ? (esModoEdicion() ? 'Guardar y enviar' : 'Enviar') : ''"
+          ariaLabel="Enviar por email"
+          class="btn-kt-naranja" [disabled]="!hayMonto()"
+          (onClick)="abrirDialogEnviar()"
+          pTooltip="Generar y enviar la cotización al cliente" tooltipPosition="bottom" />
+
+        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
+          ariaLabel="Ver historial de cotizaciones" class="btn-kt-marron"
+          routerLink="/cotizador/historial"
+          pTooltip="Ver cotizaciones generadas anteriormente" tooltipPosition="bottom" />
+
+        <app-more-menu />
+        <app-user-chip />
+        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
+          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
+          pTooltip="Volver al showroom" tooltipPosition="bottom" />
+      </div>
+    </ng-template>
+  </p-toolbar>
+
+  <!-- ============= CONTENIDO ============= -->
+  <main class="flex-1 p-3 sm:p-4 lg:p-6">
+    <div class="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-4">
+
+      <!-- ============= COLUMNA IZQUIERDA ============= -->
+      <div class="flex flex-col gap-4">
+
+        <!-- Monto base + IVA — inputs principales destacados. El IVA es
+             editable porque el % varía por producto (10.5% productos
+             esenciales, 21% general, 27% servicios públicos). Default 21
+             que cubre el caso típico. -->
+        <p-card class="kt-card">
+          <ng-template #title>
+            <div class="kt-card-title">
+              <i class="pi pi-dollar"></i>
+              <span>Monto a cotizar</span>
+            </div>
+          </ng-template>
+          <div class="monto-banner rounded-xl p-4 flex flex-col gap-2">
+            <!-- Monto: input grande full-width, jerarquía principal -->
+            <label for="montoInput" class="kt-label">
+              <i class="pi pi-tag"></i> Precio base sin IVA
+            </label>
+            <p-inputNumber inputId="montoInput"
+              [ngModel]="montoBase()"
+              (ngModelChange)="montoBase.set($event ?? 0)"
+              mode="currency" currency="ARS" locale="es-AR"
+              [maxFractionDigits]="0"
+              [min]="0"
+              placeholder="$ 0"
+              inputStyleClass="!text-3xl !font-bold !text-center text-[#3B1E09] !bg-white"
+              class="block w-full" />
+
+            <!-- IVA: chip secundario, inline, no compite con el monto.
+                 Default 21%, editable porque varía por producto (10.5
+                 esenciales, 27 servicios públicos, etc.). -->
+            <div class="flex flex-wrap items-center justify-between gap-2 mt-1 px-1">
+              <label for="ivaInput" class="flex items-center gap-1.5 text-xs font-semibold text-[#3B1E09]/80 dark:text-surface-200 cursor-pointer">
+                <i class="pi pi-percentage text-[#FF861C] text-xs"></i>
+                IVA aplicado
+                <span class="text-[10px] font-normal text-muted-color">
+                  (default 21% — ajustá si el producto tiene otra tasa)
+                </span>
+              </label>
+              <p-inputNumber inputId="ivaInput"
+                [ngModel]="porcIva()"
+                (ngModelChange)="porcIva.set($event ?? 21)"
+                suffix=" %"
+                [min]="0" [max]="100"
+                [maxFractionDigits]="2"
+                [allowEmpty]="false"
+                [showButtons]="true" buttonLayout="horizontal" spinnerMode="horizontal"
+                decrementButtonClass="!p-1.5" incrementButtonClass="!p-1.5"
+                inputStyleClass="w-16 text-center font-bold" />
+            </div>
+            <p class="text-[11px] text-muted-color m-0 px-1 flex items-start gap-1">
+              <i class="pi pi-info-circle text-[10px] text-[#FF861C] mt-0.5"></i>
+              <span>
+                Las formas con IVA usan {{ '(monto × (1 + IVA/100))' }} como base;
+                las que no, usan el monto directo.
+              </span>
+            </p>
+          </div>
+        </p-card>
+
+        <!-- Datos del cliente — todos opcionales -->
+        <p-card class="kt-card">
+          <ng-template #title>
+            <div class="kt-card-title">
+              <i class="pi pi-user"></i>
+              <span>Datos del cliente (opcional)</span>
+            </div>
+          </ng-template>
+          <div class="flex flex-col gap-3">
+            <div>
+              <label for="clienteNombreInput" class="kt-label">
+                <i class="pi pi-id-card"></i> Nombre del cliente
+              </label>
+              <p-iconfield class="block">
+                <p-inputicon class="pi pi-user" />
+                <input pInputText id="clienteNombreInput" type="text" class="w-full"
+                  [ngModel]="clienteNombre()" (ngModelChange)="clienteNombre.set($event)"
+                  placeholder="Aparece en el header del PDF" />
+              </p-iconfield>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="clienteEmailInput" class="kt-label">
+                  <i class="pi pi-envelope"></i> Email
+                  <span class="text-[10px] font-normal text-muted-color">(solo si vas a enviar por email)</span>
+                </label>
+                <p-iconfield iconPosition="left">
+                  <p-inputicon><i class="pi pi-at"></i></p-inputicon>
+                  <p-autoComplete inputId="clienteEmailInput"
+                    [ngModel]="clienteEmail()" (ngModelChange)="clienteEmail.set($event ?? '')"
+                    [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
+                    [forceSelection]="false" [delay]="0"
+                    placeholder="cliente@gmail.com"
+                    inputStyleClass="w-full pl-10" class="w-full" />
+                </p-iconfield>
+              </div>
+              <div>
+                <label for="clienteTelefonoInput" class="kt-label">
+                  <i class="pi pi-phone"></i> Teléfono
+                </label>
+                <p-inputMask inputId="clienteTelefonoInput" mask="99-99999999" [unmask]="true"
+                  [ngModel]="clienteTelefono()" (ngModelChange)="clienteTelefono.set($event ?? '')"
+                  placeholder="11-12345678" class="w-full" />
+              </div>
+            </div>
+            <div>
+              <label for="rubroSelect" class="kt-label">
+                <i class="pi pi-tag"></i> Rubro
+              </label>
+              <p-select inputId="rubroSelect" [options]="opcionesRubro"
+                optionLabel="label" optionValue="value"
+                [ngModel]="rubro()" (ngModelChange)="rubro.set($event)"
+                placeholder="Seleccioná un rubro…" class="w-full"
+                [showClear]="true" appendTo="body" />
+              @if (rubro() === 'otros') {
+                <input pInputText type="text" class="w-full mt-2"
+                  [ngModel]="rubroOtros()" (ngModelChange)="rubroOtros.set($event)"
+                  placeholder="Escribí el rubro del cliente" maxlength="100" />
+              }
+            </div>
+            <div>
+              <label for="observacionesInput" class="kt-label">
+                <i class="pi pi-comment"></i> Observaciones
+              </label>
+              <textarea pTextarea id="observacionesInput" rows="2" class="w-full"
+                [ngModel]="observaciones()" (ngModelChange)="observaciones.set($event)"
+                placeholder="Notas que se imprimen al final del PDF"></textarea>
+            </div>
+          </div>
+        </p-card>
+
+      </div>
+
+      <!-- ============= COLUMNA DERECHA: Formas de pago calculadas ============= -->
+      <div class="flex flex-col gap-4">
+
+        @if (hayMonto()) {
+          <p-card class="kt-card sticky top-3">
+            <ng-template #title>
+              <div class="kt-card-title">
+                <i class="pi pi-credit-card"></i>
+                <span>Formas de pago</span>
+              </div>
+            </ng-template>
+
+            @if (formasPago().length > 0) {
+              <div class="flex flex-col gap-2.5">
+                @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
+                  <div class="forma-pago-card"
+                    [class]="'color-' + ((i % 10) + 1)"
+                    [class.es-mejor-precio]="i === indiceMejorPrecio()">
+                    @if (i === indiceMejorPrecio()) {
+                      <span class="badge-mejor-precio">
+                        <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
+                      </span>
+                    }
+                    <div class="flex items-center gap-1.5">
+                      <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
+                      <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
+                        {{ f.nombre }}
+                      </div>
+                    </div>
+                    @if (f.descripcion) {
+                      <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
+                    }
+                    <div class="text-[10px] mt-0.5"
+                      [class.text-[#FF861C]]="f.aplicaIva"
+                      [class.text-muted-color]="!f.aplicaIva">
+                      {{ f.aplicaIva ? 'Con IVA' : 'Sin IVA' }}
+                    </div>
+                    <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
+                      {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
+                    </div>
+                    @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                      <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
+                        <i class="pi pi-clone text-[10px]"></i>
+                        {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="text-xs text-muted-color text-center py-3 flex flex-col items-center gap-1">
+                <i class="pi pi-info-circle text-[#FF861C]"></i>
+                No hay formas de pago activas configuradas.
+              </div>
+            }
+          </p-card>
+        } @else {
+          <p-card class="kt-card sticky top-3">
+            <div class="flex flex-col items-center justify-center py-8 text-center gap-2">
+              <div class="w-14 h-14 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
+                <i class="pi pi-calculator text-2xl text-[#FF861C]"></i>
+              </div>
+              <p class="m-0 text-sm font-semibold text-[#3B1E09] dark:text-surface-0">
+                Ingresá un monto para cotizar
+              </p>
+              <p class="m-0 text-xs text-muted-color">
+                Acá vas a ver cada forma de pago con su precio final.
+              </p>
+            </div>
+          </p-card>
+        }
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============= DIALOG ENVIAR POR EMAIL ============= -->
+<p-dialog [(visible)]="mostrarDialogEnviar" [modal]="true"
+  [style]="{ width: '95vw', maxWidth: '30rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [draggable]="false" [closable]="!enviandoEmail()">
+  <ng-template #header>
+    <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
+      <i class="pi pi-send text-[#FF861C]"></i>
+      <span class="font-bold">Enviar cotización por email</span>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-sm">
+      <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+      <span class="text-surface-700 dark:text-surface-200">
+        Se va a generar el PDF y enviar al email del cliente. Se asigna un número de cotización persistente.
+      </span>
+    </div>
+
+    <div class="flex flex-col gap-2 p-3 rounded-lg bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700">
+      @if (clienteNombre().trim()) {
+        <div class="flex items-center gap-2 text-sm">
+          <i class="pi pi-user text-[#FF861C]"></i>
+          <span class="text-muted-color">Cliente:</span>
+          <span class="font-medium text-[#3B1E09] dark:text-surface-0 truncate">{{ clienteNombre() }}</span>
+        </div>
+      }
+      <div class="flex items-center gap-2 text-sm">
+        <i class="pi pi-envelope text-[#FF861C]"></i>
+        <span class="text-muted-color">Email:</span>
+        <span class="font-medium text-[#3B1E09] dark:text-surface-0 truncate">{{ clienteEmail() || '—' }}</span>
+      </div>
+    </div>
+
+    <div class="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#FF861C]/5 to-[#7EBA00]/5 border border-[#FF861C]/20">
+      <span class="text-muted-color flex items-center gap-1.5">
+        <i class="pi pi-dollar text-[#FF861C]"></i> Monto base
+      </span>
+      <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
+        {{ montoBase() | currency:'ARS':'symbol':'1.0-0' }}
+      </span>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true"
+      [disabled]="enviandoEmail()"
+      (onClick)="mostrarDialogEnviar.set(false)" />
+    <p-button label="Enviar" icon="pi pi-send" class="btn-kt-naranja"
+      [loading]="enviandoEmail()" (onClick)="enviarPorEmail()" />
+  </ng-template>
+</p-dialog>

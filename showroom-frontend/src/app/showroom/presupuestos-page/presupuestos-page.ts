@@ -12,7 +12,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -36,6 +36,7 @@ import {
   EnviarPresupuestoRequest,
   FormaPago,
   GenerarPresupuestoRequest,
+  PresupuestoDetalle,
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
   ScanResult,
@@ -115,6 +116,16 @@ export class PresupuestosPage implements AfterViewInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
+
+  /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
+   *  pantalla pasa a modo edición: el botón principal dice "Guardar cambios",
+   *  el confirm dialog cambia de copy, y `previsualizar()` llama al PUT en
+   *  lugar del POST de creación. Null = modo creación (URL `/presupuestos`). */
+  readonly presupuestoEditandoId = signal<number | null>(null);
+  /** True mientras se carga el detalle del presupuesto a editar — pinta un
+   *  overlay simple para que el operador no toque el form a medio llenar. */
+  readonly cargandoEdicion = signal(false);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
@@ -370,6 +381,16 @@ export class PresupuestosPage implements AfterViewInit {
       },
     });
 
+    // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
+    // edición: cargamos el detalle del presupuesto y poblamos el form.
+    const idParam = this.route.snapshot.paramMap.get('id');
+    if (idParam) {
+      const id = Number(idParam);
+      if (Number.isFinite(id) && id > 0) {
+        this.cargarParaEditar(id);
+      }
+    }
+
     // Toast del resultado del envío async.
     this.backendStatus.presupuestoEmailEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -399,6 +420,106 @@ export class PresupuestosPage implements AfterViewInit {
       });
   }
 
+  /** Carga el detalle de un presupuesto guardado y popula todas las signals
+   *  del formulario. Marca la pantalla en modo edición — el botón principal
+   *  pasa a "Guardar cambios" y `previsualizar()` llama al PUT.
+   *
+   *  <p>Para los items necesitamos el shape de {@link PresupuestoItem} (extiende
+   *  {@link ScanResult}); los datos serializados en BD solo traen el subset que
+   *  manda el formulario al crear (sku, descripcion, cantidad, precioConIva,
+   *  porcIva, descuentoPorcentaje), entonces hacemos un {@code refreshStock}
+   *  para reconstruir los campos faltantes (precio s/IVA fresh, stock, imagen,
+   *  habilitado). Si un SKU ya no existe en el catálogo, igual lo mostramos con
+   *  los datos persistidos para que el operador pueda quitarlo o ajustarlo. */
+  private cargarParaEditar(id: number): void {
+    this.cargandoEdicion.set(true);
+    this.api.obtenerDetallePresupuestoComercial(id).subscribe({
+      next: (det) => {
+        this.presupuestoEditandoId.set(det.id);
+        this.clienteNombre.set(det.clienteNombre ?? '');
+        this.clienteTelefono.set(det.clienteTelefono ?? '');
+        this.clienteEmail.set(det.clienteEmail ?? '');
+        this.observaciones.set(det.observaciones ?? '');
+        // Rubro: si matchea una opción predefinida, la usamos; sino "otros" +
+        // texto libre con el valor persistido.
+        const rubroGuardado = det.rubro ?? null;
+        if (!rubroGuardado) {
+          this.rubro.set(null);
+          this.rubroOtros.set('');
+        } else if (this.opcionesRubro.some((o) => o.value === rubroGuardado)) {
+          this.rubro.set(rubroGuardado);
+          this.rubroOtros.set('');
+        } else {
+          this.rubro.set('otros');
+          this.rubroOtros.set(rubroGuardado);
+        }
+        this.cotizacionIndividual.set(Boolean(det.cotizacionIndividual));
+
+        const skus = det.items.map((it) => it.sku);
+        const baseItems: PresupuestoItem[] = det.items.map((it, idx) => ({
+          sku: it.sku,
+          descripcion: it.descripcion,
+          // El JSON persistido solo trae con-IVA. Calculamos s/IVA con el
+          // porcIva guardado para tener un fallback decente mientras llega el
+          // refresh; los precios reales pueden haber cambiado en DUX desde el
+          // momento original — el refresh los pisa con datos actuales.
+          pvpKtGastroConIva: it.precioConIva,
+          pvpKtGastroSinIva: it.porcIva != null
+            ? it.precioConIva / (1 + it.porcIva / 100)
+            : it.precioConIva,
+          porcIva: it.porcIva,
+          stockTotal: null,
+          habilitado: null,
+          imagenUrl: null,
+          sincronizadoAt: null,
+          uid: `${it.sku}-edit-${idx}`,
+          cantidad: it.cantidad,
+          descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
+        }));
+        this.items.set(baseItems);
+        this.cargandoEdicion.set(false);
+        this.focusInput();
+
+        // Refresh on-demand para traer stock + imagen + precios actuales. Si
+        // falla, queda con los datos del JSON.
+        if (skus.length > 0) {
+          this.api.refreshStock(skus).subscribe({
+            next: (frescos) => {
+              const porSku = new Map(frescos.map((f) => [f.sku, f]));
+              this.items.set(
+                this.items().map((it) => {
+                  const f = porSku.get(it.sku);
+                  if (!f) return it;
+                  return {
+                    ...it,
+                    descripcion: f.descripcion ?? it.descripcion,
+                    pvpKtGastroConIva: f.pvpKtGastroConIva ?? it.pvpKtGastroConIva,
+                    pvpKtGastroSinIva: f.pvpKtGastroSinIva ?? it.pvpKtGastroSinIva,
+                    porcIva: f.porcIva ?? it.porcIva,
+                    stockTotal: f.stockTotal,
+                    habilitado: f.habilitado,
+                    imagenUrl: f.imagenUrl,
+                    sincronizadoAt: f.sincronizadoAt,
+                  };
+                }),
+              );
+              this.itemsTick.update((v) => v + 1);
+            },
+            error: (err) => console.warn('[editar] refresh stock falló:', err),
+          });
+        }
+      },
+      error: (err) => {
+        this.cargandoEdicion.set(false);
+        toastError(this.toast, 'Editar', err,
+          'No se pudo cargar el presupuesto. Volvé al historial e intentá de nuevo.');
+      },
+    });
+  }
+
+  /** True cuando la pantalla está editando un presupuesto existente. */
+  readonly esModoEdicion = computed(() => this.presupuestoEditandoId() != null);
+
   // ============================================================
   // Scan / búsqueda
   //
@@ -425,6 +546,9 @@ export class PresupuestosPage implements AfterViewInit {
     if (!query) return;
     this.skuInput.set('');
     this.resultadosBusqueda.set([]);
+    // Reset de cantidades tipeadas — corresponden a la búsqueda anterior y
+    // no deberían sobrevivir a una nueva query.
+    this.cantidadesResultados.set({});
     const seq = ++this.scanSeq;
     this.cargandoScan.set(true);
     this.buscarEnCatalogo(query, seq);
@@ -495,19 +619,25 @@ export class PresupuestosPage implements AfterViewInit {
       });
   }
 
-  /** Cierra la lista de resultados (botón ✕) y devuelve el foco al input. */
+  /** Cierra la lista de resultados (botón ✕) y devuelve el foco al input.
+   *  Limpia también las cantidades tipeadas — si el operador busca otra cosa
+   *  después, los inputs arrancan en el default sin sorpresas heredadas. */
   cerrarResultadosBusqueda(): void {
     this.resultadosBusqueda.set([]);
+    this.cantidadesResultados.set({});
     this.focusInput();
   }
 
   /** El operador eligió un item de la lista de resultados — lo cargamos via
    *  `/scan/{sku}` para traer todos los datos (precios c/IVA + s/IVA, stock,
-   *  imagen) y lo agregamos al detalle. */
-  seleccionarResultado(sku: string): void {
+   *  imagen) y lo agregamos al detalle. Acepta `cantidad` opcional para que
+   *  el botón "Agregar" inline de cada fila pueda mandar varias unidades de
+   *  una sola vez. */
+  seleccionarResultado(sku: string, cantidad: number = 1): void {
     this.resultadosBusqueda.set([]);
     this.cargandoScan.set(true);
     const seq = ++this.scanSeq;
+    const cant = Number.isFinite(cantidad) && cantidad > 0 ? Math.floor(cantidad) : 1;
     // publicarVisor=false: el presupuestador es un flujo paralelo a la
     // atención del cliente — los productos cotizados no deben aparecer en
     // la pantalla /visor que mira el cliente.
@@ -515,7 +645,7 @@ export class PresupuestosPage implements AfterViewInit {
       next: (res) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
-        this.agregarItem(res);
+        this.agregarItem(res, cant);
         this.focusInput();
       },
       error: (err) => {
@@ -527,20 +657,52 @@ export class PresupuestosPage implements AfterViewInit {
     });
   }
 
-  private agregarItem(res: ScanResult): void {
+  /** Cantidades tipeadas en los inputs de la lista de resultados, por SKU.
+   *  Vive aparte del array `resultadosBusqueda()` para no mutar el `CatalogoItem`
+   *  recibido del backend. Se limpia al cerrar la lista. */
+  readonly cantidadesResultados = signal<Record<string, number>>({});
+
+  cantidadResultado(sku: string): number {
+    return this.cantidadesResultados()[sku] ?? 1;
+  }
+
+  setCantidadResultado(sku: string, cantidad: number): void {
+    if (!Number.isFinite(cantidad) || cantidad <= 0) cantidad = 1;
+    this.cantidadesResultados.set({
+      ...this.cantidadesResultados(),
+      [sku]: Math.floor(cantidad),
+    });
+  }
+
+  /** Tope de cantidad para el input de la lista de resultados: stock
+   *  disponible cuando está sincronizado y es > 0. Null cuando no se conoce
+   *  el stock (no sincronizado) o cuando no hay — esos casos quedan sin
+   *  tope; el operador ve la cantidad como pill amarillo "excede stock" en
+   *  la tabla del detalle si pasa el límite. */
+  cantidadMaximaResultado(r: CatalogoItem): number | null {
+    return r.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : null;
+  }
+
+  agregarResultado(sku: string): void {
+    const cant = this.cantidadResultado(sku);
+    this.seleccionarResultado(sku, cant);
+  }
+
+  private agregarItem(res: ScanResult, cantidad: number = 1): void {
+    const cant = cantidad > 0 ? cantidad : 1;
     const actuales = this.items();
     // Si ya existe el SKU, sumarle cantidad (caso típico: re-escanear).
     const existente = actuales.find((it) => it.sku === res.sku);
     if (existente) {
       this.items.set(actuales.map((it) =>
-        it.sku === res.sku ? { ...it, cantidad: it.cantidad + 1 } : it));
+        it.sku === res.sku ? { ...it, cantidad: it.cantidad + cant } : it));
       return;
     }
     const uid = `${res.sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const nuevo: PresupuestoItem = {
       ...res,
       uid,
-      cantidad: 1,
+      cantidad: cant,
       descuentoPorcentaje: 0,
     };
     this.items.set([...actuales, nuevo]);
@@ -671,17 +833,23 @@ export class PresupuestosPage implements AfterViewInit {
     const nombre = this.clienteNombre().trim();
     const sujeto = nombre ? `"${nombre}"` : 'el cliente';
     const cantidad = this.items().length;
-    this.confirmationService.confirm({
-      header: 'Generar presupuesto',
-      message:
-        `Se va a generar el PDF con ${cantidad} producto${cantidad === 1 ? '' : 's'} ` +
+    const editandoId = this.presupuestoEditandoId();
+    const header = editandoId != null ? 'Guardar cambios' : 'Generar presupuesto';
+    const message = editandoId != null
+      ? `Se van a guardar los cambios del presupuesto #${editandoId} ` +
+        `(${cantidad} producto${cantidad === 1 ? '' : 's'}, ${sujeto}) y se descargará el PDF actualizado.\n\n` +
+        `El número de presupuesto y la fecha original se mantienen.`
+      : `Se va a generar el PDF con ${cantidad} producto${cantidad === 1 ? '' : 's'} ` +
         `para ${sujeto} y quedará registrado en el historial de presupuestos. ` +
         `${nombre ? sujeto : 'El cliente'} también aparecerá en la lista de Clientes.\n\n` +
-        `¿Continuar?`,
-      icon: 'pi pi-file-pdf',
+        `¿Continuar?`;
+    this.confirmationService.confirm({
+      header,
+      message,
+      icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
       acceptButtonProps: {
-        label: 'Generar y descargar',
-        icon: 'pi pi-download',
+        label: editandoId != null ? 'Guardar cambios' : 'Generar y descargar',
+        icon: editandoId != null ? 'pi pi-save' : 'pi pi-download',
       },
       rejectButtonProps: {
         label: 'Cancelar',
@@ -703,7 +871,11 @@ export class PresupuestosPage implements AfterViewInit {
     // lo trata como popup automático post-async y lo bloquea.
     const previewTab = window.open('about:blank', '_blank');
     this.generandoPreview.set(true);
-    this.api.previewPresupuestoComercial(this.armarPayload()).subscribe({
+    const editandoId = this.presupuestoEditandoId();
+    const request$ = editandoId != null
+      ? this.api.actualizarPresupuestoComercial(editandoId, this.armarPayload())
+      : this.api.previewPresupuestoComercial(this.armarPayload());
+    request$.subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
         const blob = res.body;
@@ -729,8 +901,10 @@ export class PresupuestosPage implements AfterViewInit {
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
         this.toast.add({
           severity: 'success',
-          summary: 'Presupuesto generado',
-          detail: 'Se descargó el PDF y se abrió para previsualizar.',
+          summary: editandoId != null ? 'Cambios guardados' : 'Presupuesto generado',
+          detail: editandoId != null
+            ? `Presupuesto #${editandoId} actualizado y PDF descargado.`
+            : 'Se descargó el PDF y se abrió para previsualizar.',
           life: 4000,
         });
       },
@@ -778,13 +952,17 @@ export class PresupuestosPage implements AfterViewInit {
       presupuesto: this.armarPayload(),
     };
     this.enviandoEmail.set(true);
-    this.api.enviarPresupuestoComercial(payload).subscribe({
+    const editandoId = this.presupuestoEditandoId();
+    const request$ = editandoId != null
+      ? this.api.actualizarYEnviarPresupuestoComercial(editandoId, payload)
+      : this.api.enviarPresupuestoComercial(payload);
+    request$.subscribe({
       next: (res) => {
         this.enviandoEmail.set(false);
         this.mostrarDialogEnviar.set(false);
         this.toast.add({
           severity: 'info',
-          summary: 'Envío encolado',
+          summary: editandoId != null ? 'Cambios guardados — envío encolado' : 'Envío encolado',
           detail: `Presupuesto #${res.presupuestoId} → ${res.email}. El toast confirmará cuando salga.`,
           life: 5000,
         });

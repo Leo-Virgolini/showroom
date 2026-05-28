@@ -12,6 +12,9 @@ import java.time.Instant;
 public record PresupuestoListItemDTO(
         Long id,
         Instant creadoAt,
+        /** Última edición del presupuesto. Null si no se editó desde que se
+         *  generó — el frontend muestra un pill "Editado el …" cuando hay valor. */
+        Instant modificadoAt,
         String clienteNombre,
         String clienteTelefono,
         String clienteEmail,
@@ -20,5 +23,9 @@ public record PresupuestoListItemDTO(
         BigDecimal descuentoGlobalPorcentaje,
         /** Nombre o username del operador que generó el presupuesto. Null en
          *  presupuestos legacy creados antes del multi-usuario. */
-        String creadoPor
+        String creadoPor,
+        /** Si este presupuesto fue transformado en pedido vía "Crear pedido"
+         *  del historial, acá viene el id del pedido. Null = todavía
+         *  pendiente. El frontend muestra "→ Pedido #N" cuando aplica. */
+        Long convertidoEnPedidoId
 ) {}

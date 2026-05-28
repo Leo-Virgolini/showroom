@@ -369,85 +369,150 @@
           </div>
           <!-- fin scan-body — el CTA queda fijo abajo del card -->
 
-          <!-- AGREGAR AL CARRITO -->
-          <div class="flex gap-3 items-center flex-wrap mt-auto pt-2">
-            <label class="text-sm text-muted-color">Cantidad:</label>
-            <p-inputNumber [ngModel]="cantidadInput()" (ngModelChange)="cantidadInput.set($event ?? 1)" [showButtons]="true" [min]="1" [max]="maxCantidad(r.stockTotal)"
-              [disabled]="!productoVendible(r)" inputStyleClass="w-24 sm:w-32 text-center text-lg" />
-            <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large" (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
+          <!-- AGREGAR AL CARRITO — el bloque "cantidad + botón" queda en una
+               banda destacada con tono naranja KT, para que el operador lo
+               distinga claramente como el CTA principal del scan. items-end:
+               como el bloque de cantidad lleva label arriba del input, alinear
+               por la base hace que input y botón queden al mismo nivel
+               visual (sin items-end, el botón se centra contra todo el
+               bloque y queda flotando alto). -->
+          <div class="flex gap-3 items-end flex-wrap mt-auto pt-3 px-3 pb-3 rounded-xl bg-[#FF861C]/5 border border-[#FF861C]/20">
+            <div class="flex flex-col gap-1">
+              <label for="cantidadScanInput" class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1 leading-none">
+                <i class="pi pi-hashtag text-[#FF861C] text-[10px]"></i>
+                Cantidad
+                @if (r.stockTotal != null && r.stockTotal > 0) {
+                  <span class="text-[9px] font-normal text-muted-color normal-case tracking-normal">
+                    (máx {{ r.stockTotal }})
+                  </span>
+                }
+              </label>
+              <p-inputNumber inputId="cantidadScanInput" [ngModel]="cantidadInput()"
+                (ngModelChange)="cantidadInput.set($event ?? 1)"
+                [showButtons]="true" buttonLayout="horizontal" spinnerMode="horizontal"
+                decrementButtonClass="!p-2" incrementButtonClass="!p-2"
+                [min]="1" [max]="maxCantidad(r.stockTotal)"
+                [disabled]="!productoVendible(r)"
+                inputStyleClass="w-20 sm:w-24 text-center text-lg font-bold"
+                ariaLabel="Cantidad de unidades a agregar al carrito" />
+            </div>
+            <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large"
+              (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
           </div>
 
         </div>
         } @else if (resultadosBusqueda().length > 0) {
-        <div class="flex flex-col gap-2 flex-1 min-h-0">
-          <div class="flex items-center justify-between gap-2">
-            <h3 class="text-base font-semibold text-surface-900 dark:text-surface-0 m-0 truncate">
+        <!-- Paleta KT naranja — coherente con el resto de la app. -->
+        <div class="flex flex-col gap-2 flex-1 min-h-0 rounded-lg border border-[#FF861C]/30 bg-[#FF861C]/5 dark:bg-surface-900/20 p-2.5">
+          <div class="flex items-center justify-between gap-2 px-1">
+            <h3 class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 m-0 truncate flex items-center gap-1.5">
+              <i class="pi pi-search text-[#FF861C]"></i>
+              Buscando
               {{ resultadosBusqueda().length }}
               @if (totalResultadosBusqueda() > resultadosBusqueda().length) {
                 de {{ totalResultadosBusqueda() }}
               }
-              resultado{{ totalResultadosBusqueda() === 1 ? '' : 's' }} — elegí uno:
+              resultado{{ totalResultadosBusqueda() === 1 ? '' : 's' }} — elegí cuáles agregar
             </h3>
             <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true" size="small"
               (onClick)="cerrarResultadosBusqueda()"
-              pTooltip="Cerrar resultados" tooltipPosition="left" ariaLabel="Cerrar resultados" />
+              pTooltip="Cerrar búsqueda" tooltipPosition="left" ariaLabel="Cerrar búsqueda" />
           </div>
           <ul class="flex flex-col gap-1 flex-1 overflow-y-auto min-h-0 m-0 p-0 list-none">
             @for (it of resultadosBusqueda(); track it.sku) {
-            <li class="px-3 py-2.5 cursor-pointer rounded-lg border border-surface-200 dark:border-surface-700 hover:border-primary-300 hover:bg-primary-50/40 dark:hover:bg-primary-950/30 transition-colors flex items-center justify-between gap-3"
-                (click)="seleccionarResultado(it.sku)">
-              @if (it.imagenUrl) {
-                <img [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku"
-                  class="w-12 h-12 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 shrink-0"
-                  (error)="onImagenResultadoError(it.sku)" />
-              } @else {
-                <div class="w-12 h-12 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 flex items-center justify-center shrink-0">
-                  <i class="pi pi-image text-base text-muted-color opacity-50"></i>
+            <!-- Toda la fila es clickeable: agrega directo al carrito con la
+                 cantidad del input al lado. La imagen y el input de cantidad
+                 detienen la propagación para no disparar el agregado. Mismo
+                 patrón que /presupuestos. -->
+            <li class="px-3 py-2.5 rounded-lg border border-[#FF861C]/20 bg-white dark:bg-surface-900/40 hover:border-[#FF861C]/50 hover:bg-[#FF861C]/5 dark:hover:bg-surface-800/40 transition-colors flex items-center gap-3 cursor-pointer"
+                role="button"
+                tabindex="0"
+                [attr.aria-label]="'Agregar ' + it.sku + ' al carrito'"
+                [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva"
+                [class.cursor-not-allowed]="it.habilitado === false || !it.pvpKtGastroSinIva"
+                (click)="agregarResultadoAlCarrito(it)"
+                (keydown.enter)="agregarResultadoAlCarrito(it)"
+                (keydown.space)="$event.preventDefault(); agregarResultadoAlCarrito(it)">
+              <div class="flex-1 flex items-center gap-3 text-left min-w-0">
+                @if (it.imagenUrl) {
+                  <img [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku"
+                    class="w-12 h-12 object-contain rounded border border-[#FF861C]/20 bg-white dark:bg-surface-950 shrink-0"
+                    (error)="onImagenResultadoError(it.sku)" />
+                } @else {
+                  <div class="w-12 h-12 rounded border border-dashed border-[#FF861C]/30 bg-[#FF861C]/10 dark:bg-surface-900 flex items-center justify-center shrink-0">
+                    <i class="pi pi-image text-base text-[#FF861C] opacity-70"></i>
+                  </div>
+                }
+                <div class="min-w-0 flex-1">
+                  <!-- SKU pill outline naranja — versión "candidato" del pill
+                       sólido naranja del carrito (donde aparece como elegido). -->
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-primary/50 text-primary font-mono text-[10px] font-bold mb-0.5">
+                    {{ it.sku }}
+                  </span>
+                  <div class="text-sm text-surface-700 dark:text-surface-200 truncate">{{ it.descripcion ?? '—' }}</div>
                 </div>
-              }
-              <div class="min-w-0 flex-1">
-                <div class="font-mono text-sm font-bold text-primary">{{ it.sku }}</div>
-                <div class="text-sm text-surface-700 dark:text-surface-200 truncate">{{ it.descripcion ?? '—' }}</div>
+                <div class="text-right shrink-0 flex flex-col gap-0.5">
+                  @if (it.pvpKtGastroSinIva != null && it.pvpKtGastroSinIva > 0) {
+                  <div class="text-sm font-semibold tabular-nums">
+                    {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
+                  </div>
+                  } @else {
+                  <div class="text-[0.7rem] text-red-600 dark:text-red-400 uppercase font-bold inline-flex items-center justify-end gap-1"
+                    pTooltip="Producto sin precio cargado en DUX" tooltipPosition="left">
+                    <i class="pi pi-dollar text-[0.65rem]"></i>
+                    Sin precio
+                  </div>
+                  }
+                  @if ((it.stockTotal ?? 0) <= 0) {
+                  <div class="text-[0.7rem] text-red-600 dark:text-red-400 uppercase font-bold inline-flex items-center justify-end gap-1"
+                    pTooltip="Producto sin stock disponible en DUX" tooltipPosition="left">
+                    <i class="pi pi-box text-[0.65rem]"></i>
+                    Sin stock
+                  </div>
+                  } @else {
+                  <div class="text-[0.7rem] tabular-nums inline-flex items-center justify-end gap-1"
+                    [class.text-amber-600]="(it.stockTotal ?? 0) <= 5"
+                    [class.dark:text-amber-400]="(it.stockTotal ?? 0) <= 5"
+                    [class.text-emerald-600]="(it.stockTotal ?? 0) > 5"
+                    [class.dark:text-emerald-400]="(it.stockTotal ?? 0) > 5">
+                    <i class="pi pi-box text-[0.65rem]"></i>
+                    Stock: {{ it.stockTotal }}
+                  </div>
+                  }
+                  @if (it.habilitado === false) {
+                  <div class="text-[0.65rem] text-red-600 dark:text-red-400 uppercase font-bold">
+                    Deshabilitado
+                  </div>
+                  }
+                </div>
               </div>
-              <div class="text-right shrink-0 flex flex-col gap-0.5">
-                @if (it.pvpKtGastroSinIva != null && it.pvpKtGastroSinIva > 0) {
-                <div class="text-sm font-semibold tabular-nums">
-                  {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
-                </div>
-                } @else {
-                <div class="text-[0.7rem] text-red-600 dark:text-red-400 uppercase font-bold inline-flex items-center justify-end gap-1"
-                  pTooltip="Producto sin precio cargado en DUX" tooltipPosition="left">
-                  <i class="pi pi-dollar text-[0.65rem]"></i>
-                  Sin precio
-                </div>
-                }
-                @if ((it.stockTotal ?? 0) <= 0) {
-                <div class="text-[0.7rem] text-red-600 dark:text-red-400 uppercase font-bold inline-flex items-center justify-end gap-1"
-                  pTooltip="Producto sin stock disponible en DUX" tooltipPosition="left">
-                  <i class="pi pi-box text-[0.65rem]"></i>
-                  Sin stock
-                </div>
-                } @else {
-                <div class="text-[0.7rem] tabular-nums inline-flex items-center justify-end gap-1"
-                  [class.text-amber-600]="(it.stockTotal ?? 0) <= 5"
-                  [class.dark:text-amber-400]="(it.stockTotal ?? 0) <= 5"
-                  [class.text-emerald-600]="(it.stockTotal ?? 0) > 5"
-                  [class.dark:text-emerald-400]="(it.stockTotal ?? 0) > 5">
-                  <i class="pi pi-box text-[0.65rem]"></i>
-                  Stock: {{ it.stockTotal }}
-                </div>
-                }
-                @if (it.habilitado === false) {
-                <div class="text-[0.65rem] text-red-600 dark:text-red-400 uppercase font-bold">
-                  Deshabilitado
-                </div>
-                }
+              <!-- Input de cantidad con mini-label arriba — comunica claro
+                   qué es ese número (sin depender del tooltip nativo
+                   "Cantidad" que el browser muestra al hover). stopPropagation
+                   evita que los +/- disparen el agregado de la fila. El max
+                   se ata al stock conocido: desde la lista no se permite pedir
+                   más que el disponible (el flujo "forzar sin stock" sigue
+                   habilitado en el scan unitario). -->
+              <div class="shrink-0 flex flex-col items-center gap-0.5"
+                (click)="$event.stopPropagation()">
+                <span class="text-[9px] uppercase tracking-wider font-bold text-primary leading-none">
+                  Cantidad
+                </span>
+                <p-inputNumber [ngModel]="cantidadResultado(it.sku)"
+                  (ngModelChange)="setCantidadResultado(it.sku, $event)"
+                  [min]="1" [max]="cantidadMaximaResultado(it)"
+                  [showButtons]="true" buttonLayout="horizontal"
+                  spinnerMode="horizontal"
+                  decrementButtonClass="!p-1" incrementButtonClass="!p-1"
+                  inputStyleClass="w-12 text-center" [allowEmpty]="false"
+                  [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
+                  ariaLabel="Cantidad de unidades a agregar al carrito" />
               </div>
             </li>
             }
           </ul>
           @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-          <div class="flex justify-center pt-2 border-t border-surface-200 dark:border-surface-700 shrink-0">
+          <div class="flex justify-center pt-2 border-t border-stone-200 dark:border-stone-800 shrink-0">
             <p-button [label]="'Cargar más (' + (totalResultadosBusqueda() - resultadosBusqueda().length) + ' restantes)'"
               icon="pi pi-chevron-down" severity="secondary" [outlined]="true" size="small"
               [loading]="cargandoMasResultados()"

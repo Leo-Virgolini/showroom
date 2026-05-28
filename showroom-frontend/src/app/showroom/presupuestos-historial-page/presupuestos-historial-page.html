@@ -94,7 +94,7 @@
             <th style="width: 7rem" class="text-center">
               <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
             </th>
-            <th style="width: 9rem"></th>
+            <th style="width: 15rem"></th>
           </tr>
         </ng-template>
 
@@ -104,7 +104,17 @@
               {{ p.id }}
             </td>
             <td class="text-sm text-surface-700 dark:text-surface-200">
-              {{ p.creadoAt | date: 'short' : undefined : 'es-AR' }}
+              <div class="flex flex-col leading-tight">
+                <span>{{ p.creadoAt | date: 'short' : undefined : 'es-AR' }}</span>
+                @if (p.modificadoAt) {
+                  <span class="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1 mt-0.5"
+                    [pTooltip]="'Última edición: ' + (p.modificadoAt | date: 'short' : undefined : 'es-AR')"
+                    tooltipPosition="top">
+                    <i class="pi pi-pencil text-[9px]"></i>
+                    Editado {{ p.modificadoAt | date: 'shortDate' : undefined : 'es-AR' }}
+                  </span>
+                }
+              </div>
             </td>
             <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
               {{ p.clienteNombre || '—' }}
@@ -149,6 +159,38 @@
             </td>
             <td>
               <div class="inline-flex gap-1 items-center">
+                @if (p.convertidoEnPedidoId != null) {
+                  <!-- Pill "→ Pedido #N" — el presupuesto ya se transformó en
+                       pedido. Click navega al detalle del pedido en /pedidos. -->
+                  <button type="button"
+                    class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-xs font-semibold hover:bg-emerald-200 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer border-0"
+                    (click)="irAlPedido(p.convertidoEnPedidoId!)"
+                    [pTooltip]="'Ver pedido #' + p.convertidoEnPedidoId + ' en DUX'"
+                    tooltipPosition="left">
+                    <i class="pi pi-check-circle text-[10px]"></i>
+                    Pedido #{{ p.convertidoEnPedidoId }}
+                  </button>
+                } @else {
+                  <!-- Crear pedido en DUX a partir del presupuesto — abre un
+                       dialog con form pre-llenado para completar CUIT,
+                       provincia/localidad, forma de pago. -->
+                  <p-button
+                    [icon]="abriendoCrearPedido().has(p.id) ? 'pi pi-spinner pi-spin' : 'pi pi-cart-arrow-down'"
+                    severity="success" [outlined]="true" size="small" [rounded]="true"
+                    [disabled]="abriendoCrearPedido().has(p.id)"
+                    (onClick)="abrirCrearPedido(p)"
+                    pTooltip="Crear pedido en DUX a partir de este presupuesto"
+                    tooltipPosition="left"
+                    ariaLabel="Crear pedido" />
+                }
+                <!-- Editar: lleva a /presupuestos/editar/:id donde el operador
+                     puede agregar/quitar/modificar productos y datos del cliente.
+                     Al guardar, el backend actualiza in-place y setea modificadoAt. -->
+                <p-button icon="pi pi-pencil"
+                  severity="info" [outlined]="true" size="small" [rounded]="true"
+                  [routerLink]="['/presupuestos/editar', p.id]"
+                  pTooltip="Editar presupuesto" tooltipPosition="left"
+                  ariaLabel="Editar presupuesto" />
                 <!-- SplitButton: el click directo descarga la versión original
                      (con la que se generó); el dropdown ofrece descargar
                      "Versión agregada" o "Versión individual" del mismo
@@ -202,3 +244,156 @@
     </p-card>
   </main>
 </div>
+
+<!-- ============= DIALOG CREAR PEDIDO EN DUX ============= -->
+<p-dialog [(visible)]="mostrarDialogCrearPedido" [modal]="true"
+  [style]="{ width: '95vw', maxWidth: '46rem' }" [breakpoints]="{ '768px': '95vw' }"
+  [draggable]="false" [closable]="!enviandoPedido()">
+  <ng-template #header>
+    <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
+      <i class="pi pi-cart-arrow-down text-[#FF861C]"></i>
+      <span class="font-bold">
+        Crear pedido en DUX
+        @if (presupuestoParaPedido()) {
+          desde Presupuesto #{{ presupuestoParaPedido()!.id }}
+        }
+      </span>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-xs">
+      <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+      <span class="text-surface-700 dark:text-surface-200">
+        Los productos, cantidades, precios y descuentos del presupuesto se mandan
+        tal cual a DUX. Completá los datos extra que pide el pedido (CUIT,
+        dirección, forma de pago).
+      </span>
+    </div>
+
+    <!-- Datos del cliente — pre-llenados editables -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-user text-[#FF861C] text-[10px]"></i> Nombre <span class="text-red-500">*</span>
+        </label>
+        <input pInputText type="text" class="w-full"
+          [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
+          placeholder="Nombre / razón social" />
+      </div>
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> CUIT <span class="text-red-500">*</span>
+        </label>
+        <p-inputMask mask="99-99999999-9" [unmask]="true"
+          [ngModel]="cuitInputValuePedido()" (ngModelChange)="onCuitChangePedido($event)"
+          placeholder="20-12345678-9" class="w-full" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-envelope text-[#FF861C] text-[10px]"></i> Email <span class="text-red-500">*</span>
+        </label>
+        <p-autoComplete [ngModel]="pedidoEmail()" (ngModelChange)="pedidoEmail.set($event ?? '')"
+          [suggestions]="sugerenciasEmailPedido()" (completeMethod)="onCompletarEmailPedido($event)"
+          [forceSelection]="false" [delay]="0"
+          placeholder="cliente@gmail.com"
+          inputStyleClass="w-full" class="w-full" />
+      </div>
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-phone text-[#FF861C] text-[10px]"></i> Teléfono <span class="text-red-500">*</span>
+        </label>
+        <p-inputMask mask="99-99999999" [unmask]="true"
+          [ngModel]="telefonoInputValuePedido()" (ngModelChange)="onTelefonoChangePedido($event)"
+          placeholder="11-12345678" class="w-full" />
+      </div>
+    </div>
+
+    <div>
+      <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+        <i class="pi pi-tag text-[#FF861C] text-[10px]"></i> Rubro <span class="text-red-500">*</span>
+      </label>
+      <p-select [options]="opcionesRubroPedido"
+        optionLabel="label" optionValue="value"
+        [ngModel]="pedidoRubro()" (ngModelChange)="pedidoRubro.set($event)"
+        placeholder="Seleccioná un rubro…" class="w-full"
+        [showClear]="true" appendTo="body" />
+      @if (pedidoRubro() === 'otros') {
+        <input pInputText type="text" class="w-full mt-2"
+          [ngModel]="pedidoRubroOtros()" (ngModelChange)="pedidoRubroOtros.set($event)"
+          placeholder="Escribí el rubro del cliente" maxlength="100" />
+      }
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-map text-[#FF861C] text-[10px]"></i> Provincia
+        </label>
+        <p-select [options]="provinciasPedido()"
+          optionLabel="nombre" optionValue="codigo"
+          [ngModel]="pedidoCodigoProvincia()"
+          (ngModelChange)="cambiarProvinciaPedido($event)"
+          placeholder="Seleccioná…" class="w-full"
+          [showClear]="true" [filter]="true" appendTo="body" />
+      </div>
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-map-marker text-[#FF861C] text-[10px]"></i> Localidad
+          @if (cargandoLocalidadesPedido()) {
+            <p-progressSpinner class="!w-3 !h-3 ml-1" strokeWidth="6" />
+          }
+        </label>
+        <p-select [options]="localidadesPedido()"
+          optionLabel="nombre" optionValue="id"
+          [ngModel]="pedidoIdLocalidad()" (ngModelChange)="pedidoIdLocalidad.set($event)"
+          placeholder="Seleccioná provincia primero" class="w-full"
+          [showClear]="true" [filter]="true" appendTo="body"
+          [disabled]="!pedidoCodigoProvincia() || cargandoLocalidadesPedido()" />
+      </div>
+    </div>
+
+    <div>
+      <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+        <i class="pi pi-home text-[#FF861C] text-[10px]"></i> Domicilio / lugar de entrega
+      </label>
+      <input pInputText type="text" class="w-full"
+        [ngModel]="pedidoDomicilio()" (ngModelChange)="pedidoDomicilio.set($event)"
+        placeholder="Calle y número" />
+    </div>
+
+    <div>
+      <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+        <i class="pi pi-credit-card text-[#FF861C] text-[10px]"></i> Forma de pago
+      </label>
+      <p-select [options]="formasPagoActivas()"
+        optionLabel="nombre" optionValue="id"
+        [ngModel]="pedidoFormaPagoId()" (ngModelChange)="pedidoFormaPagoId.set($event)"
+        placeholder="Sin financiación" class="w-full"
+        [showClear]="true" appendTo="body" />
+    </div>
+
+    <div>
+      <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+        <i class="pi pi-comment text-[#FF861C] text-[10px]"></i> Observaciones
+      </label>
+      <textarea pTextarea rows="2" class="w-full"
+        [ngModel]="pedidoObservaciones()" (ngModelChange)="pedidoObservaciones.set($event)"
+        placeholder="Notas para el comprobante en DUX"></textarea>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true"
+      [disabled]="enviandoPedido()"
+      (onClick)="mostrarDialogCrearPedido.set(false)" />
+    <p-button label="Crear en DUX" icon="pi pi-cart-arrow-down"
+      severity="success"
+      [disabled]="!puedeCrearPedido() || enviandoPedido()"
+      [loading]="enviandoPedido()"
+      (onClick)="confirmarCrearPedido()" />
+  </ng-template>
+</p-dialog>

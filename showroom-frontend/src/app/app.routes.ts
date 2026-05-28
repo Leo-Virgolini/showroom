@@ -46,11 +46,40 @@ export const routes: Routes = [
       import('./showroom/presupuestos-page/presupuestos-page').then((m) => m.PresupuestosPage),
   },
   {
+    // Mismo componente que `/presupuestos`, pero arranca cargando el detalle
+    // del presupuesto :id y guarda con PUT en lugar de POST.
+    path: 'presupuestos/editar/:id',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/presupuestos-page/presupuestos-page').then((m) => m.PresupuestosPage),
+  },
+  {
     path: 'presupuestos/historial',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./showroom/presupuestos-historial-page/presupuestos-historial-page')
         .then((m) => m.PresupuestosHistorialPage),
+  },
+  // Cotizador de financiación — pantalla "rápida": un monto base + formas
+  // de pago + PDF. Sin productos, paralelo al presupuestador completo.
+  {
+    path: 'cotizador',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/cotizador-page/cotizador-page').then((m) => m.CotizadorPage),
+  },
+  {
+    path: 'cotizador/editar/:id',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/cotizador-page/cotizador-page').then((m) => m.CotizadorPage),
+  },
+  {
+    path: 'cotizador/historial',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./showroom/cotizador-historial-page/cotizador-historial-page')
+        .then((m) => m.CotizadorHistorialPage),
   },
   {
     // Ruta nueva (mayo 2026): ahora la página unifica clientes de presupuestos

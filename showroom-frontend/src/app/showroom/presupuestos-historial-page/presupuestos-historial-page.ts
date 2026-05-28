@@ -10,25 +10,50 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { Subject, debounceTime } from 'rxjs';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Subject, Subscription, debounceTime } from 'rxjs';
 import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
+import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
+import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { InputMaskModule } from 'primeng/inputmask';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { SelectModule } from 'primeng/select';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
+import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { PresupuestoListItem } from '../models';
+import {
+  CrearPedidoRequest,
+  FormaPago,
+  Localidad,
+  PresupuestoListItem,
+  Provincia,
+} from '../models';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
+
+const DOMINIOS_EMAIL_SUGERIDOS = [
+  'gmail.com',
+  'hotmail.com',
+  'outlook.com',
+  'yahoo.com.ar',
+  'live.com',
+  'icloud.com',
+];
+
+/** Placeholder fijo que DUX recibe como apellido/razón social — la operadora
+ *  lo asocia con el cliente real al editar el comprobante usando el CUIT.
+ *  Coherente con el flujo de pedidos de showroom-page. */
+const APELLIDO_RAZON_SOCIAL = 'PEDIDO SHOWROOM';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -48,15 +73,20 @@ import { UserChip } from '../user-chip/user-chip';
     CommonModule,
     FormsModule,
     RouterLink,
+    AutoCompleteModule,
     ButtonModule,
     CardModule,
     DatePickerModule,
+    DialogModule,
     IconFieldModule,
     InputIconModule,
+    InputMaskModule,
     InputTextModule,
     ProgressSpinnerModule,
+    SelectModule,
     SplitButtonModule,
     TableModule,
+    TextareaModule,
     ToolbarModule,
     TooltipModule,
     MoreMenu,
@@ -71,6 +101,7 @@ export class PresupuestosHistorialPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
 
   /** Pantalla ≥ 1024px — usado para mostrar/ocultar labels de botones. */
   readonly screenLg = signal(
@@ -336,5 +367,360 @@ export class PresupuestosHistorialPage {
     this.busqueda.set('');
     this.desde.set(null);
     this.hasta.set(null);
+  }
+
+  // ============================================================
+  // Dialog "Crear pedido en DUX" desde una fila del historial
+  //
+  // El operador eligió un presupuesto y quiere transformarlo en pedido.
+  // El dialog pre-llena cliente con los datos del presupuesto y pide los
+  // campos extra que DUX requiere para crear el comprobante: CUIT,
+  // domicilio, provincia, localidad, forma de pago.
+  //
+  // Al confirmar: carga los items del presupuesto, arma el payload del
+  // pedido (precio CON IVA + descuentoPorcentaje por línea — replica lo
+  // del presupuesto), POSTea a /pedido-dux, y si DUX devuelve OK marca el
+  // presupuesto como `convertidoEnPedidoId=<pedidoId>` para que el listado
+  // muestre el pill "→ Pedido #N" en lugar del botón.
+  // ============================================================
+  readonly mostrarDialogCrearPedido = signal(false);
+  /** Presupuesto sobre el que se está creando el pedido. Null cuando el
+   *  dialog está cerrado. */
+  readonly presupuestoParaPedido = signal<PresupuestoListItem | null>(null);
+  readonly cargandoDetallePresupuesto = signal(false);
+  readonly enviandoPedido = signal(false);
+
+  // Datos del cliente — pre-llenados desde el presupuesto, editables.
+  readonly pedidoNombre = signal('');
+  readonly pedidoTelefono = signal('');
+  readonly pedidoEmail = signal('');
+  readonly pedidoCuit = signal<number | null>(null);
+  readonly pedidoRubro = signal<string | null>(null);
+  readonly pedidoRubroOtros = signal('');
+  readonly pedidoDomicilio = signal('');
+  readonly pedidoCodigoProvincia = signal<string | null>(null);
+  readonly pedidoIdLocalidad = signal<string | null>(null);
+  readonly pedidoObservaciones = signal('');
+  readonly pedidoFormaPagoId = signal<number | null>(null);
+  readonly sugerenciasEmailPedido = signal<string[]>([]);
+
+  /** Items del presupuesto cargados al abrir el dialog — se usan al armar
+   *  el payload del POST /pedido-dux. Se mantienen en memoria sin mostrar:
+   *  el dialog no permite editarlos (si querés cambiarlos, edita el
+   *  presupuesto y volvé a transformar). */
+  private itemsDelPresupuesto: {
+    sku: string;
+    cantidad: number;
+    precioConIva: number;
+    descuentoPorcentaje: number | null;
+  }[] = [];
+
+  // Catálogos para los selects del dialog. Se cargan lazy al abrir.
+  readonly provinciasPedido = signal<Provincia[]>([]);
+  readonly localidadesPedido = signal<Localidad[]>([]);
+  readonly cargandoLocalidadesPedido = signal(false);
+  readonly formasPagoActivas = signal<FormaPago[]>([]);
+  private localidadesSub: Subscription | null = null;
+
+  readonly opcionesRubroPedido: { label: string; value: string }[] = [
+    { label: 'Bar', value: 'bar' },
+    { label: 'Restaurant', value: 'restaurant' },
+    { label: 'Catering', value: 'catering' },
+    { label: 'Cafetería', value: 'cafeteria' },
+    { label: 'Panadería', value: 'panaderia' },
+    { label: 'Pastelería', value: 'pasteleria' },
+    { label: 'Otros…', value: 'otros' },
+  ];
+
+  /** Lista IDs de presupuestos para los que se está cargando el detalle —
+   *  permite mostrar spinner solo en la fila que se está abriendo. */
+  readonly abriendoCrearPedido = signal<Set<number>>(new Set());
+
+  /** Click en "Crear pedido" de una fila — carga el detalle del presupuesto
+   *  (necesario para tomar los items) y abre el dialog con datos
+   *  pre-llenados. Si el presupuesto ya está convertido, no debería estar
+   *  habilitado el botón, pero igual hacemos guard. */
+  abrirCrearPedido(p: PresupuestoListItem): void {
+    if (p.convertidoEnPedidoId != null) return;
+    if (this.abriendoCrearPedido().has(p.id)) return;
+
+    this.abriendoCrearPedido.update((s) => new Set([...s, p.id]));
+    this.api.obtenerDetallePresupuestoComercial(p.id).subscribe({
+      next: (det) => {
+        this.removerAbriendoPedido(p.id);
+        // Pre-llenar form con datos del presupuesto (editables).
+        this.presupuestoParaPedido.set(p);
+        this.pedidoNombre.set(det.clienteNombre ?? '');
+        this.pedidoTelefono.set(det.clienteTelefono ?? '');
+        this.pedidoEmail.set(det.clienteEmail ?? '');
+        this.pedidoCuit.set(null); // no viene del presupuesto, el operador lo carga
+        this.pedidoObservaciones.set(det.observaciones ?? '');
+        // Rubro: mapear igual que en CotizadorPage.
+        const rubroGuardado = det.rubro ?? null;
+        if (!rubroGuardado) {
+          this.pedidoRubro.set(null);
+          this.pedidoRubroOtros.set('');
+        } else if (this.opcionesRubroPedido.some((o) => o.value === rubroGuardado)) {
+          this.pedidoRubro.set(rubroGuardado);
+          this.pedidoRubroOtros.set('');
+        } else {
+          this.pedidoRubro.set('otros');
+          this.pedidoRubroOtros.set(rubroGuardado);
+        }
+        // Defaults que no vienen del presupuesto.
+        this.pedidoDomicilio.set('');
+        this.pedidoCodigoProvincia.set(null);
+        this.pedidoIdLocalidad.set(null);
+        this.localidadesPedido.set([]);
+        this.pedidoFormaPagoId.set(null);
+
+        // Items: el shape persistido es {sku, descripcion, cantidad,
+        // precioConIva, porcIva, descuentoPorcentaje}. Para el pedido DUX
+        // necesitamos {sku, cantidad, precioUnitario (con IVA),
+        // descuentoPorcentaje}.
+        this.itemsDelPresupuesto = det.items.map((it) => ({
+          sku: it.sku,
+          cantidad: it.cantidad,
+          precioConIva: it.precioConIva,
+          descuentoPorcentaje: it.descuentoPorcentaje,
+        }));
+
+        // Cargar catálogos en paralelo si no están.
+        this.cargarProvinciasSiHaceFalta();
+        this.cargarFormasPagoSiHaceFalta();
+        this.mostrarDialogCrearPedido.set(true);
+      },
+      error: (err) => {
+        this.removerAbriendoPedido(p.id);
+        toastError(this.toast, 'Crear pedido', err,
+          'No se pudo cargar el detalle del presupuesto.');
+      },
+    });
+  }
+
+  private removerAbriendoPedido(id: number): void {
+    this.abriendoCrearPedido.update((s) => {
+      const ns = new Set(s);
+      ns.delete(id);
+      return ns;
+    });
+  }
+
+  private cargarProvinciasSiHaceFalta(): void {
+    if (this.provinciasPedido().length > 0) return;
+    this.api.obtenerProvincias().subscribe({
+      next: (lista) => this.provinciasPedido.set(lista),
+      error: (err) =>
+        toastError(this.toast, 'Provincias', err, 'No se pudieron cargar las provincias'),
+    });
+  }
+
+  private cargarFormasPagoSiHaceFalta(): void {
+    if (this.formasPagoActivas().length > 0) {
+      // Default primera forma activa.
+      if (this.pedidoFormaPagoId() == null) {
+        this.pedidoFormaPagoId.set(this.formasPagoActivas()[0].id);
+      }
+      return;
+    }
+    this.api.listarFormasPagoActivas().subscribe({
+      next: (lista) => {
+        this.formasPagoActivas.set(lista);
+        if (lista.length > 0 && this.pedidoFormaPagoId() == null) {
+          this.pedidoFormaPagoId.set(lista[0].id);
+        }
+      },
+      error: (err) =>
+        console.warn('[formas-pago] no se pudieron cargar:', err),
+    });
+  }
+
+  cambiarProvinciaPedido(codigo: string | null): void {
+    this.localidadesSub?.unsubscribe();
+    this.localidadesSub = null;
+    this.pedidoCodigoProvincia.set(codigo);
+    this.pedidoIdLocalidad.set(null);
+    this.localidadesPedido.set([]);
+    if (!codigo) {
+      this.cargandoLocalidadesPedido.set(false);
+      return;
+    }
+    this.cargandoLocalidadesPedido.set(true);
+    this.localidadesSub = this.api.obtenerLocalidades(codigo).subscribe({
+      next: (lista) => {
+        this.cargandoLocalidadesPedido.set(false);
+        this.localidadesPedido.set(lista);
+        this.localidadesSub = null;
+      },
+      error: (err) => {
+        this.cargandoLocalidadesPedido.set(false);
+        this.localidadesSub = null;
+        toastError(this.toast, 'Localidades', err,
+          'No se pudieron cargar las localidades');
+      },
+    });
+  }
+
+  onCuitChangePedido(value: string | null | undefined): void {
+    const digits = (value ?? '').replace(/\D/g, '');
+    this.pedidoCuit.set(digits ? Number(digits) : null);
+  }
+
+  onTelefonoChangePedido(value: string | null | undefined): void {
+    this.pedidoTelefono.set(value ?? '');
+  }
+
+  readonly cuitInputValuePedido = computed(() => {
+    const n = this.pedidoCuit();
+    return n != null ? String(n) : '';
+  });
+
+  readonly telefonoInputValuePedido = computed(() => {
+    const t = this.pedidoTelefono();
+    return t ? t.replace(/\D/g, '') : '';
+  });
+
+  /** Validación mínima para habilitar el botón "Crear en DUX". */
+  readonly puedeCrearPedido = computed(() => {
+    const cuit = this.pedidoCuit();
+    const cuitOk = cuit != null && String(cuit).length === 11;
+    const emailOk = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(this.pedidoEmail().trim());
+    const nombreOk = this.pedidoNombre().trim().length > 0;
+    const telOk = this.pedidoTelefono().trim().length > 0;
+    const rubro = this.pedidoRubro();
+    const rubroOk = !!rubro && (rubro !== 'otros' || this.pedidoRubroOtros().trim().length > 0);
+    return cuitOk && emailOk && nombreOk && telOk && rubroOk
+      && this.itemsDelPresupuesto.length > 0;
+  });
+
+  private rubroFinalPedido(): string {
+    const r = this.pedidoRubro();
+    if (r === 'otros') return this.pedidoRubroOtros().trim();
+    return r ?? '';
+  }
+
+  confirmarCrearPedido(): void {
+    if (!this.puedeCrearPedido()) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Faltan datos',
+        detail: 'CUIT 11 dígitos, nombre, teléfono, email y rubro son obligatorios.',
+        life: 4000,
+      });
+      return;
+    }
+    const p = this.presupuestoParaPedido();
+    if (!p) return;
+
+    const cuit = this.pedidoCuit()!;
+    const req: CrearPedidoRequest = {
+      apellidoRazonSocial: APELLIDO_RAZON_SOCIAL,
+      nombre: this.pedidoNombre().trim(),
+      categoriaFiscal: 'CONSUMIDOR_FINAL',
+      tipoDoc: 'CUIT',
+      nroDoc: cuit,
+      telefono: this.pedidoTelefono().trim(),
+      email: this.pedidoEmail().trim(),
+      rubro: this.rubroFinalPedido(),
+      domicilio: this.pedidoDomicilio().trim() || undefined,
+      codigoProvincia: this.pedidoCodigoProvincia() ?? undefined,
+      idLocalidad: this.pedidoIdLocalidad() ?? undefined,
+      observaciones: this.pedidoObservaciones().trim() || undefined,
+      formaPagoId: this.pedidoFormaPagoId() ?? undefined,
+      items: this.itemsDelPresupuesto.map((it) => ({
+        sku: it.sku,
+        cantidad: it.cantidad,
+        // DUX espera precio CON IVA (la lista KT GASTRO está configurada
+        // como "incluye IVA"). Mismo comportamiento que showroom-page.
+        precioUnitario: it.precioConIva,
+        descuentoPorcentaje: it.descuentoPorcentaje ?? undefined,
+      })),
+    };
+
+    this.enviandoPedido.set(true);
+    this.api.crearPedido(req).subscribe({
+      next: (res) => {
+        this.enviandoPedido.set(false);
+        if (res.estado === 'ENVIADO') {
+          // Marcar el presupuesto como convertido y mostrar success.
+          this.api.marcarPresupuestoConvertido(p.id, res.pedidoLocalId).subscribe({
+            next: () => {
+              this.toast.add({
+                severity: 'success',
+                summary: 'Pedido cargado en DUX',
+                detail: `Presupuesto #${p.id} → Pedido #${res.pedidoLocalId}`,
+                life: 6000,
+              });
+              this.mostrarDialogCrearPedido.set(false);
+              // Update optimista del listado.
+              this.presupuestos.set(this.presupuestos().map((x) =>
+                x.id === p.id
+                  ? { ...x, convertidoEnPedidoId: res.pedidoLocalId }
+                  : x));
+            },
+            error: (err) => {
+              // El pedido se creó en DUX pero no pudimos marcar el
+              // presupuesto. No es bloqueante — el operador puede volver
+              // a apretar "Crear pedido" igual; si lo hace, se va a
+              // duplicar el pedido. Mejor avisamos.
+              console.warn('[marcar-convertido] falló:', err);
+              this.toast.add({
+                severity: 'warn',
+                summary: 'Pedido creado pero no quedó vinculado',
+                detail: `Pedido #${res.pedidoLocalId} creado OK en DUX. ` +
+                  `No se pudo marcar el presupuesto #${p.id} como convertido — ` +
+                  `ya NO lo vuelvas a transformar para no duplicar.`,
+                life: 12000,
+              });
+              this.mostrarDialogCrearPedido.set(false);
+            },
+          });
+        } else {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Pedido pendiente',
+            detail: res.mensaje,
+            life: 8000,
+          });
+        }
+      },
+      error: (err) => {
+        this.enviandoPedido.set(false);
+        toastError(this.toast, 'Crear pedido', err, 'Error al enviar el pedido a DUX.');
+      },
+    });
+  }
+
+  onCompletarEmailPedido(event: AutoCompleteCompleteEvent): void {
+    const query = (event.query ?? '').trim();
+    if (!query) {
+      this.sugerenciasEmailPedido.set([]);
+      return;
+    }
+    const at = query.indexOf('@');
+    if (at < 0) {
+      this.sugerenciasEmailPedido.set(DOMINIOS_EMAIL_SUGERIDOS.map((d) => `${query}@${d}`));
+      return;
+    }
+    const localPart = query.substring(0, at);
+    const dominioPart = query.substring(at + 1).toLowerCase();
+    if (!localPart) {
+      this.sugerenciasEmailPedido.set([]);
+      return;
+    }
+    if (dominioPart.includes('.') && !DOMINIOS_EMAIL_SUGERIDOS.some((d) => d.startsWith(dominioPart))) {
+      this.sugerenciasEmailPedido.set([]);
+      return;
+    }
+    this.sugerenciasEmailPedido.set(
+      DOMINIOS_EMAIL_SUGERIDOS
+        .filter((d) => d.startsWith(dominioPart))
+        .map((d) => `${localPart}@${d}`),
+    );
+  }
+
+  /** Botón "Ver pedido" — navega a /pedidos con el id como filtro. */
+  irAlPedido(pedidoId: number): void {
+    this.router.navigate(['/pedidos'], { queryParams: { id: pedidoId } });
   }
 }

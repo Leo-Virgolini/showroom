@@ -625,6 +625,9 @@ export interface EnviarPresupuestoRequest {
 export interface PresupuestoListItem {
   id: number;
   creadoAt: string;
+  /** Última edición del presupuesto. Null si no se editó desde que se generó —
+   *  el historial muestra un pill "Editado" cuando hay valor. */
+  modificadoAt: string | null;
   clienteNombre: string | null;
   clienteTelefono: string | null;
   clienteEmail: string | null;
@@ -634,6 +637,35 @@ export interface PresupuestoListItem {
   /** Nombre o username del operador que generó el presupuesto. Null para
    *  presupuestos legacy anteriores al multi-usuario. */
   creadoPor: string | null;
+  /** Id del pedido DUX si el operador transformó el presupuesto en pedido.
+   *  Null = pendiente. El historial muestra pill "→ Pedido #N" cuando aplica. */
+  convertidoEnPedidoId: number | null;
+}
+
+/** Snapshot completo de un presupuesto persistido — el frontend lo consume
+ *  desde {@code GET /presupuesto-comercial/{id}/detalle} para reconstruir el
+ *  estado de la pantalla en modo edición. Los items y formas se rehidratan
+ *  del JSON persistido. */
+export interface PresupuestoDetalle {
+  id: number;
+  creadoAt: string;
+  modificadoAt: string | null;
+  clienteNombre: string | null;
+  clienteTelefono: string | null;
+  clienteEmail: string | null;
+  rubro: string | null;
+  observaciones: string | null;
+  descuentoGlobalPorcentaje: number | null;
+  cotizacionIndividual: boolean | null;
+  items: {
+    sku: string;
+    descripcion: string | null;
+    cantidad: number;
+    precioConIva: number;
+    porcIva: number | null;
+    descuentoPorcentaje: number | null;
+  }[];
+  formasPago: PresupuestoFormaPagoSnapshot[];
 }
 
 export interface PresupuestoListPage {
@@ -694,6 +726,88 @@ export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';
 export interface PresupuestoEmailEvent {
   estado: PresupuestoEmailEstado;
   presupuestoId: number;
+  email: string;
+  error?: string | null;
+}
+
+// =====================================================
+// Cotización financiera (pantalla /cotizador)
+//
+// Variante "rápida" del presupuesto: sin productos, solo un monto base
+// (sin IVA) y la lista de formas de pago calculadas. Para responder
+// "¿cuánto sale $X en cuotas?".
+// =====================================================
+
+/** Payload del POST /cotizacion-financiera/preview y /enviar. */
+export interface GenerarCotizacionRequest {
+  clienteNombre?: string | null;
+  clienteTelefono?: string | null;
+  clienteEmail?: string | null;
+  rubro?: string | null;
+  observaciones?: string | null;
+  /** Monto base SIN IVA. Las formas con `aplicaIva=true` lo multiplican
+   *  por (1 + porcIva/100) antes de aplicar el recargo financiero. */
+  montoBaseSinIva: number;
+  /** % de IVA — default 21 si null. */
+  porcIva?: number | null;
+  formasPago: PresupuestoFormaPagoSnapshot[];
+}
+
+export interface EnviarCotizacionRequest {
+  email: string;
+  cotizacion: GenerarCotizacionRequest;
+}
+
+/** Ítem del listado del historial /cotizador/historial. */
+export interface CotizacionListItem {
+  id: number;
+  creadoAt: string;
+  modificadoAt: string | null;
+  clienteNombre: string | null;
+  clienteTelefono: string | null;
+  clienteEmail: string | null;
+  rubro: string | null;
+  montoBaseSinIva: number | null;
+  creadoPor: string | null;
+}
+
+export interface CotizacionListPage {
+  items: CotizacionListItem[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface ListarCotizacionesParams {
+  id?: number;
+  q?: string;
+  desde?: string;
+  hasta?: string;
+  page?: number;
+  size?: number;
+}
+
+/** Snapshot completo de una cotización persistida. Para pre-llenar la
+ *  pantalla /cotizador/editar/:id. */
+export interface CotizacionDetalle {
+  id: number;
+  creadoAt: string;
+  modificadoAt: string | null;
+  clienteNombre: string | null;
+  clienteTelefono: string | null;
+  clienteEmail: string | null;
+  rubro: string | null;
+  observaciones: string | null;
+  montoBaseSinIva: number;
+  porcIva: number | null;
+  formasPago: PresupuestoFormaPagoSnapshot[];
+}
+
+export type CotizacionEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';
+
+export interface CotizacionEmailEvent {
+  estado: CotizacionEmailEstado;
+  cotizacionId: number;
   email: string;
   error?: string | null;
 }
