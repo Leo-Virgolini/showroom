@@ -55,21 +55,39 @@ $kt-amarillo: #a2ab00;
   }
 }
 
-// Card "Detalle del presupuesto" — borde izquierdo verde KT marcado para
-// distinguirla visualmente de la card de búsqueda (paleta sky). El operador
-// debe ver de un vistazo: "azul = explorando, verde = elegido y firme".
+// Card "Detalle del presupuesto" — diferenciación visual FUERTE con la
+// card de búsqueda. La búsqueda es crema-naranja KT default; el detalle
+// usa un fondo verde claro sólido. Usamos !important porque la card lleva
+// también la clase `.kt-card` (definida arriba en este mismo archivo) que
+// asigna `background: white` con la misma especificidad — sin !important
+// el navegador resolvía por orden y se veía blanco/crema naranja.
 :host ::ng-deep .kt-card-detalle {
   .p-card {
-    border-left: 4px solid $kt-verde;
+    border: 1.5px solid $kt-verde !important;
+    border-left: 6px solid $kt-verde !important;
+    // Fondo verde claro sólido (`#dcfce7` ≈ Tailwind green-100). Se nota
+    // claramente como un panel distinto del crema naranja de la card de
+    // búsqueda. Sólido (no gradient) para que el contraste sea uniforme
+    // en toda la altura del detalle.
+    background: #dcfce7 !important;
+
+    &:hover {
+      border-color: $kt-verde !important;
+      box-shadow: 0 2px 6px -2px rgba($kt-verde, 0.30) !important;
+    }
   }
 
   .p-card-title {
     background: linear-gradient(
       to right,
-      rgba($kt-verde, 0.08),
-      transparent 60%
-    );
-    border-bottom-color: rgba($kt-verde, 0.15);
+      #bbf7d0,
+      #dcfce7 70%
+    ) !important;
+    border-bottom: 1px solid rgba($kt-verde, 0.5) !important;
+  }
+
+  .p-card-body {
+    background: transparent !important;
   }
 }
 
@@ -191,6 +209,55 @@ $kt-amarillo: #a2ab00;
 // =====================================================
 :host ::ng-deep .descuento-input {
   width: 4.5rem;
+}
+
+// =====================================================
+// SelectButton "Modo de cotización" (Agregado / Individual)
+// Tema KT: borde naranja sutil, fondo blanco, seleccionado se rellena
+// naranja KT con texto blanco. Lo usamos en /presupuestos para elegir
+// el formato del PDF.
+// =====================================================
+:host ::ng-deep .kt-modo-cotizacion {
+  .p-togglebutton,
+  .p-selectbutton-button {
+    background: white;
+    border: 1px solid rgba($kt-naranja, 0.35);
+    color: $kt-marron;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.85rem;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+
+    > i {
+      color: $kt-naranja;
+    }
+
+    &:hover {
+      background: rgba($kt-naranja, 0.08);
+      border-color: rgba($kt-naranja, 0.55);
+    }
+
+    &.p-togglebutton-checked,
+    &.p-selectbutton-button-selected,
+    &[aria-pressed='true'] {
+      background: linear-gradient(to right, $kt-naranja, #FF9A3F);
+      color: white;
+      border-color: $kt-naranja;
+      box-shadow: 0 2px 4px rgba($kt-naranja, 0.25);
+
+      > i {
+        color: white;
+      }
+    }
+  }
+}
+
+:host-context(.dark) ::ng-deep .kt-modo-cotizacion {
+  .p-togglebutton,
+  .p-selectbutton-button {
+    background: var(--p-surface-900);
+    color: var(--p-surface-0);
+  }
 }
 
 // =====================================================

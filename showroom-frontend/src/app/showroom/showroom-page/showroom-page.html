@@ -371,12 +371,11 @@
 
           <!-- AGREGAR AL CARRITO — el bloque "cantidad + botón" queda en una
                banda destacada con tono naranja KT, para que el operador lo
-               distinga claramente como el CTA principal del scan. items-end:
-               como el bloque de cantidad lleva label arriba del input, alinear
-               por la base hace que input y botón queden al mismo nivel
-               visual (sin items-end, el botón se centra contra todo el
-               bloque y queda flotando alto). -->
-          <div class="flex gap-3 items-end flex-wrap mt-auto pt-3 px-3 pb-3 rounded-xl bg-[#FF861C]/5 border border-[#FF861C]/20">
+               distinga claramente como el CTA principal del scan. items-center:
+               alinea verticalmente el botón con el centro del bloque
+               label+input — queda más balanceado que items-end (que pegaba
+               el botón a la base del input dejando un hueco arriba). -->
+          <div class="flex gap-3 items-center flex-wrap mt-auto pt-3 px-3 pb-3 rounded-xl bg-[#FF861C]/5 border border-[#FF861C]/20">
             <div class="flex flex-col gap-1">
               <label for="cantidadScanInput" class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1 leading-none">
                 <i class="pi pi-hashtag text-[#FF861C] text-[10px]"></i>
@@ -420,19 +419,12 @@
           </div>
           <ul class="flex flex-col gap-1 flex-1 overflow-y-auto min-h-0 m-0 p-0 list-none">
             @for (it of resultadosBusqueda(); track it.sku) {
-            <!-- Toda la fila es clickeable: agrega directo al carrito con la
-                 cantidad del input al lado. La imagen y el input de cantidad
-                 detienen la propagación para no disparar el agregado. Mismo
-                 patrón que /presupuestos. -->
-            <li class="px-3 py-2.5 rounded-lg border border-[#FF861C]/20 bg-white dark:bg-surface-900/40 hover:border-[#FF861C]/50 hover:bg-[#FF861C]/5 dark:hover:bg-surface-800/40 transition-colors flex items-center gap-3 cursor-pointer"
-                role="button"
-                tabindex="0"
-                [attr.aria-label]="'Agregar ' + it.sku + ' al carrito'"
-                [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva"
-                [class.cursor-not-allowed]="it.habilitado === false || !it.pvpKtGastroSinIva"
-                (click)="agregarResultadoAlCarrito(it)"
-                (keydown.enter)="agregarResultadoAlCarrito(it)"
-                (keydown.space)="$event.preventDefault(); agregarResultadoAlCarrito(it)">
+            <!-- Fila NO-clickeable. Para agregar al carrito, el operador usa
+                 el botón verde "Agregar" del final. La lista queda abierta
+                 tras agregar para que pueda sumar varios productos seguidos
+                 sin volver a buscar. -->
+            <li class="px-3 py-2.5 rounded-lg border border-[#FF861C]/20 bg-white dark:bg-surface-900/40 hover:border-[#FF861C]/50 hover:bg-[#FF861C]/5 dark:hover:bg-surface-800/40 transition-colors flex items-center gap-3"
+                [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva">
               <div class="flex-1 flex items-center gap-3 text-left min-w-0">
                 @if (it.imagenUrl) {
                   <img [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku"
@@ -486,27 +478,35 @@
                   }
                 </div>
               </div>
-              <!-- Input de cantidad con mini-label arriba — comunica claro
-                   qué es ese número (sin depender del tooltip nativo
-                   "Cantidad" que el browser muestra al hover). stopPropagation
-                   evita que los +/- disparen el agregado de la fila. El max
-                   se ata al stock conocido: desde la lista no se permite pedir
-                   más que el disponible (el flujo "forzar sin stock" sigue
-                   habilitado en el scan unitario). -->
-              <div class="shrink-0 flex flex-col items-center gap-0.5"
-                (click)="$event.stopPropagation()">
-                <span class="text-[9px] uppercase tracking-wider font-bold text-primary leading-none">
-                  Cantidad
-                </span>
-                <p-inputNumber [ngModel]="cantidadResultado(it.sku)"
-                  (ngModelChange)="setCantidadResultado(it.sku, $event)"
-                  [min]="1" [max]="cantidadMaximaResultado(it)"
-                  [showButtons]="true" buttonLayout="horizontal"
-                  spinnerMode="horizontal"
-                  decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                  inputStyleClass="w-12 text-center" [allowEmpty]="false"
+              <!-- Cantidad + botón "Agregar al carrito" inline. items-end
+                   alinea el botón con la base del input — queda al centro
+                   visual del input ignorando el label corto arriba. Antes
+                   usábamos items-center y centraba contra el bloque entero,
+                   dejando el botón demasiado arriba (a la altura del label).
+                   La lista permanece abierta tras agregar para sumar varios
+                   productos seguidos. -->
+              <div class="shrink-0 flex items-end gap-2">
+                <div class="flex flex-col items-center gap-0.5">
+                  <span class="text-[9px] uppercase tracking-wider font-bold text-primary leading-none">
+                    Cantidad
+                  </span>
+                  <p-inputNumber [ngModel]="cantidadResultado(it.sku)"
+                    (ngModelChange)="setCantidadResultado(it.sku, $event)"
+                    [min]="1" [max]="cantidadMaximaResultado(it)"
+                    [showButtons]="true" buttonLayout="horizontal"
+                    spinnerMode="horizontal"
+                    decrementButtonClass="!p-1" incrementButtonClass="!p-1"
+                    inputStyleClass="w-20 text-center" [allowEmpty]="false"
+                    [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
+                    ariaLabel="Cantidad de unidades a agregar al carrito" />
+                </div>
+                <p-button icon="pi pi-cart-plus"
+                  severity="success" size="small"
                   [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
-                  ariaLabel="Cantidad de unidades a agregar al carrito" />
+                  (onClick)="agregarResultadoAlCarrito(it)"
+                  pTooltip="Agregar al carrito (la lista se queda abierta)"
+                  tooltipPosition="top"
+                  ariaLabel="Agregar al carrito" />
               </div>
             </li>
             }
@@ -638,7 +638,7 @@
             </div>
 
             <p-inputNumber class="shrink-0" [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.sku, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
-              [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-10 text-center text-sm" />
+              [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-20 text-center text-sm" />
 
             <div class="text-right leading-tight shrink-0 min-w-[5.5rem]">
               <div class="tabular-nums font-semibold text-sm">

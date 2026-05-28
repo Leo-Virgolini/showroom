@@ -890,6 +890,16 @@ export class ShowroomPage implements AfterViewInit {
     const refocus = (e: MouseEvent) => {
       if (this.mostrarConfirmacion()) return;
       const target = e.target as HTMLElement | null;
+      // Click dentro de un toast (incluido el botón X de cerrar) → refocusear
+      // el scan input. El operador acaba de descartar una notificación y
+      // necesita poder seguir escaneando inmediatamente sin tener que
+      // clickear el input. Este check va ANTES del exclusión general de
+      // botones, sino el click en la X cae como "click en button" y no
+      // refocusea.
+      if (target?.closest('.p-toast')) {
+        this.focusInput();
+        return;
+      }
       if (
         target?.closest(
           'input, textarea, select, button, [role="button"], a, label, ' +
@@ -1245,7 +1255,12 @@ export class ShowroomPage implements AfterViewInit {
    *  pantalla de tiles. Útil cuando el operador ya sabe qué cantidad necesita
    *  y no quiere tener que seleccionar + ver tiles + agregar. Si el producto
    *  no tiene stock se manda `forzar=true` (mismo comportamiento que
-   *  `agregarAlCarrito()` después de un scan). */
+   *  `agregarAlCarrito()` después de un scan).
+   *
+   *  <p>La lista de resultados queda ABIERTA tras agregar — el operador puede
+   *  sumar varios productos del mismo set sin volver a buscar. La cantidad
+   *  del sku recién agregado se resetea para que un siguiente click no
+   *  repita la cantidad anterior. */
   agregarResultadoAlCarrito(it: CatalogoItem): void {
     if (it.habilitado === false) {
       this.toast.add({
@@ -1268,6 +1283,14 @@ export class ShowroomPage implements AfterViewInit {
     this.api.agregarItemCarrito(it.sku, cant, forzar).subscribe({
       next: (res) => {
         this.carrito.set(res.carrito.items);
+        // Reset de la cantidad del sku para evitar duplicar la cantidad
+        // anterior si el operador vuelve a apretar "Agregar" para el mismo
+        // producto sin tocar el input.
+        this.cantidadesResultados.update((m) => {
+          const nm = { ...m };
+          delete nm[it.sku];
+          return nm;
+        });
         const itemToast = [{
           sku: it.sku,
           descripcion: it.descripcion ?? null,

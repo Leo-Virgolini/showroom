@@ -253,16 +253,19 @@ public class CotizacionFinancieraPdfGenerator {
     // Banner grande con el monto base
     // =====================================================
     private void agregarBannerMonto(Document doc, GenerarCotizacionRequestDTO datos) {
+        // Banner del monto compactado (padding 10 vs 14, font 26 vs 30) —
+        // gana espacio vertical para que las 8 cards + nota entren en una
+        // sola hoja A4.
         Div banner = new Div()
-                .setMarginTop(10)
+                .setMarginTop(8)
                 .setBackgroundColor(new DeviceRgb(254, 243, 226)) // crema claro KT
                 .setBorder(new SolidBorder(KT_NARANJA, 1.5f))
-                .setBorderRadius(new BorderRadius(12f))
-                .setPadding(14);
+                .setBorderRadius(new BorderRadius(10f))
+                .setPadding(10);
 
         banner.add(new Paragraph("MONTO A COTIZAR")
                 .simulateBold()
-                .setFontSize(11)
+                .setFontSize(10)
                 .setCharacterSpacing(1.5f)
                 .setFontColor(KT_MARRON)
                 .setTextAlignment(TextAlignment.CENTER)
@@ -272,7 +275,7 @@ public class CotizacionFinancieraPdfGenerator {
                 ? BigDecimal.ZERO : datos.montoBaseSinIva();
         banner.add(new Paragraph(PESO_FMT.format(monto))
                 .simulateBold()
-                .setFontSize(30)
+                .setFontSize(26)
                 .setFontColor(KT_NARANJA)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginTop(2)
@@ -302,8 +305,8 @@ public class CotizacionFinancieraPdfGenerator {
                 .setFontSize(10)
                 .setCharacterSpacing(1.5f)
                 .setFontColor(KT_MARRON)
-                .setMarginTop(14)
-                .setMarginBottom(6)
+                .setMarginTop(10)
+                .setMarginBottom(4)
                 .setMargin(0));
 
         int idxMejor = calcularIndiceMejorPrecio(formas);
@@ -317,9 +320,12 @@ public class CotizacionFinancieraPdfGenerator {
             Color borde = BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length];
             boolean esMejor = i == idxMejor;
 
+            // Padding reducido del wrapper (3 vs 4 antes) — junto con la
+            // compresión interna de la card, libera espacio vertical para
+            // que la nota final entre en la misma página A4.
             Cell wrapper = new Cell()
                     .setBorder(Border.NO_BORDER)
-                    .setPadding(4);
+                    .setPadding(3);
             wrapper.add(construirCardForma(f, borde, esMejor));
             grid.addCell(wrapper);
         }
@@ -348,28 +354,39 @@ public class CotizacionFinancieraPdfGenerator {
                                    Color borde,
                                    boolean esMejor) {
         // Card base. bg verde tenue + borde verde grueso cuando es mejor.
+        // Padding total más compacto para que las 8 cards + la nota entren
+        // en una sola hoja A4.
         Div card = new Div()
                 .setBackgroundColor(esMejor ? new DeviceRgb(240, 253, 244) : ColorConstants.WHITE)
-                .setBorder(esMejor ? new SolidBorder(KT_VERDE, 1.8f) : new SolidBorder(GRIS_LINEA, 1f))
-                .setBorderRadius(new BorderRadius(10f))
+                .setBorder(esMejor ? new SolidBorder(KT_VERDE, 1.5f) : new SolidBorder(GRIS_LINEA, 1f))
+                .setBorderRadius(new BorderRadius(8f))
                 .setPaddingTop(0)
-                .setPaddingBottom(12)
+                .setPaddingBottom(8)
                 .setPaddingLeft(0)
                 .setPaddingRight(0);
 
-        // Top accent bar — verde si mejor precio, sino el color rotativo.
+        // Top accent bar — siempre con el color rotativo único de la forma
+        // (sincronizado con .color-1..10 del frontend). Antes pisábamos por
+        // verde KT cuando era mejor precio, pero eso eliminaba la identidad
+        // de color de esa forma. La distinción de "mejor precio" ya está
+        // dada por: borde verde grueso de la card + badge "✓ MEJOR PRECIO"
+        // + precio en verde, así que la barra puede mantener su color
+        // único. Bordes superiores redondeados para seguir el contorno
+        // curvo de la card.
         Div barra = new Div()
-                .setBackgroundColor(esMejor ? KT_VERDE : borde)
-                .setHeight(esMejor ? 5 : 4);
+                .setBackgroundColor(borde)
+                .setHeight(4)
+                .setBorderTopLeftRadius(new BorderRadius(7f))
+                .setBorderTopRightRadius(new BorderRadius(7f));
         card.add(barra);
 
         // Header table: nombre a la izq, chips/badge a la der.
         Table header = new Table(UnitValue.createPercentArray(new float[]{1.4f, 1f}))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER)
-                .setMarginTop(8)
-                .setMarginLeft(10)
-                .setMarginRight(10);
+                .setMarginTop(6)
+                .setMarginLeft(8)
+                .setMarginRight(8);
 
         // Col 1: nombre.
         Cell celdaNombre = new Cell()
@@ -378,18 +395,27 @@ public class CotizacionFinancieraPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.TOP);
         celdaNombre.add(new Paragraph(safe(f.nombre(), "—"))
                 .simulateBold()
-                .setFontSize(11)
+                .setFontSize(10.5f)
                 .setFontColor(KT_MARRON)
                 .setMargin(0));
         header.addCell(celdaNombre);
 
-        // Col 2: contenedor de chips apilados a la derecha.
+        // Col 2: contenedor de chips apilados a la derecha. SIEMPRE reservamos
+        // el espacio del badge "MEJOR PRECIO" con un placeholder transparente
+        // del mismo tamaño cuando la card NO es la mejor. Sin esto, la card
+        // "mejor" sería más alta que las otras y el grid se ve desalineado.
         Cell celdaChips = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPadding(0)
                 .setVerticalAlignment(VerticalAlignment.TOP);
         if (esMejor) {
             celdaChips.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, KT_VERDE)
+                    .setMarginBottom(3));
+        } else {
+            // Placeholder invisible para reservar la misma altura que el badge:
+            // mini-tabla de mismo width/padding pero con bg transparente y
+            // texto invisible (color = white sobre fondo white).
+            celdaChips.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, ColorConstants.WHITE)
                     .setMarginBottom(3));
         }
         boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
@@ -406,55 +432,41 @@ public class CotizacionFinancieraPdfGenerator {
         BigDecimal precio = f.precioFinal() == null ? BigDecimal.ZERO : f.precioFinal();
         card.add(new Paragraph(simboloMoneda + PESO_FMT.format(precio))
                 .simulateBold()
-                .setFontSize(22)
+                .setFontSize(19)
                 .setFontColor(esMejor ? KT_VERDE : KT_MARRON)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
-                .setMarginTop(10)
-                .setMarginLeft(10)
-                .setMarginRight(10));
+                .setMarginTop(6)
+                .setMarginLeft(8)
+                .setMarginRight(8));
 
         // Línea de detalle: "N cuotas de $valor" si aplica, o descuento por
         // contado si la forma trae recargo negativo. Centrado debajo del precio.
         Integer cuotas = f.cantidadCuotas();
         boolean hayCuotas = cuotas != null && cuotas > 1;
+        String detalleTexto;
+        boolean detalleEsDescuento = false;
         if (hayCuotas) {
             BigDecimal valorCuota = precio.divide(BigDecimal.valueOf(cuotas),
                     2, RoundingMode.HALF_UP);
-            card.add(new Paragraph(cuotas + " cuotas de " + PESO_FMT.format(valorCuota))
-                    .setFontSize(9)
-                    .setFontColor(GRIS_MEDIO)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMargin(0)
-                    .setMarginTop(3)
-                    .setMarginLeft(10)
-                    .setMarginRight(10));
+            detalleTexto = cuotas + " cuotas de " + PESO_FMT.format(valorCuota);
         } else if (f.recargoPorcentaje() != null && f.recargoPorcentaje().signum() < 0) {
-            card.add(new Paragraph(f.recargoPorcentaje().abs().stripTrailingZeros().toPlainString()
-                    + "% de descuento")
-                    .simulateBold()
-                    .setFontSize(9)
-                    .setFontColor(KT_VERDE)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMargin(0)
-                    .setMarginTop(3)
-                    .setMarginLeft(10)
-                    .setMarginRight(10));
+            detalleTexto = f.recargoPorcentaje().abs().stripTrailingZeros().toPlainString()
+                    + "% de descuento";
+            detalleEsDescuento = true;
         } else {
-            // Placeholder discreto cuando la forma no tiene cuotas ni descuento
-            // (caso típico: "Efectivo, 1 cuota, sin recargo"). Mantiene ritmo
-            // visual entre cards — sin esto la card queda con un hueco asimétrico
-            // bajo el precio y las cards vecinas con detalle "N cuotas de $X"
-            // se ven desbalanceadas.
-            card.add(new Paragraph("pago único")
-                    .setFontSize(9)
-                    .setFontColor(GRIS_MEDIO)
-                    .setTextAlignment(TextAlignment.CENTER)
-                    .setMargin(0)
-                    .setMarginTop(3)
-                    .setMarginLeft(10)
-                    .setMarginRight(10));
+            detalleTexto = "pago único";
         }
+        Paragraph detalle = new Paragraph(detalleTexto)
+                .setFontSize(8.5f)
+                .setFontColor(detalleEsDescuento ? KT_VERDE : GRIS_MEDIO)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0)
+                .setMarginTop(3)
+                .setMarginLeft(8)
+                .setMarginRight(8);
+        if (detalleEsDescuento) detalle.simulateBold();
+        card.add(detalle);
 
         return card;
     }
@@ -535,15 +547,20 @@ public class CotizacionFinancieraPdfGenerator {
     }
 
     private void agregarNotas(Document doc) {
+        // Nota final con setKeepTogether para que iText NO la corte entre
+        // páginas — si no entra completa en la actual, mueve el bloque
+        // entero a la siguiente. Es chica (2 líneas en A4), así que casi
+        // siempre cabe junto a las cards.
         Paragraph nota = new Paragraph()
                 .add(new com.itextpdf.layout.element.Text("Nota: ").simulateBold())
                 .add("Los precios pueden variar sin previo aviso. La cotización es referencial " +
                         "y se confirma al momento de la operación. Las formas con cuotas pueden " +
                         "estar sujetas a aprobación crediticia.")
-                .setFontSize(8)
+                .setFontSize(7.5f)
                 .setFontColor(GRIS_MEDIO)
-                .setMarginTop(12)
-                .setMargin(0);
+                .setMarginTop(6)
+                .setMargin(0)
+                .setKeepTogether(true);
         doc.add(nota);
     }
 

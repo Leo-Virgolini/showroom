@@ -664,16 +664,40 @@ public class PresupuestoComercialService {
 
     /**
      * Marca este presupuesto como "convertido en pedido" — registra el id
-     * del pedido DUX que se creó a partir del presupuesto. Idempotente: si
-     * ya estaba marcado con otro pedidoId, lo PISA (caso: el operador
-     * canceló el pedido en DUX y volvió a crear uno nuevo desde el mismo
-     * presupuesto). El historial muestra el pill "→ Pedido #N".
+     * del pedido DUX que se creó a partir del presupuesto. El historial
+     * muestra el pill "→ Pedido #N".
+     *
+     * <p>Validaciones:
+     * <ul>
+     *   <li>El {@code pedidoId} debe existir en la tabla de pedidos. Sin esto
+     *       un curl con un id inventado dejaría el pill apuntando a un
+     *       pedido fantasma y el deep-link mostraría la lista vacía.</li>
+     *   <li>Si ya está marcado con el MISMO {@code pedidoId}, no-op (re-llamada
+     *       idempotente, ej. retry del frontend tras un timeout).</li>
+     *   <li>Si ya está marcado con OTRO {@code pedidoId}, falla con 409
+     *       Conflict — el operador tiene que desbloquear manualmente desde
+     *       la BD para evitar perder el rastro del pedido original. Caso
+     *       real solo se da en una race entre dos operadores con el dialog
+     *       abierto a la vez sobre el mismo presupuesto.</li>
+     * </ul>
      */
     @Transactional
     public void marcarConvertido(Long presupuestoId, Long pedidoId) {
         PresupuestoComercial p = obtener(presupuestoId);
-        p.setConvertidoEnPedidoId(pedidoId);
-        repository.save(p);
+        if (!pedidoRepository.existsById(pedidoId)) {
+            throw new ar.com.leo.showroom.common.exception.ConflictException(
+                    "El pedido " + pedidoId + " no existe — no se puede vincular al presupuesto " + presupuestoId);
+        }
+        Long existente = p.getConvertidoEnPedidoId();
+        if (existente != null && !existente.equals(pedidoId)) {
+            throw new ar.com.leo.showroom.common.exception.ConflictException(
+                    "El presupuesto " + presupuestoId + " ya fue convertido en el pedido " + existente
+                    + ". Para vincularlo a otro, hay que limpiar manualmente la marca desde la BD.");
+        }
+        if (existente == null) {
+            p.setConvertidoEnPedidoId(pedidoId);
+            repository.save(p);
+        }
     }
 
     public Optional<String> motivoEmailNoConfigurado() {

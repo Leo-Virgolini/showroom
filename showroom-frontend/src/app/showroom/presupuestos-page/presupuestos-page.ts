@@ -28,7 +28,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
-import { ToggleSwitchModule } from 'primeng/toggleswitch';
+import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
@@ -101,7 +101,7 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
     SelectModule,
     TableModule,
     TextareaModule,
-    ToggleSwitchModule,
+    SelectButtonModule,
     ToolbarModule,
     TooltipModule,
     MoreMenu,
@@ -208,6 +208,27 @@ export class PresupuestosPage implements AfterViewInit {
   // (tabla detalle + total + formas globales sobre el total agregado).
   // ------------------------------------------------------------
   readonly cotizacionIndividual = signal(false);
+
+  /** Opciones del selector "Modo de cotización" — controla el formato del
+   *  PDF. {@code agregado} = tabla detalle + total + formas globales; en
+   *  {@code individual} = 1 hoja por producto con sus propias formas. */
+  readonly modoCotizacionOpciones = [
+    { label: 'Agregado', value: 'agregado', icon: 'pi pi-list' },
+    { label: 'Individual', value: 'individual', icon: 'pi pi-file-export' },
+  ];
+
+  /** Value bindeable al p-selectButton — string en lugar del boolean
+   *  interno de `cotizacionIndividual` para que las opciones sean
+   *  semánticas y no "true/false". */
+  modoCotizacionValue(): 'agregado' | 'individual' {
+    return this.cotizacionIndividual() ? 'individual' : 'agregado';
+  }
+
+  setModoCotizacion(value: 'agregado' | 'individual' | null): void {
+    // El selectButton no permite deselección porque le seteamos
+    // [allowEmpty]="false", pero defensive si llega null lo dejamos en agregado.
+    this.cotizacionIndividual.set(value === 'individual');
+  }
 
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
@@ -418,6 +439,22 @@ export class PresupuestosPage implements AfterViewInit {
           });
         }
       });
+
+    // Refocus al scan input cuando el operador descarta un toast (click en
+    // la X). Mismo patrón que showroom-page: sin esto, el foco queda en el
+    // botón del toast y la pistola QR no escanea hasta clickear el input.
+    // Solo en desktop (pointer fino) — en tablets el auto-refocus abriría
+    // el teclado virtual con cada toque.
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+    const refocusToast = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest('.p-toast')) {
+        this.focusInput();
+      }
+    };
+    document.addEventListener('click', refocusToast);
+    this.destroyRef.onDestroy(() => document.removeEventListener('click', refocusToast));
   }
 
   /** Carga el detalle de un presupuesto guardado y popula todas las signals
@@ -480,10 +517,18 @@ export class PresupuestosPage implements AfterViewInit {
         this.cargandoEdicion.set(false);
         this.focusInput();
 
-        // Refresh on-demand para traer stock + imagen + precios actuales. Si
-        // falla, queda con los datos del JSON.
+        // Lookup contra el cache local (no toca DUX) para traer imagen,
+        // stock, descripción y flag habilitado. Antes usábamos `refreshStock`
+        // pero eso pega a DUX por cada item, es lento y en producción el
+        // rate-limit suele tirar errores parciales — el operador veía los
+        // items sin imagen y "stock no sincronizado" aunque los productos
+        // sí estaban en el catálogo. El lookupBulk es instantáneo y no
+        // falla por DUX. Los precios con/sin IVA y porcIva los dejamos del
+        // JSON persistido — son los del momento del presupuesto y NO
+        // queremos pisarlos con precios actualizados (sino editar un
+        // presupuesto viejo cambiaría los precios al guardar).
         if (skus.length > 0) {
-          this.api.refreshStock(skus).subscribe({
+          this.api.lookupBulk(skus).subscribe({
             next: (frescos) => {
               const porSku = new Map(frescos.map((f) => [f.sku, f]));
               this.items.set(
@@ -493,19 +538,20 @@ export class PresupuestosPage implements AfterViewInit {
                   return {
                     ...it,
                     descripcion: f.descripcion ?? it.descripcion,
-                    pvpKtGastroConIva: f.pvpKtGastroConIva ?? it.pvpKtGastroConIva,
-                    pvpKtGastroSinIva: f.pvpKtGastroSinIva ?? it.pvpKtGastroSinIva,
-                    porcIva: f.porcIva ?? it.porcIva,
                     stockTotal: f.stockTotal,
                     habilitado: f.habilitado,
                     imagenUrl: f.imagenUrl,
-                    sincronizadoAt: f.sincronizadoAt,
+                    // Sincronizado: usamos el momento actual del lookup
+                    // como indicador de "datos del catálogo cargados", aunque
+                    // técnicamente el cache puede ser viejo. El operador
+                    // refresca el catálogo desde /showroom si lo necesita.
+                    sincronizadoAt: new Date().toISOString(),
                   };
                 }),
               );
               this.itemsTick.update((v) => v + 1);
             },
-            error: (err) => console.warn('[editar] refresh stock falló:', err),
+            error: (err) => console.warn('[editar] lookup falló:', err),
           });
         }
       },
@@ -632,9 +678,13 @@ export class PresupuestosPage implements AfterViewInit {
    *  `/scan/{sku}` para traer todos los datos (precios c/IVA + s/IVA, stock,
    *  imagen) y lo agregamos al detalle. Acepta `cantidad` opcional para que
    *  el botón "Agregar" inline de cada fila pueda mandar varias unidades de
-   *  una sola vez. */
+   *  una sola vez.
+   *
+   *  <p>La lista de resultados queda ABIERTA tras agregar — el operador
+   *  puede sumar varios productos del mismo set de resultados sin tener que
+   *  volver a buscar. La cantidad del item recién agregado se resetea a 1
+   *  para que un siguiente click no duplique la cantidad anterior. */
   seleccionarResultado(sku: string, cantidad: number = 1): void {
-    this.resultadosBusqueda.set([]);
     this.cargandoScan.set(true);
     const seq = ++this.scanSeq;
     const cant = Number.isFinite(cantidad) && cantidad > 0 ? Math.floor(cantidad) : 1;
@@ -646,6 +696,14 @@ export class PresupuestosPage implements AfterViewInit {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
         this.agregarItem(res, cant);
+        // Reset de la cantidad del sku recién agregado — sin esto, si el
+        // operador apreta "Agregar" 3 veces con cantidad=5, agregaría 5
+        // primero y luego cada click pondría 5 más (el input no se limpia).
+        this.cantidadesResultados.update((m) => {
+          const nm = { ...m };
+          delete nm[sku];
+          return nm;
+        });
         this.focusInput();
       },
       error: (err) => {

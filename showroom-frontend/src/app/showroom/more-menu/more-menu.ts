@@ -43,24 +43,48 @@ export class MoreMenu {
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
 
-  /** Estructura del menú — fuente única para toda la app. Si en el futuro
-   *  se agregan nuevas pantallas, solo se modifica acá. */
+  /** Estructura del menú — fuente única para toda la app. Cada item lleva
+   *  el color de la página destino (mismo color que el bg-{color}-50 del
+   *  body de esa página), aplicado tanto al ícono como al texto via
+   *  {@code iconClass} y {@code styleClass} respectivamente — así el
+   *  operador asocia visualmente "el item amber lleva a la pantalla
+   *  amber" sin tener que leer cada label. */
   readonly items: MenuItem[] = [
     { label: 'Herramientas', items: [
-      { label: 'Armar presupuesto', icon: 'pi pi-file-edit', routerLink: '/presupuestos' },
-      { label: 'Cotizador de financiación', icon: 'pi pi-calculator', routerLink: '/cotizador' },
-      { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags', routerLink: '/etiquetas' },
+      { label: 'Armar presupuesto', icon: 'pi pi-file-edit',
+        iconClass: 'text-amber-700', styleClass: 'kt-menu-item-amber',
+        routerLink: '/presupuestos' },
+      { label: 'Cotizador de financiación', icon: 'pi pi-calculator',
+        iconClass: 'text-teal-700', styleClass: 'kt-menu-item-teal',
+        routerLink: '/cotizador' },
+      { label: 'Imprimir etiquetas QR', icon: 'pi pi-tags',
+        iconClass: 'text-violet-700', styleClass: 'kt-menu-item-violet',
+        routerLink: '/etiquetas' },
     ]},
     { label: 'Consultas', items: [
-      { label: 'Pedidos', icon: 'pi pi-receipt', routerLink: '/pedidos' },
-      { label: 'Historial de presupuestos', icon: 'pi pi-file', routerLink: '/presupuestos/historial' },
-      { label: 'Historial de cotizaciones', icon: 'pi pi-file-o', routerLink: '/cotizador/historial' },
-      { label: 'Clientes', icon: 'pi pi-users', routerLink: '/clientes' },
-      { label: 'Productos', icon: 'pi pi-box', routerLink: '/productos' },
-      { label: 'Historial de atenciones', icon: 'pi pi-history', routerLink: '/historial' },
+      { label: 'Pedidos', icon: 'pi pi-receipt',
+        iconClass: 'text-sky-700', styleClass: 'kt-menu-item-sky',
+        routerLink: '/pedidos' },
+      { label: 'Historial de presupuestos', icon: 'pi pi-file',
+        iconClass: 'text-amber-700', styleClass: 'kt-menu-item-amber',
+        routerLink: '/presupuestos/historial' },
+      { label: 'Historial de cotizaciones', icon: 'pi pi-file-o',
+        iconClass: 'text-teal-700', styleClass: 'kt-menu-item-teal',
+        routerLink: '/cotizador/historial' },
+      { label: 'Clientes', icon: 'pi pi-users',
+        iconClass: 'text-rose-700', styleClass: 'kt-menu-item-rose',
+        routerLink: '/clientes' },
+      { label: 'Productos', icon: 'pi pi-box',
+        iconClass: 'text-emerald-700', styleClass: 'kt-menu-item-emerald',
+        routerLink: '/productos' },
+      { label: 'Historial de atenciones', icon: 'pi pi-history',
+        iconClass: 'text-indigo-700', styleClass: 'kt-menu-item-indigo',
+        routerLink: '/historial' },
     ]},
     { label: 'Administración', items: [
-      { label: 'Configuración', icon: 'pi pi-cog', routerLink: '/configuracion' },
+      { label: 'Configuración', icon: 'pi pi-cog',
+        iconClass: 'text-slate-700', styleClass: 'kt-menu-item-slate',
+        routerLink: '/configuracion' },
     ]},
   ];
 }

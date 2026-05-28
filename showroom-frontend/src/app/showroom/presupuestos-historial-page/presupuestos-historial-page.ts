@@ -50,10 +50,11 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
   'icloud.com',
 ];
 
-/** Placeholder fijo que DUX recibe como apellido/razón social — la operadora
- *  lo asocia con el cliente real al editar el comprobante usando el CUIT.
- *  Coherente con el flujo de pedidos de showroom-page. */
-const APELLIDO_RAZON_SOCIAL = 'PEDIDO SHOWROOM';
+/** Placeholder fijo que DUX recibe como apellido/razón social cuando el
+ *  pedido se crea a partir de un presupuesto. Distinto del placeholder del
+ *  flujo de scan/carrito ("PEDIDO SHOWROOM") para que la operadora distinga
+ *  el origen del comprobante en DUX y reemplace por el cliente real al editar. */
+const APELLIDO_RAZON_SOCIAL = 'PRESUPUESTO';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -405,15 +406,54 @@ export class PresupuestosHistorialPage {
   readonly sugerenciasEmailPedido = signal<string[]>([]);
 
   /** Items del presupuesto cargados al abrir el dialog — se usan al armar
-   *  el payload del POST /pedido-dux. Se mantienen en memoria sin mostrar:
-   *  el dialog no permite editarlos (si querés cambiarlos, edita el
-   *  presupuesto y volvé a transformar). */
-  private itemsDelPresupuesto: {
+   *  el payload del POST /pedido-dux + para calcular el total por forma de
+   *  pago en el select. Signal (no var privada) para que los computed que
+   *  derivan totales reaccionen al cambiar de presupuesto. */
+  readonly itemsDelPresupuesto = signal<{
     sku: string;
     cantidad: number;
     precioConIva: number;
+    porcIva: number | null;
     descuentoPorcentaje: number | null;
-  }[] = [];
+  }[]>([]);
+
+  /** Subtotal del presupuesto CON IVA — suma de (precioConIva × cantidad ×
+   *  (1 - desc/100)) por cada ítem. Es la base que las formas con
+   *  `aplicaIva=true` usan para calcular el precio final. */
+  readonly subtotalConIvaPedido = computed(() =>
+    this.itemsDelPresupuesto().reduce((acc, it) => {
+      const factor = 1 - ((it.descuentoPorcentaje ?? 0) / 100);
+      return acc + it.precioConIva * it.cantidad * factor;
+    }, 0),
+  );
+
+  /** Subtotal SIN IVA — divide cada línea por (1 + porcIva/100). Cada item
+   *  puede tener su propio IVA (21 / 10.5 / 27), por eso lo dividimos por
+   *  línea y no al final con un IVA promedio. */
+  readonly subtotalSinIvaPedido = computed(() =>
+    this.itemsDelPresupuesto().reduce((acc, it) => {
+      const factor = 1 - ((it.descuentoPorcentaje ?? 0) / 100);
+      const divisor = 1 + ((it.porcIva ?? 21) / 100);
+      return acc + (it.precioConIva / divisor) * it.cantidad * factor;
+    }, 0),
+  );
+
+  /** Calcula el precio final que paga el cliente con una forma de pago dada.
+   *  Misma fórmula que el presupuestador / cotizador:
+   *  {@code base / (1 - recargo/100)}, donde base es con-IVA o sin-IVA
+   *  según {@code aplicaIva} de la forma. */
+  totalParaFormaPago(forma: FormaPago): number {
+    const recargo = (forma.recargoPorcentaje ?? 0) / 100;
+    const aplicaIva = forma.aplicaIva ?? true;
+    const base = aplicaIva ? this.subtotalConIvaPedido() : this.subtotalSinIvaPedido();
+    return base / (1 - recargo);
+  }
+
+  /** Hardcoded — DUX exige estos campos y son siempre los mismos para todo
+   *  pedido del showroom. Se exponen en el dialog como inputs deshabilitados
+   *  para que el operador vea exactamente qué se manda a DUX. */
+  readonly apellidoRazonSocialFijo = APELLIDO_RAZON_SOCIAL;
+  readonly categoriaFiscalFija = 'CONSUMIDOR_FINAL';
 
   // Catálogos para los selects del dialog. Se cargan lazy al abrir.
   readonly provinciasPedido = signal<Provincia[]>([]);
@@ -478,12 +518,16 @@ export class PresupuestosHistorialPage {
         // precioConIva, porcIva, descuentoPorcentaje}. Para el pedido DUX
         // necesitamos {sku, cantidad, precioUnitario (con IVA),
         // descuentoPorcentaje}.
-        this.itemsDelPresupuesto = det.items.map((it) => ({
+        this.itemsDelPresupuesto.set(det.items.map((it) => ({
           sku: it.sku,
           cantidad: it.cantidad,
           precioConIva: it.precioConIva,
+          // porcIva se usa para calcular el subtotal sin IVA en
+          // `subtotalSinIvaPedido` (necesario para las formas con
+          // `aplicaIva=false`). Default 21 si el item no lo trae.
+          porcIva: it.porcIva,
           descuentoPorcentaje: it.descuentoPorcentaje,
-        }));
+        })));
 
         // Cargar catálogos en paralelo si no están.
         this.cargarProvinciasSiHaceFalta();
@@ -590,7 +634,7 @@ export class PresupuestosHistorialPage {
     const rubro = this.pedidoRubro();
     const rubroOk = !!rubro && (rubro !== 'otros' || this.pedidoRubroOtros().trim().length > 0);
     return cuitOk && emailOk && nombreOk && telOk && rubroOk
-      && this.itemsDelPresupuesto.length > 0;
+      && this.itemsDelPresupuesto().length > 0;
   });
 
   private rubroFinalPedido(): string {
@@ -627,7 +671,7 @@ export class PresupuestosHistorialPage {
       idLocalidad: this.pedidoIdLocalidad() ?? undefined,
       observaciones: this.pedidoObservaciones().trim() || undefined,
       formaPagoId: this.pedidoFormaPagoId() ?? undefined,
-      items: this.itemsDelPresupuesto.map((it) => ({
+      items: this.itemsDelPresupuesto().map((it) => ({
         sku: it.sku,
         cantidad: it.cantidad,
         // DUX espera precio CON IVA (la lista KT GASTRO está configurada
@@ -642,6 +686,21 @@ export class PresupuestosHistorialPage {
       next: (res) => {
         this.enviandoPedido.set(false);
         if (res.estado === 'ENVIADO') {
+          // Defensive: si por algún motivo el backend devolvió ENVIADO sin
+          // pedidoLocalId, no podemos vincular el presupuesto. Avisamos
+          // y dejamos al operador resolver (al recargar el listado, el
+          // backend ya tiene el pedido pero el vínculo nunca se hizo).
+          if (res.pedidoLocalId == null) {
+            this.toast.add({
+              severity: 'warn',
+              summary: 'Pedido creado pero sin id',
+              detail: `Pedido enviado a DUX OK pero no recibimos pedidoLocalId. ` +
+                `Marca manualmente el presupuesto #${p.id} desde la base.`,
+              life: 10000,
+            });
+            this.mostrarDialogCrearPedido.set(false);
+            return;
+          }
           // Marcar el presupuesto como convertido y mostrar success.
           this.api.marcarPresupuestoConvertido(p.id, res.pedidoLocalId).subscribe({
             next: () => {
@@ -722,5 +781,15 @@ export class PresupuestosHistorialPage {
   /** Botón "Ver pedido" — navega a /pedidos con el id como filtro. */
   irAlPedido(pedidoId: number): void {
     this.router.navigate(['/pedidos'], { queryParams: { id: pedidoId } });
+  }
+
+  /** Cleanup al cerrar el dialog: cancela cualquier carga de localidades en
+   *  vuelo. Sin esto, si el operador cierra el dialog mientras se cargan,
+   *  la suscripción sigue viva y el next setea {@code localidadesPedido}
+   *  con datos viejos al reabrir rápido el dialog para otro presupuesto. */
+  onCerrarDialogCrearPedido(): void {
+    this.localidadesSub?.unsubscribe();
+    this.localidadesSub = null;
+    this.cargandoLocalidadesPedido.set(false);
   }
 }

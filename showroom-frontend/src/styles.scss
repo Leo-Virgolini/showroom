@@ -376,6 +376,34 @@ textarea,
   --kt-menu-hover-pct: 22%;
 }
 
+// =====================================================
+// Items coloreados del más-menú: cada destino tiene un color asignado
+// (mismo que el bg-{color}-50 del body de su pantalla). El ícono toma
+// ese color y el hover del item se ilumina con un fondo del mismo
+// matiz — el operador asocia "el item teal lleva a la pantalla teal"
+// sin tener que leer cada label. Aplicado vía `styleClass` del MenuItem.
+// =====================================================
+.kt-menu-extras.p-menu {
+  @mixin kt-menu-color($icon, $hover-bg, $hover-icon) {
+    .p-menu-item-link {
+      .p-menu-item-icon { color: $icon; }
+      &:hover {
+        background: $hover-bg;
+        .p-menu-item-icon { color: $hover-icon; }
+      }
+    }
+  }
+
+  .kt-menu-item-amber   { @include kt-menu-color(#b45309, #fef3c7, #92400e); }
+  .kt-menu-item-teal    { @include kt-menu-color(#0f766e, #ccfbf1, #115e59); }
+  .kt-menu-item-violet  { @include kt-menu-color(#6d28d9, #ede9fe, #5b21b6); }
+  .kt-menu-item-sky     { @include kt-menu-color(#0369a1, #e0f2fe, #075985); }
+  .kt-menu-item-rose    { @include kt-menu-color(#be123c, #ffe4e6, #9f1239); }
+  .kt-menu-item-emerald { @include kt-menu-color(#047857, #d1fae5, #065f46); }
+  .kt-menu-item-indigo  { @include kt-menu-color(#4338ca, #e0e7ff, #3730a3); }
+  .kt-menu-item-slate   { @include kt-menu-color(#475569, #f1f5f9, #334155); }
+}
+
 // p-overlayBadge no soporta la prop badgeSize (la doc aclara que sólo aplica al
 // p-badge standalone). Achicamos vía CSS vars del badge interno renderizado.
 .kt-badge-xs .p-badge {

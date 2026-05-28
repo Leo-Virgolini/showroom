@@ -1,7 +1,7 @@
-<div class="flex flex-col min-h-screen bg-orange-50/60 dark:bg-surface-950">
+<div class="flex flex-col min-h-screen bg-amber-50/40 dark:bg-surface-950">
   <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
 
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
+  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-amber-100/80 dark:!bg-surface-900">
     <ng-template #start>
       <div class="flex items-center gap-2 sm:gap-3">
         <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
@@ -248,7 +248,8 @@
 <!-- ============= DIALOG CREAR PEDIDO EN DUX ============= -->
 <p-dialog [(visible)]="mostrarDialogCrearPedido" [modal]="true"
   [style]="{ width: '95vw', maxWidth: '46rem' }" [breakpoints]="{ '768px': '95vw' }"
-  [draggable]="false" [closable]="!enviandoPedido()">
+  [draggable]="false" [closable]="!enviandoPedido()"
+  (onHide)="onCerrarDialogCrearPedido()">
   <ng-template #header>
     <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
       <i class="pi pi-cart-arrow-down text-[#FF861C]"></i>
@@ -269,6 +270,29 @@
         tal cual a DUX. Completá los datos extra que pide el pedido (CUIT,
         dirección, forma de pago).
       </span>
+    </div>
+
+    <!-- Campos hardcoded que DUX exige y que NO son editables — los
+         mostramos como inputs deshabilitados para que el operador vea
+         exactamente qué se manda al comprobante. Sin esto, parecía que
+         el sistema "ocultaba" información sensible del pedido. -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 rounded-lg bg-surface-50 dark:bg-surface-800/40 border border-surface-200 dark:border-surface-700">
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-lock text-muted-color text-[10px]"></i>
+          Apellido / razón social en DUX
+        </label>
+        <input pInputText type="text" class="w-full" disabled
+          [value]="apellidoRazonSocialFijo" />
+      </div>
+      <div>
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-lock text-muted-color text-[10px]"></i>
+          Categoría fiscal
+        </label>
+        <input pInputText type="text" class="w-full" disabled
+          [value]="categoriaFiscalFija" />
+      </div>
     </div>
 
     <!-- Datos del cliente — pre-llenados editables -->
@@ -368,12 +392,47 @@
     <div>
       <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
         <i class="pi pi-credit-card text-[#FF861C] text-[10px]"></i> Forma de pago
+        <span class="text-[10px] font-normal text-muted-color normal-case tracking-normal">
+          (cada opción muestra el total que paga el cliente)
+        </span>
       </label>
       <p-select [options]="formasPagoActivas()"
         optionLabel="nombre" optionValue="id"
         [ngModel]="pedidoFormaPagoId()" (ngModelChange)="pedidoFormaPagoId.set($event)"
         placeholder="Sin financiación" class="w-full"
-        [showClear]="true" appendTo="body" />
+        [showClear]="true" appendTo="body">
+        <!-- Selected: la pill que aparece en el input cuando ya hay una elegida.
+             Muestra el nombre + total a la derecha en bold. -->
+        <ng-template let-f #selectedItem>
+          @if (f) {
+            <div class="flex items-center justify-between gap-2 w-full">
+              <span class="truncate">{{ f.nombre }}</span>
+              <span class="font-bold text-[#3B1E09] dark:text-surface-0 tabular-nums">
+                {{ totalParaFormaPago(f) | currency:'ARS':'symbol':'1.0-0' }}
+              </span>
+            </div>
+          }
+        </ng-template>
+        <!-- Item: cada opción en el dropdown. Layout en 2 filas: nombre +
+             metadatos arriba (cuotas / IVA), total grande abajo a la derecha. -->
+        <ng-template let-f #item>
+          <div class="flex items-center justify-between gap-3 w-full py-0.5">
+            <div class="flex flex-col min-w-0 flex-1">
+              <span class="font-medium truncate">{{ f.nombre }}</span>
+              <span class="text-[10px] text-muted-color flex items-center gap-1.5">
+                @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                  <span>{{ f.cantidadCuotas }} cuotas</span>
+                  <span class="opacity-50">·</span>
+                }
+                <span>{{ f.aplicaIva ? 'con IVA' : 'sin IVA' }}</span>
+              </span>
+            </div>
+            <span class="font-bold text-[#3B1E09] dark:text-surface-0 tabular-nums text-sm shrink-0">
+              {{ totalParaFormaPago(f) | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+        </ng-template>
+      </p-select>
     </div>
 
     <div>
