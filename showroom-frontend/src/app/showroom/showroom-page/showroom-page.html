@@ -478,14 +478,13 @@
                   }
                 </div>
               </div>
-              <!-- Cantidad + botón "Agregar al carrito" inline. items-end
-                   alinea el botón con la base del input — queda al centro
-                   visual del input ignorando el label corto arriba. Antes
-                   usábamos items-center y centraba contra el bloque entero,
-                   dejando el botón demasiado arriba (a la altura del label).
-                   La lista permanece abierta tras agregar para sumar varios
-                   productos seguidos. -->
-              <div class="shrink-0 flex items-end gap-2">
+              <!-- Cantidad + botón "Agregar al carrito" inline. Para
+                   centrar perfectamente el botón con el input, le ponemos
+                   un spacer invisible arriba con la misma altura del label
+                   "CANTIDAD". Así ambos bloques tienen idéntica altura
+                   total y items-center los alinea al medio sin offset.
+                   La lista permanece abierta tras agregar. -->
+              <div class="shrink-0 flex items-center gap-2">
                 <div class="flex flex-col items-center gap-0.5">
                   <span class="text-[9px] uppercase tracking-wider font-bold text-primary leading-none">
                     Cantidad
@@ -500,13 +499,16 @@
                     [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
                     ariaLabel="Cantidad de unidades a agregar al carrito" />
                 </div>
-                <p-button icon="pi pi-cart-plus"
-                  severity="success" size="small"
-                  [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
-                  (onClick)="agregarResultadoAlCarrito(it)"
-                  pTooltip="Agregar al carrito (la lista se queda abierta)"
-                  tooltipPosition="top"
-                  ariaLabel="Agregar al carrito" />
+                <div class="flex flex-col items-center gap-0.5">
+                  <span class="text-[9px] leading-none invisible" aria-hidden="true">.</span>
+                  <p-button icon="pi pi-cart-plus"
+                    severity="success" size="small"
+                    [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
+                    (onClick)="agregarResultadoAlCarrito(it)"
+                    pTooltip="Agregar al carrito (la lista se queda abierta)"
+                    tooltipPosition="top"
+                    ariaLabel="Agregar al carrito" />
+                </div>
               </div>
             </li>
             }

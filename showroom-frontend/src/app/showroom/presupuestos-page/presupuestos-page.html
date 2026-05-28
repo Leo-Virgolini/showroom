@@ -193,12 +193,13 @@
                     </div>
                     </div>
                     <!-- Input de cantidad con label "Cantidad" arriba +
-                         botón "Agregar" al lado. items-end alinea el botón
-                         con la base del input — visualmente queda al centro
-                         del input ignorando el label corto de arriba.
-                         items-center centraba contra el bloque label+input
-                         completo y dejaba el botón demasiado arriba. -->
-                    <div class="shrink-0 flex items-end gap-2">
+                         botón "Agregar" al lado. Para centrar el botón
+                         perfectamente con el input, le agregamos un spacer
+                         invisible arriba del botón con la misma altura del
+                         label. Así ambos bloques (label+input y
+                         spacer+botón) tienen idéntica altura total y
+                         items-center los alinea al medio sin offset. -->
+                    <div class="shrink-0 flex items-center gap-2">
                       <div class="flex flex-col items-center gap-0.5">
                         <span class="text-[9px] uppercase tracking-wider font-bold text-[#FF861C] dark:text-[#FF9A3F] leading-none">
                           Cantidad
@@ -212,12 +213,15 @@
                           inputStyleClass="w-20 text-center" [allowEmpty]="false"
                           ariaLabel="Cantidad de unidades a agregar al detalle" />
                       </div>
-                      <p-button icon="pi pi-arrow-down"
-                        severity="success" size="small"
-                        (onClick)="agregarResultado(r.sku)"
-                        pTooltip="Agregar al detalle (la lista se queda abierta)"
-                        tooltipPosition="top"
-                        ariaLabel="Agregar al detalle" />
+                      <div class="flex flex-col items-center gap-0.5">
+                        <span class="text-[9px] leading-none invisible" aria-hidden="true">.</span>
+                        <p-button icon="pi pi-arrow-down"
+                          severity="success" size="small"
+                          (onClick)="agregarResultado(r.sku)"
+                          pTooltip="Agregar al detalle (la lista se queda abierta)"
+                          tooltipPosition="top"
+                          ariaLabel="Agregar al detalle" />
+                      </div>
                     </div>
                   </div>
                 }
