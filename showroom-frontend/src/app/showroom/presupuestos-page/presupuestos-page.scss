@@ -43,18 +43,6 @@ $kt-amarillo: #a2ab00;
   }
 }
 
-// Card de Resumen — destacada con gradiente sutil naranja → verde.
-:host ::ng-deep .kt-card-totales {
-  .p-card {
-    border: 1px solid rgba($kt-naranja, 0.3);
-    background: linear-gradient(
-      135deg,
-      rgba($kt-naranja, 0.04) 0%,
-      rgba($kt-verde, 0.04) 100%
-    );
-  }
-}
-
 // Card "Detalle del presupuesto" — diferenciación visual FUERTE con la
 // card de búsqueda. La búsqueda es crema-naranja KT default; el detalle
 // usa un fondo verde claro sólido. Usamos !important porque la card lleva
@@ -263,28 +251,31 @@ $kt-amarillo: #a2ab00;
     box-shadow: none;
   }
 
-  // Primer botón = "Agregado" (naranja KT) — la opción por default.
-  .p-togglebutton:first-child {
+  // Mixin con los estados de un botón del SelectButton — color base + los dos
+  // colores del gradient cuando checked. Cada botón hijo (`:first-child` /
+  // `:nth-child(2)`) lo invoca con su paleta. Antes los dos bloques estaban
+  // duplicados completos (~60 líneas); el mixin los reduce a 2 invocaciones.
+  @mixin togglebutton-color($color, $checked-from, $checked-to) {
     &:not(.p-togglebutton-checked) {
       .p-togglebutton-icon,
       > i,
       span > i {
-        color: $kt-naranja;
+        color: $color;
       }
 
       &:hover {
-        background: rgba($kt-naranja, 0.18);
-        color: $kt-naranja;
+        background: rgba($color, 0.18);
+        color: $color;
         transform: translateY(-1px);
       }
     }
 
     &.p-togglebutton-checked {
-      background: linear-gradient(135deg, #FF6A00 0%, $kt-naranja 60%, #FFB347 100%);
+      background: linear-gradient(135deg, $checked-from 0%, $color 60%, $checked-to 100%);
       color: white;
       box-shadow:
-        0 6px 14px -4px rgba($kt-naranja, 0.55),
-        0 2px 4px -1px rgba($kt-naranja, 0.35),
+        0 6px 14px -4px rgba($color, 0.55),
+        0 2px 4px -1px rgba($color, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.25),
         inset 0 -2px 0 rgba(0, 0, 0, 0.1);
       transform: translateY(-1px);
@@ -298,39 +289,14 @@ $kt-amarillo: #a2ab00;
     }
   }
 
+  // Primer botón = "Agregado" (naranja KT) — la opción por default.
+  .p-togglebutton:first-child {
+    @include togglebutton-color($kt-naranja, #FF6A00, #FFB347);
+  }
+
   // Segundo botón = "Individual" (verde KT) — la opción más "deliberada".
   .p-togglebutton:nth-child(2) {
-    &:not(.p-togglebutton-checked) {
-      .p-togglebutton-icon,
-      > i,
-      span > i {
-        color: $kt-verde;
-      }
-
-      &:hover {
-        background: rgba($kt-verde, 0.18);
-        color: $kt-verde;
-        transform: translateY(-1px);
-      }
-    }
-
-    &.p-togglebutton-checked {
-      background: linear-gradient(135deg, #5a9a00 0%, $kt-verde 60%, #b8e34a 100%);
-      color: white;
-      box-shadow:
-        0 6px 14px -4px rgba($kt-verde, 0.55),
-        0 2px 4px -1px rgba($kt-verde, 0.35),
-        inset 0 1px 0 rgba(255, 255, 255, 0.25),
-        inset 0 -2px 0 rgba(0, 0, 0, 0.1);
-      transform: translateY(-1px);
-
-      .p-togglebutton-icon,
-      > i,
-      span > i {
-        color: white;
-        transform: scale(1.15);
-      }
-    }
+    @include togglebutton-color($kt-verde, #5a9a00, #b8e34a);
   }
 }
 
@@ -638,13 +604,6 @@ $kt-amarillo: #a2ab00;
     background: rgba($kt-naranja, 0.08);
     transform: none;
   }
-}
-
-// Chip "+N" para indicar formas ocultas detrás del toggle.
-:host ::ng-deep .kt-forma-chip-mas {
-  background: rgba($kt-marron, 0.08);
-  border-color: rgba($kt-marron, 0.2);
-  font-weight: 700;
 }
 
 // Botón toggle del panel — circular con ícono chevron.
