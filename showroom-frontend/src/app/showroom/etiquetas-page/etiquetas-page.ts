@@ -1249,6 +1249,329 @@ export class EtiquetasPage {
     return s.replace(/[\^~\\]/g, '_');
   }
 
+  /**
+   * Genera un PNG en blanco y negro puro con todas las filas del rollo apiladas
+   * verticalmente y lo descarga. Pensado para impresoras térmicas tipo rotuladora
+   * (Detonger, etc) cuyo manual pide imagen PNG sin fondo, B&N. El usuario abre
+   * el PNG resultante con la app oficial de la impresora y lo manda a imprimir
+   * sin tener que pasar antes por el diálogo de impresión del navegador ni
+   * convertir a PDF.
+   *
+   * El canvas se renderiza a 300 DPI: suficiente para que cabezales de 200-300
+   * DPI no pierdan nitidez en los QR ni en el texto pequeño.
+   */
+  async descargarPNG(): Promise<void> {
+    this.generandoQR.set(true);
+    try {
+      const seleccionadas = this.seleccionadas();
+      const dataUrls = await Promise.all(
+        seleccionadas.map((it) => this.obtenerQR(it.sku)),
+      );
+      const expandidas: EtiquetaImprimible[] = [];
+      seleccionadas.forEach((it, idx) => {
+        for (let i = 0; i < it.copias; i++) {
+          expandidas.push({
+            sku: it.sku,
+            descripcion: it.descripcion,
+            precio: it.pvpKtGastroSinIva,
+            numeroOrden: it.numeroOrden,
+            qrDataUrl: dataUrls[idx],
+          });
+        }
+      });
+      if (expandidas.length === 0) return;
+
+      const n = Math.max(1, this.etiquetasPorFila());
+      const filas: EtiquetaImprimible[][] = [];
+      for (let i = 0; i < expandidas.length; i += n) {
+        filas.push(expandidas.slice(i, i + n));
+      }
+
+      const blob = await this.renderizarPNG(filas);
+
+      const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const filename = `etiquetas-${ts}.png`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      this.toast.add({
+        severity: 'success',
+        summary: 'PNG generado',
+        detail: `${expandidas.length} etiqueta${expandidas.length === 1 ? '' : 's'} en ${filename}. Abrilo con la app de la impresora.`,
+        life: 6000,
+      });
+    } catch (e) {
+      const err = e as Error;
+      this.toast.add({
+        severity: 'error',
+        summary: 'Generar PNG',
+        detail: err.message ?? 'No se pudo generar el archivo',
+      });
+    } finally {
+      this.generandoQR.set(false);
+    }
+  }
+
+  /**
+   * Renderiza todas las filas en un único canvas (vertical) y devuelve el PNG.
+   * Cada fila ocupa exactamente {@code anchoRollo × altoRollo} mm a 300 DPI.
+   * Texto en negro puro, fondo blanco — sin grises porque las térmicas no
+   * los manejan bien (terminan ralos o ausentes).
+   */
+  private async renderizarPNG(filas: EtiquetaImprimible[][]): Promise<Blob> {
+    const DPI = 300;
+    const PX_PER_MM = DPI / 25.4;
+    const mm = (v: number) => Math.round(v * PX_PER_MM);
+
+    const anchoRollo = this.anchoRolloMm();
+    const altoRollo = this.altoRolloMm();
+    const ancho = this.anchoMm();
+    const alto = this.altoMm();
+    const margenIzq = this.margenIzqMm();
+    const margenSup = this.margenSuperiorMm();
+    const sep = this.separacionMm();
+    const padding = this.paddingEtiquetaMm();
+    const gapQrTexto = this.gapEtiquetaMm();
+    const qrSize = this.qrSizeMm();
+    const textoGap = this.textoGapMm();
+    const fontSku = this.fontSkuMm();
+    const fontOrden = this.fontOrdenMm();
+    const fontDesc = this.fontDescMm();
+    const fontPrecio = this.fontPrecioMm();
+    const mostrarSku = this.mostrarSku();
+    const mostrarOrden = this.mostrarNumeroOrden();
+    const mostrarDesc = this.mostrarDescripcion();
+    const mostrarPrecio = this.mostrarPrecio();
+
+    const W = mm(anchoRollo);
+    const H = mm(altoRollo * filas.length);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas 2D no disponible');
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#000000';
+    ctx.textBaseline = 'top';
+    // El QR ya viene rasterizado por la lib qrcode con scale 6 → cuando se
+    // re-escala a tamaño físico hay que evitar el smoothing del browser para
+    // que los módulos queden cuadrados nítidos en lugar de bordes grises.
+    ctx.imageSmoothingEnabled = false;
+
+    // Cargamos los QR únicos una sola vez (varias etiquetas pueden compartir SKU).
+    const imgCache = new Map<string, HTMLImageElement>();
+    const cargarImg = (src: string) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('No se pudo cargar el QR'));
+        img.src = src;
+      });
+    const srcsUnicos = new Set<string>();
+    for (const fila of filas) for (const et of fila) srcsUnicos.add(et.qrDataUrl);
+    await Promise.all(
+      [...srcsUnicos].map(async (src) => imgCache.set(src, await cargarImg(src))),
+    );
+
+    const anchoTextoMm = ancho - padding - qrSize - gapQrTexto - padding;
+    const FONT_FAMILY = "'Helvetica Neue', Arial, sans-serif";
+    const FONT_FAMILY_MONO = "ui-monospace, Menlo, Consolas, monospace";
+
+    filas.forEach((fila, filaIdx) => {
+      const yFila = filaIdx * altoRollo;
+      fila.forEach((et, i) => {
+        const xEt = margenIzq + i * (ancho + sep);
+        const yEt = yFila + margenSup;
+
+        // QR (centrado vertical dentro de la etiqueta).
+        const qrY = yEt + (alto - qrSize) / 2;
+        const img = imgCache.get(et.qrDataUrl);
+        if (img) {
+          ctx.drawImage(
+            img,
+            mm(xEt + padding),
+            mm(qrY),
+            mm(qrSize),
+            mm(qrSize),
+          );
+        }
+
+        // Bloque de texto a la derecha del QR — replicamos el orden del SCSS:
+        // # orden, SKU, descripción, precio. Las líneas se centran verticalmente
+        // como bloque dentro del alto del label.
+        const textoX = xEt + padding + qrSize + gapQrTexto;
+        const lineas: {
+          texto: string;
+          fontMm: number;
+          weight: string;
+          family: string;
+          lineas: number;
+        }[] = [];
+        if (mostrarOrden && et.numeroOrden) {
+          lineas.push({
+            texto: `#${et.numeroOrden}`,
+            fontMm: fontOrden,
+            weight: '600',
+            family: FONT_FAMILY,
+            lineas: 1,
+          });
+        }
+        if (mostrarSku) {
+          lineas.push({
+            texto: et.sku,
+            fontMm: fontSku,
+            weight: '700',
+            family: FONT_FAMILY_MONO,
+            lineas: 1,
+          });
+        }
+        if (mostrarDesc && et.descripcion) {
+          lineas.push({
+            texto: et.descripcion,
+            fontMm: fontDesc,
+            weight: '400',
+            family: FONT_FAMILY,
+            lineas: 2,
+          });
+        }
+        if (mostrarPrecio && et.precio != null) {
+          lineas.push({
+            texto: `$${Math.round(et.precio).toLocaleString('es-AR')}`,
+            fontMm: fontPrecio,
+            weight: '600',
+            family: FONT_FAMILY,
+            lineas: 1,
+          });
+        }
+
+        const altoBloque =
+          lineas.reduce((acc, l) => acc + l.fontMm * l.lineas, 0) +
+          Math.max(0, lineas.length - 1) * textoGap;
+        let yCursor = yEt + (alto - altoBloque) / 2;
+
+        for (const linea of lineas) {
+          const fontPx = mm(linea.fontMm);
+          ctx.font = `${linea.weight} ${fontPx}px ${linea.family}`;
+
+          if (linea.lineas > 1) {
+            // Word-wrap manual para la descripción (max 2 líneas). Si el browser
+            // soporta `direction: ltr` y nuestro texto es corto, suele entrar
+            // en 1 línea; cuando no, partimos por palabras respetando el ancho
+            // disponible y agregamos elipsis al final si overflowea.
+            const lineasRender = this.wrapTexto(
+              ctx,
+              linea.texto,
+              mm(anchoTextoMm),
+              linea.lineas,
+            );
+            for (const l of lineasRender) {
+              ctx.fillText(l, mm(textoX), mm(yCursor));
+              yCursor += linea.fontMm;
+            }
+            // Si la descripción ocupó menos líneas que el slot reservado, igual
+            // avanzamos el cursor el slot completo para mantener el centrado
+            // consistente con el cálculo de altoBloque.
+            const restantes = linea.lineas - lineasRender.length;
+            if (restantes > 0) yCursor += restantes * linea.fontMm;
+            yCursor += textoGap;
+          } else {
+            ctx.fillText(linea.texto, mm(textoX), mm(yCursor));
+            yCursor += linea.fontMm + textoGap;
+          }
+        }
+      });
+    });
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error('No se pudo generar el PNG'))),
+        'image/png',
+      );
+    });
+  }
+
+  /** Word-wrap simple para multilinea (descripción). Corta por palabras hasta
+   *  `maxLineas`. Si quedan palabras sin consumir, agrega elipsis en la última
+   *  línea (recortando caracteres hasta que entre con el `…`). Si una sola
+   *  palabra es más ancha que el espacio disponible se incluye igual — la
+   *  térmica recorta. */
+  private wrapTexto(
+    ctx: CanvasRenderingContext2D,
+    texto: string,
+    anchoMaxPx: number,
+    maxLineas: number,
+  ): string[] {
+    if (maxLineas <= 0) return [];
+    const palabras = texto.split(/\s+/).filter(Boolean);
+    if (palabras.length === 0) return [];
+
+    const lineas: string[] = [];
+    let actual = '';
+    let consumidas = 0;
+
+    for (let i = 0; i < palabras.length; i++) {
+      const palabra = palabras[i];
+      const tentativa = actual ? `${actual} ${palabra}` : palabra;
+      if (ctx.measureText(tentativa).width <= anchoMaxPx) {
+        actual = tentativa;
+        consumidas = i + 1;
+      } else {
+        // No entra. Cerramos `actual` como una línea (si tiene algo) y empezamos
+        // una nueva con esta palabra. Si ya alcanzamos el límite de líneas
+        // permitidas, frenamos sin pushear más — `consumidas` queda en el
+        // último i exitoso, así marcamos recorte.
+        if (actual) {
+          if (lineas.length + 1 >= maxLineas) {
+            lineas.push(actual);
+            actual = palabra;
+            consumidas = i + 1;
+            break;
+          }
+          lineas.push(actual);
+        } else if (lineas.length >= maxLineas) {
+          // Edge case: la primera palabra ya no entra y ya tenemos maxLineas.
+          break;
+        }
+        actual = palabra;
+        consumidas = i + 1;
+      }
+    }
+
+    if (actual && lineas.length < maxLineas) {
+      lineas.push(actual);
+    } else if (actual && lineas.length === maxLineas) {
+      // Quedó una palabra en `actual` que no pudimos pushear → recorte.
+      // `consumidas` puede estar = palabras.length; lo bajamos para marcarlo.
+      // (Ej: la última palabra del input no encontró lugar.)
+      consumidas = Math.min(consumidas, palabras.length - 1);
+    }
+
+    if (consumidas < palabras.length && lineas.length > 0) {
+      // Hubo recorte: meter elipsis en la última línea, achicando hasta que
+      // entre con el `…` agregado. Releemos `lineas[idx]` en cada iteración
+      // para evitar quedar atrapados midiendo el string original.
+      const idx = lineas.length - 1;
+      while (
+        lineas[idx].length > 0 &&
+        ctx.measureText(`${lineas[idx]}…`).width > anchoMaxPx
+      ) {
+        lineas[idx] = lineas[idx].slice(0, -1);
+      }
+      lineas[idx] = `${lineas[idx]}…`;
+    }
+
+    return lineas;
+  }
+
   private async obtenerQR(sku: string): Promise<string> {
     const cached = this.qrCache.get(sku);
     if (cached) return cached;

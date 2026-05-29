@@ -371,9 +371,9 @@
                       <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Pedido</h4>
                       <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
                         <dt class="text-muted-color">Creado</dt>
-                        <dd class="tabular-nums">{{ det.creadoAt | date: 'medium' }}</dd>
+                        <dd class="tabular-nums">{{ det.creadoAt | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR' }}</dd>
                         <dt class="text-muted-color">Cargado en DUX</dt>
-                        <dd class="tabular-nums">{{ det.enviadoAt ? (det.enviadoAt | date: 'medium') : '—' }}</dd>
+                        <dd class="tabular-nums">{{ det.enviadoAt ? (det.enviadoAt | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') : '—' }}</dd>
                         <dt class="text-muted-color">Estado</dt>
                         <dd>
                           <p-tag [severity]="estadoSeverity(det.estado)" [value]="estadoLabel(det.estado)" />
@@ -458,7 +458,7 @@
                       </h4>
                       <div class="text-sm text-red-900 dark:text-red-200">
                         <span class="font-semibold">Anulado el:</span>
-                        {{ det.anuladoAt ? (det.anuladoAt | date: 'medium') : '—' }}
+                        {{ det.anuladoAt ? (det.anuladoAt | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') : '—' }}
                       </div>
                       @if (det.motivoAnulacion) {
                         <div class="text-sm text-red-900 dark:text-red-200 mt-1">

@@ -44,7 +44,8 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
+import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -109,15 +110,6 @@ const OPCIONES_RUBRO: { label: string; value: string }[] = [
   { label: 'Otros…', value: 'otros' },
 ];
 
-/** Dominios sugeridos al tipear el email. Orden = popularidad esperada en AR. */
-const DOMINIOS_EMAIL_SUGERIDOS = [
-  'gmail.com',
-  'hotmail.com',
-  'outlook.com',
-  'yahoo.com.ar',
-  'live.com',
-  'icloud.com',
-];
 
 /** Nombre con el que se carga todo pedido del showroom — la operadora lo
  * sobrescribe en DUX al asociar el CUIT con el cliente real. */
@@ -350,7 +342,16 @@ export class ShowroomPage implements AfterViewInit {
     [...this.escalasDescuento()].sort((a, b) => a.umbralMin - b.umbralMin),
   );
 
-  /** Suma del PVP s/IVA por cantidad, sin aplicar descuento — base para decidir el escalón. */
+  /** True si el ítem pertenece a un rubro excluido de los descuentos por
+   *  escala (MAQUINAS INDUSTRIALES). Esos ítems NO suman al umbral del
+   *  escalón ni reciben el descuento — el cliente los paga al PVP de lista. */
+  private rubroExcluido(it: { rubro?: string | null }): boolean {
+    return rubroExcluyeDescuentos(it.rubro);
+  }
+
+  /** Suma del PVP s/IVA por cantidad, sin aplicar descuento. Es el "subtotal"
+   *  visible en el carrito (incluye TODOS los ítems, también los excluidos
+   *  de descuento). */
   readonly subtotalPreDescuento = computed(() =>
     this.carrito().reduce(
       (acc, it) => acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad,
@@ -358,16 +359,32 @@ export class ShowroomPage implements AfterViewInit {
     ),
   );
 
-  /** Descuento % vigente según el subtotal y los escalones configurados. */
+  /** Subtotal s/IVA contando SOLO los ítems elegibles para el descuento por
+   *  escala. Es la base sobre la que se compara el umbral y sobre la que se
+   *  aplica el %. Los ítems excluidos (ej. MAQUINAS INDUSTRIALES) no
+   *  empujan el escalón ni reciben el descuento. */
+  readonly subtotalElegibleDescuento = computed(() =>
+    this.carrito()
+      .filter((it) => !this.rubroExcluido(it))
+      .reduce((acc, it) => acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad, 0),
+  );
+
+  /** Descuento % vigente según el subtotal elegible y los escalones configurados. */
   readonly descuentoAplicado = computed(() => {
-    const sub = this.subtotalPreDescuento();
+    const sub = this.subtotalElegibleDescuento();
     const aplicable = this.escalasDesc().find((e) => sub >= e.umbralMin);
     return aplicable?.porcentaje ?? 0;
   });
 
-  /** Monto del descuento (en pesos) sobre el subtotal pre-descuento. */
+  /** % de descuento que aplica a un ítem individual: el {@link descuentoAplicado}
+   *  para los elegibles, 0 para los excluidos por rubro. */
+  private descuentoParaItem(it: { rubro?: string | null }): number {
+    return this.rubroExcluido(it) ? 0 : this.descuentoAplicado();
+  }
+
+  /** Monto del descuento (en pesos) — solo sobre los ítems elegibles. */
   readonly descuentoMonto = computed(
-    () => (this.subtotalPreDescuento() * this.descuentoAplicado()) / 100,
+    () => (this.subtotalElegibleDescuento() * this.descuentoAplicado()) / 100,
   );
 
   readonly totalCarrito = computed(
@@ -393,13 +410,14 @@ export class ShowroomPage implements AfterViewInit {
 
   /** Recargo financiero puro (sin IVA): lo que el cliente paga de más sobre
    *  el subtotal sin IVA por elegir esta forma. Fórmula per-item:
-   *  {@code base × (1/(1-recargo/100) - 1)}. */
+   *  {@code base × (1/(1-recargo/100) - 1)}. El descuento es per-item: los
+   *  ítems excluidos (MAQUINAS INDUSTRIALES) usan 0. */
   readonly recargoMontoSinIva = computed(() => {
     const recargo = this.recargoAplicado();
     if (recargo <= 0) return 0;
-    const descuento = this.descuentoAplicado();
     const factorExtra = 1 / (1 - recargo / 100) - 1;
     return this.carrito().reduce((acc, it) => {
+      const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
       return acc + baseSinIva * factorExtra * it.cantidad;
     }, 0);
@@ -410,11 +428,11 @@ export class ShowroomPage implements AfterViewInit {
   readonly ivaMontoCarrito = computed(() => {
     if (!this.aplicaIvaCliente()) return 0;
     const recargo = this.recargoAplicado();
-    const descuento = this.descuentoAplicado();
     const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
     return this.carrito().reduce((acc, it) => {
       const porcIva = it.porcIva ?? 0;
       if (porcIva <= 0) return acc;
+      const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
       const conRecargoSinIva = baseSinIva / divisorRecargo;
       return acc + conRecargoSinIva * (porcIva / 100) * it.cantidad;
@@ -429,13 +447,15 @@ export class ShowroomPage implements AfterViewInit {
   );
 
   /** Total final del carrito para una forma de pago dada — usado en el dialog
-   *  "comparativa de formas de pago" que el operador le muestra al cliente. */
+   *  "comparativa de formas de pago" que el operador le muestra al cliente.
+   *  Descuento per-item para que los rubros excluidos (MAQUINAS INDUSTRIALES)
+   *  no reciban la rebaja por escala. */
   totalParaForma(fp: FormaPago): number {
     const recargo = fp.recargoPorcentaje ?? 0;
     const aplicaIva = fp.aplicaIva ?? true;
-    const descuento = this.descuentoAplicado();
     const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
     return this.carrito().reduce((acc, it) => {
+      const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
       const conRecargoSinIva = baseSinIva / divisorRecargo;
       const porcIva = it.porcIva ?? 0;
@@ -460,6 +480,31 @@ export class ShowroomPage implements AfterViewInit {
     this.seleccionarFormaPago(fp);
     this.mostrarDialogFormasPago.set(false);
   }
+
+  /** True si el producto recién escaneado pertenece a un rubro excluido de
+   *  los descuentos por escala (MAQUINAS INDUSTRIALES). Se usa para ocultar
+   *  los tiles "Comprá más y ahorrás" debajo del scan — esos tiles
+   *  sugerirían un precio que comercialmente no aplica al producto. */
+  readonly scanExcluyeDescuentos = computed(
+    () => rubroExcluyeDescuentos(this.ultimoScan()?.rubro),
+  );
+
+  /** True si el ítem (resultado de búsqueda o ítem de carrito) es de un
+   *  rubro excluido. El template lo usa para mostrar el badge "MÁQUINA
+   *  INDUSTRIAL" en cada fila — el operador identifica de un vistazo qué
+   *  productos no califican para descuentos por escala. */
+  esRubroSinDescuento(rubro: string | null | undefined): boolean {
+    return rubroExcluyeDescuentos(rubro);
+  }
+
+  /** True si en el carrito hay AL MENOS un ítem de rubro excluido. El UI lo
+   *  usa para aclarar que el descuento mostrado no se aplica a todos los
+   *  ítems (sólo a los elegibles). Sin esta aclaración el operador podría
+   *  confundirse al ver que el monto del descuento es menor del que esperaría
+   *  multiplicando subtotal × %. */
+  readonly carritoTieneRubroExcluido = computed(
+    () => this.carrito().some((it) => rubroExcluyeDescuentos(it.rubro)),
+  );
 
   /** Forma de pago con el menor total — para el badge "MEJOR PRECIO". */
   readonly formaMasBarata = computed(() => {
@@ -486,10 +531,11 @@ export class ShowroomPage implements AfterViewInit {
     this.carrito().reduce((acc, it) => acc + it.cantidad, 0),
   );
 
-  /** Precio unitario efectivo aplicando el descuento global vigente. */
+  /** Precio unitario efectivo aplicando el descuento global vigente. Los
+   *  ítems de rubros excluidos (MAQUINAS INDUSTRIALES) mantienen el PVP. */
   precioEfectivo(it: CarritoItem): number {
     const base = it.pvpKtGastroSinIva ?? 0;
-    return base * (1 - this.descuentoAplicado() / 100);
+    return base * (1 - this.descuentoParaItem(it) / 100);
   }
 
   /** Subtotal de la línea SIN descuento — el descuento se muestra solo a nivel total. */
@@ -497,16 +543,18 @@ export class ShowroomPage implements AfterViewInit {
     return (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
   }
 
-  /** Próximo escalón a alcanzar (umbralMin > subtotal actual), o null si ya está en el tope. */
+  /** Próximo escalón a alcanzar (umbralMin > subtotal elegible actual), o
+   *  null si ya está en el tope. Usa el subtotal de ítems ELEGIBLES — los
+   *  excluidos por rubro no empujan el escalón. */
   private readonly proximoEscalonObj = computed(() => {
-    const sub = this.subtotalPreDescuento();
+    const sub = this.subtotalElegibleDescuento();
     return this.escalasDescuento().find((e) => sub < e.umbralMin) ?? null;
   });
 
   /** Pesos que faltan para llegar al próximo escalón — null si ya está en el tope. */
   readonly faltaParaProximo = computed(() => {
     const proximo = this.proximoEscalonObj();
-    return proximo ? proximo.umbralMin - this.subtotalPreDescuento() : null;
+    return proximo ? proximo.umbralMin - this.subtotalElegibleDescuento() : null;
   });
 
   /** % del próximo escalón al que se llegaría, null si ya está en el tope. */
@@ -518,7 +566,7 @@ export class ShowroomPage implements AfterViewInit {
   readonly meterProximoEscalon = computed(() => {
     const proximo = this.proximoEscalonObj();
     if (!proximo) return null;
-    const sub = this.subtotalPreDescuento();
+    const sub = this.subtotalElegibleDescuento();
     const acumulado = Math.min(sub, proximo.umbralMin);
     return {
       // Label vacío + ocultamos la label list via CSS (.meter-discount):
@@ -1805,41 +1853,11 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /**
-   * Genera sugerencias para el autocomplete del email basadas en lo que tipeó el operador:
-   *  - Sin `@` todavía: sugerir `<lo-que-escribió>@<dominio>` para los dominios populares.
-   *  - Con `@` ya escrito: filtrar la lista de dominios por los que matchean lo que sigue.
-   *  - Si ya hay un dominio completo válido (otro `.` después del `@`), no sugerir nada
-   *    (no pisar la elección manual del operador).
-   */
+  /** Sugerencias del autocomplete del email — delega en
+   *  {@link calcularSugerenciasEmail} (helper compartido por todas las
+   *  pantallas con autocomplete de email del cliente). */
   onCompletarEmail(event: AutoCompleteCompleteEvent): void {
-    const query = (event.query ?? '').trim();
-    if (!query) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    const at = query.indexOf('@');
-    if (at < 0) {
-      // No tiene @ — sugerir todos los dominios.
-      this.sugerenciasEmail.set(DOMINIOS_EMAIL_SUGERIDOS.map((d) => `${query}@${d}`));
-      return;
-    }
-    const localPart = query.substring(0, at);
-    const dominioPart = query.substring(at + 1).toLowerCase();
-    if (!localPart) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    // Si ya hay un dominio "completo" (algo.algo), no sugerimos.
-    if (dominioPart.includes('.') && !DOMINIOS_EMAIL_SUGERIDOS.some((d) => d.startsWith(dominioPart))) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    this.sugerenciasEmail.set(
-      DOMINIOS_EMAIL_SUGERIDOS
-        .filter((d) => d.startsWith(dominioPart))
-        .map((d) => `${localPart}@${d}`),
-    );
+    this.sugerenciasEmail.set(calcularSugerenciasEmail(event.query));
   }
 
   /**
@@ -2047,16 +2065,22 @@ export class ShowroomPage implements AfterViewInit {
         // selección). El backend aplica el recargo % a cada precioUnitario
         // antes de mandar a DUX.
         formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
-        items: this.carrito().map((it) => ({
-          sku: it.sku,
-          cantidad: it.cantidad,
-          // Mandamos el precio CON IVA: la lista "KT GASTRO" en DUX está configurada
-          // como "incluye IVA", entonces DUX espera valores con-IVA y descuenta el IVA
-          // internamente. Si mandamos sin-IVA, DUX lo trata como con-IVA y queda mal.
-          // El display en el showroom sigue mostrando sin-IVA al operador (informativo).
-          precioUnitario: it.pvpKtGastroConIva,
-          descuentoPorcentaje: this.descuentoAplicado() || undefined,
-        })),
+        items: this.carrito().map((it) => {
+          // Descuento per-item: los ítems excluidos por rubro
+          // (MAQUINAS INDUSTRIALES) NO reciben el descuento por escala —
+          // mandamos `undefined` para que DUX los facture al PVP de lista.
+          const descItem = this.descuentoParaItem(it);
+          return {
+            sku: it.sku,
+            cantidad: it.cantidad,
+            // Mandamos el precio CON IVA: la lista "KT GASTRO" en DUX está configurada
+            // como "incluye IVA", entonces DUX espera valores con-IVA y descuenta el IVA
+            // internamente. Si mandamos sin-IVA, DUX lo trata como con-IVA y queda mal.
+            // El display en el showroom sigue mostrando sin-IVA al operador (informativo).
+            precioUnitario: it.pvpKtGastroConIva,
+            descuentoPorcentaje: descItem > 0 ? descItem : undefined,
+          };
+        }),
       })
       .subscribe({
         next: (res) => {

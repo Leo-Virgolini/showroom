@@ -72,7 +72,11 @@ public final class ProductoCacheSpecs {
                 Predicate skuMatch = cb.like(cb.lower(root.get("sku")), like);
                 Predicate descMatch = cb.like(cb.lower(root.get("descripcion")), like);
                 Predicate eanMatch = cb.like(codigos, like);
-                ands.add(cb.or(skuMatch, descMatch, eanMatch));
+                // Permite filtrar por rubro tipeando ("maquinas" → todas las
+                // máquinas industriales). El rubro se persiste en mayúsculas
+                // tal cual DUX lo devuelve, así que comparamos sobre lower.
+                Predicate rubroMatch = cb.like(cb.lower(root.get("rubro")), like);
+                ands.add(cb.or(skuMatch, descMatch, eanMatch, rubroMatch));
             }
 
             if (aplicarRanking && query != null) {
@@ -103,5 +107,15 @@ public final class ProductoCacheSpecs {
                 cb.isNull(root.get("stockTotal")),
                 cb.lessThanOrEqualTo(root.get("stockTotal"), 0)
         );
+    }
+
+    /** Filtra por nombre exacto de rubro (case-insensitive). Si {@code rubro}
+     *  es null o blank, devuelve un predicado neutro (sin filtro). */
+    public static Specification<ProductoCache> porRubro(String rubro) {
+        return (root, query, cb) -> {
+            if (rubro == null || rubro.isBlank()) return cb.conjunction();
+            return cb.equal(cb.lower(root.get("rubro")),
+                    rubro.trim().toLowerCase());
+        };
     }
 }

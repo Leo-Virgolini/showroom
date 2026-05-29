@@ -186,3 +186,17 @@
 .app-dark .item-excedido {
   background-color: color-mix(in oklab, var(--p-red-950) 40%, transparent);
 }
+
+// Item del carrito que es máquina industrial — borde izquierdo ámbar grueso
+// para que el operador identifique de un vistazo que ese ítem no recibe el
+// descuento por escala (las máquinas industriales mantienen el PVP de lista).
+// Si además está excedido, item-excedido pisa el background pero el borde
+// izquierdo queda visible (es un side, no un fill).
+.item-maquina-industrial {
+  border-left: 4px solid var(--p-amber-400);
+  padding-left: calc(0.5rem - 4px);
+}
+
+.app-dark .item-maquina-industrial {
+  border-left-color: var(--p-amber-600);
+}

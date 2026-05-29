@@ -213,49 +213,133 @@ $kt-amarillo: #a2ab00;
 
 // =====================================================
 // SelectButton "Modo de cotización" (Agregado / Individual)
-// Tema KT: borde naranja sutil, fondo blanco, seleccionado se rellena
-// naranja KT con texto blanco. Lo usamos en /presupuestos para elegir
-// el formato del PDF.
+// Cada opción tiene un color identificador distinto para que se diferencien
+// visualmente sin tener que leer el label: Agregado = naranja KT (lista
+// única, "default"), Individual = verde KT (1 hoja por producto, opción
+// más explícita y deliberada). Borde lateral grueso del color + fondo del
+// color cuando seleccionado.
 // =====================================================
+// El `class` del p-selectButton se aplica al wrapper. Cada hijo es un
+// `<p-togglebutton>` con clase `.p-togglebutton` (+ `.p-togglebutton-checked`
+// cuando seleccionado). Diferenciamos cada botón con `:first-child` /
+// `:nth-child(2)` sobre el wrapper.
 :host ::ng-deep .kt-modo-cotizacion {
-  .p-togglebutton,
-  .p-selectbutton-button {
-    background: white;
-    border: 1px solid rgba($kt-naranja, 0.35);
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: linear-gradient(135deg,
+    rgba($kt-naranja, 0.1) 0%,
+    rgba($kt-verde, 0.1) 100%);
+  border-radius: 999px;
+
+  .p-togglebutton {
+    background: transparent;
+    border: 2px solid transparent;
     color: $kt-marron;
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.4rem 0.85rem;
-    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 0.55rem 1.4rem;
+    border-radius: 999px;
+    transition: background-color 0.18s ease, color 0.18s ease,
+                border-color 0.18s ease, transform 0.12s ease,
+                box-shadow 0.18s ease;
+    position: relative;
+    overflow: hidden;
 
-    > i {
-      color: $kt-naranja;
+    .p-togglebutton-icon,
+    > i,
+    span > i {
+      color: $kt-marron;
+      transition: color 0.18s ease, transform 0.18s ease;
+    }
+  }
+
+  // PrimeNG por defecto pinta un fondo blanco en `.p-togglebutton-content`
+  // cuando el botón está checked (efecto "pill iOS"). Eso tapaba nuestro
+  // gradient. Neutralizamos: contenido transparente sin sombra, así el
+  // gradient del fondo del botón queda visible y el texto blanco contrasta.
+  .p-togglebutton.p-togglebutton-checked .p-togglebutton-content {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  // Primer botón = "Agregado" (naranja KT) — la opción por default.
+  .p-togglebutton:first-child {
+    &:not(.p-togglebutton-checked) {
+      .p-togglebutton-icon,
+      > i,
+      span > i {
+        color: $kt-naranja;
+      }
+
+      &:hover {
+        background: rgba($kt-naranja, 0.18);
+        color: $kt-naranja;
+        transform: translateY(-1px);
+      }
     }
 
-    &:hover {
-      background: rgba($kt-naranja, 0.08);
-      border-color: rgba($kt-naranja, 0.55);
-    }
-
-    &.p-togglebutton-checked,
-    &.p-selectbutton-button-selected,
-    &[aria-pressed='true'] {
-      background: linear-gradient(to right, $kt-naranja, #FF9A3F);
+    &.p-togglebutton-checked {
+      background: linear-gradient(135deg, #FF6A00 0%, $kt-naranja 60%, #FFB347 100%);
       color: white;
-      border-color: $kt-naranja;
-      box-shadow: 0 2px 4px rgba($kt-naranja, 0.25);
+      box-shadow:
+        0 6px 14px -4px rgba($kt-naranja, 0.55),
+        0 2px 4px -1px rgba($kt-naranja, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
 
-      > i {
+      .p-togglebutton-icon,
+      > i,
+      span > i {
         color: white;
+        transform: scale(1.15);
+      }
+    }
+  }
+
+  // Segundo botón = "Individual" (verde KT) — la opción más "deliberada".
+  .p-togglebutton:nth-child(2) {
+    &:not(.p-togglebutton-checked) {
+      .p-togglebutton-icon,
+      > i,
+      span > i {
+        color: $kt-verde;
+      }
+
+      &:hover {
+        background: rgba($kt-verde, 0.18);
+        color: $kt-verde;
+        transform: translateY(-1px);
+      }
+    }
+
+    &.p-togglebutton-checked {
+      background: linear-gradient(135deg, #5a9a00 0%, $kt-verde 60%, #b8e34a 100%);
+      color: white;
+      box-shadow:
+        0 6px 14px -4px rgba($kt-verde, 0.55),
+        0 2px 4px -1px rgba($kt-verde, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25),
+        inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+
+      .p-togglebutton-icon,
+      > i,
+      span > i {
+        color: white;
+        transform: scale(1.15);
       }
     }
   }
 }
 
 :host-context(.dark) ::ng-deep .kt-modo-cotizacion {
-  .p-togglebutton,
-  .p-selectbutton-button {
-    background: var(--p-surface-900);
+  background: linear-gradient(135deg,
+    rgba($kt-naranja, 0.18) 0%,
+    rgba($kt-verde, 0.18) 100%);
+
+  .p-togglebutton {
     color: var(--p-surface-0);
   }
 }
@@ -339,3 +423,333 @@ $kt-amarillo: #a2ab00;
   border-color: rgba(255, 255, 255, 0.05);
 }
 
+// =====================================================
+// Footer sticky con TOTAL + chips de formas de pago.
+// Vive afuera del <main> y se ancla al borde inferior del viewport.
+// Por default está COMPACTO (1 línea); el panel superior se expande
+// con max-height animado cuando el operador toca "Ver formas" o un chip.
+// =====================================================
+.kt-footer-sticky {
+  // Fixed al borde inferior del viewport — el operador siempre ve TOTAL
+  // y formas de pago sin scrollear. Sticky era ambiguo dentro del flex
+  // column con overflows anidados (las columnas internas tienen scroll
+  // propio en lg+), fixed garantiza visibilidad consistente.
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: white;
+  border-top: 1px solid rgba($kt-naranja, 0.25);
+  // Sombra suave hacia arriba — separa visualmente del contenido scrolleado.
+  box-shadow: 0 -4px 14px -6px rgba(0, 0, 0, 0.18);
+}
+
+// Panel EXPANDIBLE — el contenido vive en `.kt-footer-panel-inner` y se
+// muestra al setear `.expandido` en el footer. Transición de max-height
+// suave; cuando está oculto, no captura clicks.
+.kt-footer-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, padding 0.25s ease;
+  background: linear-gradient(
+    180deg,
+    rgba($kt-naranja, 0.04) 0%,
+    rgba($kt-verde, 0.04) 100%
+  );
+  border-bottom: 1px solid rgba($kt-naranja, 0.1);
+}
+
+.kt-footer-sticky.expandido .kt-footer-panel {
+  // 60vh para no tapar todo: si hay 15 formas siempre se puede scrollear
+  // dentro del panel. El borde superior queda visible por la sombra del
+  // footer compacto que sigue siendo el "ancla" visual.
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.kt-footer-panel-inner {
+  padding: 1rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+// Chevron del botón toggle — rota 180° cuando el panel está expandido.
+.kt-footer-toggle-icon {
+  transition: transform 0.2s ease;
+}
+
+.kt-footer-sticky.expandido .kt-footer-toggle-icon {
+  transform: rotate(180deg);
+}
+
+// Barra COMPACTA — flex envolvente: totales (izq) + chips (der).
+// En mobile las dos secciones se apilan; en sm+ van lado a lado.
+.kt-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  flex-wrap: wrap;
+  max-width: 1600px;
+  margin: 0 auto;
+
+  @media (max-width: 640px) {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+}
+
+.kt-footer-totales {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.kt-footer-dcto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: rgba($kt-naranja, 0.06);
+  border: 1px solid rgba($kt-naranja, 0.2);
+}
+
+.kt-footer-formas {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+}
+
+// Chip compacto de forma de pago — muestra ícono + nombre + precio en 1 línea.
+// Es clickeable: dispara la expansión del panel completo.
+:host ::ng-deep .kt-forma-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: var(--p-surface-50);
+  border: 1px solid rgba($kt-naranja, 0.2);
+  color: $kt-marron;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  white-space: nowrap;
+
+  > i {
+    color: $kt-naranja;
+    font-size: 0.78rem;
+  }
+
+  &:hover {
+    background: rgba($kt-naranja, 0.08);
+    border-color: rgba($kt-naranja, 0.4);
+    transform: translateY(-1px);
+  }
+}
+
+// 10 colores rotativos por índice de la forma de pago — mismo set que la
+// barra superior de `.forma-pago-card` en el panel expandido, así el chip
+// compacto y la card detallada comparten identidad visual. Aplicamos el
+// color como borde izquierdo grueso + tinte sutil de fondo + ícono y precio
+// del color, manteniendo la legibilidad del nombre en marrón KT.
+@mixin kt-forma-chip-color($color) {
+  border-left: 4px solid $color;
+  background: color-mix(in srgb, $color 8%, white);
+
+  > i:not(.pi-check-circle) {
+    color: $color;
+  }
+
+  .kt-forma-chip-precio {
+    color: $color;
+    border-left-color: rgba($color, 0.4);
+  }
+
+  &:hover {
+    background: color-mix(in srgb, $color 14%, white);
+    border-color: $color;
+  }
+}
+
+:host ::ng-deep .kt-forma-chip {
+  &.color-1  { @include kt-forma-chip-color(#eab308); } // amarillo
+  &.color-2  { @include kt-forma-chip-color(#3b82f6); } // azul
+  &.color-3  { @include kt-forma-chip-color(#10b981); } // verde esmeralda
+  &.color-4  { @include kt-forma-chip-color(#f97316); } // naranja
+  &.color-5  { @include kt-forma-chip-color(#a855f7); } // púrpura
+  &.color-6  { @include kt-forma-chip-color(#ec4899); } // rosa
+  &.color-7  { @include kt-forma-chip-color(#06b6d4); } // cian
+  &.color-8  { @include kt-forma-chip-color(#84cc16); } // lima
+  &.color-9  { @include kt-forma-chip-color(#6366f1); } // índigo
+  &.color-10 { @include kt-forma-chip-color(#d97706); } // ámbar oscuro
+}
+
+// Chip de "mejor precio" — gana al color rotativo: verde KT sólido con
+// gradient + sombra para destacar como ganadora del comparativo.
+:host ::ng-deep .kt-forma-chip-mejor.kt-forma-chip-mejor {
+  background: linear-gradient(135deg, $kt-verde 0%, #95cc28 100%);
+  border-left-color: #5a8500;
+  border-color: $kt-verde;
+  color: white;
+  box-shadow: 0 3px 8px -2px rgba($kt-verde, 0.4);
+
+  > i {
+    color: white;
+  }
+
+  .kt-forma-chip-precio {
+    color: white;
+    border-left-color: rgba(255, 255, 255, 0.5);
+  }
+
+  &:hover {
+    background: linear-gradient(135deg, #6fa700 0%, $kt-verde 100%);
+    border-color: #5a8500;
+  }
+}
+
+// Precio dentro del chip — separador visual con el nombre.
+:host ::ng-deep .kt-forma-chip-precio {
+  padding-left: 0.4rem;
+  margin-left: 0.2rem;
+  border-left: 1px solid currentColor;
+  opacity: 0.95;
+  font-weight: 700;
+}
+
+// Chip informativo (e.g. "Cotización individual · N hojas") — no clickeable.
+:host ::ng-deep .kt-forma-chip-info {
+  cursor: default;
+  background: rgba($kt-naranja, 0.08);
+
+  &:hover {
+    background: rgba($kt-naranja, 0.08);
+    transform: none;
+  }
+}
+
+// Chip "+N" para indicar formas ocultas detrás del toggle.
+:host ::ng-deep .kt-forma-chip-mas {
+  background: rgba($kt-marron, 0.08);
+  border-color: rgba($kt-marron, 0.2);
+  font-weight: 700;
+}
+
+// Botón toggle del panel — circular con ícono chevron.
+.kt-footer-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: $kt-naranja;
+  color: white;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba($kt-naranja, 0.3);
+  transition: background-color 0.12s ease, transform 0.12s ease;
+
+  &:hover {
+    background: #e87714;
+    transform: translateY(-1px);
+  }
+
+  > i {
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+}
+
+// Dark mode del footer.
+:host-context(.dark) .kt-footer-sticky {
+  background: var(--p-surface-900);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+:host-context(.dark) ::ng-deep .kt-forma-chip {
+  background: var(--p-surface-800);
+  color: var(--p-surface-0);
+  border-color: rgba(255, 255, 255, 0.08);
+
+  &:hover {
+    background: rgba($kt-naranja, 0.15);
+  }
+}
+
+:host-context(.dark) ::ng-deep .kt-forma-chip-info {
+  background: rgba($kt-naranja, 0.12);
+}
+
+// =====================================================
+// Chip "Datos del cliente" en el header del detalle. Abre el dialog
+// unificado en modo edición libre. Outline naranja KT cuando el cliente
+// ya tiene datos cargados, gris muted cuando está vacío.
+// =====================================================
+.kt-cliente-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: white;
+  border: 1px solid rgba($kt-naranja, 0.4);
+  color: $kt-marron;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  white-space: nowrap;
+  max-width: 18rem;
+
+  > i:first-child {
+    color: $kt-naranja;
+  }
+
+  &:hover {
+    background: rgba($kt-naranja, 0.08);
+    border-color: $kt-naranja;
+    transform: translateY(-1px);
+  }
+}
+
+:host-context(.dark) .kt-cliente-chip {
+  background: var(--p-surface-800);
+  color: var(--p-surface-0);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+
+// Fila del detalle del presupuesto cuyo producto es del rubro
+// MAQUINAS INDUSTRIALES — borde izquierdo grueso ámbar + tinte de fondo
+// para que el operador note de un vistazo que ese ítem NO recibe el
+// descuento global por escala (mantiene PVP de lista).
+::ng-deep tr.item-maquina-industrial > td {
+  background-color: var(--p-amber-50);
+  border-left: 0;
+}
+
+::ng-deep tr.item-maquina-industrial > td:first-child {
+  border-left: 4px solid var(--p-amber-400);
+}
+
+:host-context(.dark) ::ng-deep tr.item-maquina-industrial > td {
+  background-color: color-mix(in oklab, var(--p-amber-950) 35%, transparent);
+}
+
+:host-context(.dark) ::ng-deep tr.item-maquina-industrial > td:first-child {
+  border-left-color: var(--p-amber-600);
+}

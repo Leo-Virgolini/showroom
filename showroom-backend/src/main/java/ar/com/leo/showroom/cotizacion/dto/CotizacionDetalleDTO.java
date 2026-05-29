@@ -20,5 +20,7 @@ public record CotizacionDetalleDTO(
         String observaciones,
         BigDecimal montoBaseSinIva,
         BigDecimal porcIva,
+        BigDecimal montoBaseSinIva2,
+        BigDecimal porcIva2,
         List<GenerarCotizacionRequestDTO.FormaPagoSnapshot> formasPago
 ) {}

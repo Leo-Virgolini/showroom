@@ -21,11 +21,12 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
+import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { ProductoListItem } from '../models';
+import { ProductoListItem, rubroExcluyeDescuentos } from '../models';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
@@ -47,6 +48,7 @@ import { UserChip } from '../user-chip/user-chip';
     InputIconModule,
     InputTextModule,
     ProgressSpinnerModule,
+    SelectModule,
     TableModule,
     TagModule,
     ToggleSwitchModule,
@@ -70,6 +72,12 @@ export class ProductosPage {
   readonly busqueda = signal('');
   readonly soloDeshabilitados = signal(false);
   readonly soloSinStock = signal(false);
+  /** Rubro seleccionado en el dropdown del filtro — null = sin filtro. */
+  readonly rubroFiltro = signal<string | null>(null);
+  /** Lista de rubros distintos del cache — popula el dropdown del filtro.
+   *  Se carga al iniciar; el refresh manual no la actualiza (el catálogo
+   *  cambia rara vez de rubros, no vale la pena recargar). */
+  readonly rubrosDisponibles = signal<string[]>([]);
 
   readonly cargando = signal(false);
   readonly productos = signal<ProductoListItem[]>([]);
@@ -96,7 +104,8 @@ export class ProductosPage {
     () =>
       this.busqueda().trim().length > 0 ||
       this.soloDeshabilitados() ||
-      this.soloSinStock(),
+      this.soloSinStock() ||
+      this.rubroFiltro() != null,
   );
 
   constructor() {
@@ -107,6 +116,13 @@ export class ProductosPage {
         this.cargar(0, this.pageSize());
       });
 
+    // Carga la lista de rubros para popular el dropdown. Una sola query —
+    // los rubros del catálogo cambian rara vez, no vale la pena re-cargar.
+    this.api.listarRubrosProductos().subscribe({
+      next: (rubros) => this.rubrosDisponibles.set(rubros),
+      error: (err) => console.warn('[rubros] no se pudieron cargar:', err),
+    });
+
     // Guard contra doble request inicial: el effect corre la primera vez al
     // mount (los signals tienen valor inicial) y `onLazyLoad` del p-table
     // también dispara. Si no skipeamos la primera, se hacen 2 cargas idénticas.
@@ -116,6 +132,7 @@ export class ProductosPage {
       this.busqueda();
       this.soloDeshabilitados();
       this.soloSinStock();
+      this.rubroFiltro();
       if (!filtrosInicializados) {
         filtrosInicializados = true;
         return;
@@ -146,6 +163,7 @@ export class ProductosPage {
         q: this.busqueda(),
         soloDeshabilitados: this.soloDeshabilitados(),
         soloSinStock: this.soloSinStock(),
+        rubro: this.rubroFiltro(),
         page,
         size,
         sortField: this.sortField(),
@@ -168,6 +186,7 @@ export class ProductosPage {
     this.busqueda.set('');
     this.soloDeshabilitados.set(false);
     this.soloSinStock.set(false);
+    this.rubroFiltro.set(null);
   }
 
   refrescarFila(sku: string): void {
@@ -217,6 +236,13 @@ export class ProductosPage {
 
   estaRefrescando(sku: string): boolean {
     return this.refrescando().has(sku);
+  }
+
+  /** True si el rubro está excluido de los descuentos generales por escala.
+   *  La tabla lo usa para destacar visualmente la fila — MAQUINAS
+   *  INDUSTRIALES tiene un badge ámbar en lugar del nombre del rubro plano. */
+  esRubroSinDescuento(rubro: string | null): boolean {
+    return rubroExcluyeDescuentos(rubro);
   }
 
   trackBySku = (_: number, it: ProductoListItem) => it.sku;

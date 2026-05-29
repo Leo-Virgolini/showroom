@@ -5,6 +5,7 @@ import {
   DestroyRef,
   ElementRef,
   computed,
+  effect,
   inject,
   signal,
   viewChild,
@@ -13,7 +14,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { ConfirmationService, MessageService } from 'primeng/api';
+import { MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -40,29 +41,23 @@ import {
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
   ScanResult,
+  rubroExcluyeDescuentos,
 } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
+import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
+import { abrirPdfEnPreview } from '../download.utils';
+import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
+import { HasUnsavedChanges } from './unsaved-changes.guard';
 
 /** Redondeo HALF_UP a 2 decimales para que el preview en pantalla coincida
  *  con el `BigDecimal.setScale(2, HALF_UP)` que aplica el backend al generar
  *  el PDF. Evita discrepancias de centavos en formas de pago con muchos
  *  decimales (ej. 99.99 × 1.15 = 114.9885). */
 const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
-
-/** Dominios sugeridos al tipear el email — mismo set que el dialog de pedidos
- *  para mantener consistencia visual y de comportamiento entre ambos flujos. */
-const DOMINIOS_EMAIL_SUGERIDOS = [
-  'gmail.com',
-  'hotmail.com',
-  'outlook.com',
-  'yahoo.com.ar',
-  'live.com',
-  'icloud.com',
-];
 
 /**
  * Pantalla para armar presupuestos comerciales: el operador escanea/busca
@@ -104,16 +99,16 @@ const DOMINIOS_EMAIL_SUGERIDOS = [
     SelectButtonModule,
     ToolbarModule,
     TooltipModule,
+    CrearPedidoDialog,
     MoreMenu,
     UserChip,
   ],
   templateUrl: './presupuestos-page.html',
   styleUrl: './presupuestos-page.scss',
 })
-export class PresupuestosPage implements AfterViewInit {
+export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
-  private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
@@ -126,8 +121,23 @@ export class PresupuestosPage implements AfterViewInit {
   /** True mientras se carga el detalle del presupuesto a editar — pinta un
    *  overlay simple para que el operador no toque el form a medio llenar. */
   readonly cargandoEdicion = signal(false);
+  /** True cuando hubo cambios en el detalle (agregar/modificar/quitar ítems
+   *  o aplicar descuento global) desde el último guardado. En modo edición se
+   *  pinta un badge "Sin guardar" cerca del botón "Guardar cambios" para que
+   *  el operador no se olvide de persistir antes de salir. Se resetea al
+   *  guardar/generar con éxito y al cargar inicial el detalle en edición. */
+  readonly hayCambiosSinGuardar = signal(false);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
+  /** Referencia al footer sticky para medir su alto real (cambia cuando los
+   *  chips de formas de pago se wrappean a 2+ líneas). El padding-bottom
+   *  del main se ajusta a este alto para que los últimos ítems del detalle
+   *  no queden tapados. */
+  readonly footerSticky = viewChild<ElementRef<HTMLElement>>('footerSticky');
+  /** Alto del footer sticky en px — actualizado por ResizeObserver en el
+   *  constructor. El valor inicial (96) cubre el caso típico hasta que el
+   *  observador mida el alto real al primer render. */
+  readonly footerHeight = signal(96);
 
   /** Pantalla ≥ 1024px — usado para ocultar los labels de los botones del
    *  toolbar en mobile y dejar solo el ícono. Mismo patrón que showroom-page. */
@@ -240,7 +250,40 @@ export class PresupuestosPage implements AfterViewInit {
   // ------------------------------------------------------------
   readonly generandoPreview = signal(false);
   readonly enviandoEmail = signal(false);
-  readonly mostrarDialogEnviar = signal(false);
+  /** Dialog unificado de "Datos del cliente + confirmación". Se abre antes
+   *  de generar el PDF / guardar cambios / enviar por email para que el
+   *  operador cargue (o revise) los datos del cliente sin que el formulario
+   *  compita por espacio con el armado del presupuesto. Reemplaza la card
+   *  "Datos del cliente" antes embebida en la columna derecha. */
+  readonly mostrarDialogCliente = signal(false);
+  /** Acción que va a ejecutar el dialog al confirmar:
+   *   - `'previsualizar'` → generar PDF y descargar (POST/PUT)
+   *   - `'enviar'`        → encolar envío por email
+   *   - `null`            → solo edición libre (botón "Cerrar", sin acción)
+   *  Se setea cuando el operador toca el botón correspondiente del toolbar. */
+  readonly accionPendienteDialog = signal<'previsualizar' | 'enviar' | null>(null);
+
+  /** Estado del dialog reusable de "Crear pedido en DUX" — solo visible
+   *  en modo edición. La lógica vive en {@link CrearPedidoDialog}; este
+   *  componente solo mantiene la visibilidad. */
+  readonly mostrarDialogCrearPedido = signal(false);
+
+  /** Id del pedido DUX al que se convirtió este presupuesto durante la
+   *  sesión actual. Se setea cuando {@link CrearPedidoDialog} emite
+   *  {@code pedidoCreado}; el botón "Crear pedido" se deshabilita y aparece
+   *  un pill "→ Pedido #N" en su lugar para evitar duplicar la conversión.
+   *  No se hidrata en {@link cargarParaEditar} porque el detalle del backend
+   *  todavía no expone el flag — el control "no duplicar" para presupuestos
+   *  ya convertidos antes de esta sesión vive en /historial. */
+  readonly pedidoIdConvertido = signal<number | null>(null);
+
+  /** Footer sticky con TOTAL + formas de pago. Compacto por default (chips
+   *  de TODAS las formas con su precio en 1 línea, con flex-wrap a 2 líneas
+   *  si no entran); cuando el operador toca el chevron se expande hacia
+   *  arriba mostrando las cards completas con barras de color, descripción
+   *  detallada y desglose por cuotas. En modo individual el panel expandido
+   *  muestra el preview por producto en lugar de la lista global. */
+  readonly footerExpandido = signal(false);
 
   /** Todos los ítems entran al PDF — ya no hay checkbox por fila para
    *  excluir ítems individuales. Si el operador no quiere un ítem, lo borra. */
@@ -334,6 +377,42 @@ export class PresupuestosPage implements AfterViewInit {
    *  mismo cálculo al generar el PDF para mantener consistencia. */
   readonly indiceMejorPrecio = computed(() => this.calcularIndiceMejorPrecio(
     this.formasPagoCalculadas()));
+
+  /** Clase CSS completa de cada card de forma de pago en el panel expandido.
+   *  Computamos la string en TS porque combinar `[class]="'color-N'"` con
+   *  `[class.es-mejor-precio]` en el template hace que Angular pise el
+   *  toggle de "mejor precio" al re-evaluar la expresión string. */
+  clasesFormaCard(i: number): string {
+    const colorClass = `color-${(i % 10) + 1}`;
+    const mejorClass = i === this.indiceMejorPrecio() ? ' es-mejor-precio' : '';
+    return `forma-pago-card ${colorClass}${mejorClass}`;
+  }
+
+  /** Chips de TODAS las formas de pago para el footer sticky. Orden:
+   *   1. Mejor precio primero (resaltado en verde — la "ganadora").
+   *   2. El resto por precio ascendente (más barato → más caro).
+   *  Esto le da al operador una lectura inmediata "de qué tan caro es cada
+   *  uno respecto al efectivo": cuanto más a la derecha, más caro. Cada
+   *  chip lleva un color identificador único (1-10 rotativos), el mismo
+   *  que la card detallada del panel expandido. */
+  readonly formasPagoFooter = computed<FormaPagoFooter[]>(() => {
+    const todas = this.formasPagoCalculadas();
+    if (todas.length === 0) return [];
+    const idxMejor = this.indiceMejorPrecio();
+    const decoradas: FormaPagoFooter[] = todas.map((f, i) => ({
+      ...f,
+      indiceOriginal: i,
+      esMejorPrecio: i === idxMejor,
+    }));
+    const porPrecio = (a: FormaPagoFooter, b: FormaPagoFooter) =>
+      (a.precioFinal ?? Infinity) - (b.precioFinal ?? Infinity);
+    if (idxMejor >= 0) {
+      const ganadora = decoradas[idxMejor];
+      const otras = decoradas.filter((_, i) => i !== idxMejor).sort(porPrecio);
+      return [ganadora, ...otras];
+    }
+    return [...decoradas].sort(porPrecio);
+  });
 
   /** En modo cotización individual: para cada ítem, calcula sus propias
    *  formas de pago sobre el precio del ítem (cantidad × precio × (1 - desc)).
@@ -455,6 +534,34 @@ export class PresupuestosPage implements AfterViewInit {
     };
     document.addEventListener('click', refocusToast);
     this.destroyRef.onDestroy(() => document.removeEventListener('click', refocusToast));
+
+    // Si el operador intenta cerrar la pestaña o refrescar con cambios sin
+    // guardar en modo edición, dispara el confirm nativo del navegador. El
+    // CanDeactivate guard se encarga de la navegación dentro de la SPA;
+    // este listener cubre el caso de salir del browser.
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (!this.hasUnsavedChanges()) return;
+      e.preventDefault();
+      // Chrome ignora el texto y muestra su propio mensaje, pero el
+      // returnValue sigue siendo necesario para que se dispare el prompt.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    this.destroyRef.onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
+
+    // Observa el alto del footer sticky y lo refleja en `footerHeight()`.
+    // El footer crece cuando los chips de formas de pago hacen flex-wrap a
+    // 2+ líneas — sin este ajuste, el padding-bottom estático del main no
+    // alcanza y el footer tapa los últimos ítems del detalle.
+    effect((onCleanup) => {
+      const el = this.footerSticky()?.nativeElement;
+      if (!el || typeof window === 'undefined') return;
+      const update = () => this.footerHeight.set(el.offsetHeight);
+      const obs = new ResizeObserver(update);
+      obs.observe(el);
+      update();
+      onCleanup(() => obs.disconnect());
+    });
   }
 
   /** Carga el detalle de un presupuesto guardado y popula todas las signals
@@ -496,6 +603,10 @@ export class PresupuestosPage implements AfterViewInit {
         const baseItems: PresupuestoItem[] = det.items.map((it, idx) => ({
           sku: it.sku,
           descripcion: it.descripcion,
+          // Rubro: si el detalle no lo trae (presupuestos viejos persistidos
+          // antes del campo), lo dejamos null; el refresh posterior lo pisa
+          // con el dato actual del cache.
+          rubro: it.rubro ?? null,
           // El JSON persistido solo trae con-IVA. Calculamos s/IVA con el
           // porcIva guardado para tener un fallback decente mientras llega el
           // refresh; los precios reales pueden haber cambiado en DUX desde el
@@ -515,6 +626,14 @@ export class PresupuestosPage implements AfterViewInit {
         }));
         this.items.set(baseItems);
         this.cargandoEdicion.set(false);
+        // Al cargar el detalle original no hay cambios pendientes.
+        this.hayCambiosSinGuardar.set(false);
+        // Hidrata el estado "convertido" desde el backend. Si la response
+        // todavía no trae el campo (backend viejo), queda en null y el botón
+        // "Crear pedido" aparece habilitado — el control adicional vive en
+        // /historial. Con backend actualizado, los presupuestos ya
+        // convertidos muestran directamente el pill "→ Pedido #N".
+        this.pedidoIdConvertido.set(det.convertidoEnPedidoId ?? null);
         this.focusInput();
 
         // Lookup contra el cache local (no toca DUX) para traer imagen,
@@ -565,6 +684,33 @@ export class PresupuestosPage implements AfterViewInit {
 
   /** True cuando la pantalla está editando un presupuesto existente. */
   readonly esModoEdicion = computed(() => this.presupuestoEditandoId() != null);
+
+  /** Abre el dialog "Crear pedido en DUX". Solo disponible en modo edición:
+   *  el dialog carga el detalle persistido desde el backend (no la versión
+   *  en memoria), por eso si hay cambios sin guardar el botón está
+   *  deshabilitado con tooltip que pide guardar primero. */
+  abrirCrearPedido(): void {
+    if (!this.esModoEdicion()) return;
+    if (this.hayCambiosSinGuardar()) {
+      this.warn('Guardá los cambios antes de generar el pedido.');
+      return;
+    }
+    if (this.pedidoIdConvertido() != null) return;
+    this.mostrarDialogCrearPedido.set(true);
+  }
+
+  /** Output del {@link CrearPedidoDialog} cuando el pedido se creó OK. */
+  onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
+    this.pedidoIdConvertido.set(evt.pedidoLocalId);
+  }
+
+  /** Implementa {@link HasUnsavedChanges} para el {@link unsavedChangesGuard}.
+   *  Solo bloquea la navegación cuando se está EDITANDO un presupuesto y
+   *  hay cambios pendientes — durante la creación inicial el operador
+   *  puede abandonar sin riesgo de perder un guardado. */
+  hasUnsavedChanges(): boolean {
+    return this.esModoEdicion() && this.hayCambiosSinGuardar();
+  }
 
   // ============================================================
   // Scan / búsqueda
@@ -741,9 +887,45 @@ export class PresupuestosPage implements AfterViewInit {
     return r.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : null;
   }
 
+  /** True si el producto es de un rubro excluido de los descuentos por
+   *  escala (MAQUINAS INDUSTRIALES). El template lo usa para marcar las
+   *  filas — tanto en los resultados de búsqueda como en la tabla del
+   *  detalle del presupuesto — con un badge visible. */
+  esRubroSinDescuento(rubro: string | null | undefined): boolean {
+    return rubroExcluyeDescuentos(rubro);
+  }
+
   agregarResultado(sku: string): void {
     const cant = this.cantidadResultado(sku);
     this.seleccionarResultado(sku, cant);
+  }
+
+  /** Producto que se está previsualizando en el diálogo "Ver producto".
+   *  Null = diálogo cerrado. Usamos el {@link CatalogoItem} de la lista
+   *  directamente (sin refetch) — los datos visibles son los mismos. */
+  readonly productoPreview = signal<CatalogoItem | null>(null);
+
+  /** Abre el diálogo de preview con la foto grande + datos del producto.
+   *  El operador puede ver mejor el producto antes de decidir si lo agrega
+   *  al detalle. El botón "Agregar" del diálogo respeta la cantidad
+   *  tipeada en la fila de la lista. */
+  verResultado(r: CatalogoItem): void {
+    this.productoPreview.set(r);
+  }
+
+  /** Cierra el diálogo de preview. */
+  cerrarProductoPreview(): void {
+    this.productoPreview.set(null);
+  }
+
+  /** Confirma "Agregar al detalle" desde el diálogo de preview: respeta la
+   *  cantidad ya tipeada en la fila del listado (default 1) y cierra el
+   *  diálogo después. */
+  agregarDesdePreview(): void {
+    const r = this.productoPreview();
+    if (!r) return;
+    this.agregarResultado(r.sku);
+    this.cerrarProductoPreview();
   }
 
   private agregarItem(res: ScanResult, cantidad: number = 1): void {
@@ -752,8 +934,11 @@ export class PresupuestosPage implements AfterViewInit {
     // Si ya existe el SKU, sumarle cantidad (caso típico: re-escanear).
     const existente = actuales.find((it) => it.sku === res.sku);
     if (existente) {
+      const nuevaCantidad = existente.cantidad + cant;
       this.items.set(actuales.map((it) =>
-        it.sku === res.sku ? { ...it, cantidad: it.cantidad + cant } : it));
+        it.sku === res.sku ? { ...it, cantidad: nuevaCantidad } : it));
+      this.notificarMutacion('info', 'Cantidad actualizada',
+        `${this.etiquetaItem(existente)}: ${existente.cantidad}u → ${nuevaCantidad}u`);
       return;
     }
     const uid = `${res.sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -764,6 +949,8 @@ export class PresupuestosPage implements AfterViewInit {
       descuentoPorcentaje: 0,
     };
     this.items.set([...actuales, nuevo]);
+    this.notificarMutacion('success', 'Producto agregado',
+      `${this.etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
   }
 
   // ============================================================
@@ -778,8 +965,12 @@ export class PresupuestosPage implements AfterViewInit {
     if (!Number.isFinite(valor) || valor <= 0) valor = 1;
     const tope = this.cantidadMaximaDe(it);
     if (tope != null && valor > tope) valor = tope;
+    if (it.cantidad === valor) return;
+    const prev = it.cantidad;
     it.cantidad = valor;
     this.itemsTick.update((v) => v + 1);
+    this.notificarMutacion('info', 'Cantidad actualizada',
+      `${this.etiquetaItem(it)}: ${prev}u → ${valor}u`);
   }
 
   /** Tope de cantidad para el input: el stock disponible cuando está
@@ -794,17 +985,29 @@ export class PresupuestosPage implements AfterViewInit {
   actualizarDescuento(it: PresupuestoItem, valor: number): void {
     if (!Number.isFinite(valor) || valor < 0) valor = 0;
     if (valor > 100) valor = 100;
+    if ((it.descuentoPorcentaje ?? 0) === valor) return;
     it.descuentoPorcentaje = valor;
     this.itemsTick.update((v) => v + 1);
+    this.notificarMutacion('info', 'Descuento actualizado',
+      `${this.etiquetaItem(it)}: ${valor}%`);
   }
 
   eliminarItem(uid: string): void {
-    this.items.set(this.items().filter((it) => it.uid !== uid));
+    const it = this.items().find((x) => x.uid === uid);
+    this.items.set(this.items().filter((x) => x.uid !== uid));
+    if (it) {
+      this.notificarMutacion('warn', 'Producto quitado', this.etiquetaItem(it));
+    }
   }
 
   vaciar(): void {
+    const cantidad = this.items().length;
     this.items.set([]);
     this.focusInput();
+    if (cantidad > 0) {
+      this.notificarMutacion('warn', 'Detalle vaciado',
+        `Se quitaron ${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}.`);
+    }
   }
 
   // ============================================================
@@ -828,8 +1031,14 @@ export class PresupuestosPage implements AfterViewInit {
   actualizarDescuentoGlobal(valor: number): void {
     if (!Number.isFinite(valor) || valor < 0) valor = 0;
     if (valor > 100) valor = 100;
-    for (const it of this.items()) it.descuentoPorcentaje = valor;
+    const actuales = this.items();
+    if (actuales.length === 0) return;
+    const todosIguales = actuales.every((it) => (it.descuentoPorcentaje ?? 0) === valor);
+    if (todosIguales) return;
+    for (const it of actuales) it.descuentoPorcentaje = valor;
     this.itemsTick.update((v) => v + 1);
+    this.notificarMutacion('info', 'Descuento global aplicado',
+      `${valor}% sobre ${actuales.length} ${actuales.length === 1 ? 'ítem' : 'ítems'}.`);
   }
 
   /** Construye el payload del backend a partir del estado actual.
@@ -882,40 +1091,10 @@ export class PresupuestosPage implements AfterViewInit {
       this.warn('Tenés que seleccionar al menos un producto para previsualizar.');
       return;
     }
-    if (!this.validarDatosCliente()) return;
-    // Confirmación previa: el endpoint backend persiste el presupuesto
-    // (consume número + crea/actualiza cliente). El operador tiene que saber
-    // que cada click genera un registro nuevo — antes esto ocurría silencioso
-    // y se ensuciaba el historial con duplicados al re-descargar para probar
-    // ajustes de descuento o forma de pago.
-    const nombre = this.clienteNombre().trim();
-    const sujeto = nombre ? `"${nombre}"` : 'el cliente';
-    const cantidad = this.items().length;
-    const editandoId = this.presupuestoEditandoId();
-    const header = editandoId != null ? 'Guardar cambios' : 'Generar presupuesto';
-    const message = editandoId != null
-      ? `Se van a guardar los cambios del presupuesto #${editandoId} ` +
-        `(${cantidad} producto${cantidad === 1 ? '' : 's'}, ${sujeto}) y se descargará el PDF actualizado.\n\n` +
-        `El número de presupuesto y la fecha original se mantienen.`
-      : `Se va a generar el PDF con ${cantidad} producto${cantidad === 1 ? '' : 's'} ` +
-        `para ${sujeto} y quedará registrado en el historial de presupuestos. ` +
-        `${nombre ? sujeto : 'El cliente'} también aparecerá en la lista de Clientes.\n\n` +
-        `¿Continuar?`;
-    this.confirmationService.confirm({
-      header,
-      message,
-      icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
-      acceptButtonProps: {
-        label: editandoId != null ? 'Guardar cambios' : 'Generar y descargar',
-        icon: editandoId != null ? 'pi pi-save' : 'pi pi-download',
-      },
-      rejectButtonProps: {
-        label: 'Cancelar',
-        severity: 'secondary',
-        outlined: true,
-      },
-      accept: () => this.ejecutarPrevisualizar(),
-    });
+    // El dialog unificado funciona como confirmación + form de cliente. Si
+    // los datos están incompletos, el operador los completa adentro antes
+    // de confirmar; si ya están cargados, los revisa y confirma.
+    this.abrirDialogCliente('previsualizar');
   }
 
   private ejecutarPrevisualizar(): void {
@@ -936,33 +1115,28 @@ export class PresupuestosPage implements AfterViewInit {
     request$.subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
-        const blob = res.body;
-        if (!blob) {
-          if (previewTab) previewTab.close();
+        // Abrimos el PDF en la pestaña pre-abierta para que el operador lo
+        // previsualice. NO auto-descargamos cuando el preview se abre OK:
+        // si quiere bajarlo a disco (para mandarlo por WhatsApp/email
+        // manual), lo hace desde el visor del browser. Cuando el browser
+        // bloquea el popup, el helper cae a auto-descarga como plan B y
+        // el toast lo aclara.
+        const resultado = abrirPdfEnPreview(res, 'presupuesto.pdf', previewTab);
+        if (resultado == null) {
           this.warn('El backend no devolvió un PDF.');
           return;
         }
-        // Bajamos el PDF a disco con un nombre legible para que el operador
-        // pueda mandárselo al cliente por WhatsApp/email manual. El mismo
-        // blob lo abrimos en la pestaña pre-abierta para previsualizar.
-        const filename = this.extraerFilename(res.headers.get('Content-Disposition'));
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        if (previewTab) previewTab.location.href = url;
-        // 60s — la pestaña preview necesita el URL para renderizar el PDF;
-        // si lo revocamos antes, la pestaña muestra "página no encontrada".
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        this.hayCambiosSinGuardar.set(false);
+        const detallePreview = editandoId != null
+          ? `Presupuesto #${editandoId} actualizado — se abrió para previsualizar.`
+          : 'Se abrió para previsualizar. Podés bajar el PDF desde el visor.';
+        const detalleDescarga = editandoId != null
+          ? `Presupuesto #${editandoId} actualizado — PDF descargado (el browser bloqueó la pestaña preview).`
+          : 'PDF descargado — el browser bloqueó la pestaña preview.';
         this.toast.add({
           severity: 'success',
           summary: editandoId != null ? 'Cambios guardados' : 'Presupuesto generado',
-          detail: editandoId != null
-            ? `Presupuesto #${editandoId} actualizado y PDF descargado.`
-            : 'Se descargó el PDF y se abrió para previsualizar.',
+          detail: resultado.previewAbierto ? detallePreview : detalleDescarga,
           life: 4000,
         });
       },
@@ -974,31 +1148,48 @@ export class PresupuestosPage implements AfterViewInit {
     });
   }
 
-  /** Extrae el filename del header `Content-Disposition`. Acepta los
-   *  formatos {@code attachment; filename="x.pdf"} y {@code inline; filename=x.pdf}.
-   *  Si el filename viene URL-encoded lo decodifica defensivamente
-   *  (un `%` malformado tira `URIError`, en ese caso devolvemos el raw).
-   *  Si no encuentra nada usable, devuelve un fallback genérico. */
-  private extraerFilename(disposition: string | null): string {
-    if (!disposition) return 'presupuesto.pdf';
-    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-    if (!m) return 'presupuesto.pdf';
-    const raw = m[1].trim();
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
-  }
-
   abrirDialogEnviar(): void {
     if (!this.hayItems()) {
       this.warn('Tenés que seleccionar al menos un producto para enviar.');
       return;
     }
+    // Validamos al confirmar (dentro del dialog), no al abrirlo, porque el
+    // dialog incluye los inputs editables del cliente — si falta el email
+    // el operador lo carga adentro.
+    this.abrirDialogCliente('enviar');
+  }
+
+  /** Abre el dialog unificado de "Datos del cliente + confirmación" en el
+   *  modo correspondiente a {@code accion}:
+   *   - `'previsualizar'`: el botón principal genera el PDF (POST/PUT).
+   *   - `'enviar'`: el botón principal encola el envío por email.
+   *   - `null`: edición libre — solo "Cerrar" en el footer.
+   *  El form interno bindea los signals existentes ({@link clienteNombre},
+   *  {@link clienteEmail}, etc.) así que los cambios persisten aunque el
+   *  operador cierre el dialog sin confirmar. */
+  abrirDialogCliente(accion: 'previsualizar' | 'enviar' | null): void {
+    this.accionPendienteDialog.set(accion);
+    this.mostrarDialogCliente.set(true);
+  }
+
+  /** Botón principal del dialog. Valida los datos del cliente según la
+   *  acción (email obligatorio solo si se va a enviar) y dispara el flujo
+   *  correspondiente. Si la acción es `null` (edición libre), simplemente
+   *  cierra el dialog. */
+  confirmarDialogCliente(): void {
+    const accion = this.accionPendienteDialog();
+    if (accion === null) {
+      this.mostrarDialogCliente.set(false);
+      return;
+    }
     if (!this.validarDatosCliente()) return;
-    if (!this.validarEmailParaEnvio()) return;
-    this.mostrarDialogEnviar.set(true);
+    if (accion === 'enviar' && !this.validarEmailParaEnvio()) return;
+    this.mostrarDialogCliente.set(false);
+    if (accion === 'previsualizar') {
+      this.ejecutarPrevisualizar();
+    } else {
+      this.enviarPorEmail();
+    }
   }
 
   enviarPorEmail(): void {
@@ -1017,7 +1208,7 @@ export class PresupuestosPage implements AfterViewInit {
     request$.subscribe({
       next: (res) => {
         this.enviandoEmail.set(false);
-        this.mostrarDialogEnviar.set(false);
+        this.hayCambiosSinGuardar.set(false);
         this.toast.add({
           severity: 'info',
           summary: editandoId != null ? 'Cambios guardados — envío encolado' : 'Envío encolado',
@@ -1036,36 +1227,27 @@ export class PresupuestosPage implements AfterViewInit {
     this.toast.add({ severity: 'warn', summary: 'Atención', detail, life: 5000 });
   }
 
-  /** Arma las sugerencias del autocomplete del email mientras el operador
-   *  tipea. Replica la misma lógica del dialog de pedidos: si todavía no
-   *  hay `@`, sugiere todos los dominios; si ya está el `@` con dominio
-   *  parcial, filtra por prefijo. */
+  /** Notifica al operador una mutación sobre el detalle del presupuesto
+   *  (agregar / modificar / quitar / vaciar / descuento global) y marca el
+   *  estado como "cambios sin guardar". El toast tiene vida corta para no
+   *  saturar cuando se hacen varios cambios seguidos. */
+  private notificarMutacion(severity: 'success' | 'info' | 'warn', summary: string, detail: string): void {
+    this.toast.add({ severity, summary, detail, life: 1000 });
+    this.hayCambiosSinGuardar.set(true);
+  }
+
+  /** Etiqueta corta del ítem para usar en los toasts: descripción truncada o
+   *  el SKU como fallback. Mantiene los toasts legibles sin desbordar. */
+  private etiquetaItem(it: { descripcion?: string | null; sku: string }): string {
+    const desc = (it.descripcion ?? '').trim();
+    if (!desc) return it.sku;
+    return desc.length > 40 ? `${desc.slice(0, 40)}…` : desc;
+  }
+
+  /** Sugerencias del autocomplete del email — delega en el helper
+   *  compartido {@link calcularSugerenciasEmail}. */
   onCompletarEmail(event: AutoCompleteCompleteEvent): void {
-    const query = (event.query ?? '').trim();
-    if (!query) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    const at = query.indexOf('@');
-    if (at < 0) {
-      this.sugerenciasEmail.set(DOMINIOS_EMAIL_SUGERIDOS.map((d) => `${query}@${d}`));
-      return;
-    }
-    const localPart = query.substring(0, at);
-    const dominioPart = query.substring(at + 1).toLowerCase();
-    if (!localPart) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    if (dominioPart.includes('.') && !DOMINIOS_EMAIL_SUGERIDOS.some((d) => d.startsWith(dominioPart))) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    this.sugerenciasEmail.set(
-      DOMINIOS_EMAIL_SUGERIDOS
-        .filter((d) => d.startsWith(dominioPart))
-        .map((d) => `${localPart}@${d}`),
-    );
+    this.sugerenciasEmail.set(calcularSugerenciasEmail(event.query));
   }
 
   /** Valida los datos del cliente. El email NO es obligatorio para previsualizar
@@ -1162,4 +1344,12 @@ interface GrupoItem {
   totalSinIva: number;
   formas: PresupuestoFormaPagoSnapshot[];
   indiceMejorPrecio: number;
+}
+
+/** Snapshot de forma de pago enriquecido para el footer compacto: trae el
+ *  índice original (para resaltar la misma "mejor precio" en el panel
+ *  expandido) y un flag para pintar el chip ganador con el badge verde. */
+interface FormaPagoFooter extends PresupuestoFormaPagoSnapshot {
+  indiceOriginal: number;
+  esMejorPrecio: boolean;
 }

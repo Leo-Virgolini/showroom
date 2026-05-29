@@ -32,6 +32,13 @@ public class ProductoCache {
     @Column(length = 200)
     private String descripcion;
 
+    /** Nombre del rubro DUX (ej. "MAQUINAS INDUSTRIALES", "UTENSILIOS",
+     *  "BAZAR"). Lo usamos para excluir ciertos rubros de los descuentos
+     *  generales por escala (regla negocio: a MAQUINAS INDUSTRIALES no se le
+     *  aplican los descuentos por monto). Null si DUX no informa rubro. */
+    @Column(name = "rubro", length = 120)
+    private String rubro;
+
     /** PVP de la lista "KT GASTRO" tal como viene de DUX (con IVA incluido). */
     @Column(name = "pvp_kt_gastro_con_iva", precision = 18, scale = 4)
     private BigDecimal pvpKtGastroConIva;

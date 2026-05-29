@@ -47,6 +47,12 @@ public class SesionScanItem {
     @Column(name = "descripcion", length = 300)
     private String descripcion;
 
+    /** Rubro DUX al momento del scan (ej. "MAQUINAS INDUSTRIALES"). Snapshot —
+     *  si DUX recategoriza después, el PDF de ítems de interés sigue tratando
+     *  el producto según lo que era cuando el cliente lo vio. */
+    @Column(name = "rubro", length = 120)
+    private String rubro;
+
     /** Precio con IVA al momento del scan. Si DUX lo cambió después, el PDF
      *  muestra este valor — refleja lo que vio el cliente. */
     @Column(name = "precio_con_iva", precision = 18, scale = 2)

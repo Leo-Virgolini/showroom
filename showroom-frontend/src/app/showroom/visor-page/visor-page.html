@@ -166,8 +166,29 @@
   </div>
 </div>
 
-<!-- Tiles de descuento — uno por escala configurada -->
-@if (escalasOrdenadas().length > 0) {
+<!-- Aviso cuando el producto es de un rubro excluido (MAQUINAS INDUSTRIALES):
+     reemplaza visualmente a los tiles de descuento para que el cliente
+     entienda que el precio mostrado es el final (no hay descuento por monto
+     que pueda obtener acumulando). -->
+@if (escalasOrdenadas().length > 0 && scanExcluyeDescuentos()) {
+<div class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 flex items-start gap-3">
+  <i class="pi pi-info-circle text-amber-700 dark:text-amber-300 text-xl shrink-0 mt-0.5"></i>
+  <div class="flex-1 min-w-0">
+    <div class="font-bold text-amber-800 dark:text-amber-200 text-sm sm:text-base">
+      Sin descuentos por monto
+    </div>
+    <div class="text-xs sm:text-sm text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+      Las máquinas industriales mantienen el precio de lista —
+      los descuentos por compras desde cierto monto no aplican a este rubro.
+    </div>
+  </div>
+</div>
+}
+
+<!-- Tiles de descuento — uno por escala configurada. Para rubros excluidos
+     (MAQUINAS INDUSTRIALES) no se muestran: comercialmente no aplica el
+     descuento a esos productos. -->
+@if (escalasOrdenadas().length > 0 && !scanExcluyeDescuentos()) {
 <div class="flex flex-col gap-2">
   <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
     Comprá más y ahorrás
@@ -277,6 +298,10 @@
         </div>
       </div>
       }
+    </div>
+    <div class="text-[11px] text-muted-color text-center inline-flex items-start gap-1.5 justify-center">
+      <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
+      <span>No aplican al rubro <strong>MAQUINAS INDUSTRIALES</strong>.</span>
     </div>
   </div>
   }

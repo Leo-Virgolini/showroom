@@ -224,6 +224,7 @@ public class PresupuestoComercialService {
                 p.getObservaciones(),
                 p.getDescuentoGlobalPorcentaje(),
                 datos.cotizacionIndividual(),
+                p.getConvertidoEnPedidoId(),
                 datos.items(),
                 datos.formasPago());
     }

@@ -136,8 +136,114 @@ $kt-marron:  #3B1E09;
   border-color: rgba(255, 255, 255, 0.05);
 }
 
-// Banner del monto principal — gradient naranja KT.
-.monto-banner {
-  background: linear-gradient(135deg, #fff5eb 0%, #ffe4c7 100%);
-  border: 2px solid rgba($kt-naranja, 0.4);
+// =====================================================
+// Tarjeta de monto del nuevo layout (2 columnas).
+// El monto 1 es el "principal" (naranja KT lleno), el monto 2 es el
+// "secundario" (más sutil hasta que se completa, ahí se enciende).
+// =====================================================
+.monto-card {
+  transition: background 0.2s ease, border-color 0.2s ease,
+              box-shadow 0.2s ease, transform 0.2s ease;
+  display: flex;
+
+  &--primario {
+    background: linear-gradient(135deg, #fff5eb 0%, #ffe4c7 100%);
+    border: 2px solid rgba($kt-naranja, 0.4);
+  }
+
+  &--secundario {
+    background: var(--p-surface-50);
+    border: 2px dashed rgba($kt-marron, 0.18);
+  }
+
+  &--secundario-activo {
+    background: linear-gradient(135deg, #fff8eb 0%, #ffefcd 100%);
+    border: 2px solid rgba($kt-naranja, 0.4);
+    border-style: solid;
+  }
+}
+
+:host-context(.dark) ::ng-deep .monto-card--primario,
+:host-context(.dark) ::ng-deep .monto-card--secundario-activo {
+  background: color-mix(in oklab, var(--p-surface-900) 88%, $kt-naranja);
+  border-color: rgba($kt-naranja, 0.55);
+}
+
+:host-context(.dark) ::ng-deep .monto-card--secundario {
+  background: var(--p-surface-900);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+// Pill identificador del monto (esquina superior izquierda de cada card).
+.monto-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 1;
+
+  &--primario {
+    background: $kt-naranja;
+    color: white;
+  }
+
+  &--secundario {
+    background: rgba($kt-marron, 0.12);
+    color: $kt-marron;
+  }
+}
+
+:host-context(.dark) ::ng-deep .monto-pill--secundario {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--p-surface-100);
+}
+
+// Chip de selección rápida de tasa de IVA (21%, 10,5%, etc.).
+// El input numérico al lado queda para tasas custom.
+.iva-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: white;
+  border: 1px solid rgba($kt-marron, 0.2);
+  color: $kt-marron;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease,
+              border-color 0.15s ease, transform 0.1s ease;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba($kt-naranja, 0.1);
+    border-color: rgba($kt-naranja, 0.5);
+    transform: translateY(-1px);
+  }
+
+  &--active {
+    background: $kt-naranja;
+    color: white;
+    border-color: $kt-naranja;
+    box-shadow: 0 2px 6px -1px rgba($kt-naranja, 0.4);
+
+    &:hover {
+      background: $kt-naranja;
+      color: white;
+    }
+  }
+}
+
+:host-context(.dark) ::ng-deep .iva-chip {
+  background: var(--p-surface-900);
+  color: var(--p-surface-100);
+  border-color: rgba(255, 255, 255, 0.15);
+
+  &--active {
+    background: $kt-naranja;
+    color: white;
+  }
 }

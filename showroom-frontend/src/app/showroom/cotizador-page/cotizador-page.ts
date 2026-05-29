@@ -33,21 +33,14 @@ import {
 } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
+import { abrirPdfEnPreview } from '../download.utils';
+import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
 import { UserChip } from '../user-chip/user-chip';
 
 /** Redondeo HALF_UP a 2 decimales — alinea preview con el backend (BigDecimal). */
 const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
-
-const DOMINIOS_EMAIL_SUGERIDOS = [
-  'gmail.com',
-  'hotmail.com',
-  'outlook.com',
-  'yahoo.com.ar',
-  'live.com',
-  'icloud.com',
-];
 
 /**
  * Pantalla del cotizador de financiación: el operador ingresa un monto base
@@ -108,12 +101,23 @@ export class CotizadorPage {
 
   // -----------------------------
   // Estado del cotizador
+  //
+  // El cotizador soporta DOS montos en simultáneo, cada uno con su tasa de
+  // IVA propia, para cuando el operador cotiza productos con tasas
+  // distintas (ej. una máquina con 21% + un insumo con 10.5%). Al menos
+  // uno de los dos tiene que estar cargado; las formas de pago se calculan
+  // sobre la suma respetando el IVA propio de cada monto.
   // -----------------------------
   readonly montoBase = signal<number>(0);
   /** % de IVA aplicado a las formas que lo incluyen. Default 21 (tasa
    *  general AR) editable porque varía según el producto: 10.5 para
    *  esenciales, 27 para servicios públicos. */
   readonly porcIva = signal<number>(21);
+
+  /** Segundo monto base SIN IVA, opcional — 0 = no se usa. */
+  readonly montoBase2 = signal<number>(0);
+  /** % de IVA del segundo monto. Default 10.5 (productos esenciales). */
+  readonly porcIva2 = signal<number>(10.5);
 
   // Datos del cliente (todos opcionales — caso típico: cotización rápida
   // sin tener al cliente registrado todavía).
@@ -141,18 +145,25 @@ export class CotizadorPage {
   readonly enviandoEmail = signal(false);
   readonly mostrarDialogEnviar = signal(false);
 
-  /** Tiene al menos un monto válido para cotizar. */
-  readonly hayMonto = computed(() => (this.montoBase() ?? 0) > 0);
+  /** Tiene al menos uno de los dos montos cargado. */
+  readonly hayMonto = computed(
+    () => (this.montoBase() ?? 0) > 0 || (this.montoBase2() ?? 0) > 0,
+  );
 
-  /** Total CON IVA (base × (1 + IVA/100)) — para formas que aplican IVA. */
+  /** Total CON IVA — suma cada monto con su IVA propio. Para formas que
+   *  aplican IVA: monto1×(1+iva1) + monto2×(1+iva2). */
   readonly totalConIva = computed(() => {
-    const base = this.montoBase() ?? 0;
-    const iva = (this.porcIva() ?? 21) / 100;
-    return base * (1 + iva);
+    const m1 = this.montoBase() ?? 0;
+    const iva1 = (this.porcIva() ?? 21) / 100;
+    const m2 = this.montoBase2() ?? 0;
+    const iva2 = (this.porcIva2() ?? 10.5) / 100;
+    return m1 * (1 + iva1) + m2 * (1 + iva2);
   });
 
-  /** Total SIN IVA — para formas que no aplican IVA. */
-  readonly totalSinIva = computed(() => this.montoBase() ?? 0);
+  /** Total SIN IVA — suma de los dos montos. Para formas que no aplican IVA. */
+  readonly totalSinIva = computed(
+    () => (this.montoBase() ?? 0) + (this.montoBase2() ?? 0),
+  );
 
   /** Snapshots de las formas de pago con sus precios finales. Misma fórmula
    *  que el presupuestador: recargo se interpreta como descuento contado,
@@ -176,6 +187,17 @@ export class CotizadorPage {
       };
     });
   });
+
+  /** Clase CSS completa de cada card de forma de pago. Computamos la string
+   *  en TS porque combinar `[class]="'color-N'"` con `[class.es-mejor-precio]`
+   *  en el template hace que Angular pise el toggle de "mejor precio" al
+   *  re-evaluar la expresión string, dejando la barra superior con el color
+   *  del índice en lugar del verde. Una única string evita el conflicto. */
+  clasesFormaCard(i: number): string {
+    const colorClass = `color-${(i % 10) + 1}`;
+    const mejorClass = i === this.indiceMejorPrecio() ? ' es-mejor-precio' : '';
+    return `forma-pago-card ${colorClass}${mejorClass}`;
+  }
 
   readonly indiceMejorPrecio = computed(() => {
     const formas = this.formasPagoCalculadas();
@@ -248,6 +270,8 @@ export class CotizadorPage {
         this.cotizacionEditandoId.set(det.id);
         this.montoBase.set(det.montoBaseSinIva ?? 0);
         this.porcIva.set(det.porcIva ?? 21);
+        this.montoBase2.set(det.montoBaseSinIva2 ?? 0);
+        this.porcIva2.set(det.porcIva2 ?? 10.5);
         this.clienteNombre.set(det.clienteNombre ?? '');
         this.clienteTelefono.set(det.clienteTelefono ?? '');
         this.clienteEmail.set(det.clienteEmail ?? '');
@@ -274,6 +298,7 @@ export class CotizadorPage {
   }
 
   private armarPayload(): GenerarCotizacionRequest {
+    const m2 = this.montoBase2() ?? 0;
     return {
       clienteNombre: this.clienteNombre().trim() || null,
       clienteTelefono: this.clienteTelefono().trim() || null,
@@ -282,6 +307,10 @@ export class CotizadorPage {
       observaciones: this.observaciones().trim() || null,
       montoBaseSinIva: this.montoBase() ?? 0,
       porcIva: this.porcIva() ?? 21,
+      // Mandamos el segundo monto solo cuando está cargado — el backend lo
+      // toma como "no se usa el segundo monto" si viene null/0.
+      montoBaseSinIva2: m2 > 0 ? m2 : null,
+      porcIva2: m2 > 0 ? (this.porcIva2() ?? 10.5) : null,
       formasPago: this.formasPagoCalculadas(),
     };
   }
@@ -301,6 +330,8 @@ export class CotizadorPage {
     // IVA vuelve al default 21 — caso típico, el operador igual lo puede
     // ajustar después si la cotización es para un producto con otra tasa.
     this.porcIva.set(21);
+    this.montoBase2.set(0);
+    this.porcIva2.set(10.5);
     this.clienteNombre.set('');
     this.clienteTelefono.set('');
     this.clienteEmail.set('');
@@ -317,16 +348,16 @@ export class CotizadorPage {
     const editandoId = this.cotizacionEditandoId();
     const header = editandoId != null ? 'Guardar cambios' : 'Generar cotización';
     const message = editandoId != null
-      ? `Se van a guardar los cambios de la cotización #${editandoId} y se descargará el PDF actualizado.`
-      : `Se va a generar el PDF de la cotización por ${this.formatear(this.montoBase())} y quedará registrada en el historial.\n\n¿Continuar?`;
+      ? `Se van a guardar los cambios de la cotización #${editandoId} y se abrirá el PDF actualizado.`
+      : `Se va a generar el PDF de la cotización por ${this.formatear(this.totalSinIva())} y quedará registrada en el historial.\n\n¿Continuar?`;
 
     this.confirmationService.confirm({
       header,
       message,
       icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
       acceptButtonProps: {
-        label: editandoId != null ? 'Guardar cambios' : 'Generar y descargar',
-        icon: editandoId != null ? 'pi pi-save' : 'pi pi-download',
+        label: editandoId != null ? 'Guardar cambios' : 'Generar PDF',
+        icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
       },
       rejectButtonProps: {
         label: 'Cancelar',
@@ -348,28 +379,21 @@ export class CotizadorPage {
     request$.subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
-        const blob = res.body;
-        if (!blob) {
-          if (previewTab) previewTab.close();
+        const resultado = abrirPdfEnPreview(res, 'cotizacion.pdf', previewTab);
+        if (resultado == null) {
           this.warn('El backend no devolvió un PDF.');
           return;
         }
-        const filename = this.extraerFilename(res.headers.get('Content-Disposition'));
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        if (previewTab) previewTab.location.href = url;
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        const detallePreview = editandoId != null
+          ? `Cotización #${editandoId} actualizada — se abrió para previsualizar.`
+          : 'Se abrió para previsualizar. Podés bajar el PDF desde el visor.';
+        const detalleDescarga = editandoId != null
+          ? `Cotización #${editandoId} actualizada — PDF descargado (el browser bloqueó la pestaña preview).`
+          : 'PDF descargado — el browser bloqueó la pestaña preview.';
         this.toast.add({
           severity: 'success',
           summary: editandoId != null ? 'Cambios guardados' : 'Cotización generada',
-          detail: editandoId != null
-            ? `Cotización #${editandoId} actualizada y PDF descargado.`
-            : 'Se descargó el PDF y se abrió para previsualizar.',
+          detail: resultado.previewAbierto ? detallePreview : detalleDescarga,
           life: 4000,
         });
       },
@@ -439,43 +463,7 @@ export class CotizadorPage {
   }
 
   onCompletarEmail(event: AutoCompleteCompleteEvent): void {
-    const query = (event.query ?? '').trim();
-    if (!query) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    const at = query.indexOf('@');
-    if (at < 0) {
-      this.sugerenciasEmail.set(DOMINIOS_EMAIL_SUGERIDOS.map((d) => `${query}@${d}`));
-      return;
-    }
-    const localPart = query.substring(0, at);
-    const dominioPart = query.substring(at + 1).toLowerCase();
-    if (!localPart) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    if (dominioPart.includes('.') && !DOMINIOS_EMAIL_SUGERIDOS.some((d) => d.startsWith(dominioPart))) {
-      this.sugerenciasEmail.set([]);
-      return;
-    }
-    this.sugerenciasEmail.set(
-      DOMINIOS_EMAIL_SUGERIDOS
-        .filter((d) => d.startsWith(dominioPart))
-        .map((d) => `${localPart}@${d}`),
-    );
-  }
-
-  private extraerFilename(disposition: string | null): string {
-    if (!disposition) return 'cotizacion.pdf';
-    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-    if (!m) return 'cotizacion.pdf';
-    const raw = m[1].trim();
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
+    this.sugerenciasEmail.set(calcularSugerenciasEmail(event.query));
   }
 
   // -----------------------------

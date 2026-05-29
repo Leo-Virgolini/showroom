@@ -171,6 +171,7 @@ public class SesionShowroomService {
         if (existente != null) {
             existente.setEscaneadoAt(Instant.now());
             existente.setDescripcion(scan.descripcion());
+            existente.setRubro(scan.rubro());
             existente.setPrecioConIva(scan.pvpKtGastroConIva());
             existente.setPorcIva(scan.porcIva());
         } else {
@@ -178,6 +179,7 @@ public class SesionShowroomService {
                     .sesion(activa)
                     .sku(scan.sku())
                     .descripcion(scan.descripcion())
+                    .rubro(scan.rubro())
                     .precioConIva(scan.pvpKtGastroConIva())
                     .porcIva(scan.porcIva())
                     .escaneadoAt(Instant.now())
@@ -339,6 +341,7 @@ public class SesionShowroomService {
                 it.getId(),
                 it.getSku(),
                 it.getDescripcion(),
+                it.getRubro(),
                 it.getPrecioConIva(),
                 it.getPorcIva(),
                 imagenLocalService.buscar(it.getSku()).isPresent()

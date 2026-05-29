@@ -42,14 +42,22 @@
           <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar el detalle"
             class="btn-kt-rojo" (onClick)="vaciar()" pTooltip="Vaciar el detalle" tooltipPosition="bottom" />
         }
-        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-download'"
+        @if (esModoEdicion() && hayCambiosSinGuardar()) {
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
+            pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
+            tooltipPosition="bottom" role="status" aria-live="polite">
+            <i class="pi pi-exclamation-circle"></i>
+            <span class="hidden sm:inline">Sin guardar</span>
+          </span>
+        }
+        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
           [label]="screenLg() ? (esModoEdicion() ? 'Guardar cambios' : 'Generar PDF') : ''"
-          [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar y descargar PDF'"
+          [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
           class="btn-kt-marron" [disabled]="!hayItems() || generandoPreview()"
           [loading]="generandoPreview()" (onClick)="previsualizar()"
           [pTooltip]="esModoEdicion()
-              ? 'Guarda los cambios sobre el presupuesto y descarga el PDF actualizado'
-              : 'Genera, descarga y guarda el presupuesto en el historial (pide confirmación antes)'"
+              ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+              : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
           tooltipPosition="bottom" />
         <p-button icon="pi pi-send"
           [label]="screenLg() ? (esModoEdicion() ? 'Guardar y enviar' : 'Enviar') : ''"
@@ -60,6 +68,28 @@
               ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
               : 'Generar y enviar el presupuesto al cliente'"
           tooltipPosition="bottom" />
+
+        @if (esModoEdicion()) {
+          @if (pedidoIdConvertido() != null) {
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
+              [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
+              tooltipPosition="bottom">
+              <i class="pi pi-check-circle"></i>
+              <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
+            </span>
+          } @else {
+            <p-button icon="pi pi-cart-arrow-down"
+              [label]="screenLg() ? 'Crear pedido' : ''"
+              ariaLabel="Crear pedido en DUX a partir de este presupuesto"
+              severity="success"
+              [disabled]="hayCambiosSinGuardar()"
+              (onClick)="abrirCrearPedido()"
+              [pTooltip]="hayCambiosSinGuardar()
+                  ? 'Guardá los cambios antes de generar el pedido'
+                  : 'Crear pedido en DUX a partir de este presupuesto'"
+              tooltipPosition="bottom" />
+          }
+        }
 
         <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
           ariaLabel="Ver historial de presupuestos" class="btn-kt-marron"
@@ -75,12 +105,24 @@
     </ng-template>
   </p-toolbar>
 
-  <!-- ============= CONTENIDO ============= -->
-  <main class="flex-1 p-3 sm:p-4 lg:p-6">
-    <div class="grid grid-cols-1 xl:grid-cols-[1fr_22rem] gap-4">
+  <!-- ============= CONTENIDO =============
+       Layout split 50/50 en lg+: izquierda buscador, derecha presupuesto
+       armado + datos cliente. En md y menores, vuelve a 1 columna apilada.
+       El padding-bottom se calcula dinámicamente con el alto real del
+       footer sticky (medido con ResizeObserver) + 16px de aire visual, así
+       el footer nunca tapa los últimos ítems aunque los chips de formas
+       hagan flex-wrap a 2 o más líneas. -->
+  <main class="flex-1 p-3 sm:p-4 lg:p-6"
+    [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ============= COLUMNA IZQUIERDA ============= -->
-      <div class="flex flex-col gap-4">
+      <!-- ============= COLUMNA IZQUIERDA: scan + búsqueda =============
+           Sticky en lg+ para que el buscador esté siempre a la vista
+           mientras el operador arma el detalle a la derecha. No usamos
+           overflow-y-auto en la columna (provoca scrolls anidados con la
+           lista interna); la lista de resultados maneja su propio scroll
+           hasta el viewport disponible. -->
+      <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start">
 
         <!-- Card: scan + búsqueda por descripción -->
         <p-card class="kt-card">
@@ -127,13 +169,29 @@
                 <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
                   size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
               </div>
-              <div class="divide-y divide-[#FF861C]/10 max-h-72 overflow-auto">
+              <!-- Altura adaptativa al viewport: en pantallas chicas mantiene
+                   un tope razonable; en sm+ el cálculo deja respirar a la
+                   lista hasta donde permite el viewport, restando toolbar
+                   (~5rem) + scan input + header de la card + header de
+                   resultados + "Cargar más" + footer sticky compacto
+                   (~22rem en total). El operador ve muchos más resultados
+                   sin scrollear el cuerpo de la página. -->
+              <div class="divide-y divide-[#FF861C]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
                 @for (r of resultadosBusqueda(); track r.sku) {
                   <!-- Fila NO-clickeable. Para agregar al detalle, el operador
                        toca el botón explícito "Agregar" del final de la fila.
                        Después de agregar, la lista queda abierta para que pueda
-                       sumar varios productos seguidos sin volver a buscar. -->
-                  <div class="w-full flex items-center gap-3 px-3 py-2 hover:bg-[#FF861C]/5 transition-colors">
+                       sumar varios productos seguidos sin volver a buscar.
+                       Las máquinas industriales (rubro excluido de descuentos)
+                       llevan un borde izquierdo ámbar grueso + tinte de fondo
+                       para identificarlas en listas largas. -->
+                  <div class="w-full flex items-center gap-3 px-3 py-2 transition-colors"
+                       [class.bg-amber-50]="esRubroSinDescuento(r.rubro)"
+                       [class.dark:bg-amber-950/20]="esRubroSinDescuento(r.rubro)"
+                       [class.border-l-4]="esRubroSinDescuento(r.rubro)"
+                       [class.border-amber-400]="esRubroSinDescuento(r.rubro)"
+                       [class.dark:border-amber-600]="esRubroSinDescuento(r.rubro)"
+                       [class.hover:bg-[#FF861C]/5]="!esRubroSinDescuento(r.rubro)">
                     <!-- Imagen más chica (48×48) que en el detalle (56×56) para
                          reforzar visualmente que la lista es "secundaria/exploratoria". -->
                     @if (r.imagenUrl) {
@@ -155,6 +213,16 @@
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-[10px] font-bold">
                           {{ r.sku }}
                         </span>
+                        @if (esRubroSinDescuento(r.rubro)) {
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
+                                       font-bold text-[9px] uppercase tracking-wide"
+                                pTooltip="Máquina industrial — no aplican los descuentos por monto"
+                                tooltipPosition="top">
+                            <i class="pi pi-wrench text-[8px]"></i>
+                            Máq. Industrial
+                          </span>
+                        }
                         @if (r.habilitado === false) {
                           <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
                             Deshabilitado
@@ -192,14 +260,23 @@
                       <div class="text-[10px] text-muted-color">s/IVA</div>
                     </div>
                     </div>
-                    <!-- Input de cantidad con label "Cantidad" arriba +
-                         botón "Agregar" al lado. Para centrar el botón
-                         perfectamente con el input, le agregamos un spacer
-                         invisible arriba del botón con la misma altura del
-                         label. Así ambos bloques (label+input y
-                         spacer+botón) tienen idéntica altura total y
-                         items-center los alinea al medio sin offset. -->
+                    <!-- Layout: 3 columnas (Ver, Cantidad, Agregar) con la
+                         misma estructura [label/spacer + gap + elemento].
+                         items-center alinea los centros geométricos de cada
+                         columna, así los centros de los elementos (botones e
+                         input) quedan a la misma altura visual. Los botones
+                         usan un spacer invisible (aria-hidden) con la misma
+                         altura que la label "CANTIDAD". -->
                     <div class="shrink-0 flex items-center gap-2">
+                      <div class="flex flex-col items-center gap-0.5">
+                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
+                        <p-button icon="pi pi-eye"
+                          severity="info" size="small"
+                          (onClick)="verResultado(r)"
+                          pTooltip="Ver el producto completo (foto grande, datos)"
+                          tooltipPosition="top"
+                          ariaLabel="Ver producto" />
+                      </div>
                       <div class="flex flex-col items-center gap-0.5">
                         <span class="text-[9px] uppercase tracking-wider font-bold text-[#FF861C] dark:text-[#FF9A3F] leading-none">
                           Cantidad
@@ -214,8 +291,8 @@
                           ariaLabel="Cantidad de unidades a agregar al detalle" />
                       </div>
                       <div class="flex flex-col items-center gap-0.5">
-                        <span class="text-[9px] leading-none invisible" aria-hidden="true">.</span>
-                        <p-button icon="pi pi-arrow-down"
+                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
+                        <p-button icon="pi pi-arrow-right"
                           severity="success" size="small"
                           (onClick)="agregarResultado(r.sku)"
                           pTooltip="Agregar al detalle (la lista se queda abierta)"
@@ -237,10 +314,15 @@
           }
         </p-card>
 
+      </div>
+
+      <!-- ============= COLUMNA DERECHA: detalle + datos cliente ============= -->
+      <div class="flex flex-col gap-4">
+
         <!-- Tabla de items — card destacada con borde izquierdo verde KT
-             para distinguirla visualmente de la lista de búsqueda (azul/sky)
-             que está arriba. El verde refuerza que estos productos ya están
-             "comprometidos" en el presupuesto. -->
+             para diferenciarla visualmente del card naranja de búsqueda
+             (a la izquierda). El verde refuerza que estos productos ya
+             están "comprometidos" en el presupuesto. -->
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
             <div class="flex items-center justify-between gap-2 flex-wrap">
@@ -254,6 +336,22 @@
                   </span>
                 }
               </div>
+              <!-- Chip "Datos del cliente" — abre el dialog en modo edición
+                   libre. Si el cliente ya tiene datos, los muestra como
+                   resumen rápido; si no, invita a cargarlos. -->
+              <button type="button" class="kt-cliente-chip"
+                (click)="abrirDialogCliente(null)"
+                [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
+                <i class="pi pi-user"></i>
+                @if (clienteNombre().trim() || clienteTelefono().trim()) {
+                  <span class="truncate max-w-[12rem]">
+                    {{ clienteNombre().trim() || clienteTelefono() }}
+                  </span>
+                } @else {
+                  <span>Sin datos del cliente</span>
+                }
+                <i class="pi pi-pencil text-[10px] opacity-70"></i>
+              </button>
             </div>
           </ng-template>
 
@@ -274,9 +372,9 @@
                 optionLabel="label" optionValue="value"
                 [allowEmpty]="false"
                 ariaLabelledBy="modo-cotizacion-label"
-                styleClass="kt-modo-cotizacion">
+                class="kt-modo-cotizacion">
                 <ng-template let-opt #item>
-                  <span class="flex items-center gap-1.5 px-1">
+                  <span class="flex items-center gap-1.5 px-1 font-bold">
                     <i [class]="opt.icon"></i>
                     <span>{{ opt.label }}</span>
                   </span>
@@ -321,7 +419,11 @@
               </ng-template>
 
               <ng-template #body let-it>
-                <tr>
+                <!-- Fila del detalle: si es máquina industrial, marcamos con
+                     fondo ámbar suave para que el operador no se sorprenda
+                     al ver que el descuento global no afecta a esa línea
+                     (lo aclaramos también con badge "Máq. Industrial"). -->
+                <tr [class.item-maquina-industrial]="esRubroSinDescuento(it.rubro)">
                   <td>
                     @if (it.imagenUrl) {
                       <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
@@ -336,6 +438,16 @@
                     <div class="flex flex-col gap-0.5">
                       <div class="flex items-center gap-1.5 flex-wrap">
                         <span class="kt-sku-pill">{{ it.sku }}</span>
+                        @if (esRubroSinDescuento(it.rubro)) {
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
+                                       font-bold text-[10px] uppercase tracking-wide"
+                                pTooltip="Máquina industrial — no aplican los descuentos por monto"
+                                tooltipPosition="top">
+                            <i class="pi pi-wrench text-[9px]"></i>
+                            Máq. Industrial
+                          </span>
+                        }
                         @if (!it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0) {
                           <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex items-center gap-1"
                             pTooltip="Este producto no tiene precio cargado en DUX — no aportará al total" tooltipPosition="top">
@@ -410,302 +522,492 @@
           }
         </p-card>
 
-        <!-- Card: datos del cliente.
-             Email y teléfono son OBLIGATORIOS para descargar o enviar el
-             presupuesto — el operador siempre tiene que registrar al cliente
-             en el sistema para poder darle seguimiento posterior. -->
-        <p-card class="kt-card">
-          <ng-template #title>
-            <div class="kt-card-title">
-              <i class="pi pi-user"></i>
-              <span>Datos del cliente</span>
-            </div>
-          </ng-template>
-          <div class="flex flex-col gap-3">
-            <div>
-              <label for="clienteNombreInput" class="kt-label">
-                <i class="pi pi-id-card"></i> Nombre del cliente
-              </label>
-              <p-iconfield class="block">
-                <p-inputicon class="pi pi-user" />
-                <input pInputText id="clienteNombreInput" type="text" class="w-full"
-                  [ngModel]="clienteNombre()" (ngModelChange)="clienteNombre.set($event)"
-                  placeholder="Aparece en el header del PDF" />
-              </p-iconfield>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label for="clienteEmailInput" class="kt-label">
-                  <i class="pi pi-envelope"></i> Email
-                  <span class="text-[10px] font-normal text-muted-color">(requerido solo para enviar por email)</span>
-                </label>
-                <p-iconfield iconPosition="left">
-                  <p-inputicon><i class="pi pi-at"></i></p-inputicon>
-                  <p-autoComplete inputId="clienteEmailInput"
-                    [ngModel]="clienteEmail()" (ngModelChange)="clienteEmail.set($event ?? '')"
-                    [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
-                    [forceSelection]="false" [delay]="0"
-                    placeholder="cliente@gmail.com"
-                    inputStyleClass="w-full pl-10" class="w-full" />
-                </p-iconfield>
-              </div>
-              <div>
-                <label for="clienteTelefonoInput" class="kt-label">
-                  <i class="pi pi-phone"></i> Teléfono <span class="text-red-500">*</span>
-                </label>
-                <p-inputMask inputId="clienteTelefonoInput" mask="99-99999999" [unmask]="true"
-                  [ngModel]="clienteTelefono()" (ngModelChange)="clienteTelefono.set($event ?? '')"
-                  placeholder="11-12345678" class="w-full" />
-              </div>
-            </div>
-            <div>
-              <label for="rubroSelect" class="kt-label">
-                <i class="pi pi-tag"></i> Rubro
-              </label>
-              <p-select inputId="rubroSelect" [options]="opcionesRubro"
-                optionLabel="label" optionValue="value"
-                [ngModel]="rubro()" (ngModelChange)="rubro.set($event)"
-                placeholder="Seleccioná un rubro…" class="w-full"
-                [showClear]="true" appendTo="body" />
-              @if (rubro() === 'otros') {
-                <input pInputText type="text" class="w-full mt-2"
-                  [ngModel]="rubroOtros()" (ngModelChange)="rubroOtros.set($event)"
-                  placeholder="Escribí el rubro del cliente" maxlength="100" />
-              }
-            </div>
-            <div>
-              <label for="observacionesInput" class="kt-label">
-                <i class="pi pi-comment"></i> Observaciones
-              </label>
-              <textarea pTextarea id="observacionesInput" rows="2" class="w-full"
-                [ngModel]="observaciones()" (ngModelChange)="observaciones.set($event)"
-                placeholder="Notas que se imprimen al final del PDF"></textarea>
-            </div>
-          </div>
-        </p-card>
-
-      </div>
-
-      <!-- ============= COLUMNA DERECHA: formas de pago con sumario ============= -->
-      <div class="flex flex-col gap-4">
-
-        @if (hayItems()) {
-          <!-- Card con el descuento global + formas de pago o preview por ítem.
-               El layout cambia según `cotizacionIndividual`: agregado (1 set
-               de formas sobre el total) o individual (1 set por ítem). -->
-          <p-card class="kt-card kt-card-totales sticky top-3">
-            <ng-template #title>
-              <div class="kt-card-title">
-                <i class="pi pi-credit-card"></i>
-                @if (cotizacionIndividual()) {
-                  <span>Vista previa por producto</span>
-                } @else {
-                  <span>Formas de pago</span>
-                }
-              </div>
-            </ng-template>
-
-            <!-- Header de sumario: ítems + descuento global. El TOTAL global
-                 solo se muestra en modo agregado; en cotización individual,
-                 cada producto muestra su propio total más abajo. -->
-            <div class="flex flex-col gap-2 mb-3"
-              [class.pb-3]="!cotizacionIndividual()"
-              [class.border-b]="!cotizacionIndividual()"
-              [class.border-\[\#FF861C\]\/15]="!cotizacionIndividual()">
-              <div class="flex items-center justify-between gap-2">
-                <span class="text-xs text-muted-color flex items-center gap-1.5">
-                  <i class="pi pi-list-check text-[#FF861C]"></i>
-                  {{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}
-                </span>
-                @if (descuentoTotalMonto() > 0 && !cotizacionIndividual()) {
-                  <span class="text-xs text-muted-color text-right">
-                    Subtotal: <span class="line-through">{{ subtotalBrutoSinIva() | currency:'ARS':'symbol':'1.0-0' }}</span>
-                  </span>
-                }
-              </div>
-
-              <!-- Input de descuento global — actúa como atajo: al editarlo
-                   se COPIA el % a cada ítem (no se adiciona). Cuando los
-                   ítems tienen descuentos distintos, este input muestra el
-                   % efectivo (descuento total / subtotal bruto). -->
-              <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/15"
-                pTooltip="El % se aplica a cada ítem por igual. Si los ítems tienen descuentos distintos, este campo muestra el % efectivo."
-                tooltipPosition="left">
-                <label for="dctoGlobal" class="text-xs font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 cursor-pointer">
-                  <i class="pi pi-percentage text-[#FF861C]"></i>
-                  Descuento global
-                </label>
-                <p-inputNumber inputId="dctoGlobal" [ngModel]="descuentoGlobal()"
-                  (ngModelChange)="actualizarDescuentoGlobal($event)"
-                  [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
-                  [maxFractionDigits]="2"
-                  inputStyleClass="w-16 text-center descuento-input" />
-              </div>
-
-              @if (!cotizacionIndividual()) {
-                <!-- Total final único (modo agregado) -->
-                <div class="flex items-center justify-between gap-2 pt-1">
-                  <span class="text-sm font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                    <i class="pi pi-wallet text-[#FF861C]"></i> Total
-                  </span>
-                  <div class="text-right leading-tight">
-                    <div class="text-xl font-bold text-[#3B1E09] dark:text-surface-0">
-                      {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
-                    </div>
-                    @if (descuentoTotalMonto() > 0) {
-                      <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                        Ahorro: {{ descuentoTotalMonto() | currency:'ARS':'symbol':'1.0-0' }}
-                      </div>
-                    } @else {
-                      <div class="text-[10px] text-muted-color">precios sin IVA</div>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-
-            <!-- ======================
-                 MODO AGREGADO: 1 sola lista de formas globales
-                 ====================== -->
-            @if (!cotizacionIndividual()) {
-              @if (formasPago().length > 0) {
-                <div class="flex flex-col gap-2.5">
-                  @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
-                    <div class="forma-pago-card"
-                      [class]="'color-' + ((i % 10) + 1)"
-                      [class.es-mejor-precio]="i === indiceMejorPrecio()">
-                      @if (i === indiceMejorPrecio()) {
-                        <span class="badge-mejor-precio">
-                          <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
-                        </span>
-                      }
-                      <div class="flex items-center gap-1.5">
-                        <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
-                        <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
-                          {{ f.nombre }}
-                        </div>
-                      </div>
-                      @if (f.descripcion) {
-                        <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
-                      }
-                      <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
-                        {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
-                      </div>
-                      @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-                        <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
-                          <i class="pi pi-clone text-[10px]"></i>
-                          {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
-                        </div>
-                      }
-                    </div>
-                  }
-                </div>
-              } @else {
-                <div class="text-xs text-muted-color text-center py-3 flex flex-col items-center gap-1">
-                  <i class="pi pi-info-circle text-[#FF861C]"></i>
-                  No hay formas de pago activas configuradas.
-                </div>
-              }
-            }
-
-            <!-- ======================
-                 MODO COTIZACIÓN INDIVIDUAL: card colapsada por producto.
-                 No mostramos la lista completa de formas (el operador ya la
-                 verá en el PDF) — solo el producto + su total para que el
-                 operador valide qué se está cotizando.
-                 ====================== -->
-            @if (cotizacionIndividual()) {
-              <div class="text-xs text-muted-color mb-3 p-2 rounded-md bg-blue-50 border border-blue-200 flex items-start gap-2">
-                <i class="pi pi-info-circle text-blue-500 mt-0.5"></i>
-                <span>Se generará una hoja del PDF por cada producto, con su foto y formas de pago.</span>
-              </div>
-              <div class="flex flex-col gap-2 mt-2">
-                @for (g of formasPagoPorItem(); track g.item.uid) {
-                  <div class="rounded-lg border border-[#FF861C]/25 px-3 py-2 bg-white">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="min-w-0 flex-1">
-                        <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 truncate">
-                          {{ g.item.descripcion || g.item.sku }}
-                        </div>
-                        <div class="text-[10px] text-muted-color">
-                          {{ g.item.sku }} · {{ g.item.cantidad }}u
-                        </div>
-                      </div>
-                      <div class="text-right leading-tight shrink-0">
-                        <div class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-                          {{ g.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
-                        </div>
-                        <div class="text-[9px] text-muted-color">total s/IVA</div>
-                      </div>
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-          </p-card>
-        }
-
       </div>
     </div>
   </main>
+
+  <!-- ============= FOOTER STICKY: TOTAL + FORMAS DE PAGO =============
+       Solo aparece cuando hay ítems. Por default está COMPACTO (1 línea
+       con descuento global + TOTAL + chips de top 3 formas). Click en
+       "Ver formas" o en cualquier chip lo EXPANDE hacia arriba mostrando
+       las cards completas (modo agregado) o el preview por producto
+       (modo individual). El operador siempre ve el total y la mejor
+       forma sin tener que scrollear hasta la columna derecha. -->
+  @if (hayItems()) {
+    <footer class="kt-footer-sticky" #footerSticky [class.expandido]="footerExpandido()"
+      role="region" aria-label="Total y formas de pago">
+
+      <!-- Panel EXPANDIDO — se despliega hacia arriba con todas las formas
+           (modo agregado) o cards por producto (modo individual). Cuando
+           está colapsado se oculta con max-height: 0. -->
+      <div class="kt-footer-panel" aria-hidden="{{ !footerExpandido() }}">
+        <div class="kt-footer-panel-inner">
+          @if (!cotizacionIndividual()) {
+            @if (formasPago().length > 0) {
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">
+                @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
+                  <!-- Class computada en TS para evitar el conflicto entre
+                       `[class]="'color-N'"` y `[class.es-mejor-precio]` —
+                       una única string garantiza que el toggle del verde
+                       sobreviva los ciclos de change detection. -->
+                  <div [class]="clasesFormaCard(i)">
+                    @if (i === indiceMejorPrecio()) {
+                      <span class="badge-mejor-precio">
+                        <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
+                      </span>
+                    }
+                    <div class="flex items-center gap-1.5">
+                      <i [class]="iconoForma(f.nombre) + ' text-[#FF861C] text-sm'"></i>
+                      <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0">
+                        {{ f.nombre }}
+                      </div>
+                    </div>
+                    @if (f.descripcion) {
+                      <div class="text-xs text-muted-color mt-0.5">{{ f.descripcion }}</div>
+                    }
+                    <div class="text-lg font-bold text-[#3B1E09] dark:text-surface-0 mt-1">
+                      {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
+                    </div>
+                    @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                      <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
+                        <i class="pi pi-clone text-[10px]"></i>
+                        {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="text-xs text-muted-color text-center py-3 flex flex-col items-center gap-1">
+                <i class="pi pi-info-circle text-[#FF861C]"></i>
+                No hay formas de pago activas configuradas.
+              </div>
+            }
+          } @else {
+            <!-- Modo individual: preview por producto con su total s/IVA.
+                 Las formas de pago calculadas viven en el PDF (1 hoja por
+                 ítem), acá solo damos el resumen para que el operador valide. -->
+            <div class="text-xs text-muted-color mb-3 p-2 rounded-md bg-blue-50 border border-blue-200 flex items-start gap-2">
+              <i class="pi pi-info-circle text-blue-500 mt-0.5"></i>
+              <span>Se generará una hoja del PDF por cada producto, con su foto y formas de pago.</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              @for (g of formasPagoPorItem(); track g.item.uid) {
+                <div class="rounded-lg border border-[#FF861C]/25 px-3 py-2 bg-white">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <div class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 truncate">
+                        {{ g.item.descripcion || g.item.sku }}
+                      </div>
+                      <div class="text-[10px] text-muted-color">
+                        {{ g.item.sku }} · {{ g.item.cantidad }}u
+                      </div>
+                    </div>
+                    <div class="text-right leading-tight shrink-0">
+                      <div class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
+                        {{ g.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
+                      </div>
+                      <div class="text-[9px] text-muted-color">total s/IVA</div>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Barra COMPACTA — siempre visible. Layout flex envolvente:
+           izquierda totales + descuento global, derecha chips de formas
+           + botón toggle del panel. -->
+      <div class="kt-footer-bar">
+        <!-- Izquierda: TOTAL grande + descuento global -->
+        <div class="kt-footer-totales">
+          <div class="flex flex-col leading-tight">
+            <span class="text-[10px] uppercase tracking-wider font-bold text-[#FF861C]">
+              <i class="pi pi-wallet"></i> Total
+              <span class="text-muted-color font-medium normal-case tracking-normal ml-1">
+                · {{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}
+              </span>
+            </span>
+            <div class="flex items-baseline gap-2 flex-wrap">
+              <span class="text-xl sm:text-2xl font-bold text-[#3B1E09] dark:text-surface-0">
+                {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+              </span>
+              @if (descuentoTotalMonto() > 0) {
+                <span class="text-[11px] text-muted-color line-through">
+                  {{ subtotalBrutoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  −{{ descuentoTotalMonto() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+              }
+            </div>
+          </div>
+
+          <!-- Input de descuento global — atajo: al editarlo se COPIA el %
+               a cada ítem (no se adiciona). Cuando los ítems tienen
+               descuentos distintos, este input muestra el % efectivo
+               (descuento total / subtotal bruto). -->
+          <div class="kt-footer-dcto"
+            pTooltip="El % se aplica a cada ítem por igual. Si los ítems tienen descuentos distintos, este campo muestra el % efectivo."
+            tooltipPosition="top">
+            <label for="dctoGlobal" class="text-[10px] uppercase tracking-wider font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1 cursor-pointer">
+              <i class="pi pi-percentage text-[#FF861C]"></i>
+              Desc. global
+            </label>
+            <p-inputNumber inputId="dctoGlobal" [ngModel]="descuentoGlobal()"
+              (ngModelChange)="actualizarDescuentoGlobal($event)"
+              [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
+              [maxFractionDigits]="2"
+              inputStyleClass="w-16 text-center descuento-input" />
+          </div>
+        </div>
+
+        <!-- Derecha: chips de formas + botón expand.
+             En modo individual no hay un total único — mostramos un chip
+             informativo "Individual · N hojas" y el botón abre el preview
+             por producto en el panel. -->
+        <div class="kt-footer-formas">
+          @if (cotizacionIndividual()) {
+            <span class="kt-forma-chip kt-forma-chip-info">
+              <i class="pi pi-file-export"></i>
+              <span class="font-bold">Cotización individual</span>
+              <span class="text-muted-color">·</span>
+              <span>{{ items().length }} {{ items().length === 1 ? 'hoja' : 'hojas' }}</span>
+            </span>
+          } @else if (formasPagoFooter().length > 0) {
+            @for (f of formasPagoFooter(); track f.id) {
+              <button type="button"
+                [class]="'kt-forma-chip color-' + ((f.indiceOriginal % 10) + 1) + (f.esMejorPrecio ? ' kt-forma-chip-mejor' : '')"
+                (click)="footerExpandido.set(!footerExpandido())"
+                [attr.aria-label]="'Ver detalle de ' + f.nombre">
+                @if (f.esMejorPrecio) {
+                  <i class="pi pi-check-circle text-[10px]"></i>
+                }
+                <i [class]="iconoForma(f.nombre)"></i>
+                <span class="font-bold">{{ f.nombre }}</span>
+                <span class="kt-forma-chip-precio">
+                  {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+              </button>
+            }
+          } @else {
+            <span class="text-xs text-muted-color italic">
+              <i class="pi pi-info-circle"></i>
+              No hay formas de pago configuradas
+            </span>
+          }
+
+          <!-- Botón toggle del panel — chevron que rota cuando se expande. -->
+          <button type="button" class="kt-footer-toggle"
+            (click)="footerExpandido.set(!footerExpandido())"
+            [attr.aria-expanded]="footerExpandido()"
+            [attr.aria-label]="footerExpandido() ? 'Ocultar detalle de formas' : 'Ver todas las formas de pago'"
+            [pTooltip]="footerExpandido() ? 'Ocultar' : 'Ver todas las formas'"
+            tooltipPosition="top">
+            <i class="pi pi-chevron-up kt-footer-toggle-icon"></i>
+          </button>
+        </div>
+      </div>
+    </footer>
+  }
 </div>
 
-<!-- ============= DIALOG ENVIAR POR EMAIL ============= -->
-<p-dialog [(visible)]="mostrarDialogEnviar" [modal]="true"
-  [style]="{ width: '95vw', maxWidth: '30rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [draggable]="false" [closable]="!enviandoEmail()">
+<!-- ============= DIALOG DATOS DEL CLIENTE + CONFIRMACIÓN =============
+     Dialog unificado para los 3 flujos terminales del presupuestador:
+       - 'previsualizar': generar PDF / guardar cambios
+       - 'enviar': encolar envío por email
+       - null: edición libre desde el chip del header
+     Reemplaza la card "Datos del cliente" antes embebida en la columna
+     derecha. Los inputs bindean directamente los signals del componente
+     ({@link clienteNombre}, {@link clienteEmail}, etc.) — los cambios
+     persisten aunque el operador cierre el dialog sin confirmar. -->
+<p-dialog [(visible)]="mostrarDialogCliente" [modal]="true"
+  [style]="{ width: '95vw', maxWidth: '40rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [draggable]="false" [closable]="!generandoPreview() && !enviandoEmail()">
   <ng-template #header>
     <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
-      <i class="pi pi-send text-[#FF861C]"></i>
-      <span class="font-bold">Enviar presupuesto por email</span>
+      @switch (accionPendienteDialog()) {
+        @case ('previsualizar') {
+          <i class="pi pi-file-pdf text-[#FF861C]"></i>
+          <span class="font-bold">
+            @if (esModoEdicion()) { Guardar cambios y descargar PDF }
+            @else { Generar presupuesto }
+          </span>
+        }
+        @case ('enviar') {
+          <i class="pi pi-send text-[#FF861C]"></i>
+          <span class="font-bold">
+            @if (esModoEdicion()) { Guardar y enviar por email }
+            @else { Enviar presupuesto por email }
+          </span>
+        }
+        @default {
+          <i class="pi pi-user text-[#FF861C]"></i>
+          <span class="font-bold">Datos del cliente</span>
+        }
+      }
     </div>
   </ng-template>
 
   <div class="flex flex-col gap-3">
-    <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-sm">
-      <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
-      <span class="text-surface-700 dark:text-surface-200">
-        Se va a generar el PDF y enviar al email del cliente. Se asigna un número de presupuesto persistente.
-      </span>
-    </div>
-
-    <!-- Resumen de los datos cargados en la página principal — solo lectura.
-         Si algo está mal, el operador cancela y corrige arriba. -->
-    <div class="flex flex-col gap-2 p-3 rounded-lg bg-surface-50 dark:bg-surface-800 border border-surface-200 dark:border-surface-700">
-      @if (clienteNombre().trim()) {
-        <div class="flex items-center gap-2 text-sm">
-          <i class="pi pi-user text-[#FF861C]"></i>
-          <span class="text-muted-color">Cliente:</span>
-          <span class="font-medium text-[#3B1E09] dark:text-surface-0 truncate">{{ clienteNombre() }}</span>
+    <!-- Banner contextual por acción: explica qué va a pasar al confirmar. -->
+    @switch (accionPendienteDialog()) {
+      @case ('previsualizar') {
+        <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-sm">
+          <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+          <span class="text-surface-700 dark:text-surface-200">
+            @if (esModoEdicion()) {
+              Se van a guardar los cambios sobre el presupuesto #{{ presupuestoEditandoId() }} y descargar el PDF actualizado. El número y la fecha original se mantienen.
+            } @else {
+              Se va a generar el PDF y guardar en el historial. El cliente quedará registrado para seguimiento.
+            }
+          </span>
         </div>
       }
-      <div class="flex items-center gap-2 text-sm">
-        <i class="pi pi-envelope text-[#FF861C]"></i>
-        <span class="text-muted-color">Email:</span>
-        <span class="font-medium text-[#3B1E09] dark:text-surface-0 truncate">{{ clienteEmail() || '—' }}</span>
+      @case ('enviar') {
+        <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-sm">
+          <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+          <span class="text-surface-700 dark:text-surface-200">
+            @if (esModoEdicion()) {
+              Se van a guardar los cambios y enviar el PDF al email del cliente.
+            } @else {
+              Se va a generar el PDF y enviar al email del cliente.
+            }
+          </span>
+        </div>
+      }
+    }
+
+    <!-- Form de datos del cliente — siempre editable. -->
+    <div>
+      <label for="dlgNombreInput" class="kt-label">
+        <i class="pi pi-id-card"></i> Nombre del cliente
+      </label>
+      <p-iconfield class="block">
+        <p-inputicon class="pi pi-user" />
+        <input pInputText id="dlgNombreInput" type="text" class="w-full"
+          [ngModel]="clienteNombre()" (ngModelChange)="clienteNombre.set($event)"
+          placeholder="Aparece en el header del PDF" />
+      </p-iconfield>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div>
+        <label for="dlgEmailInput" class="kt-label">
+          <i class="pi pi-envelope"></i> Email
+          @if (accionPendienteDialog() === 'enviar') {
+            <span class="text-red-500">*</span>
+          } @else {
+            <span class="text-[10px] font-normal text-muted-color">(solo para enviar)</span>
+          }
+        </label>
+        <p-iconfield iconPosition="left">
+          <p-inputicon><i class="pi pi-at"></i></p-inputicon>
+          <p-autoComplete inputId="dlgEmailInput"
+            [ngModel]="clienteEmail()" (ngModelChange)="clienteEmail.set($event ?? '')"
+            [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
+            [forceSelection]="false" [delay]="0"
+            placeholder="cliente@gmail.com"
+            inputStyleClass="w-full pl-10" class="w-full" />
+        </p-iconfield>
       </div>
-      <div class="flex items-center gap-2 text-sm">
-        <i class="pi pi-phone text-[#FF861C]"></i>
-        <span class="text-muted-color">Teléfono:</span>
-        <span class="font-medium text-[#3B1E09] dark:text-surface-0 truncate">{{ clienteTelefono() || '—' }}</span>
+      <div>
+        <label for="dlgTelefonoInput" class="kt-label">
+          <i class="pi pi-phone"></i> Teléfono <span class="text-red-500">*</span>
+        </label>
+        <p-inputMask inputId="dlgTelefonoInput" mask="99-99999999" [unmask]="true"
+          [ngModel]="clienteTelefono()" (ngModelChange)="clienteTelefono.set($event ?? '')"
+          placeholder="11-12345678" class="w-full" />
       </div>
+    </div>
+    <div>
+      <label for="dlgRubroSelect" class="kt-label">
+        <i class="pi pi-tag"></i> Rubro
+      </label>
+      <p-select inputId="dlgRubroSelect" [options]="opcionesRubro"
+        optionLabel="label" optionValue="value"
+        [ngModel]="rubro()" (ngModelChange)="rubro.set($event)"
+        placeholder="Seleccioná un rubro…" class="w-full"
+        [showClear]="true" appendTo="body" />
+      @if (rubro() === 'otros') {
+        <input pInputText type="text" class="w-full mt-2"
+          [ngModel]="rubroOtros()" (ngModelChange)="rubroOtros.set($event)"
+          placeholder="Escribí el rubro del cliente" maxlength="100" />
+      }
+    </div>
+    <div>
+      <label for="dlgObservacionesInput" class="kt-label">
+        <i class="pi pi-comment"></i> Observaciones
+      </label>
+      <textarea pTextarea id="dlgObservacionesInput" rows="2" class="w-full"
+        [ngModel]="observaciones()" (ngModelChange)="observaciones.set($event)"
+        placeholder="Notas que se imprimen al final del PDF"></textarea>
     </div>
 
-    <div class="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#FF861C]/5 to-[#7EBA00]/5 border border-[#FF861C]/20">
-      <span class="text-muted-color flex items-center gap-1.5">
-        <i class="pi pi-wallet text-[#FF861C]"></i> Total
-      </span>
-      <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
-        {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
-      </span>
-    </div>
+    <!-- Resumen del presupuesto — solo visible cuando hay acción pendiente
+         (preview/enviar), porque en edición libre el operador ya está viendo
+         todo en la pantalla principal. -->
+    @if (accionPendienteDialog() !== null) {
+      <div class="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#FF861C]/5 to-[#7EBA00]/5 border border-[#FF861C]/20 mt-1">
+        <span class="text-muted-color flex items-center gap-1.5 text-sm">
+          <i class="pi pi-shopping-cart text-[#FF861C]"></i>
+          {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
+        </span>
+        <div class="text-right leading-tight">
+          <div class="text-[10px] uppercase tracking-wider font-bold text-[#FF861C]">Total</div>
+          <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
+            {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+          </span>
+        </div>
+      </div>
+    }
   </div>
 
   <ng-template #footer>
-    <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true"
-      [disabled]="enviandoEmail()"
-      (onClick)="mostrarDialogEnviar.set(false)" />
-    <p-button label="Enviar" icon="pi pi-send" class="btn-kt-naranja"
-      [loading]="enviandoEmail()" (onClick)="enviarPorEmail()" />
+    @if (accionPendienteDialog() === null) {
+      <p-button label="Cerrar" icon="pi pi-check" class="btn-kt-marron"
+        (onClick)="confirmarDialogCliente()" />
+    } @else {
+      <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true"
+        [disabled]="generandoPreview() || enviandoEmail()"
+        (onClick)="mostrarDialogCliente.set(false)" />
+      @if (accionPendienteDialog() === 'previsualizar') {
+        <p-button
+          [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+          [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
+          class="btn-kt-naranja"
+          [loading]="generandoPreview()"
+          (onClick)="confirmarDialogCliente()" />
+      } @else {
+        <p-button
+          [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar al cliente'"
+          icon="pi pi-send" class="btn-kt-naranja"
+          [loading]="enviandoEmail()"
+          (onClick)="confirmarDialogCliente()" />
+      }
+    }
   </ng-template>
 </p-dialog>
+
+<!-- ============= DIALOG CREAR PEDIDO EN DUX (REUSABLE) =============
+     Solo se monta cuando estamos en modo edición y el operador toca el
+     botón del toolbar. Pasa el id del presupuesto persistido; el dialog
+     se encarga de cargar el detalle internamente. -->
+<app-crear-pedido-dialog
+  [(visible)]="mostrarDialogCrearPedido"
+  [presupuestoId]="presupuestoEditandoId()"
+  (pedidoCreado)="onPedidoCreado($event)" />
+
+<!-- ============= DIALOG "VER PRODUCTO" =============
+     Preview rápido de un resultado de búsqueda: foto grande + datos
+     del producto + botón directo "Agregar al detalle". Sirve para que
+     el operador verifique el producto antes de meterlo en el
+     presupuesto, sin tener que cerrar la lista de resultados. -->
+@if (productoPreview(); as p) {
+  <p-dialog [visible]="true"
+    (visibleChange)="$event ? null : cerrarProductoPreview()"
+    [modal]="true" [draggable]="false"
+    [style]="{ width: '92vw', maxWidth: '32rem' }"
+    [breakpoints]="{ '640px': '95vw' }">
+    <ng-template #header>
+      <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
+        <i class="pi pi-eye text-[#FF861C]"></i>
+        <span class="font-bold">Vista previa del producto</span>
+      </div>
+    </ng-template>
+
+    <div class="flex flex-col gap-4">
+      <!-- Foto grande centrada (300x300 max) o placeholder. -->
+      <div class="flex justify-center bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 p-4">
+        @if (p.imagenUrl) {
+          <p-image [src]="p.imagenUrl" [alt]="p.descripcion ?? p.sku" [preview]="true"
+            imageClass="max-h-72 object-contain cursor-zoom-in" />
+        } @else {
+          <div class="h-72 w-full flex flex-col items-center justify-center gap-2 text-muted-color">
+            <i class="pi pi-image text-5xl opacity-40"></i>
+            <span class="text-xs">Sin imagen disponible</span>
+          </div>
+        }
+      </div>
+
+      <!-- SKU + badges. -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center px-2 py-1 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-xs font-bold">
+          {{ p.sku }}
+        </span>
+        @if (esRubroSinDescuento(p.rubro)) {
+          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
+                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
+                       font-bold text-[10px] uppercase tracking-wide"
+                pTooltip="Máquina industrial — no aplican los descuentos por monto"
+                tooltipPosition="top">
+            <i class="pi pi-wrench text-[9px]"></i>
+            Máq. Industrial
+          </span>
+        } @else if (p.rubro) {
+          <span class="text-[10px] text-muted-color uppercase tracking-wide">
+            {{ p.rubro }}
+          </span>
+        }
+        @if (p.habilitado === false) {
+          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
+            Deshabilitado
+          </span>
+        }
+      </div>
+
+      <!-- Descripción. -->
+      <div class="text-base font-medium text-[#3B1E09] dark:text-surface-0">
+        {{ p.descripcion || '—' }}
+      </div>
+
+      <!-- Precio + stock en dos columnas. -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="p-3 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">
+            Precio s/IVA
+          </div>
+          @if (p.pvpKtGastroSinIva != null && p.pvpKtGastroSinIva > 0) {
+            <div class="text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
+              {{ p.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
+            </div>
+          } @else {
+            <div class="text-sm text-red-600 dark:text-red-400 font-bold inline-flex items-center gap-1">
+              <i class="pi pi-exclamation-triangle text-[10px]"></i>
+              Sin precio cargado
+            </div>
+          }
+        </div>
+        <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-800/80 dark:text-emerald-300/80 mb-1">
+            Stock
+          </div>
+          @if (p.stockTotal == null) {
+            <div class="text-sm text-muted-color inline-flex items-center gap-1">
+              <i class="pi pi-question-circle text-[10px]"></i>
+              No sincronizado
+            </div>
+          } @else if (p.stockTotal <= 0) {
+            <div class="text-sm font-bold text-red-600 dark:text-red-400 inline-flex items-center gap-1">
+              <i class="pi pi-times-circle text-[10px]"></i>
+              Sin stock
+            </div>
+          } @else {
+            <div class="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+              {{ p.stockTotal }}
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+
+    <ng-template #footer>
+      <p-button label="Cerrar" icon="pi pi-times" severity="secondary" [outlined]="true"
+        (onClick)="cerrarProductoPreview()" />
+      <p-button label="Agregar al detalle" icon="pi pi-arrow-right" class="btn-kt-naranja"
+        [disabled]="p.habilitado === false || !p.pvpKtGastroSinIva || p.pvpKtGastroSinIva <= 0"
+        (onClick)="agregarDesdePreview()" />
+    </ng-template>
+  </p-dialog>
+}

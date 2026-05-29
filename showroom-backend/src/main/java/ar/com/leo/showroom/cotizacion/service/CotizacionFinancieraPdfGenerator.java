@@ -250,20 +250,28 @@ public class CotizacionFinancieraPdfGenerator {
     }
 
     // =====================================================
-    // Banner grande con el monto base
+    // Banner grande con el monto base. Cuando hay dos montos con IVAs
+    // distintos cargados, se muestran como dos columnas dentro del banner
+    // y debajo se agrega un sub-banner con el total de la cotización.
     // =====================================================
     private void agregarBannerMonto(Document doc, GenerarCotizacionRequestDTO datos) {
-        // Banner del monto compactado (padding 10 vs 14, font 26 vs 30) —
-        // gana espacio vertical para que las 8 cards + nota entren en una
-        // sola hoja A4.
+        BigDecimal monto1 = datos.montoBaseSinIva() == null
+                ? BigDecimal.ZERO : datos.montoBaseSinIva();
+        BigDecimal iva1 = datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva();
+        BigDecimal monto2 = datos.montoBaseSinIva2() == null
+                ? BigDecimal.ZERO : datos.montoBaseSinIva2();
+        BigDecimal iva2 = datos.porcIva2() == null ? new BigDecimal("10.5") : datos.porcIva2();
+        boolean tiene1 = monto1.signum() > 0;
+        boolean tiene2 = monto2.signum() > 0;
+
         Div banner = new Div()
                 .setMarginTop(8)
-                .setBackgroundColor(new DeviceRgb(254, 243, 226)) // crema claro KT
+                .setBackgroundColor(new DeviceRgb(254, 243, 226))
                 .setBorder(new SolidBorder(KT_NARANJA, 1.5f))
                 .setBorderRadius(new BorderRadius(10f))
                 .setPadding(10);
 
-        banner.add(new Paragraph("MONTO A COTIZAR")
+        banner.add(new Paragraph(tiene2 ? "MONTOS A COTIZAR" : "MONTO A COTIZAR")
                 .simulateBold()
                 .setFontSize(10)
                 .setCharacterSpacing(1.5f)
@@ -271,47 +279,111 @@ public class CotizacionFinancieraPdfGenerator {
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0));
 
-        BigDecimal monto = datos.montoBaseSinIva() == null
-                ? BigDecimal.ZERO : datos.montoBaseSinIva();
-        banner.add(new Paragraph(PESO_FMT.format(monto))
-                .simulateBold()
-                .setFontSize(26)
-                .setFontColor(KT_NARANJA)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(2)
-                .setMargin(0));
+        if (tiene1 && tiene2) {
+            Table dosCols = new Table(UnitValue.createPercentArray(new float[]{1f, 1f}))
+                    .useAllAvailableWidth()
+                    .setBorder(Border.NO_BORDER)
+                    .setMarginTop(4);
+            dosCols.addCell(celdaMontoIva(monto1, iva1));
+            dosCols.addCell(celdaMontoIva(monto2, iva2));
+            banner.add(dosCols);
 
-        BigDecimal iva = datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva();
-        banner.add(new Paragraph("precio sin IVA · IVA " + iva.stripTrailingZeros().toPlainString() + "%")
-                .setFontSize(9)
-                .setFontColor(GRIS_MEDIO)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMargin(0));
+            // Mostramos AMBOS totales (sin y con IVA) en una sola línea para
+            // que el cliente vea de un vistazo el precio neto y el facturado.
+            // Sin esto, solo veía "Total sin IVA" y tenía que deducir el con-IVA
+            // mirando la card "Transferencia con IVA" en las formas de pago.
+            BigDecimal totalSinIva = monto1.add(monto2);
+            BigDecimal totalConIva = monto1.multiply(
+                    BigDecimal.ONE.add(iva1.movePointLeft(2)))
+                .add(monto2.multiply(BigDecimal.ONE.add(iva2.movePointLeft(2))));
+            banner.add(new Paragraph()
+                    .add(new com.itextpdf.layout.element.Text("Total sin IVA: ").simulateBold())
+                    .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalSinIva))
+                            .simulateBold()
+                            .setFontColor(KT_MARRON))
+                    .add(new com.itextpdf.layout.element.Text("    ·    ")
+                            .setFontColor(GRIS_MEDIO))
+                    .add(new com.itextpdf.layout.element.Text("Total con IVA: ").simulateBold())
+                    .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalConIva))
+                            .simulateBold()
+                            .setFontColor(KT_NARANJA))
+                    .setFontSize(11)
+                    .setFontColor(KT_MARRON)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(6)
+                    .setMargin(0));
+        } else {
+            BigDecimal monto = tiene1 ? monto1 : monto2;
+            BigDecimal iva = tiene1 ? iva1 : iva2;
+            banner.add(new Paragraph(PESO_FMT.format(monto))
+                    .simulateBold()
+                    .setFontSize(26)
+                    .setFontColor(KT_NARANJA)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(2)
+                    .setMargin(0));
+            banner.add(new Paragraph(
+                    "precio sin IVA · IVA " + iva.stripTrailingZeros().toPlainString() + "%")
+                    .setFontSize(9)
+                    .setFontColor(GRIS_MEDIO)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMargin(0));
+        }
 
         doc.add(banner);
     }
 
+    /** Celda con un monto + chip de IVA — para el banner con dos montos. */
+    private Cell celdaMontoIva(BigDecimal monto, BigDecimal iva) {
+        Cell c = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setPadding(4)
+                .setTextAlignment(TextAlignment.CENTER);
+        c.add(new Paragraph(PESO_FMT.format(monto))
+                .simulateBold()
+                .setFontSize(20)
+                .setFontColor(KT_NARANJA)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMargin(0));
+        c.add(new Paragraph("IVA " + iva.stripTrailingZeros().toPlainString() + "%")
+                .setFontSize(9)
+                .setFontColor(GRIS_MEDIO)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(1)
+                .setMargin(0));
+        return c;
+    }
+
     // =====================================================
-    // Cards de formas de pago — grilla 2 columnas. Cada card es una tabla
-    // interna (header con nombre + chip IVA + badge mejor precio; precio
-    // grande; detalle de cuotas) para que el layout sea predecible.
+    // Cards de formas de pago — grilla 3 columnas (8 formas entran en 3
+    // filas en lugar de 4, ganando una hoja). Cada card es compacta: pill
+    // del nombre + chip IVA + badge mejor precio en el header, precio
+    // grande centrado, y línea de detalle (cuotas o descuento).
     // =====================================================
+    private static final int COLUMNAS_FORMAS_PAGO = 3;
+
     private void agregarFormasPago(Document doc,
                                    List<GenerarCotizacionRequestDTO.FormaPagoSnapshot> formas) {
         if (formas == null || formas.isEmpty()) return;
 
+        // OJO con el orden: setMargin(0) borraría los marginTop/marginBottom
+        // si se llamara después. Primero reseteamos a 0 y luego seteamos los
+        // específicos. Margin top generoso (18pt) para separar visualmente
+        // el banner de "MONTOS A COTIZAR" de la sección de formas de pago.
         doc.add(new Paragraph("FORMAS DE PAGO DISPONIBLES")
                 .simulateBold()
                 .setFontSize(10)
                 .setCharacterSpacing(1.5f)
                 .setFontColor(KT_MARRON)
-                .setMarginTop(10)
-                .setMarginBottom(4)
-                .setMargin(0));
+                .setMargin(0)
+                .setMarginTop(18)
+                .setMarginBottom(6));
 
         int idxMejor = calcularIndiceMejorPrecio(formas);
 
-        Table grid = new Table(UnitValue.createPercentArray(new float[]{1f, 1f}))
+        float[] cols = new float[COLUMNAS_FORMAS_PAGO];
+        for (int i = 0; i < COLUMNAS_FORMAS_PAGO; i++) cols[i] = 1f;
+        Table grid = new Table(UnitValue.createPercentArray(cols))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER);
 
@@ -320,19 +392,20 @@ public class CotizacionFinancieraPdfGenerator {
             Color borde = BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length];
             boolean esMejor = i == idxMejor;
 
-            // Padding reducido del wrapper (3 vs 4 antes) — junto con la
-            // compresión interna de la card, libera espacio vertical para
-            // que la nota final entre en la misma página A4.
+            // Padding reducido del wrapper para minimizar el gap entre cards
+            // y aprovechar mejor el ancho de A4 con 3 columnas.
             Cell wrapper = new Cell()
                     .setBorder(Border.NO_BORDER)
-                    .setPadding(3);
+                    .setPadding(2);
             wrapper.add(construirCardForma(f, borde, esMejor));
             grid.addCell(wrapper);
         }
 
-        // Si la lista es impar, agregamos una celda vacía para que la última
-        // card no quede expandida en todo el ancho.
-        if (formas.size() % 2 == 1) {
+        // Si la última fila no está completa, agregamos celdas vacías para
+        // que las cards no se estiren al ancho restante.
+        int huecos = (COLUMNAS_FORMAS_PAGO - (formas.size() % COLUMNAS_FORMAS_PAGO))
+                % COLUMNAS_FORMAS_PAGO;
+        for (int i = 0; i < huecos; i++) {
             grid.addCell(new Cell().setBorder(Border.NO_BORDER));
         }
 
@@ -350,95 +423,116 @@ public class CotizacionFinancieraPdfGenerator {
      *        "X% de descuento" si la forma tiene recargo negativo.</li>
      *  </ol>
      */
+    /** Altura mínima de cada card de forma de pago — sin esto, una card cuyo
+     *  nombre rompe a 2 líneas (ej. "Transferencia con IVA") queda más alta
+     *  que sus vecinas de la misma fila y descentra visualmente los precios. */
+    private static final float MIN_ALTURA_CARD_FORMA = 95f;
+
     private Div construirCardForma(GenerarCotizacionRequestDTO.FormaPagoSnapshot f,
                                    Color borde,
                                    boolean esMejor) {
         // Card base. bg verde tenue + borde verde grueso cuando es mejor.
-        // Padding total más compacto para que las 8 cards + la nota entren
-        // en una sola hoja A4.
+        // Padding interno mínimo para maximizar el aprovechamiento del
+        // espacio en una grilla de 3 columnas (cards más angostas).
+        // setMinHeight + setKeepTogether: garantiza que todas las cards
+        // de una misma fila tengan la misma altura visual (sino los precios
+        // no se alinean horizontalmente) y que iText no parta una card
+        // entre páginas.
         Div card = new Div()
                 .setBackgroundColor(esMejor ? new DeviceRgb(240, 253, 244) : ColorConstants.WHITE)
                 .setBorder(esMejor ? new SolidBorder(KT_VERDE, 1.5f) : new SolidBorder(GRIS_LINEA, 1f))
                 .setBorderRadius(new BorderRadius(8f))
                 .setPaddingTop(0)
-                .setPaddingBottom(8)
+                .setPaddingBottom(6)
                 .setPaddingLeft(0)
-                .setPaddingRight(0);
+                .setPaddingRight(0)
+                .setMinHeight(MIN_ALTURA_CARD_FORMA)
+                .setKeepTogether(true);
 
-        // Top accent bar — siempre con el color rotativo único de la forma
-        // (sincronizado con .color-1..10 del frontend). Antes pisábamos por
-        // verde KT cuando era mejor precio, pero eso eliminaba la identidad
-        // de color de esa forma. La distinción de "mejor precio" ya está
-        // dada por: borde verde grueso de la card + badge "✓ MEJOR PRECIO"
-        // + precio en verde, así que la barra puede mantener su color
-        // único. Bordes superiores redondeados para seguir el contorno
-        // curvo de la card.
+        // Top accent bar — barra de color identificador, ahora más gruesa
+        // (7pt vs 4pt) y con las 4 esquinas redondeadas (6f, ligeramente
+        // menos que el card de 8f para que se "inscriba" prolijamente en
+        // el contorno superior). Visualmente queda como un "pill" arriba
+        // de la card. Margen superior/lateral pequeño para que respire del
+        // borde de la card.
         Div barra = new Div()
                 .setBackgroundColor(borde)
-                .setHeight(4)
-                .setBorderTopLeftRadius(new BorderRadius(7f))
-                .setBorderTopRightRadius(new BorderRadius(7f));
+                .setHeight(7)
+                .setBorderRadius(new BorderRadius(6f))
+                .setMarginTop(3)
+                .setMarginLeft(6)
+                .setMarginRight(6);
         card.add(barra);
 
-        // Header table: nombre a la izq, chips/badge a la der.
-        Table header = new Table(UnitValue.createPercentArray(new float[]{1.4f, 1f}))
+        // Header table: nombre + indicador IVA (inline, izq) y badge MEJOR
+        // PRECIO (der). El IVA va como subtítulo italic debajo del nombre
+        // en vez de chip aparte — así la col 2 nunca es más alta que la
+        // col 1 (eso era lo que empujaba el precio hacia abajo y lo dejaba
+        // visualmente "debajo del badge"). Ratio 2.0/1.0 (era 1.6/1.0) +
+        // SPLIT_CHARACTERS=ninguno en el nombre + font 9pt (era 10pt) =
+        // nombres como "Transferencia con IVA" entran en una sola línea
+        // en las cards angostas del grid de 3 columnas.
+        Table header = new Table(UnitValue.createPercentArray(new float[]{2.0f, 1f}))
                 .useAllAvailableWidth()
                 .setBorder(Border.NO_BORDER)
-                .setMarginTop(6)
-                .setMarginLeft(8)
-                .setMarginRight(8);
+                .setMarginTop(4)
+                .setMarginLeft(7)
+                .setMarginRight(7);
 
-        // Col 1: nombre.
+        boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
+        Color ivaColor = aplicaIva ? new DeviceRgb(180, 83, 9) : new DeviceRgb(110, 110, 110);
+
+        // Col 1: nombre arriba + indicador IVA chico debajo.
         Cell celdaNombre = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPadding(0)
                 .setVerticalAlignment(VerticalAlignment.TOP);
         celdaNombre.add(new Paragraph(safe(f.nombre(), "—"))
                 .simulateBold()
-                .setFontSize(10.5f)
+                .setFontSize(9)
                 .setFontColor(KT_MARRON)
                 .setMargin(0));
+        celdaNombre.add(new Paragraph(aplicaIva ? "con IVA" : "sin IVA")
+                .simulateBold()
+                .setFontSize(7)
+                .setCharacterSpacing(0.4f)
+                .setFontColor(ivaColor)
+                .setMargin(0)
+                .setMarginTop(1));
         header.addCell(celdaNombre);
 
-        // Col 2: contenedor de chips apilados a la derecha. SIEMPRE reservamos
-        // el espacio del badge "MEJOR PRECIO" con un placeholder transparente
-        // del mismo tamaño cuando la card NO es la mejor. Sin esto, la card
-        // "mejor" sería más alta que las otras y el grid se ve desalineado.
-        Cell celdaChips = new Cell()
+        // Col 2: badge MEJOR PRECIO (o placeholder invisible para que todas
+        // las cards tengan la misma altura — sin esto la "mejor" sería más
+        // alta y el grid se ve desalineado).
+        Cell celdaBadge = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPadding(0)
                 .setVerticalAlignment(VerticalAlignment.TOP);
         if (esMejor) {
-            celdaChips.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, KT_VERDE)
-                    .setMarginBottom(3));
+            celdaBadge.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, KT_VERDE));
         } else {
-            // Placeholder invisible para reservar la misma altura que el badge:
-            // mini-tabla de mismo width/padding pero con bg transparente y
-            // texto invisible (color = white sobre fondo white).
-            celdaChips.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, ColorConstants.WHITE)
-                    .setMarginBottom(3));
+            celdaBadge.add(chipPill("✓ MEJOR PRECIO", ColorConstants.WHITE, ColorConstants.WHITE));
         }
-        boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
-        Color chipBg = aplicaIva ? new DeviceRgb(255, 234, 209) : new DeviceRgb(235, 235, 240);
-        Color chipFg = aplicaIva ? new DeviceRgb(180, 83, 9) : new DeviceRgb(80, 80, 90);
-        celdaChips.add(chipPill(aplicaIva ? "CON IVA" : "SIN IVA", chipFg, chipBg));
-        header.addCell(celdaChips);
+        header.addCell(celdaBadge);
         card.add(header);
 
         // Precio final destacado — centrado, jerarquía dominante.
+        // 18pt: equilibra visibilidad con el espacio disponible en las cards
+        // del grid de 3 columnas. Antes (19pt) andaba apretado; bajarlo a
+        // 15pt lo dejaba muy chico — 18pt es el punto medio prolijo.
         String simboloMoneda = f.monedaSimbolo() != null && !f.monedaSimbolo().isBlank()
                 ? f.monedaSimbolo() + " "
                 : "";
         BigDecimal precio = f.precioFinal() == null ? BigDecimal.ZERO : f.precioFinal();
         card.add(new Paragraph(simboloMoneda + PESO_FMT.format(precio))
                 .simulateBold()
-                .setFontSize(19)
+                .setFontSize(18)
                 .setFontColor(esMejor ? KT_VERDE : KT_MARRON)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
                 .setMarginTop(6)
-                .setMarginLeft(8)
-                .setMarginRight(8));
+                .setMarginLeft(6)
+                .setMarginRight(6));
 
         // Línea de detalle: "N cuotas de $valor" si aplica, o descuento por
         // contado si la forma trae recargo negativo. Centrado debajo del precio.
@@ -449,7 +543,7 @@ public class CotizacionFinancieraPdfGenerator {
         if (hayCuotas) {
             BigDecimal valorCuota = precio.divide(BigDecimal.valueOf(cuotas),
                     2, RoundingMode.HALF_UP);
-            detalleTexto = cuotas + " cuotas de " + PESO_FMT.format(valorCuota);
+            detalleTexto = cuotas + " × " + PESO_FMT.format(valorCuota);
         } else if (f.recargoPorcentaje() != null && f.recargoPorcentaje().signum() < 0) {
             detalleTexto = f.recargoPorcentaje().abs().stripTrailingZeros().toPlainString()
                     + "% de descuento";
@@ -458,13 +552,13 @@ public class CotizacionFinancieraPdfGenerator {
             detalleTexto = "pago único";
         }
         Paragraph detalle = new Paragraph(detalleTexto)
-                .setFontSize(8.5f)
+                .setFontSize(7.5f)
                 .setFontColor(detalleEsDescuento ? KT_VERDE : GRIS_MEDIO)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
-                .setMarginTop(3)
-                .setMarginLeft(8)
-                .setMarginRight(8);
+                .setMarginTop(2)
+                .setMarginLeft(6)
+                .setMarginRight(6);
         if (detalleEsDescuento) detalle.simulateBold();
         card.add(detalle);
 

@@ -37,13 +37,13 @@
           class="btn-kt-rojo" (onClick)="vaciar()"
           [disabled]="!hayMonto()"
           pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
-        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-download'"
+        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
           [label]="screenLg() ? (esModoEdicion() ? 'Guardar cambios' : 'Generar PDF') : ''"
           class="btn-kt-marron" [disabled]="!hayMonto() || generandoPreview()"
           [loading]="generandoPreview()" (onClick)="previsualizar()"
           [pTooltip]="esModoEdicion()
-              ? 'Guarda los cambios y descarga el PDF actualizado'
-              : 'Genera, descarga y guarda la cotización en el historial'"
+              ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+              : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva'"
           tooltipPosition="bottom" />
         <p-button icon="pi pi-send"
           [label]="screenLg() ? (esModoEdicion() ? 'Guardar y enviar' : 'Enviar') : ''"
@@ -73,62 +73,170 @@
       <!-- ============= COLUMNA IZQUIERDA ============= -->
       <div class="flex flex-col gap-4">
 
-        <!-- Monto base + IVA — inputs principales destacados. El IVA es
-             editable porque el % varía por producto (10.5% productos
-             esenciales, 21% general, 27% servicios públicos). Default 21
-             que cubre el caso típico. -->
+        <!-- Montos a cotizar — soporta DOS montos con tasas de IVA distintas.
+             Caso típico: una máquina con 21% + un insumo con 10,5%. Layout
+             en 2 columnas (desktop) para aprovechar el ancho horizontal.
+             Cada monto tiene un quick-selector de tasas comunes (21/10,5/27)
+             además del input numérico para tasas custom. Al pie del card se
+             muestra el resumen en vivo (total s/IVA + total c/IVA + IVA
+             ponderado) para que el operador vea el efecto en el acto. -->
         <p-card class="kt-card">
           <ng-template #title>
             <div class="kt-card-title">
               <i class="pi pi-dollar"></i>
-              <span>Monto a cotizar</span>
+              <span>Montos a cotizar</span>
+              @if (hayMonto()) {
+                <span class="ml-auto text-xs font-normal text-muted-color hidden sm:inline-flex items-center gap-1.5">
+                  <i class="pi pi-check-circle text-[#7EBA00]"></i>
+                  Total s/IVA: <strong class="text-[#3B1E09] dark:text-surface-0">{{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}</strong>
+                </span>
+              }
             </div>
           </ng-template>
-          <div class="monto-banner rounded-xl p-4 flex flex-col gap-2">
-            <!-- Monto: input grande full-width, jerarquía principal -->
-            <label for="montoInput" class="kt-label">
-              <i class="pi pi-tag"></i> Precio base sin IVA
-            </label>
-            <p-inputNumber inputId="montoInput"
-              [ngModel]="montoBase()"
-              (ngModelChange)="montoBase.set($event ?? 0)"
-              mode="currency" currency="ARS" locale="es-AR"
-              [maxFractionDigits]="0"
-              [min]="0"
-              placeholder="$ 0"
-              inputStyleClass="!text-3xl !font-bold !text-center text-[#3B1E09] !bg-white"
-              class="block w-full" />
 
-            <!-- IVA: chip secundario, inline, no compite con el monto.
-                 Default 21%, editable porque varía por producto (10.5
-                 esenciales, 27 servicios públicos, etc.). -->
-            <div class="flex flex-wrap items-center justify-between gap-2 mt-1 px-1">
-              <label for="ivaInput" class="flex items-center gap-1.5 text-xs font-semibold text-[#3B1E09]/80 dark:text-surface-200 cursor-pointer">
-                <i class="pi pi-percentage text-[#FF861C] text-xs"></i>
-                IVA aplicado
-                <span class="text-[10px] font-normal text-muted-color">
-                  (default 21% — ajustá si el producto tiene otra tasa)
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- ===== Monto 1 (principal, naranja KT) ===== -->
+            <div class="monto-card monto-card--primario rounded-xl p-4 flex flex-col gap-2.5">
+              <div class="flex items-center justify-between">
+                <span class="monto-pill monto-pill--primario">
+                  <i class="pi pi-bookmark text-[9px]"></i>
+                  Monto 1
                 </span>
-              </label>
-              <p-inputNumber inputId="ivaInput"
-                [ngModel]="porcIva()"
-                (ngModelChange)="porcIva.set($event ?? 21)"
-                suffix=" %"
-                [min]="0" [max]="100"
-                [maxFractionDigits]="2"
-                [allowEmpty]="false"
-                [showButtons]="true" buttonLayout="horizontal" spinnerMode="horizontal"
-                decrementButtonClass="!p-1.5" incrementButtonClass="!p-1.5"
-                inputStyleClass="w-16 text-center font-bold" />
+                @if (montoBase() > 0) {
+                  <span class="text-[10px] font-bold text-[#7EBA00] dark:text-[#a2d534] uppercase tracking-wide inline-flex items-center gap-1">
+                    <i class="pi pi-check text-[9px]"></i>
+                    Cargado
+                  </span>
+                }
+              </div>
+
+              <p-inputNumber inputId="montoInput"
+                [ngModel]="montoBase()"
+                (ngModelChange)="montoBase.set($event ?? 0)"
+                mode="currency" currency="ARS" locale="es-AR"
+                [maxFractionDigits]="0"
+                [min]="0"
+                placeholder="$ 0"
+                inputStyleClass="!text-3xl !font-bold !text-center text-[#3B1E09] !bg-white"
+                class="block w-full" />
+
+              <div class="flex items-center justify-between gap-2 mt-0.5">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-surface-200 inline-flex items-center gap-1">
+                  <i class="pi pi-percentage text-[#FF861C] text-[10px]"></i>
+                  IVA
+                </span>
+                <div class="flex items-center gap-1">
+                  <!-- Chips de selección rápida de las tasas comunes. -->
+                  <button type="button"
+                    class="iva-chip"
+                    [class.iva-chip--active]="porcIva() === 21"
+                    (click)="porcIva.set(21)">21%</button>
+                  <button type="button"
+                    class="iva-chip"
+                    [class.iva-chip--active]="porcIva() === 10.5"
+                    (click)="porcIva.set(10.5)">10,5%</button>
+                  <p-inputNumber inputId="ivaInput"
+                    [ngModel]="porcIva()"
+                    (ngModelChange)="porcIva.set($event ?? 21)"
+                    suffix=" %"
+                    [min]="0" [max]="100"
+                    [maxFractionDigits]="2"
+                    [allowEmpty]="false"
+                    inputStyleClass="!w-20 !text-center !font-bold !py-1 !text-sm" />
+                </div>
+              </div>
             </div>
-            <p class="text-[11px] text-muted-color m-0 px-1 flex items-start gap-1">
+
+            <!-- ===== Monto 2 (opcional, secundario) ===== -->
+            <div class="monto-card monto-card--secundario rounded-xl p-4 flex flex-col gap-2.5"
+                 [class.monto-card--secundario-activo]="montoBase2() > 0">
+              <div class="flex items-center justify-between">
+                <span class="monto-pill monto-pill--secundario">
+                  <i class="pi pi-plus text-[9px]"></i>
+                  Monto 2
+                  <span class="opacity-70 font-normal">· opcional</span>
+                </span>
+                @if (montoBase2() > 0) {
+                  <span class="text-[10px] font-bold text-[#7EBA00] dark:text-[#a2d534] uppercase tracking-wide inline-flex items-center gap-1">
+                    <i class="pi pi-check text-[9px]"></i>
+                    Cargado
+                  </span>
+                } @else {
+                  <span class="text-[10px] text-muted-color hover:text-[#FF861C] underline underline-offset-2 cursor-help"
+                    pTooltip="Para cotizar con dos tasas de IVA distintas (ej. máquinas 10,5% + insumos 21%)"
+                    tooltipPosition="left">
+                    ¿Para qué sirve?
+                  </span>
+                }
+              </div>
+
+              <p-inputNumber inputId="montoInput2"
+                [ngModel]="montoBase2()"
+                (ngModelChange)="montoBase2.set($event ?? 0)"
+                mode="currency" currency="ARS" locale="es-AR"
+                [maxFractionDigits]="0"
+                [min]="0"
+                placeholder="$ 0"
+                inputStyleClass="!text-3xl !font-bold !text-center text-[#3B1E09] !bg-white"
+                class="block w-full" />
+
+              <div class="flex items-center justify-between gap-2 mt-0.5">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-surface-200 inline-flex items-center gap-1">
+                  <i class="pi pi-percentage text-[#FF861C] text-[10px]"></i>
+                  IVA
+                </span>
+                <div class="flex items-center gap-1">
+                  <button type="button"
+                    class="iva-chip"
+                    [class.iva-chip--active]="porcIva2() === 10.5"
+                    (click)="porcIva2.set(10.5)">10,5%</button>
+                  <button type="button"
+                    class="iva-chip"
+                    [class.iva-chip--active]="porcIva2() === 21"
+                    (click)="porcIva2.set(21)">21%</button>
+                  <p-inputNumber inputId="ivaInput2"
+                    [ngModel]="porcIva2()"
+                    (ngModelChange)="porcIva2.set($event ?? 10.5)"
+                    suffix=" %"
+                    [min]="0" [max]="100"
+                    [maxFractionDigits]="2"
+                    [allowEmpty]="false"
+                    inputStyleClass="!w-20 !text-center !font-bold !py-1 !text-sm" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== Resumen en vivo de totales ===== -->
+          @if (hayMonto()) {
+            <div class="mt-3 pt-3 border-t border-[#FF861C]/20 grid grid-cols-2 gap-3 text-sm">
+              <div class="flex flex-col gap-0.5 items-end sm:items-center">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-muted-color">
+                  Total sin IVA
+                </span>
+                <span class="text-lg font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
+                  {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+              </div>
+              <div class="flex flex-col gap-0.5 items-start sm:items-center">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-muted-color">
+                  Total con IVA
+                </span>
+                <span class="text-lg font-bold tabular-nums text-[#FF861C]">
+                  {{ totalConIva() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+              </div>
+            </div>
+          } @else {
+            <div class="mt-3 pt-3 border-t border-[#FF861C]/20 text-[11px] text-muted-color flex items-start gap-1.5">
               <i class="pi pi-info-circle text-[10px] text-[#FF861C] mt-0.5"></i>
               <span>
-                Las formas con IVA usan {{ '(monto × (1 + IVA/100))' }} como base;
-                las que no, usan el monto directo.
+                Cargá al menos uno de los dos montos para ver las formas de pago.
+                Si cotizás dos productos con tasas distintas (ej. 21% + 10,5%),
+                usá ambos.
               </span>
-            </p>
-          </div>
+            </div>
+          }
         </p-card>
 
         <!-- Datos del cliente — todos opcionales -->
@@ -219,9 +327,12 @@
             @if (formasPago().length > 0) {
               <div class="flex flex-col gap-2.5">
                 @for (f of formasPagoCalculadas(); track f.id; let i = $index) {
-                  <div class="forma-pago-card"
-                    [class]="'color-' + ((i % 10) + 1)"
-                    [class.es-mejor-precio]="i === indiceMejorPrecio()">
+                  <!-- Class string completa computada en TS para que Angular no
+                       tenga que combinar `[class]="'color-N'"` con
+                       `[class.es-mejor-precio]` — esa combinación pisaba el
+                       toggle del verde y dejaba la barra con el color del
+                       índice en lugar del verde de "mejor precio". -->
+                  <div [class]="clasesFormaCard(i)">
                     @if (i === indiceMejorPrecio()) {
                       <span class="badge-mejor-precio">
                         <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
@@ -317,10 +428,10 @@
 
     <div class="flex justify-between items-center p-3 rounded-lg bg-gradient-to-r from-[#FF861C]/5 to-[#7EBA00]/5 border border-[#FF861C]/20">
       <span class="text-muted-color flex items-center gap-1.5">
-        <i class="pi pi-dollar text-[#FF861C]"></i> Monto base
+        <i class="pi pi-dollar text-[#FF861C]"></i> Total sin IVA
       </span>
       <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
-        {{ montoBase() | currency:'ARS':'symbol':'1.0-0' }}
+        {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
       </span>
     </div>
   </div>

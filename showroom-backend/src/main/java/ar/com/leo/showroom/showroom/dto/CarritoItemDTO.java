@@ -11,6 +11,7 @@ import java.time.Instant;
 public record CarritoItemDTO(
         String sku,
         String descripcion,
+        String rubro,
         BigDecimal pvpKtGastroConIva,
         BigDecimal pvpKtGastroSinIva,
         BigDecimal porcIva,
@@ -24,6 +25,7 @@ public record CarritoItemDTO(
         return new CarritoItemDTO(
                 scan.sku(),
                 scan.descripcion(),
+                scan.rubro(),
                 scan.pvpKtGastroConIva(),
                 scan.pvpKtGastroSinIva(),
                 scan.porcIva(),
@@ -36,7 +38,7 @@ public record CarritoItemDTO(
 
     public CarritoItemDTO withCantidad(int nueva) {
         return new CarritoItemDTO(
-                sku, descripcion, pvpKtGastroConIva, pvpKtGastroSinIva, porcIva,
+                sku, descripcion, rubro, pvpKtGastroConIva, pvpKtGastroSinIva, porcIva,
                 stockTotal, habilitado, imagenUrl, sincronizadoAt, nueva);
     }
 
@@ -44,6 +46,7 @@ public record CarritoItemDTO(
         return new CarritoItemDTO(
                 scan.sku(),
                 scan.descripcion(),
+                scan.rubro(),
                 scan.pvpKtGastroConIva(),
                 scan.pvpKtGastroSinIva(),
                 scan.porcIva(),
@@ -68,6 +71,7 @@ public record CarritoItemDTO(
         return new CarritoItemDTO(
                 scan.sku(),
                 scan.descripcion(),
+                scan.rubro(),
                 pvpKtGastroConIva,
                 pvpKtGastroSinIva,
                 porcIva,

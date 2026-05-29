@@ -6,6 +6,9 @@ import java.math.BigDecimal;
  * Item liviano del catálogo cacheado, pensado para listas de etiquetas QR
  * y búsquedas (no incluye timestamps de sync).
  *
+ * @param rubro     Rubro DUX (ej. "MAQUINAS INDUSTRIALES"). Permite excluir
+ *                  ciertos rubros de los descuentos generales en el frontend
+ *                  sin necesidad de un lookup extra.
  * @param imagenUrl URL del endpoint local de imagen del producto, o null si
  *                  el archivo no existe en la carpeta indexada.
  * @param stockTotal Stock total sumado de todos los depósitos. Null si nunca
@@ -14,6 +17,7 @@ import java.math.BigDecimal;
 public record CatalogoItemDTO(
         String sku,
         String descripcion,
+        String rubro,
         BigDecimal pvpKtGastroSinIva,
         Boolean habilitado,
         String imagenUrl,

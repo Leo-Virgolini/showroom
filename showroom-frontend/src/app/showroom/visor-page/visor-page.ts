@@ -17,7 +17,7 @@ import { ImageModule } from 'primeng/image';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
-import { EscalaDescuento, ScanResult, SesionShowroom } from '../models';
+import { EscalaDescuento, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -105,6 +105,14 @@ export class VisorPage {
    *  como "comprá más para llegar al próximo descuento". */
   readonly escalasOrdenadas = computed(() =>
     [...this.escalas()].sort((a, b) => a.umbralMin - b.umbralMin),
+  );
+
+  /** True si el producto recién scaneado pertenece a un rubro excluido de los
+   *  descuentos por escala (MAQUINAS INDUSTRIALES). El visor oculta los tiles
+   *  "Comprá más y ahorrás" en ese caso — sino sugeriría precios que no
+   *  aplican comercialmente para este tipo de producto. */
+  readonly scanExcluyeDescuentos = computed(
+    () => rubroExcluyeDescuentos(this.ultimoScan()?.rubro),
   );
 
   /** Producto vendible: con precio cargado y habilitado. El stock NO lo bloquea

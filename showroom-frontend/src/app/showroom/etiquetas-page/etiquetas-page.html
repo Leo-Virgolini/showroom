@@ -163,7 +163,12 @@ SKU003" class="w-full font-mono text-sm"></textarea>
                 tooltipPosition="top">*</span>
             }
           </h4>
-          <div class="flex items-center gap-1 mb-2">
+          <!-- Fila única: selector + acciones (incluido "Guardar"). El guardado
+               se ofrece como ícono al final, coherente con el resto de acciones;
+               se pone verde cuando hay cambios pendientes (también marcados con
+               el asterisco al lado del título). Antes era un botón con label
+               aparte que quedaba flotando suelto a la derecha. -->
+          <div class="flex items-center gap-1 mb-3">
             <p-select [options]="perfiles()" [ngModel]="perfilActivoId()" (ngModelChange)="cambiarPerfilActivo($event)"
               optionLabel="nombre" optionValue="id" appendTo="body" size="small" class="flex-1 min-w-0" />
             <p-button icon="pi pi-plus" severity="secondary" [text]="true" [rounded]="true" size="small"
@@ -173,15 +178,12 @@ SKU003" class="w-full font-mono text-sm"></textarea>
             <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small"
               (onClick)="confirmarEliminarPerfil()" [disabled]="perfiles().length <= 1"
               pTooltip="Eliminar este perfil" tooltipPosition="top" />
-          </div>
-          <!-- Botón explícito para persistir los cambios del perfil activo.
-               Se habilita solo cuando hay diferencias entre los signals de
-               config y la versión persistida (computed `hayCambiosSinGuardar`). -->
-          <div class="flex items-center justify-end mb-3">
-            <p-button icon="pi pi-save" label="Guardar perfil" severity="success" size="small"
+            <p-button icon="pi pi-save"
+              [severity]="hayCambiosSinGuardar() ? 'success' : 'secondary'"
+              [text]="!hayCambiosSinGuardar()" [rounded]="true" size="small"
               [disabled]="!hayCambiosSinGuardar() || guardandoPerfil()"
               [loading]="guardandoPerfil()" (onClick)="guardarPerfilActivo()"
-              pTooltip="Persiste los cambios actuales en el perfil activo"
+              [pTooltip]="hayCambiosSinGuardar() ? 'Guardar cambios del perfil' : 'No hay cambios pendientes'"
               tooltipPosition="top" />
           </div>
 
@@ -351,6 +353,10 @@ SKU003" class="w-full font-mono text-sm"></textarea>
         </div>
 
         <div class="flex justify-end mt-3 gap-2 flex-wrap">
+          <p-button label="PNG (térmica BT)" icon="pi pi-image" severity="secondary" [outlined]="true"
+            [loading]="generandoQR()" [disabled]="!puedeImprimir()" (onClick)="descargarPNG()"
+            pTooltip="Descarga un PNG en blanco y negro para imprimir desde la app de la impresora térmica (Detonger u otras rotuladoras Bluetooth)."
+            tooltipPosition="top" />
           <p-button label="ZPL (Zebra)" icon="pi pi-download" severity="secondary" [outlined]="true"
             [loading]="generandoQR()" [disabled]="!puedeImprimir()" (onClick)="descargarZPL()"
             pTooltip="Descarga un archivo ZPL para enviar con Zebra Setup Utilities. Recomendado para tiradas grandes (50+ etiquetas)."

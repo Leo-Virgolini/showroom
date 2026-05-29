@@ -40,6 +40,17 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
     @Query("select p.id, c from ProductoCache p join p.codigosBarra c where p.id in :ids")
     List<Object[]> findCodigosBarraByProductoIds(@Param("ids") Collection<Long> ids);
 
+    /** Lista de rubros distintos cacheados, ordenada alfabéticamente — popula
+     *  el dropdown del filtro de la pantalla /productos. Los nulls/blancos
+     *  quedan fuera; el frontend agrega manualmente la opción "todos" / "sin
+     *  rubro" si lo necesita. */
+    @Query("""
+            select distinct p.rubro from ProductoCache p
+            where p.rubro is not null and p.rubro <> ''
+            order by p.rubro asc
+            """)
+    List<String> findDistinctRubros();
+
     // La búsqueda por texto + filtros vive en {@link ProductoCacheSpecs} +
     // {@code findAll(Specification, Pageable)} de JpaSpecificationExecutor.
     // La spec tokeniza el query y matchea cada token contra SKU/desc/EAN, lo

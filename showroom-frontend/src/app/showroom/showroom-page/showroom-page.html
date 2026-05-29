@@ -187,7 +187,7 @@
           tooltipPosition="bottom" />
 
         @if (health()?.ultimaSincronizacionAt; as fecha) {
-        <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'medium' : undefined : 'es-AR') ?? ''"
+        <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') ?? ''"
           tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
         }
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
@@ -276,6 +276,10 @@
                 pTooltip="Actualizar precio y stock desde DUX"
                 tooltipPosition="left"
                 ariaLabel="Refrescar producto" />
+              @if (scanExcluyeDescuentos()) {
+              <p-tag severity="warn" value="Máq. Industrial" icon="pi pi-wrench" class="tag-grande"
+                pTooltip="No aplican los descuentos por monto" tooltipPosition="left" />
+              }
               @if (r.habilitado === false) {
               <p-tag severity="danger" value="Deshabilitado" icon="pi pi-ban" class="tag-grande" />
               }
@@ -320,10 +324,33 @@
             </div>
           </div>
 
+          <!-- Aviso cuando el rubro está excluido de los descuentos por escala
+               (MAQUINAS INDUSTRIALES). Reemplaza visualmente a los tiles de
+               descuento para que el operador no tenga que adivinar por qué
+               no aparecen — esos productos comercialmente no aceptan el
+               descuento por monto. -->
+          @if (escalasOrdenadas().length > 0 && scanExcluyeDescuentos()) {
+            <div class="rounded-xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 sm:p-4 flex items-start gap-3">
+              <i class="pi pi-info-circle text-amber-700 dark:text-amber-300 text-lg shrink-0 mt-0.5"></i>
+              <div class="flex-1 min-w-0">
+                <div class="font-bold text-amber-800 dark:text-amber-200 text-sm">
+                  Sin descuentos por monto
+                </div>
+                <div class="text-xs sm:text-sm text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+                  El rubro <strong>MAQUINAS INDUSTRIALES</strong> no califica
+                  para los descuentos generales por escala — el cliente paga
+                  siempre el PVP de lista.
+                </div>
+              </div>
+            </div>
+          }
+
           <!-- AHORROS POR ESCALA — comprando más bajan el precio unitario.
                Itera sobre todas las escalas configuradas; alterna ámbar
-               (índice par) y verde (índice impar) para distinguir. -->
-          @if (escalasOrdenadas().length > 0) {
+               (índice par) y verde (índice impar) para distinguir.
+               Para los rubros excluidos (MAQUINAS INDUSTRIALES) no se
+               muestran porque comercialmente no se les aplica el descuento. -->
+          @if (escalasOrdenadas().length > 0 && !scanExcluyeDescuentos()) {
           <div class="flex flex-col gap-2">
             <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1">
               Comprá más y ahorrás
@@ -369,12 +396,14 @@
           </div>
           <!-- fin scan-body — el CTA queda fijo abajo del card -->
 
-          <!-- AGREGAR AL CARRITO — el bloque "cantidad + botón" queda en una
-               banda destacada con tono naranja KT, para que el operador lo
-               distinga claramente como el CTA principal del scan. items-center:
-               alinea verticalmente el botón con el centro del bloque
-               label+input — queda más balanceado que items-end (que pegaba
-               el botón a la base del input dejando un hueco arriba). -->
+          <!-- AGREGAR AL CARRITO — banda destacada con tono naranja KT. El
+               botón se centra con el input usando items-center sobre el
+               flex Y un spacer invisible en la columna del botón con el
+               mismo alto que la label "CANTIDAD". Como ambas columnas
+               tienen estructura [label/spacer + gap + elemento], sus
+               centros geométricos coinciden y los elementos quedan
+               perfectamente alineados aunque tengan alturas distintas
+               (input vs. botón size="large"). -->
           <div class="flex gap-3 items-center flex-wrap mt-auto pt-3 px-3 pb-3 rounded-xl bg-[#FF861C]/5 border border-[#FF861C]/20">
             <div class="flex flex-col gap-1">
               <label for="cantidadScanInput" class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1 leading-none">
@@ -395,8 +424,11 @@
                 inputStyleClass="w-20 sm:w-24 text-center text-lg font-bold"
                 ariaLabel="Cantidad de unidades a agregar al carrito" />
             </div>
-            <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large"
-              (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
+            <div class="flex flex-col gap-1">
+              <span aria-hidden="true" class="text-[10px] leading-none invisible">·</span>
+              <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large"
+                (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
+            </div>
           </div>
 
         </div>
@@ -422,8 +454,19 @@
             <!-- Fila NO-clickeable. Para agregar al carrito, el operador usa
                  el botón verde "Agregar" del final. La lista queda abierta
                  tras agregar para que pueda sumar varios productos seguidos
-                 sin volver a buscar. -->
-            <li class="px-3 py-2.5 rounded-lg border border-[#FF861C]/20 bg-white dark:bg-surface-900/40 hover:border-[#FF861C]/50 hover:bg-[#FF861C]/5 dark:hover:bg-surface-800/40 transition-colors flex items-center gap-3"
+                 sin volver a buscar. Para máquinas industriales (rubro
+                 excluido de descuentos por escala) usamos un borde izquierdo
+                 ámbar grueso como diferenciador visual a primera vista. -->
+            <li class="px-3 py-2.5 rounded-lg border bg-white dark:bg-surface-900/40 transition-colors flex items-center gap-3"
+                [class.border-amber-400]="esRubroSinDescuento(it.rubro)"
+                [class.dark:border-amber-600]="esRubroSinDescuento(it.rubro)"
+                [class.border-l-4]="esRubroSinDescuento(it.rubro)"
+                [class.bg-amber-50/40]="esRubroSinDescuento(it.rubro)"
+                [class.dark:bg-amber-950/20]="esRubroSinDescuento(it.rubro)"
+                [class.border-[#FF861C]/20]="!esRubroSinDescuento(it.rubro)"
+                [class.hover:border-[#FF861C]/50]="!esRubroSinDescuento(it.rubro)"
+                [class.hover:bg-[#FF861C]/5]="!esRubroSinDescuento(it.rubro)"
+                [class.dark:hover:bg-surface-800/40]="!esRubroSinDescuento(it.rubro)"
                 [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva">
               <div class="flex-1 flex items-center gap-3 text-left min-w-0">
                 @if (it.imagenUrl) {
@@ -438,9 +481,21 @@
                 <div class="min-w-0 flex-1">
                   <!-- SKU pill outline naranja — versión "candidato" del pill
                        sólido naranja del carrito (donde aparece como elegido). -->
-                  <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-primary/50 text-primary font-mono text-[10px] font-bold mb-0.5">
-                    {{ it.sku }}
-                  </span>
+                  <div class="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-primary/50 text-primary font-mono text-[10px] font-bold">
+                      {{ it.sku }}
+                    </span>
+                    @if (esRubroSinDescuento(it.rubro)) {
+                      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full
+                                   bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
+                                   font-bold text-[9px] uppercase tracking-wide"
+                            pTooltip="Máquina industrial — no aplican los descuentos por monto"
+                            tooltipPosition="top">
+                        <i class="pi pi-wrench text-[8px]"></i>
+                        Máq. Industrial
+                      </span>
+                    }
+                  </div>
                   <div class="text-sm text-surface-700 dark:text-surface-200 truncate">{{ it.descripcion ?? '—' }}</div>
                 </div>
                 <div class="text-right shrink-0 flex flex-col gap-0.5">
@@ -478,13 +533,24 @@
                   }
                 </div>
               </div>
-              <!-- Cantidad + botón "Agregar al carrito" inline. Para
-                   centrar perfectamente el botón con el input, le ponemos
-                   un spacer invisible arriba con la misma altura del label
-                   "CANTIDAD". Así ambos bloques tienen idéntica altura
-                   total y items-center los alinea al medio sin offset.
-                   La lista permanece abierta tras agregar. -->
+              <!-- Layout: las 3 columnas (botón Ver, cantidad, botón Agregar)
+                   tienen estructura idéntica [label/spacer + gap + elemento].
+                   Con items-center, los centros geométricos de cada columna
+                   coinciden — y como cada elemento está en la misma posición
+                   relativa dentro de su columna, los centros de los
+                   elementos (input, botones) quedan a la misma altura
+                   visual. Los botones laterales usan un span invisible
+                   (aria-hidden) con la misma altura que la label "CANTIDAD". -->
               <div class="shrink-0 flex items-center gap-2">
+                <div class="flex flex-col items-center gap-0.5">
+                  <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
+                  <p-button icon="pi pi-eye"
+                    severity="info" size="small"
+                    (onClick)="seleccionarResultado(it.sku)"
+                    pTooltip="Ver el producto completo (foto grande, descuentos por escala)"
+                    tooltipPosition="top"
+                    ariaLabel="Ver producto" />
+                </div>
                 <div class="flex flex-col items-center gap-0.5">
                   <span class="text-[9px] uppercase tracking-wider font-bold text-primary leading-none">
                     Cantidad
@@ -500,7 +566,7 @@
                     ariaLabel="Cantidad de unidades a agregar al carrito" />
                 </div>
                 <div class="flex flex-col items-center gap-0.5">
-                  <span class="text-[9px] leading-none invisible" aria-hidden="true">.</span>
+                  <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
                   <p-button icon="pi pi-cart-plus"
                     severity="success" size="small"
                     [disabled]="it.habilitado === false || !it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0"
@@ -554,6 +620,10 @@
                   </div>
                 }
               </div>
+              <div class="text-[11px] text-muted-color mt-2 inline-flex items-start gap-1.5">
+                <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
+                <span>No aplican al rubro <strong>MAQUINAS INDUSTRIALES</strong>.</span>
+              </div>
             </div>
           }
         </div>
@@ -606,7 +676,10 @@
                No usamos margin negativo lateral — sino aparecería scroll aún
                cuando el li entra cómodo en el contenedor (el margen negativo
                cuenta como contenido fuera de los bordes del <ul>). -->
-          <li class="py-2 px-2 rounded-md flex items-center gap-2 min-w-[20rem]" [class.item-excedido]="excedeStock(it)" [attr.data-sku]="it.sku">
+          <li class="py-2 px-2 rounded-md flex items-center gap-2 min-w-[20rem]"
+              [class.item-excedido]="excedeStock(it)"
+              [class.item-maquina-industrial]="esRubroSinDescuento(it.rubro)"
+              [attr.data-sku]="it.sku">
             @if (it.imagenUrl) {
               <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
                 imageClass="w-10 h-10 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
@@ -619,8 +692,16 @@
             }
 
             <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-1.5 flex-wrap">
                 <span class="font-mono text-sm font-semibold shrink-0">{{ it.sku }}</span>
+                @if (esRubroSinDescuento(it.rubro)) {
+                  <span class="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1 shrink-0
+                               bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200"
+                        pTooltip="Máquina industrial — no aplican los descuentos por monto"
+                        tooltipPosition="top">
+                    <i class="pi pi-wrench text-[8px]"></i> Máq. Industrial
+                  </span>
+                }
                 @if (it.stockTotal != null) {
                   @if (excedeStock(it)) {
                     <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 font-semibold inline-flex items-center gap-1 shrink-0"
@@ -673,6 +754,14 @@
               }
             </span>
           </div>
+
+          @if (descuentoAplicado() > 0 && carritoTieneRubroExcluido()) {
+            <div class="text-[10px] text-amber-700 dark:text-amber-300 inline-flex items-start gap-1 leading-tight">
+              <i class="pi pi-info-circle text-[0.6rem] mt-0.5"></i>
+              <span>El {{ descuentoAplicado() }}% no se aplica a las
+                <strong>máquinas industriales</strong> del carrito.</span>
+            </div>
+          }
 
           @if (proximoEscalon() != null && faltaParaProximo() != null) {
           <!-- Próximo escalón de descuento — texto inline + meter en una fila

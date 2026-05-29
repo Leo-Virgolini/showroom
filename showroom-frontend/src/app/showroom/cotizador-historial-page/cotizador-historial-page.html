@@ -100,10 +100,10 @@
             </td>
             <td class="text-sm text-surface-700 dark:text-surface-200">
               <div class="flex flex-col leading-tight">
-                <span>{{ c.creadoAt | date: 'short' : undefined : 'es-AR' }}</span>
+                <span>{{ c.creadoAt | date: 'dd/MM/yy HH:mm' : undefined : 'es-AR' }}</span>
                 @if (c.modificadoAt) {
                   <span class="text-[10px] text-amber-700 dark:text-amber-300 flex items-center gap-1 mt-0.5"
-                    [pTooltip]="'Última edición: ' + (c.modificadoAt | date: 'short' : undefined : 'es-AR')"
+                    [pTooltip]="'Última edición: ' + (c.modificadoAt | date: 'dd/MM/yy HH:mm' : undefined : 'es-AR')"
                     tooltipPosition="top">
                     <i class="pi pi-pencil text-[9px]"></i>
                     Editado {{ c.modificadoAt | date: 'shortDate' : undefined : 'es-AR' }}
@@ -148,12 +148,12 @@
                   pTooltip="Editar cotización" tooltipPosition="left"
                   ariaLabel="Editar cotización" />
                 <p-button
-                  [icon]="descargandoPdf().has(c.id) ? 'pi pi-spinner pi-spin' : 'pi pi-download'"
+                  [icon]="descargandoPdf().has(c.id) ? 'pi pi-spinner pi-spin' : 'pi pi-file-pdf'"
                   severity="secondary" [outlined]="true" size="small" [rounded]="true"
                   [disabled]="descargandoPdf().has(c.id)"
                   (onClick)="descargar(c)"
-                  pTooltip="Descargar PDF" tooltipPosition="left"
-                  ariaLabel="Descargar PDF" />
+                  pTooltip="Abrir PDF" tooltipPosition="left"
+                  ariaLabel="Abrir PDF" />
                 <p-button
                   [icon]="eliminandoPdf().has(c.id) ? 'pi pi-spinner pi-spin' : 'pi pi-trash'"
                   severity="danger" [outlined]="true" size="small" [rounded]="true"

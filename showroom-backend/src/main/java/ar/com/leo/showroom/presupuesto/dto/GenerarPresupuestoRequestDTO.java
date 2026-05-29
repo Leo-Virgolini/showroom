@@ -55,6 +55,11 @@ public record GenerarPresupuestoRequestDTO(
     public record Item(
             @NotNull String sku,
             String descripcion,
+            /** Rubro DUX del producto al momento de armar el presupuesto. Lo
+             *  usa el PDF de "ítems de interés" para omitir las columnas de
+             *  descuento por escala en rubros excluidos (MAQUINAS INDUSTRIALES).
+             *  Null = rubro desconocido → se aplican todos los escalones. */
+            String rubro,
             @NotNull @Positive BigDecimal cantidad,
             /** Precio unitario CON IVA tal como se mostró en la pantalla — el
              *  generador del PDF lo divide por (1 + porcIva/100) para mostrar

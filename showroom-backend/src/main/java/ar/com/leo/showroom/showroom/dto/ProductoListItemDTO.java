@@ -12,6 +12,8 @@ import java.util.List;
 public record ProductoListItemDTO(
         String sku,
         String descripcion,
+        /** Rubro DUX del producto (ej. "MAQUINAS INDUSTRIALES"). */
+        String rubro,
         BigDecimal pvpKtGastroConIva,
         BigDecimal pvpKtGastroSinIva,
         BigDecimal porcIva,

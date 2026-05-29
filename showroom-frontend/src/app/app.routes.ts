@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './auth/auth.guard';
+import { unsavedChangesGuard } from './showroom/presupuestos-page/unsaved-changes.guard';
 
 export const routes: Routes = [
   // Rutas públicas — no requieren login.
@@ -47,9 +48,12 @@ export const routes: Routes = [
   },
   {
     // Mismo componente que `/presupuestos`, pero arranca cargando el detalle
-    // del presupuesto :id y guarda con PUT en lugar de POST.
+    // del presupuesto :id y guarda con PUT en lugar de POST. El
+    // {@link unsavedChangesGuard} intercepta la navegación cuando hay
+    // cambios pendientes para que el operador no pierda trabajo por error.
     path: 'presupuestos/editar/:id',
     canActivate: [authGuard],
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./showroom/presupuestos-page/presupuestos-page').then((m) => m.PresupuestosPage),
   },

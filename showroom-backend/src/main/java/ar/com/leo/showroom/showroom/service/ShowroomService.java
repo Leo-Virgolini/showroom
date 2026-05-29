@@ -226,6 +226,14 @@ public class ShowroomService {
 
 
     /**
+     * Rubros distintos cacheados — popula el dropdown del filtro de la
+     * pantalla {@code /productos}. Una sola query sobre el cache.
+     */
+    public List<String> listarRubrosDistintos() {
+        return productoCacheRepository.findDistinctRubros();
+    }
+
+    /**
      * Búsqueda paginada en el cache local (sin tocar DUX).
      * Usada por la pantalla de generación de etiquetas QR.
      */
@@ -266,6 +274,7 @@ public class ShowroomService {
         return new CatalogoItemDTO(
                 pc.getSku(),
                 pc.getDescripcion(),
+                pc.getRubro(),
                 sinIva,
                 pc.getHabilitado(),
                 urlImagenLocal(pc.getSku()),
@@ -278,21 +287,23 @@ public class ShowroomService {
      * timestamp de última sync.
      */
     /** Whitelist de campos ordenables del listado de productos. */
-    private static final Map<String, String> SORT_PRODUCTOS = Map.of(
-            "sku", "sku",
-            "descripcion", "descripcion",
-            "pvpKtGastroConIva", "pvpKtGastroConIva",
-            "pvpKtGastroSinIva", "pvpKtGastroConIva", // mismo campo (sin-IVA es derivado)
-            "porcIva", "porcIva",
-            "stockTotal", "stockTotal",
-            "habilitado", "habilitado",
-            "sincronizadoAt", "sincronizadoAt"
+    private static final Map<String, String> SORT_PRODUCTOS = Map.ofEntries(
+            Map.entry("sku", "sku"),
+            Map.entry("descripcion", "descripcion"),
+            Map.entry("rubro", "rubro"),
+            Map.entry("pvpKtGastroConIva", "pvpKtGastroConIva"),
+            Map.entry("pvpKtGastroSinIva", "pvpKtGastroConIva"), // mismo campo (sin-IVA es derivado)
+            Map.entry("porcIva", "porcIva"),
+            Map.entry("stockTotal", "stockTotal"),
+            Map.entry("habilitado", "habilitado"),
+            Map.entry("sincronizadoAt", "sincronizadoAt")
     );
 
     public ProductoListPageDTO buscarProductos(
             String q,
             boolean soloDeshabilitados,
             boolean soloSinStock,
+            String rubro,
             int page,
             int size,
             String sortField,
@@ -323,6 +334,7 @@ public class ShowroomService {
         Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, aplicarRanking);
         if (soloDeshabilitados) spec = spec.and(ProductoCacheSpecs.soloDeshabilitados());
         if (soloSinStock) spec = spec.and(ProductoCacheSpecs.soloSinStock());
+        if (rubro != null && !rubro.isBlank()) spec = spec.and(ProductoCacheSpecs.porRubro(rubro));
 
         Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         // Bulk fetch de codigosBarra (colección lazy @ElementCollection) en una
@@ -678,6 +690,7 @@ public class ShowroomService {
         return new ProductoListItemDTO(
                 pc.getSku(),
                 pc.getDescripcion(),
+                pc.getRubro(),
                 pc.getPvpKtGastroConIva(),
                 calcularSinIva(pc.getPvpKtGastroConIva(), pc.getPorcIva()),
                 pc.getPorcIva(),
@@ -929,6 +942,7 @@ public class ShowroomService {
         return new ScanResultDTO(
                 pc.getSku(),
                 pc.getDescripcion(),
+                pc.getRubro(),
                 pc.getPvpKtGastroConIva(),
                 sinIva,
                 pc.getPorcIva(),

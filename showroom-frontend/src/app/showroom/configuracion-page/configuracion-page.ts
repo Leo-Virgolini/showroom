@@ -538,6 +538,19 @@ export class ConfiguracionPage {
     });
   }
 
+  /**
+   * Esquema de colores para identificar visualmente cada escalón.
+   * 5 colores cíclicos (ámbar → esmeralda → cielo → violeta → rosa) —
+   * el mismo orden que usa el showroom-page para mostrar los tiles
+   * "Comprá más y ahorrás", así el operador asocia color → escalón
+   * incluso al ver ambas pantallas.
+   *
+   * Devuelve las clases Tailwind para borde + fondo + pill numerador.
+   */
+  escalonColorScheme(i: number): { border: string; bg: string; pill: string } {
+    return ESCALON_COLOR_SCHEMES[i % ESCALON_COLOR_SCHEMES.length];
+  }
+
   agregarFila(): void {
     this.filas.set([...this.filas(), { umbralMin: null, porcentaje: null }]);
   }
@@ -1180,3 +1193,37 @@ export class ConfiguracionPage {
     });
   }
 }
+
+/**
+ * 5 esquemas de color cíclicos para los escalones de descuento, en el mismo
+ * orden que el showroom-page (ámbar → esmeralda → cielo → violeta → rosa).
+ * Solo borde + fondo + pill: en /configuracion los escalones son cards
+ * compactas, no necesitan la paleta extendida de la pantalla principal.
+ */
+const ESCALON_COLOR_SCHEMES = [
+  {
+    border: 'border-amber-300 dark:border-amber-700',
+    bg: 'bg-amber-50 dark:bg-amber-950/30',
+    pill: 'bg-amber-500',
+  },
+  {
+    border: 'border-emerald-400 dark:border-emerald-700',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/30',
+    pill: 'bg-emerald-600',
+  },
+  {
+    border: 'border-sky-400 dark:border-sky-700',
+    bg: 'bg-sky-50 dark:bg-sky-950/30',
+    pill: 'bg-sky-600',
+  },
+  {
+    border: 'border-violet-400 dark:border-violet-700',
+    bg: 'bg-violet-50 dark:bg-violet-950/30',
+    pill: 'bg-violet-600',
+  },
+  {
+    border: 'border-rose-400 dark:border-rose-700',
+    bg: 'bg-rose-50 dark:bg-rose-950/30',
+    pill: 'bg-rose-600',
+  },
+] as const;

@@ -165,6 +165,24 @@ public class PresupuestoComercialPdfGenerator {
      *  angosta — queda siempre en una sola línea. */
     private static final ISplitCharacters CODIGO_NO_SPLIT = (text, glyphPos) -> false;
 
+    /** Rubros DUX a los que NO se les aplican los descuentos generales por
+     *  escala (regla de negocio confirmada por el dueño el 2026-05-29). En la
+     *  tabla de "ítems de interés" estas filas muestran "—" en lugar de un
+     *  precio rebajado para cada escalón. La comparación es case-insensitive,
+     *  trimeada y SIN diacríticos para tolerar "MÁQUINAS INDUSTRIALES" /
+     *  "Maquinas Industriales" / etc. */
+    private static final Set<String> RUBROS_SIN_DESCUENTO_ESCALA = Set.of(
+            "MAQUINAS INDUSTRIALES");
+
+    private static boolean rubroExcluyeDescuentos(String rubro) {
+        if (rubro == null) return false;
+        String sinAcentos = java.text.Normalizer
+                .normalize(rubro.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
+        return RUBROS_SIN_DESCUENTO_ESCALA.contains(
+                sinAcentos.toUpperCase(Locale.of("es", "AR")));
+    }
+
     private final ImagenLocalService imagenLocalService;
     private final EscalaDescuentoService escalaDescuentoService;
 
@@ -257,7 +275,10 @@ public class PresupuestoComercialPdfGenerator {
                 } else {
                     List<EscalaDescuento> escalones = escalaDescuentoService.listar();
                     agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones);
-                    agregarNotaPreciosEfectivo(doc, !escalones.isEmpty());
+                    boolean hayItemExcluido = datos.items() != null
+                            && datos.items().stream()
+                                    .anyMatch(it -> rubroExcluyeDescuentos(it.rubro()));
+                    agregarNotaPreciosEfectivo(doc, !escalones.isEmpty(), hayItemExcluido);
                     agregarNotaMediosPago(doc);
                 }
                 agregarObservaciones(doc, datos);
@@ -345,6 +366,7 @@ public class PresupuestoComercialPdfGenerator {
             items.add(new GenerarPresupuestoRequestDTO.Item(
                     s.getSku(),
                     s.getDescripcion(),
+                    s.getRubro(),
                     BigDecimal.ONE,
                     s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
                     s.getPorcIva(),
@@ -1004,7 +1026,10 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("CANT."));
-        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
+        // "Precio efectivo" — coincide con el header de la tabla de ítems de
+        // interés. Comunica al cliente que ese es el precio unitario s/IVA
+        // de contado, no un precio de lista ambiguo.
+        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -1260,6 +1285,11 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
             BigDecimal precioSinIva = precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
             boolean sinPrecio = precioSinIva.signum() <= 0;
+            /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
+             *  fila muestra el precio efectivo de contado pero las columnas
+             *  de descuento por escala van en "—" para que no sugieran un
+             *  precio rebajado que comercialmente no aplica. */
+            boolean sinDescuentos = rubroExcluyeDescuentos(it.rubro());
 
             // Foto
             Cell celdaFoto = new Cell()
@@ -1338,7 +1368,7 @@ public class PresupuestoComercialPdfGenerator {
                         .setPadding(6)
                         .setTextAlignment(TextAlignment.CENTER)
                         .setVerticalAlignment(VerticalAlignment.MIDDLE);
-                if (sinPrecio) {
+                if (sinPrecio || sinDescuentos) {
                     celdaRebaja.add(new Paragraph("—")
                             .setFontSize(10)
                             .setFontColor(GRIS_MEDIO)
@@ -1388,7 +1418,8 @@ public class PresupuestoComercialPdfGenerator {
      * sobre el total de la compra y no acumulables, para que el cliente no
      * interprete que un solo producto ya accede al escalón mayor.
      */
-    private void agregarNotaPreciosEfectivo(Document doc, boolean hayDescuentos) {
+    private void agregarNotaPreciosEfectivo(Document doc, boolean hayDescuentos,
+                                            boolean hayItemExcluido) {
         doc.add(new Paragraph("Precios en efectivo — no incluyen IVA")
                 .setFontSize(9)
                 .setCharacterSpacing(0.3f)
@@ -1399,6 +1430,19 @@ public class PresupuestoComercialPdfGenerator {
         if (hayDescuentos) {
             doc.add(new Paragraph(
                     "Descuentos sobre el total de la compra al alcanzar el monto indicado")
+                    .setFontSize(8)
+                    .setFontColor(GRIS_MEDIO)
+                    .setTextAlignment(TextAlignment.CENTER)
+                    .setMarginTop(2)
+                    .setMarginBottom(0));
+        }
+        // Si alguno de los ítems pertenece a un rubro excluido (MAQUINAS
+        // INDUSTRIALES) le explicamos al cliente por qué esas filas tienen
+        // "—" en las columnas de descuento, en lugar de un precio rebajado.
+        if (hayDescuentos && hayItemExcluido) {
+            doc.add(new Paragraph(
+                    "* Las máquinas industriales mantienen el precio de lista — "
+                    + "los descuentos por monto no aplican a ese rubro.")
                     .setFontSize(8)
                     .setFontColor(GRIS_MEDIO)
                     .setTextAlignment(TextAlignment.CENTER)
@@ -1489,7 +1533,7 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal porcEfectivo = ahorro.multiply(BigDecimal.valueOf(100))
                     .divide(subtotalBruto, 2, RoundingMode.HALF_UP);
 
-            card.add(filaDesglose("Subtotal s/IVA", formatPesos(subtotalBruto), false, false));
+            card.add(filaDesglose("Subtotal efectivo s/IVA", formatPesos(subtotalBruto), false, false));
             card.add(filaDesglose(
                     "Descuento (" + formatPorcentaje(porcEfectivo) + "%)",
                     "-" + formatPesos(ahorro), false, true));
@@ -1497,7 +1541,11 @@ public class PresupuestoComercialPdfGenerator {
                     .setMarginTop(4).setMarginBottom(4));
         }
 
-        card.add(filaDesglose("Total s/IVA", formatPesos(totalSinIva), true, false));
+        // Total destacado — los textos "efectivo" + "s/IVA" comunican que es
+        // el precio s/IVA de contado, coherente con la columna "PRECIO
+        // EFECTIVO" de la tabla y con la card de formas de pago donde el
+        // cliente ve las alternativas con financiación.
+        card.add(filaDesglose("Total efectivo s/IVA", formatPesos(totalSinIva), true, false));
         doc.add(card);
     }
 

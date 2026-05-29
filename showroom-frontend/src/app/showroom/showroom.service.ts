@@ -146,9 +146,16 @@ export class ShowroomService {
     if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
     if (opts.soloDeshabilitados) params = params.set('soloDeshabilitados', 'true');
     if (opts.soloSinStock) params = params.set('soloSinStock', 'true');
+    if (opts.rubro && opts.rubro.trim()) params = params.set('rubro', opts.rubro.trim());
     if (opts.sortField) params = params.set('sortField', opts.sortField);
     if (opts.sortOrder) params = params.set('sortOrder', opts.sortOrder);
     return this.http.get<ProductoListPage>(`${this.base}/productos`, { params });
+  }
+
+  /** Rubros distintos del catálogo cacheado — para el dropdown del filtro
+   *  por rubro en la pantalla {@code /productos}. */
+  listarRubrosProductos(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.base}/productos/rubros`);
   }
 
   health(): Observable<Health> {

@@ -351,7 +351,19 @@ public class CatalogoSyncService {
         pc.setPvpKtGastroConIva(extraerPrecio(item, listaObjetivo));
         pc.setStockTotal(sumarStock(item.getStock()));
         sincronizarCodigosBarra(pc, item.getCodigosBarra());
+        pc.setRubro(extraerRubro(item));
         pc.setSincronizadoAt(ahora);
+    }
+
+    /** Nombre del rubro tal como lo manda DUX (truncado y trimeado para la
+     *  columna de 120 chars). Null si DUX no informa rubro. */
+    private static String extraerRubro(DuxItem item) {
+        if (item.getRubro() == null) return null;
+        String nombre = item.getRubro().getNombre();
+        if (nombre == null) return null;
+        String trimmed = nombre.trim();
+        if (trimmed.isEmpty()) return null;
+        return trimmed.length() > 120 ? trimmed.substring(0, 120) : trimmed;
     }
 
     /**

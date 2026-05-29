@@ -15,6 +15,10 @@ public record SesionScanItemDTO(
         Long id,
         String sku,
         String descripcion,
+        /** Rubro DUX al momento del scan — el PDF de ítems no comprados lo
+         *  usa para omitir los descuentos por escala en productos de rubros
+         *  excluidos (MAQUINAS INDUSTRIALES). */
+        String rubro,
         BigDecimal precioConIva,
         BigDecimal porcIva,
         String imagenUrl,

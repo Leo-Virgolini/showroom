@@ -25,6 +25,9 @@ public class DuxItem {
     @JsonProperty("codigos_barra")
     private List<String> codigosBarra;
 
+    @JsonProperty("rubro")
+    private DuxRubro rubro;
+
     @JsonProperty("costo")
     private String costo;
 

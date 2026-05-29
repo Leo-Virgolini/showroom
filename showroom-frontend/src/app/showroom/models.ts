@@ -1,6 +1,10 @@
 export interface ScanResult {
   sku: string;
   descripcion: string | null;
+  /** Rubro DUX (ej. "MAQUINAS INDUSTRIALES"). Se usa para excluir ese rubro de
+   *  los descuentos generales por escala — tanto en el showroom (al escanear)
+   *  como en el PDF de productos no comprados. Null = rubro desconocido. */
+  rubro: string | null;
   pvpKtGastroConIva: number | null;
   pvpKtGastroSinIva: number | null;
   porcIva: number | null;
@@ -8,6 +12,25 @@ export interface ScanResult {
   habilitado: boolean | null;
   imagenUrl: string | null;
   sincronizadoAt: string | null;
+}
+
+/** Nombre del rubro DUX que está excluido de los descuentos generales por
+ *  escala. La comparación se hace case-insensitive y trimeada para tolerar
+ *  variaciones de casing en DUX. Mantener sincronizado con la lista
+ *  {@code RUBROS_SIN_DESCUENTO_ESCALA} del backend
+ *  ({@code PresupuestoComercialPdfGenerator}). */
+export const RUBROS_SIN_DESCUENTO_ESCALA = new Set(['MAQUINAS INDUSTRIALES']);
+
+/** True si el rubro está excluido de los descuentos generales por escala.
+ *  Tolera null/whitespace/casing/diacríticos — DUX a veces devuelve
+ *  "Máquinas Industriales" con tilde o lowercase, lo aceptamos igual. */
+export function rubroExcluyeDescuentos(rubro: string | null | undefined): boolean {
+  if (!rubro) return false;
+  const sinAcentos = rubro.trim()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toUpperCase();
+  return RUBROS_SIN_DESCUENTO_ESCALA.has(sinAcentos);
 }
 
 export interface CarritoItem extends ScanResult {
@@ -125,6 +148,8 @@ export interface SesionScanItem {
   id: number;
   sku: string;
   descripcion: string | null;
+  /** Rubro DUX al momento del scan — snapshot. */
+  rubro: string | null;
   precioConIva: number | null;
   porcIva: number | null;
   imagenUrl: string | null;
@@ -269,6 +294,9 @@ export interface CarritoAgregarResponse {
 export interface CatalogoItem {
   sku: string;
   descripcion: string | null;
+  /** Rubro DUX — para excluir el producto de los descuentos generales al
+   *  agregarlo al carrito desde la lista de resultados de búsqueda. */
+  rubro: string | null;
   pvpKtGastroSinIva: number | null;
   habilitado: boolean | null;
   /** URL del endpoint local de imagen, o null si no existe el archivo. */
@@ -297,6 +325,7 @@ export interface EtiquetaSeleccionada extends CatalogoItem {
 export interface ProductoListItem {
   sku: string;
   descripcion: string | null;
+  rubro: string | null;
   pvpKtGastroConIva: number | null;
   pvpKtGastroSinIva: number | null;
   porcIva: number | null;
@@ -318,6 +347,9 @@ export interface ListarProductosParams {
   q?: string;
   soloDeshabilitados?: boolean;
   soloSinStock?: boolean;
+  /** Filtro por rubro DUX exacto (ej. "MAQUINAS INDUSTRIALES"). El backend
+   *  matchea case-insensitive. Null/undefined = sin filtro. */
+  rubro?: string | null;
   page?: number;
   size?: number;
   sortField?: string;
@@ -608,6 +640,9 @@ export interface GenerarPresupuestoRequest {
   items: {
     sku: string;
     descripcion?: string | null;
+    /** Rubro DUX — para que el PDF de "ítems de interés" pueda decidir si
+     *  muestra o no las columnas de descuento por escala para este ítem. */
+    rubro?: string | null;
     cantidad: number;
     precioConIva: number;
     porcIva?: number | null;
@@ -657,9 +692,16 @@ export interface PresupuestoDetalle {
   observaciones: string | null;
   descuentoGlobalPorcentaje: number | null;
   cotizacionIndividual: boolean | null;
+  /** Id del pedido DUX si este presupuesto ya fue convertido. Opcional para
+   *  tolerar respuestas de backends anteriores que todavía no exponen el
+   *  campo — en ese caso el frontend lo trata como `null` (no convertido).
+   *  La pantalla de edición lo usa para mostrar el pill "→ Pedido #N" en
+   *  lugar del botón "Crear pedido" y evitar la doble conversión. */
+  convertidoEnPedidoId?: number | null;
   items: {
     sku: string;
     descripcion: string | null;
+    rubro?: string | null;
     cantidad: number;
     precioConIva: number;
     porcIva: number | null;
@@ -745,11 +787,18 @@ export interface GenerarCotizacionRequest {
   clienteEmail?: string | null;
   rubro?: string | null;
   observaciones?: string | null;
-  /** Monto base SIN IVA. Las formas con `aplicaIva=true` lo multiplican
-   *  por (1 + porcIva/100) antes de aplicar el recargo financiero. */
+  /** Monto base SIN IVA principal. Puede ser 0 si la cotización usa SOLO el
+   *  segundo monto — el backend valida que al menos uno de los dos sea > 0. */
   montoBaseSinIva: number;
-  /** % de IVA — default 21 si null. */
+  /** % de IVA del monto principal — default 21 si null. */
   porcIva?: number | null;
+  /** Segundo monto base SIN IVA, opcional. Permite cotizar dos productos con
+   *  tasas de IVA distintas (ej. 21% + 10.5%) en una sola cotización. Las
+   *  formas de pago se calculan sobre la suma respetando cada IVA. Null o 0
+   *  = no se usa el segundo monto. */
+  montoBaseSinIva2?: number | null;
+  /** % de IVA del segundo monto — default 10.5 si null y hay monto2 > 0. */
+  porcIva2?: number | null;
   formasPago: PresupuestoFormaPagoSnapshot[];
 }
 
@@ -800,6 +849,8 @@ export interface CotizacionDetalle {
   observaciones: string | null;
   montoBaseSinIva: number;
   porcIva: number | null;
+  montoBaseSinIva2?: number | null;
+  porcIva2?: number | null;
   formasPago: PresupuestoFormaPagoSnapshot[];
 }
 

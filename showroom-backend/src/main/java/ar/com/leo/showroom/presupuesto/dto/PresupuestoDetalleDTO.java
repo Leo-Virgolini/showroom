@@ -24,6 +24,14 @@ public record PresupuestoDetalleDTO(
         String observaciones,
         BigDecimal descuentoGlobalPorcentaje,
         Boolean cotizacionIndividual,
+        /**
+         * Id del pedido DUX si este presupuesto ya fue convertido. Null si
+         * sigue pendiente. La pantalla de edición lo usa para mostrar el
+         * pill "→ Pedido #N" en lugar del botón "Crear pedido" y evitar
+         * la doble conversión cuando otro operador abre un presupuesto que
+         * ya pasó a pedido.
+         */
+        Long convertidoEnPedidoId,
         List<GenerarPresupuestoRequestDTO.Item> items,
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasPago
 ) {}

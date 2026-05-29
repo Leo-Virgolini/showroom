@@ -465,11 +465,23 @@ public class ShowroomController {
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "soloDeshabilitados", defaultValue = "false") boolean soloDeshabilitados,
             @RequestParam(value = "soloSinStock", defaultValue = "false") boolean soloSinStock,
+            @RequestParam(value = "rubro", required = false) String rubro,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size,
             @RequestParam(value = "sortField", required = false) String sortField,
             @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        return service.buscarProductos(q, soloDeshabilitados, soloSinStock, page, size, sortField, sortOrder);
+        return service.buscarProductos(q, soloDeshabilitados, soloSinStock, rubro,
+                page, size, sortField, sortOrder);
+    }
+
+    /**
+     * Lista de rubros distintos del catálogo cacheado — popula el dropdown del
+     * filtro de la pantalla /productos. Ordenada alfabéticamente; los rubros
+     * null/blank quedan fuera.
+     */
+    @GetMapping("/productos/rubros")
+    public List<String> listarRubros() {
+        return service.listarRubrosDistintos();
     }
 
     /**

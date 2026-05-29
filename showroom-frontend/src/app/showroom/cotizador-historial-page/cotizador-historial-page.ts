@@ -24,6 +24,7 @@ import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { CotizacionListItem } from '../models';
+import { abrirPdfEnPreview } from '../download.utils';
 import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -159,39 +160,32 @@ export class CotizadorHistorialPage {
 
   descargar(c: CotizacionListItem): void {
     if (this.descargandoPdf().has(c.id)) return;
+    // Pestaña preview abierta sincrónica con el click — anti popup-blocker.
+    // El PDF se renderiza ahí cuando llega; NO se auto-descarga, si el
+    // operador quiere bajarlo a disco lo hace desde el visor del browser.
     const previewTab = window.open('about:blank', '_blank');
     this.descargandoPdf.update((s) => new Set([...s, c.id]));
     this.api.descargarPdfCotizacionFinanciera(c.id).subscribe({
       next: (res) => {
         this.removerDescargando(c.id);
-        const blob = res.body;
-        if (!blob) {
-          if (previewTab) previewTab.close();
-          toastError(this.toast, 'Descargar PDF', null, 'El backend no devolvió un PDF.');
+        const resultado = abrirPdfEnPreview(res, `cotizacion-${c.id}.pdf`, previewTab);
+        if (resultado == null) {
+          toastError(this.toast, 'Abrir PDF', null, 'El backend no devolvió un PDF.');
           return;
         }
-        const filename = this.extraerFilename(res.headers.get('Content-Disposition'))
-          || `cotizacion-${c.id}.pdf`;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        if (previewTab) previewTab.location.href = url;
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
         this.toast.add({
           severity: 'success',
-          summary: 'PDF descargado',
-          detail: `#${c.id}`,
+          summary: resultado.previewAbierto ? 'PDF abierto' : 'PDF descargado',
+          detail: resultado.previewAbierto
+            ? `#${c.id} — se abrió para previsualizar.`
+            : `#${c.id} — el browser bloqueó la pestaña preview.`,
           life: 3500,
         });
       },
       error: (err) => {
         if (previewTab) previewTab.close();
         this.removerDescargando(c.id);
-        toastError(this.toast, 'Descargar PDF', err, 'No se pudo descargar el PDF.');
+        toastError(this.toast, 'Abrir PDF', err, 'No se pudo abrir el PDF.');
       },
     });
   }
@@ -245,18 +239,6 @@ export class CotizadorHistorialPage {
         toastError(this.toast, 'Eliminar', err, 'No se pudo eliminar la cotización.');
       },
     });
-  }
-
-  private extraerFilename(disposition: string | null): string | null {
-    if (!disposition) return null;
-    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
-    if (!m) return null;
-    const raw = m[1].trim();
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
   }
 
   limpiarFiltros(): void {
