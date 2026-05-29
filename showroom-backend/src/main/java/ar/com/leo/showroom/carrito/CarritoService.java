@@ -188,7 +188,7 @@ public class CarritoService {
      */
     public CarritoStateDTO agregarGenerico(String username, String descripcion,
                                            BigDecimal precioConIva, BigDecimal porcIva,
-                                           int cantidad) {
+                                           int cantidad, boolean maquinaria) {
         if (descripcion == null || descripcion.isBlank()) {
             throw new ConflictException("La descripción es obligatoria para el producto genérico");
         }
@@ -200,10 +200,15 @@ public class CarritoService {
         }
         BigDecimal iva = porcIva != null ? porcIva : new BigDecimal("21");
         String skuGenerico = duxProperties.skuProductoGenerico();
+        // Si el operador marcó "maquinaria", asignamos rubro MAQUINAS
+        // INDUSTRIALES para que la lógica existente de rubroExcluyeDescuentos
+        // lo excluya del descuento por escala. Sino queda con rubro null y
+        // entra en la escala como cualquier producto.
+        String rubro = maquinaria ? "MAQUINAS INDUSTRIALES" : null;
         String itemKey = "gen-" + System.currentTimeMillis() + "-"
                 + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFL);
         CarritoItemDTO nuevo = CarritoItemDTO.generico(itemKey, skuGenerico,
-                descripcion.trim(), precioConIva, iva, cantidad);
+                descripcion.trim(), rubro, precioConIva, iva, cantidad);
 
         EspacioUsuario esp = espacioDe(username);
         esp.lock.lock();

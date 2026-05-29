@@ -62,6 +62,10 @@ export interface CarritoAgregarGenericoRequest {
   precioConIva: number;
   porcIva: number;
   cantidad: number;
+  /** Si true, el backend setea {@code rubro=MAQUINAS INDUSTRIALES} en la
+   *  línea para que quede excluida del descuento por escala (igual que las
+   *  máquinas del catálogo). Default false. */
+  maquinaria?: boolean;
 }
 
 export type CategoriaFiscal =

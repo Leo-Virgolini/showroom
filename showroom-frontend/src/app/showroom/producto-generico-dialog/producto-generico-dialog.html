@@ -69,6 +69,27 @@
           class="w-full" inputStyleClass="w-full" />
       </div>
     </div>
+
+    <!-- Toggle "Maquinaria industrial": cuando está activo, el producto se
+         marca con rubro MAQUINAS INDUSTRIALES y queda excluido del descuento
+         por escala (mismo comportamiento que cualquier máquina del catálogo).
+         Default OFF — el caso típico de "producto que no tenemos" es un
+         consumible/repuesto que sí entra en la escala. -->
+    <label class="flex items-start gap-2 p-2 rounded-lg border border-surface-200 dark:border-surface-700 cursor-pointer hover:bg-amber-50 dark:hover:bg-surface-800/60 transition-colors"
+      pTooltip="Si lo marcás, el producto NO recibe descuento por escala (igual que las máquinas del catálogo)."
+      tooltipPosition="top">
+      <p-checkbox [ngModel]="maquinaria()" (ngModelChange)="maquinaria.set($event)"
+        [binary]="true" inputId="generico-maquinaria" />
+      <span class="flex flex-col gap-0.5">
+        <span class="text-xs font-semibold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1">
+          <i class="pi pi-wrench text-amber-600 text-[10px]"></i>
+          Es maquinaria industrial
+        </span>
+        <span class="text-[10px] text-muted-color leading-snug">
+          Excluido del descuento por escala — se factura al PVP indicado.
+        </span>
+      </span>
+    </label>
   </div>
 
   <ng-template #footer>

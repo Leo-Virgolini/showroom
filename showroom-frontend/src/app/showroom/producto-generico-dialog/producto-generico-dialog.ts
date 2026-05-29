@@ -15,6 +15,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
+import { CheckboxModule } from 'primeng/checkbox';
 import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
@@ -30,6 +31,11 @@ export interface ProductoGenericoData {
   precioConIva: number;
   porcIva: number;
   cantidad: number;
+  /** True si la línea representa una máquina industrial — el sistema la marca
+   *  con rubro {@code MAQUINAS INDUSTRIALES} para excluirla del descuento por
+   *  escala (igual que cualquier máquina del catálogo). False (default) = entra
+   *  en la escala como un producto normal. */
+  maquinaria: boolean;
 }
 
 /**
@@ -54,6 +60,7 @@ export interface ProductoGenericoData {
     CommonModule,
     FormsModule,
     ButtonModule,
+    CheckboxModule,
     DialogModule,
     InputNumberModule,
     InputTextModule,
@@ -82,6 +89,10 @@ export class ProductoGenericoDialog {
   readonly precioConIva = signal<number | null>(null);
   readonly porcIva = signal<number>(21);
   readonly cantidad = signal<number>(1);
+  /** True = el producto es maquinaria industrial (no recibe descuento por
+   *  escala). Default false: el caso típico de "producto que no tenemos pero
+   *  podemos conseguir" es un consumible/repuesto que sí entra en la escala. */
+  readonly maquinaria = signal<boolean>(false);
 
   /** Tasas de IVA típicas en AR — los productos KT GASTRO usan 21 (default)
    *  o 10.5 (esenciales). El operador elige según el producto que está
@@ -113,6 +124,7 @@ export class ProductoGenericoDialog {
         this.precioConIva.set(null);
         this.porcIva.set(21);
         this.cantidad.set(1);
+        this.maquinaria.set(false);
         // Focus diferido — el dialog necesita un tick para montar el DOM.
         setTimeout(() => {
           this.descripcionInput()?.nativeElement?.focus();
@@ -136,6 +148,7 @@ export class ProductoGenericoDialog {
       precioConIva: this.precioConIva() ?? 0,
       porcIva: this.porcIva(),
       cantidad: this.cantidad() ?? 1,
+      maquinaria: this.maquinaria(),
     });
   }
 }

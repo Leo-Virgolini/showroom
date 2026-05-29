@@ -373,7 +373,8 @@ public class ShowroomController {
                 request.descripcion(),
                 request.precioConIva(),
                 request.porcIva(),
-                request.cantidad());
+                request.cantidad(),
+                request.esMaquinaria());
     }
 
     @PatchMapping("/carrito/items/{itemKey}")

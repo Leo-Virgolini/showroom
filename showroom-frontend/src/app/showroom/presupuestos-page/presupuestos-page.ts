@@ -1032,11 +1032,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // El precioConIva s/IVA se calcula sobre la marcha — el operador tipea
     // SIEMPRE c/IVA en el dialog. La descripción se duplica como comentarios
     // para que viaje al DUX cuando el presupuesto se transforme en pedido.
+    // El rubro se setea a MAQUINAS INDUSTRIALES solo si el operador marcó
+    // "Es maquinaria" — eso hace que la helper `rubroExcluyeDescuentos` lo
+    // saque automáticamente del descuento por escala, lo mismo que pasa con
+    // las máquinas reales del catálogo.
     const sinIva = data.precioConIva / (1 + data.porcIva / 100);
     const nuevo: PresupuestoItem = {
       sku,
       descripcion: data.descripcion,
-      rubro: null,
+      rubro: data.maquinaria ? 'MAQUINAS INDUSTRIALES' : null,
       pvpKtGastroConIva: data.precioConIva,
       pvpKtGastroSinIva: sinIva,
       porcIva: data.porcIva,
@@ -1155,6 +1159,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     const items = this.items().map((it) => ({
       sku: it.sku,
       descripcion: it.descripcion,
+      // Rubro: para genéricos puede ser "MAQUINAS INDUSTRIALES" si el operador
+      // marcó la casilla "es maquinaria" — el PDF lo usa para excluir esa
+      // línea de las columnas de descuento por escala. Para items del catálogo
+      // el backend de todas formas lo ignora (toma el del cache real).
+      rubro: it.rubro ?? null,
       cantidad: it.cantidad,
       precioConIva: it.pvpKtGastroConIva ?? 0,
       porcIva: it.porcIva ?? 21,

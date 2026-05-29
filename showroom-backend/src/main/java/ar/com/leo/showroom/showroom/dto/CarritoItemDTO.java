@@ -62,10 +62,12 @@ public record CarritoItemDTO(
     /** Constructor para items genéricos cargados desde el dialog "+ Producto
      *  genérico". {@code sku} es el SKU comodín (config), {@code itemKey} es
      *  un uid sintético generado por el caller para que varias líneas con el
-     *  mismo SKU coexistan. */
+     *  mismo SKU coexistan. {@code rubro} permite marcar el ítem como
+     *  {@code MAQUINAS INDUSTRIALES} para que quede excluido del descuento
+     *  por escala (la misma helper que para productos del catálogo). */
     public static CarritoItemDTO generico(String itemKey, String sku, String descripcion,
-                                          BigDecimal precioConIva, BigDecimal porcIva,
-                                          int cantidad) {
+                                          String rubro, BigDecimal precioConIva,
+                                          BigDecimal porcIva, int cantidad) {
         BigDecimal sinIva = precioConIva == null || porcIva == null
                 ? precioConIva
                 : precioConIva.divide(
@@ -75,7 +77,7 @@ public record CarritoItemDTO(
                 itemKey,
                 sku,
                 descripcion,
-                null,
+                rubro,
                 precioConIva,
                 sinIva,
                 porcIva,

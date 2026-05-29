@@ -30,6 +30,15 @@ public record CarritoAgregarGenericoRequestDTO(
 
         @Min(value = 1, message = "cantidad mínima 1")
         @Max(value = 9999, message = "cantidad máxima 9999")
-        int cantidad
+        int cantidad,
+
+        /** Si true, el producto se trata como "máquina industrial": se le
+         *  setea {@code rubro=MAQUINAS INDUSTRIALES} para que la lógica
+         *  existente de {@code rubroExcluyeDescuentos} lo saque del descuento
+         *  por escala. Default false (null se interpreta como false). */
+        Boolean maquinaria
 ) {
+        public boolean esMaquinaria() {
+                return Boolean.TRUE.equals(maquinaria);
+        }
 }

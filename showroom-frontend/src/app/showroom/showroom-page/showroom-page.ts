@@ -365,14 +365,14 @@ export class ShowroomPage implements AfterViewInit {
     return rubroExcluyeDescuentos(it.rubro);
   }
 
-  /** True si el ítem queda fuera del descuento por escala: rubro excluido
-   *  (MAQUINAS INDUSTRIALES) o producto genérico cargado a mano. Los genéricos
-   *  no representan productos KT GASTRO, por lo tanto no entran en la escala
-   *  ni empujan el umbral. Si no excluyera acá, el total en pantalla saldría
-   *  con descuento sobre el genérico pero DUX lo factura sin descuento (ver
-   *  `enviarPedido`), generando discrepancia visible al cliente. */
+  /** True si el ítem queda fuera del descuento por escala. Hoy depende solo
+   *  del rubro (MAQUINAS INDUSTRIALES), inclusive para genéricos: el dialog
+   *  "+ Producto genérico" tiene un toggle "Es maquinaria" que el backend
+   *  traduce a {@code rubro=MAQUINAS INDUSTRIALES}, así que la misma helper
+   *  cubre ambos casos. Los genéricos sin esa marca entran en la escala
+   *  como cualquier producto del catálogo. */
   private excluidoDescuentoEscala(it: { rubro?: string | null; generico?: boolean }): boolean {
-    return it.generico === true || this.rubroExcluido(it);
+    return this.rubroExcluido(it);
   }
 
   /** Suma del PVP s/IVA por cantidad, sin aplicar descuento. Es el "subtotal"
@@ -1689,6 +1689,7 @@ export class ShowroomPage implements AfterViewInit {
       precioConIva: data.precioConIva,
       porcIva: data.porcIva,
       cantidad: data.cantidad,
+      maquinaria: data.maquinaria,
     }).subscribe({
       next: (state) => {
         this.procesandoGenerico.set(false);
@@ -2152,10 +2153,10 @@ export class ShowroomPage implements AfterViewInit {
         formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
         items: this.carrito().map((it) => {
           // Descuento per-item: los ítems excluidos por rubro
-          // (MAQUINAS INDUSTRIALES) y los genéricos NO reciben el descuento por
-          // escala — mandamos `undefined` para que DUX los facture al PVP de
-          // lista. `descuentoParaItem` ya devuelve 0 en ambos casos vía
-          // `excluidoDescuentoEscala`.
+          // (MAQUINAS INDUSTRIALES) NO reciben el descuento por escala —
+          // mandamos `undefined` para que DUX los facture al PVP de lista.
+          // Los genéricos marcados como "maquinaria" caen acá automáticamente
+          // porque el backend les setea ese mismo rubro al crearlos.
           const descItem = this.descuentoParaItem(it);
           return {
             sku: it.sku,
