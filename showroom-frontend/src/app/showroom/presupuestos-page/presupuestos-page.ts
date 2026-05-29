@@ -46,6 +46,10 @@ import {
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
+import {
+  ProductoGenericoData,
+  ProductoGenericoDialog,
+} from '../producto-generico-dialog/producto-generico-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { MoreMenu } from '../more-menu/more-menu';
@@ -100,6 +104,7 @@ const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
     ToolbarModule,
     TooltipModule,
     CrearPedidoDialog,
+    ProductoGenericoDialog,
     MoreMenu,
     UserChip,
   ],
@@ -267,6 +272,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  en modo edición. La lógica vive en {@link CrearPedidoDialog}; este
    *  componente solo mantiene la visibilidad. */
   readonly mostrarDialogCrearPedido = signal(false);
+
+  /** Estado del dialog de "+ Producto genérico" — para cargar líneas que no
+   *  están en el catálogo (SKU comodín de DUX). El SKU concreto lo expone el
+   *  backend en /health (ver {@link BackendStatusService.skuProductoGenerico}).
+   *  Si está null, el botón en la UI queda oculto. */
+  readonly mostrarDialogGenerico = signal(false);
+  /** SKU comodín derivado del estado del backend. El template lo usa para
+   *  mostrar/ocultar el botón "+ Producto genérico". */
+  readonly skuGenerico = this.backendStatus.skuProductoGenerico;
 
   /** Id del pedido DUX al que se convirtió este presupuesto durante la
    *  sesión actual. Se setea cuando {@link CrearPedidoDialog} emite
@@ -549,6 +563,19 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     window.addEventListener('beforeunload', beforeUnload);
     this.destroyRef.onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
 
+    // Refocus al scan input cuando el dialog de "+ Producto genérico" se
+    // CIERRA (cualquier camino: confirmar, cancelar, ESC). Sin esto, el foco
+    // queda en el botón que disparó el cierre y la pistola QR / teclado no
+    // alimentan el input hasta que el operador hace click.
+    let dialogGenericoAbierto = false;
+    effect(() => {
+      const abierto = this.mostrarDialogGenerico();
+      if (dialogGenericoAbierto && !abierto) {
+        this.focusInput();
+      }
+      dialogGenericoAbierto = abierto;
+    });
+
     // Observa el alto del footer sticky y lo refleja en `footerHeight()`.
     // El footer crece cuando los chips de formas de pago hacen flex-wrap a
     // 2+ líneas — sin este ajuste, el padding-bottom estático del main no
@@ -599,31 +626,47 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         }
         this.cotizacionIndividual.set(Boolean(det.cotizacionIndividual));
 
-        const skus = det.items.map((it) => it.sku);
-        const baseItems: PresupuestoItem[] = det.items.map((it, idx) => ({
-          sku: it.sku,
-          descripcion: it.descripcion,
-          // Rubro: si el detalle no lo trae (presupuestos viejos persistidos
-          // antes del campo), lo dejamos null; el refresh posterior lo pisa
-          // con el dato actual del cache.
-          rubro: it.rubro ?? null,
-          // El JSON persistido solo trae con-IVA. Calculamos s/IVA con el
-          // porcIva guardado para tener un fallback decente mientras llega el
-          // refresh; los precios reales pueden haber cambiado en DUX desde el
-          // momento original — el refresh los pisa con datos actuales.
-          pvpKtGastroConIva: it.precioConIva,
-          pvpKtGastroSinIva: it.porcIva != null
-            ? it.precioConIva / (1 + it.porcIva / 100)
-            : it.precioConIva,
-          porcIva: it.porcIva,
-          stockTotal: null,
-          habilitado: null,
-          imagenUrl: null,
-          sincronizadoAt: null,
-          uid: `${it.sku}-edit-${idx}`,
-          cantidad: it.cantidad,
-          descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
-        }));
+        const skuGen = this.skuGenerico();
+        // Los items genéricos NO se refrescan contra catálogo (su SKU es el
+        // comodín y no representa un producto real). Los listamos aparte para
+        // saltearlos en el lookup bulk de abajo.
+        const skus = det.items
+          .filter((it) => skuGen == null || it.sku !== skuGen)
+          .map((it) => it.sku);
+        const baseItems: PresupuestoItem[] = det.items.map((it, idx) => {
+          const esGenerico = skuGen != null && it.sku === skuGen;
+          return {
+            sku: it.sku,
+            // Genéricos: la descripción tipeada por el operador queda en el
+            // detalle persistido; si por alguna razón está vacía, caemos a
+            // comentarios (que es el espejo) para no romper el render.
+            descripcion: esGenerico
+              ? (it.descripcion || it.comentarios || '')
+              : it.descripcion,
+            // Rubro: si el detalle no lo trae (presupuestos viejos persistidos
+            // antes del campo), lo dejamos null; el refresh posterior lo pisa
+            // con el dato actual del cache.
+            rubro: it.rubro ?? null,
+            // El JSON persistido solo trae con-IVA. Calculamos s/IVA con el
+            // porcIva guardado para tener un fallback decente mientras llega el
+            // refresh; los precios reales pueden haber cambiado en DUX desde el
+            // momento original — el refresh los pisa con datos actuales.
+            pvpKtGastroConIva: it.precioConIva,
+            pvpKtGastroSinIva: it.porcIva != null
+              ? it.precioConIva / (1 + it.porcIva / 100)
+              : it.precioConIva,
+            porcIva: it.porcIva,
+            stockTotal: null,
+            habilitado: esGenerico ? true : null,
+            imagenUrl: null,
+            sincronizadoAt: esGenerico ? new Date().toISOString() : null,
+            uid: esGenerico ? `gen-edit-${idx}-${Date.now()}` : `${it.sku}-edit-${idx}`,
+            cantidad: it.cantidad,
+            descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
+            generico: esGenerico,
+            comentarios: it.comentarios ?? (esGenerico ? it.descripcion : null),
+          };
+        });
         this.items.set(baseItems);
         this.cargandoEdicion.set(false);
         // Al cargar el detalle original no hay cambios pendientes.
@@ -652,6 +695,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
               const porSku = new Map(frescos.map((f) => [f.sku, f]));
               this.items.set(
                 this.items().map((it) => {
+                  // Genéricos no se refrescan contra catálogo — su SKU es
+                  // comodín y la descripción/precio del operador es la fuente.
+                  if (it.generico) return it;
                   const f = porSku.get(it.sku);
                   if (!f) return it;
                   return {
@@ -930,6 +976,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   private agregarItem(res: ScanResult, cantidad: number = 1): void {
     const cant = cantidad > 0 ? cantidad : 1;
+    // Si el operador escaneó/buscó el SKU comodín directamente, lo rechazamos
+    // y le indicamos el dialog correcto — sino se cargaría con la descripción
+    // genérica de DUX ("Producto a cotizar") y, si ya hay otro genérico en el
+    // detalle, el merge por SKU haría que la cantidad caiga sobre un ítem
+    // incorrecto (todos los genéricos comparten el SKU).
+    if (this.skuGenerico() && res.sku === this.skuGenerico()) {
+      this.warn('Para cargar un producto que no está en catálogo, usá el botón "Producto genérico".');
+      return;
+    }
     const actuales = this.items();
     // Si ya existe el SKU, sumarle cantidad (caso típico: re-escanear).
     const existente = actuales.find((it) => it.sku === res.sku);
@@ -951,6 +1006,55 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.items.set([...actuales, nuevo]);
     this.notificarMutacion('success', 'Producto agregado',
       `${this.etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
+  }
+
+  // ============================================================
+  // Producto genérico — alta a mano de una línea con el SKU comodín de DUX.
+  // A diferencia del flujo normal, no consulta el catálogo: el operador
+  // tipea descripción + precio + IVA + cantidad, y cada confirmación crea
+  // una línea NUEVA (no se mergea con otros genéricos aunque compartan SKU).
+  // ============================================================
+  abrirGenerico(): void {
+    if (!this.skuGenerico()) {
+      this.warn('El SKU comodín no está configurado en el backend.');
+      return;
+    }
+    this.mostrarDialogGenerico.set(true);
+  }
+
+  onAgregarGenerico(data: ProductoGenericoData): void {
+    const sku = this.skuGenerico();
+    if (!sku) {
+      this.warn('El SKU comodín no está configurado en el backend.');
+      return;
+    }
+    const uid = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // El precioConIva s/IVA se calcula sobre la marcha — el operador tipea
+    // SIEMPRE c/IVA en el dialog. La descripción se duplica como comentarios
+    // para que viaje al DUX cuando el presupuesto se transforme en pedido.
+    const sinIva = data.precioConIva / (1 + data.porcIva / 100);
+    const nuevo: PresupuestoItem = {
+      sku,
+      descripcion: data.descripcion,
+      rubro: null,
+      pvpKtGastroConIva: data.precioConIva,
+      pvpKtGastroSinIva: sinIva,
+      porcIva: data.porcIva,
+      stockTotal: null,
+      habilitado: true,
+      imagenUrl: null,
+      sincronizadoAt: new Date().toISOString(),
+      uid,
+      cantidad: data.cantidad,
+      descuentoPorcentaje: 0,
+      generico: true,
+      comentarios: data.descripcion,
+    };
+    this.items.set([...this.items(), nuevo]);
+    this.mostrarDialogGenerico.set(false);
+    this.notificarMutacion('success', 'Producto genérico agregado',
+      `${this.etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
+    this.focusInput();
   }
 
   // ============================================================
@@ -1055,6 +1159,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       precioConIva: it.pvpKtGastroConIva ?? 0,
       porcIva: it.porcIva ?? 21,
       descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
+      // Solo viaja para items genéricos — DUX lo pone como `comentarios` de
+      // la línea al transformar el presupuesto en pedido.
+      comentarios: it.comentarios ?? null,
     }));
     // En modo individual: una colección de formas por cada ítem (con itemSku).
     // En modo agregado: una única colección de formas globales (itemSku = null).

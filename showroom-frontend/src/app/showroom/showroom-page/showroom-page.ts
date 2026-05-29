@@ -50,6 +50,10 @@ import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
 import { MoreMenu } from '../more-menu/more-menu';
+import {
+  ProductoGenericoData,
+  ProductoGenericoDialog,
+} from '../producto-generico-dialog/producto-generico-dialog';
 import { UserChip } from '../user-chip/user-chip';
 
 /**
@@ -167,6 +171,7 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     ToolbarModule,
     TooltipModule,
     MoreMenu,
+    ProductoGenericoDialog,
     UserChip,
   ],
   templateUrl: './showroom-page.html',
@@ -240,12 +245,23 @@ export class ShowroomPage implements AfterViewInit {
   /** Modal "Nuevo cliente" — visible/hidden + nombre tipeado. */
   readonly mostrarDialogoNuevoCliente = signal(false);
   readonly nombreNuevoCliente = signal('');
+
+  /** Estado del dialog "+ Producto genérico" — para cargar al carrito un
+   *  ítem que no existe en el catálogo KT GASTRO (usa el SKU comodín de DUX
+   *  expuesto en /health). El botón en el toolbar se oculta si el backend
+   *  no expuso el SKU (versión vieja). */
+  readonly mostrarDialogGenerico = signal(false);
+  /** True mientras la request POST /carrito/generico está en vuelo — el dialog
+   *  lo lee para deshabilitar el botón "Agregar" y mostrar el spinner. */
+  readonly procesandoGenerico = signal(false);
+  /** SKU comodín — el template lo lee para mostrar/ocultar el botón. */
+  readonly skuGenerico = this.backendStatus.skuProductoGenerico;
   readonly iniciandoSesion = signal(false);
   /** Updates de cantidad — debounceadas por SKU para que clickear +/- rápido
    *  no dispare un PATCH por click. El último valor por SKU dentro del
    *  intervalo es el que viaja al backend. La suscripción se arma en el
    *  constructor. */
-  private readonly cantidadUpdates$ = new Subject<{ sku: string; cantidad: number }>();
+  private readonly cantidadUpdates$ = new Subject<{ itemKey: string; cantidad: number }>();
   readonly refrescando = signal(false);
   /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
    *  que es para el carrito completo. */
@@ -349,6 +365,16 @@ export class ShowroomPage implements AfterViewInit {
     return rubroExcluyeDescuentos(it.rubro);
   }
 
+  /** True si el ítem queda fuera del descuento por escala: rubro excluido
+   *  (MAQUINAS INDUSTRIALES) o producto genérico cargado a mano. Los genéricos
+   *  no representan productos KT GASTRO, por lo tanto no entran en la escala
+   *  ni empujan el umbral. Si no excluyera acá, el total en pantalla saldría
+   *  con descuento sobre el genérico pero DUX lo factura sin descuento (ver
+   *  `enviarPedido`), generando discrepancia visible al cliente. */
+  private excluidoDescuentoEscala(it: { rubro?: string | null; generico?: boolean }): boolean {
+    return it.generico === true || this.rubroExcluido(it);
+  }
+
   /** Suma del PVP s/IVA por cantidad, sin aplicar descuento. Es el "subtotal"
    *  visible en el carrito (incluye TODOS los ítems, también los excluidos
    *  de descuento). */
@@ -365,7 +391,7 @@ export class ShowroomPage implements AfterViewInit {
    *  empujan el escalón ni reciben el descuento. */
   readonly subtotalElegibleDescuento = computed(() =>
     this.carrito()
-      .filter((it) => !this.rubroExcluido(it))
+      .filter((it) => !this.excluidoDescuentoEscala(it))
       .reduce((acc, it) => acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad, 0),
   );
 
@@ -377,9 +403,9 @@ export class ShowroomPage implements AfterViewInit {
   });
 
   /** % de descuento que aplica a un ítem individual: el {@link descuentoAplicado}
-   *  para los elegibles, 0 para los excluidos por rubro. */
-  private descuentoParaItem(it: { rubro?: string | null }): number {
-    return this.rubroExcluido(it) ? 0 : this.descuentoAplicado();
+   *  para los elegibles, 0 para los excluidos (por rubro o por ser genérico). */
+  private descuentoParaItem(it: { rubro?: string | null; generico?: boolean }): number {
+    return this.excluidoDescuentoEscala(it) ? 0 : this.descuentoAplicado();
   }
 
   /** Monto del descuento (en pesos) — solo sobre los ítems elegibles. */
@@ -858,14 +884,14 @@ export class ShowroomPage implements AfterViewInit {
     // avisa y el carrito se reconcilia con el state real.
     this.cantidadUpdates$
       .pipe(
-        groupBy((u) => u.sku),
-        mergeMap((porSku) =>
-          porSku.pipe(
+        groupBy((u) => u.itemKey),
+        mergeMap((porKey) =>
+          porKey.pipe(
             debounceTime(250),
             switchMap((u) =>
-              this.api.actualizarCantidadItemCarrito(u.sku, u.cantidad).pipe(
+              this.api.actualizarCantidadItemCarrito(u.itemKey, u.cantidad).pipe(
                 tap((state) => {
-                  const item = state.items.find((it) => it.sku === u.sku);
+                  const item = state.items.find((it) => it.itemKey === u.itemKey);
                   if (item && item.cantidad < u.cantidad) {
                     // Recortado por stock — el server tiene menos disponible
                     // que lo que pidió el user. Aceptamos siempre (el max del
@@ -873,7 +899,7 @@ export class ShowroomPage implements AfterViewInit {
                     this.toast.add({
                       severity: 'warn',
                       summary: 'Cantidad ajustada al stock',
-                      detail: `${u.sku}: tope ${item.cantidad} unidades.`,
+                      detail: `${item.sku}: tope ${item.cantidad} unidades.`,
                       life: 3500,
                     });
                     this.carrito.set(state.items);
@@ -928,7 +954,8 @@ export class ShowroomPage implements AfterViewInit {
         this.mostrarConfirmacion() ||
         this.mostrarDialogVisor() ||
         this.mostrarDialogReview() ||
-        this.mostrarSyncDialog();
+        this.mostrarSyncDialog() ||
+        this.mostrarDialogGenerico();
       if (dialogAbiertoPrevio && !algunoAbierto) {
         this.focusInput();
       }
@@ -1544,11 +1571,17 @@ export class ShowroomPage implements AfterViewInit {
    *  {@code message.data} (sku + descripcion + cantidad agregada) para que
    *  el operador vea de un vistazo QUÉ pidió el cliente, no solo el SKU. */
   private procesarCambioDesdeVisor(previo: CarritoItem[], nuevo: CarritoItem[]): void {
-    const prevMap = new Map(previo.map((it) => [it.sku, it]));
+    // Indexamos por itemKey (no sku) porque varios items genéricos comparten
+    // el SKU comodín. Si indexáramos por sku, el último generic ganaría el
+    // slot del Map y los diffs del resto saldrían contra una cantidad
+    // incorrecta — falsos positivos del tipo "el cliente sumó N unidades".
+    // El visor solo puede agregar items normales (backend rechaza el SKU
+    // comodín), pero el carrito puede tener genéricos preexistentes.
+    const prevMap = new Map(previo.map((it) => [it.itemKey, it]));
     const items: { sku: string; descripcion: string | null; cantidad: number }[] = [];
     const skusAgregados: string[] = [];
     for (const it of nuevo) {
-      const antes = prevMap.get(it.sku);
+      const antes = prevMap.get(it.itemKey);
       const cantidadAntes = antes?.cantidad ?? 0;
       const diff = it.cantidad - cantidadAntes;
       if (diff > 0) {
@@ -1580,15 +1613,18 @@ export class ShowroomPage implements AfterViewInit {
     }
   }
 
-  actualizarCantidad(sku: string, cantidad: number): void {
+  /** {@code itemKey} es la clave única dentro del carrito (SKU para items
+   *  normales, uid sintético para genéricos). El template del carrito ya
+   *  pasa `it.itemKey` desde cada fila. */
+  actualizarCantidad(itemKey: string, cantidad: number): void {
     // Mínimo 1 — para eliminar el item está la X dedicada al lado.
     const c = Math.max(1, cantidad ?? 1);
     // Update local optimista: la UI (cant. total, subtotal, etc.) responde
     // instantáneo aunque el PATCH al backend se debouncee 250ms.
     this.carrito.set(
-      this.carrito().map((it) => (it.sku === sku ? { ...it, cantidad: c } : it)),
+      this.carrito().map((it) => (it.itemKey === itemKey ? { ...it, cantidad: c } : it)),
     );
-    this.cantidadUpdates$.next({ sku, cantidad: c });
+    this.cantidadUpdates$.next({ itemKey, cantidad: c });
   }
 
   /**
@@ -1616,9 +1652,9 @@ export class ShowroomPage implements AfterViewInit {
    * <p>Items en local pero no en remoto: se descartan (item eliminado en otro lado).
    */
   private mergeRemotoRespetandoLocal(remoteItems: CarritoItem[]): CarritoItem[] {
-    const localBySku = new Map(this.carrito().map((it) => [it.sku, it]));
+    const localByKey = new Map(this.carrito().map((it) => [it.itemKey, it]));
     return remoteItems.map((remote) => {
-      const local = localBySku.get(remote.sku);
+      const local = localByKey.get(remote.itemKey);
       if (local && local.cantidad !== remote.cantidad) {
         return { ...remote, cantidad: local.cantidad };
       }
@@ -1626,8 +1662,55 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  eliminarDelCarrito(sku: string): void {
-    this.api.eliminarItemCarrito(sku).subscribe({
+  // ============================================================
+   // Producto genérico (carrito) — alta a mano de una línea con el SKU
+   // comodín de DUX. A diferencia del scan normal, no consulta catálogo y
+   // cada confirmación crea una línea NUEVA en el carrito (no se mergea con
+   // otras genéricas aunque compartan SKU). El backend genera el itemKey y
+   // lo devuelve en el state del carrito.
+  // ============================================================
+  abrirGenerico(): void {
+    if (!this.skuGenerico()) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'No disponible',
+        detail: 'El SKU comodín no está configurado en el backend.',
+        life: 4000,
+      });
+      return;
+    }
+    this.mostrarDialogGenerico.set(true);
+  }
+
+  onAgregarGenerico(data: ProductoGenericoData): void {
+    this.procesandoGenerico.set(true);
+    this.api.agregarGenericoCarrito({
+      descripcion: data.descripcion,
+      precioConIva: data.precioConIva,
+      porcIva: data.porcIva,
+      cantidad: data.cantidad,
+    }).subscribe({
+      next: (state) => {
+        this.procesandoGenerico.set(false);
+        this.mostrarDialogGenerico.set(false);
+        this.carrito.set(state.items);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Producto genérico agregado',
+          detail: `${data.descripcion}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`,
+          life: 3000,
+        });
+        this.focusInput();
+      },
+      error: (err) => {
+        this.procesandoGenerico.set(false);
+        toastError(this.toast, 'Producto genérico', err, 'No se pudo agregar.');
+      },
+    });
+  }
+
+  eliminarDelCarrito(itemKey: string): void {
+    this.api.eliminarItemCarrito(itemKey).subscribe({
       next: (state) => {
         this.carrito.set(state.items);
         this.focusInput();
@@ -1970,7 +2053,9 @@ export class ShowroomPage implements AfterViewInit {
     // ven el nuevo stock vía SSE). Acá solo leemos el state resultante para
     // detectar excedidos y mantenemos las cantidades pedidas (el operador
     // decide si recortarlas en el diálogo).
-    const cantidadesPedidas = new Map(this.carrito().map((it) => [it.sku, it.cantidad]));
+    // Indexamos por itemKey, no por sku, para que múltiples genéricos
+    // (todos con el SKU comodín) no colapsen al mismo entry del Map.
+    const cantidadesPedidas = new Map(this.carrito().map((it) => [it.itemKey, it.cantidad]));
     this.refrescando.set(true);
     this.api.refrescarStockCarritoServer().subscribe({
       next: (state) => {
@@ -1983,7 +2068,7 @@ export class ShowroomPage implements AfterViewInit {
           stockDisponible: number;
         }[] = [];
         for (const it of state.items) {
-          const pedida = cantidadesPedidas.get(it.sku) ?? it.cantidad;
+          const pedida = cantidadesPedidas.get(it.itemKey) ?? it.cantidad;
           const stock = it.stockTotal;
           if (stock != null && pedida > stock) {
             excedidos.push({
@@ -2067,8 +2152,10 @@ export class ShowroomPage implements AfterViewInit {
         formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
         items: this.carrito().map((it) => {
           // Descuento per-item: los ítems excluidos por rubro
-          // (MAQUINAS INDUSTRIALES) NO reciben el descuento por escala —
-          // mandamos `undefined` para que DUX los facture al PVP de lista.
+          // (MAQUINAS INDUSTRIALES) y los genéricos NO reciben el descuento por
+          // escala — mandamos `undefined` para que DUX los facture al PVP de
+          // lista. `descuentoParaItem` ya devuelve 0 en ambos casos vía
+          // `excluidoDescuentoEscala`.
           const descItem = this.descuentoParaItem(it);
           return {
             sku: it.sku,
@@ -2079,6 +2166,13 @@ export class ShowroomPage implements AfterViewInit {
             // El display en el showroom sigue mostrando sin-IVA al operador (informativo).
             precioUnitario: it.pvpKtGastroConIva,
             descuentoPorcentaje: descItem > 0 ? descItem : undefined,
+            // Genéricos: el operador eligió el IVA en el dialog (21 o 10.5).
+            // Sin esto, el backend caería al porcIva del cache del SKU comodín
+            // que no representa al producto real.
+            porcIva: it.generico ? (it.porcIva ?? undefined) : undefined,
+            // Comentarios: descripción tipeada por el operador, viaja al
+            // campo `comentarios` de la línea en el payload DUX.
+            comentarios: it.comentarios ?? undefined,
           };
         }),
       })

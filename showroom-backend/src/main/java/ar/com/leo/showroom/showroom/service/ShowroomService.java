@@ -520,7 +520,8 @@ public class ShowroomService {
                         it.getCantidad(),
                         it.getPrecioUnitario(),
                         it.getPorcIva(),
-                        urlImagenLocal(it.getSku())))
+                        urlImagenLocal(it.getSku()),
+                        it.getComentarios()))
                 .toList();
         String provinciaNombre = p.getCodigoProvincia() != null
                 ? provinciaRepository.findByCodIsoIgnoreCase(p.getCodigoProvincia())
@@ -773,13 +774,29 @@ public class ShowroomService {
                 request.items().stream().map(CrearPedidoRequestDTO.Item::sku).toList()
         );
 
+        String skuGenerico = duxProperties.skuProductoGenerico();
         for (CrearPedidoRequestDTO.Item it : request.items()) {
+            boolean esGenerico = skuGenerico != null && skuGenerico.equals(it.sku());
             ProductoCache pc = caches.get(it.sku());
             BigDecimal precioBaseConIva = it.precioUnitario() != null
                     ? it.precioUnitario()
                     : (pc != null ? pc.getPvpKtGastroConIva() : null);
-            String descripcion = pc != null ? pc.getDescripcion() : null;
-            BigDecimal porcIva = pc != null ? pc.getPorcIva() : null;
+            // Para genéricos preferimos la descripción tipeada por el operador
+            // (que viaja en `comentarios`) por encima de lo que diga el cache
+            // del SKU comodín. Para items normales, el cache es la fuente.
+            String descripcion;
+            if (esGenerico && StringUtils.hasText(it.comentarios())) {
+                descripcion = it.comentarios().trim();
+            } else {
+                descripcion = pc != null ? pc.getDescripcion() : null;
+            }
+            // Genéricos: el porcIva lo eligió el operador en el dialog y
+            // viaja en el item. Si no vino (defensive — siempre debería venir
+            // para genéricos), asumimos 21. Items normales toman el porcIva
+            // del cache — la fuente de verdad para el producto real.
+            BigDecimal porcIva = esGenerico
+                    ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
+                    : (pc != null ? pc.getPorcIva() : null);
 
             // Aplicar recargo (dividir, no multiplicar) y resolver IVA según la
             // forma. Sin formaPago: precio queda igual al base.
@@ -792,6 +809,7 @@ public class ShowroomService {
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
                     .porcIva(porcIva)
+                    .comentarios(StringUtils.hasText(it.comentarios()) ? it.comentarios().trim() : null)
                     .build();
             pedido.getItems().add(item);
 
@@ -1094,8 +1112,10 @@ public class ShowroomService {
         //   precio (double, required), porc_desc (double, required).
         // Los 4 son obligatorios — si falta cualquiera, DUX devuelve 200 con
         // {"message":"Debe completar todos los campos requeridos."} y NO crea el pedido.
+        String skuGenericoDux = duxProperties.skuProductoGenerico();
         List<Map<String, Object>> productos = new ArrayList<>();
         for (CrearPedidoRequestDTO.Item it : request.items()) {
+            boolean esGenerico = skuGenericoDux != null && skuGenericoDux.equals(it.sku());
             Map<String, Object> d = new LinkedHashMap<>();
             d.put("cod_item", it.sku());
             d.put("ctd", it.cantidad());
@@ -1107,12 +1127,21 @@ public class ShowroomService {
             BigDecimal precioBaseConIva = it.precioUnitario() != null
                     ? it.precioUnitario()
                     : (pc != null ? pc.getPvpKtGastroConIva() : BigDecimal.ZERO);
-            BigDecimal porcIva = pc != null ? pc.getPorcIva() : null;
+            // Genéricos: usar el porcIva del item (lo eligió el operador).
+            // Items normales: el del cache. El recargo financiero se calcula
+            // sobre con-IVA, así que el porcIva solo importa cuando la forma
+            // pasa a/desde s/IVA — para genéricos asumimos 21 si no vino.
+            BigDecimal porcIva = esGenerico
+                    ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
+                    : (pc != null ? pc.getPorcIva() : null);
             BigDecimal precioDux = formaPago != null
                     ? calcularPrecioParaDux(precioBaseConIva, porcIva, formaPago)
                     : precioBaseConIva;
             d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);
+            if (StringUtils.hasText(it.comentarios())) {
+                d.put("comentarios", it.comentarios().trim());
+            }
             productos.add(d);
         }
         root.put("productos", productos);

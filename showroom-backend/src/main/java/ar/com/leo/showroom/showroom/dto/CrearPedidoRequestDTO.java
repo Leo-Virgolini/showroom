@@ -75,7 +75,19 @@ public record CrearPedidoRequestDTO(
             @NotNull String sku,
             @NotNull @Positive Integer cantidad,
             BigDecimal precioUnitario,
-            BigDecimal descuentoPorcentaje
+            BigDecimal descuentoPorcentaje,
+            /** % de IVA del producto (21 o 10.5 en AR). Solo se considera para
+             *  ítems genéricos (SKU comodín de {@code dux.sku-producto-generico}):
+             *  el cache del SKU 9999990 no tiene un IVA representativo del
+             *  producto real, así que el operador lo elige en el dialog. Para
+             *  ítems normales el backend usa el porcIva del cache. */
+            BigDecimal porcIva,
+            /** Texto libre que se manda como {@code comentarios} de la línea
+             *  en el payload DUX y se persiste como detalle de la línea del
+             *  pedido. Usado principalmente con el SKU comodín
+             *  ({@code dux.sku-producto-generico}) para describir el producto
+             *  real que no existe en catálogo. Null/blank cuando no aplica. */
+            String comentarios
     ) {
     }
 }

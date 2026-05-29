@@ -34,11 +34,34 @@ export function rubroExcluyeDescuentos(rubro: string | null | undefined): boolea
 }
 
 export interface CarritoItem extends ScanResult {
+  /** Identificador único del ítem dentro del carrito del operador. Para items
+   *  normales coincide con el SKU; para productos genéricos (SKU comodín de
+   *  DUX) es un uid sintético generado en el backend al crear el ítem. El
+   *  frontend lo usa en las URLs PATCH/DELETE del carrito. */
+  itemKey: string;
   cantidad: number;
+  /** Descripción libre del producto genérico, igual a {@link ScanResult.descripcion}.
+   *  Se envía como {@code comentarios} de la línea al payload DUX. Null en items
+   *  normales del catálogo. */
+  comentarios?: string | null;
+  /** True si la línea representa un producto cargado a mano con el SKU
+   *  comodín. El frontend lo usa para render distinto en la grilla y
+   *  ocultar las acciones que solo aplican al catálogo (refresh, etc.). */
+  generico?: boolean;
 }
 
 export interface RefreshStockRequest {
   skus: string[];
+}
+
+/** Payload del dialog "+ Producto genérico" para agregar una línea de SKU
+ *  comodín al carrito. El backend resuelve el SKU desde {@code dux.sku-producto-generico}
+ *  y genera un uid sintético como identificador del ítem. */
+export interface CarritoAgregarGenericoRequest {
+  descripcion: string;
+  precioConIva: number;
+  porcIva: number;
+  cantidad: number;
 }
 
 export type CategoriaFiscal =
@@ -81,6 +104,15 @@ export interface CrearPedidoRequest {
     cantidad: number;
     precioUnitario: number | null;
     descuentoPorcentaje?: number | null;
+    /** % de IVA del producto. Solo se considera para ítems genéricos (SKU
+     *  comodín de DUX): el cache del SKU 9999990 no tiene un IVA
+     *  representativo del producto real, así que el operador lo elige en el
+     *  dialog. Para ítems normales el backend usa el porcIva del cache. */
+    porcIva?: number | null;
+    /** Texto libre que viaja al campo {@code comentarios} de la línea en el
+     *  payload DUX. Usado principalmente con el SKU comodín para describir el
+     *  producto real que no está en catálogo. */
+    comentarios?: string | null;
   }[];
 }
 
@@ -110,6 +142,11 @@ export interface Health {
   syncIniciadoAt?: string;
   /** Fin de la última sync global exitosa (no incluye refreshes individuales). */
   ultimaSincronizacionAt?: string;
+  /** SKU comodín de DUX para productos cargados a mano (sin catálogo). El
+   *  frontend lo usa para identificar items genéricos en el carrito/presupuesto
+   *  y para el dialog "+ Producto genérico". Opcional para tolerar backends
+   *  viejos que aún no lo exponen — en ese caso el botón queda oculto. */
+  skuProductoGenerico?: string;
 }
 
 export type SyncEventEstado =
@@ -516,6 +553,10 @@ export interface PedidoItemDetalle {
   porcIva: number | null;
   /** URL del endpoint local de imagen del producto, o null si no existe el archivo. */
   imagenUrl: string | null;
+  /** Comentarios libres de la línea (se envió a DUX como {@code comentarios}).
+   *  Trae la descripción tipeada por el operador para items genéricos; null
+   *  en items normales del catálogo. */
+  comentarios?: string | null;
 }
 
 export interface PedidoDetalle {
@@ -602,6 +643,14 @@ export interface PresupuestoItem extends ScanResult {
   cantidad: number;
   /** % de descuento individual aplicado al ítem (0..100). */
   descuentoPorcentaje: number;
+  /** True cuando el ítem fue cargado a mano con el SKU comodín. La grilla lo
+   *  marca con un badge "Genérico" y el render usa la descripción que tipeó el
+   *  operador (que también se guarda en {@link comentarios}). */
+  generico?: boolean;
+  /** Texto libre que viaja a DUX como {@code comentarios} de la línea cuando
+   *  el presupuesto se transforma en pedido. Para genéricos = descripción
+   *  tipeada por el operador. Null en items normales del catálogo. */
+  comentarios?: string | null;
 }
 
 /** Snapshot de una forma de pago precalculada en el frontend. Se manda al
@@ -647,6 +696,9 @@ export interface GenerarPresupuestoRequest {
     precioConIva: number;
     porcIva?: number | null;
     descuentoPorcentaje?: number | null;
+    /** Texto libre que viaja como {@code comentarios} a DUX cuando el
+     *  presupuesto se transforma en pedido. Usado para productos genéricos. */
+    comentarios?: string | null;
   }[];
   formasPago: PresupuestoFormaPagoSnapshot[];
 }
@@ -706,6 +758,9 @@ export interface PresupuestoDetalle {
     precioConIva: number;
     porcIva: number | null;
     descuentoPorcentaje: number | null;
+    /** Comentarios libres persistidos junto al item — para items genéricos
+     *  trae la descripción tipeada por el operador. Null en items normales. */
+    comentarios?: string | null;
   }[];
   formasPago: PresupuestoFormaPagoSnapshot[];
 }

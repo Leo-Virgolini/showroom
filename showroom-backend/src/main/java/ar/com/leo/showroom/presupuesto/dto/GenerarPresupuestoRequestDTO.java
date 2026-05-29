@@ -69,7 +69,14 @@ public record GenerarPresupuestoRequestDTO(
              *  asume 21 para los cálculos. */
             BigDecimal porcIva,
             /** % de descuento individual aplicado a este ítem (0..100). */
-            @PositiveOrZero BigDecimal descuentoPorcentaje
+            @PositiveOrZero BigDecimal descuentoPorcentaje,
+            /** Texto libre que viaja como {@code comentarios} a DUX al
+             *  convertir el presupuesto en pedido. Se usa principalmente para
+             *  el SKU comodín (ver {@code dux.sku-producto-generico}) cuando
+             *  el operador carga un producto que no está en catálogo: la
+             *  línea va a DUX con el SKU genérico y los comentarios describen
+             *  el producto real. Null/blank cuando no aplica. */
+            String comentarios
     ) {}
 
     public record FormaPagoSnapshot(

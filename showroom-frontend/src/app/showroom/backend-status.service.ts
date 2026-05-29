@@ -42,6 +42,11 @@ import {
 @Injectable({ providedIn: 'root' })
 export class BackendStatusService {
   readonly connected = signal(true);
+  /** SKU comodín de DUX para cargar productos genéricos. Se hidrata desde
+   *  /health al primer ping exitoso. Null hasta entonces (o si el backend
+   *  está en una versión vieja sin el campo) — los componentes que ofrecen
+   *  el botón "+ Producto genérico" lo ocultan mientras no haya valor. */
+  readonly skuProductoGenerico = signal<string | null>(null);
   readonly syncEvents$ = new Subject<SyncEvent>();
   readonly pickingEmailEvents$ = new Subject<PickingEmailEvent>();
   /** Resultado del envío del PDF por WhatsApp tras un pedido. SENT / FAILED /
@@ -209,7 +214,10 @@ export class BackendStatusService {
    */
   private fetchBootTimeBaseline(): void {
     this.http.get<Health>('/api/showroom/health').subscribe({
-      next: (h) => { if (h.bootTimeMs != null) this.lastBootTimeMs = h.bootTimeMs; },
+      next: (h) => {
+        if (h.bootTimeMs != null) this.lastBootTimeMs = h.bootTimeMs;
+        if (h.skuProductoGenerico) this.skuProductoGenerico.set(h.skuProductoGenerico);
+      },
       error: () => { /* silencioso, se reintenta en la próxima reconexión */ },
     });
   }
@@ -232,6 +240,7 @@ export class BackendStatusService {
     //    que el frontend muestre toast y limpie estado fantasma.
     this.http.get<Health>('/api/showroom/health').subscribe({
       next: (h) => {
+        if (h.skuProductoGenerico) this.skuProductoGenerico.set(h.skuProductoGenerico);
         if (h.bootTimeMs == null) return;
         if (this.lastBootTimeMs != null && h.bootTimeMs !== this.lastBootTimeMs) {
           this.backendReiniciado$.next();

@@ -3,6 +3,7 @@ import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import {
   ActualizarClienteRequest,
+  CarritoAgregarGenericoRequest,
   CarritoAgregarResponse,
   CarritoState,
   CatalogoItem,
@@ -92,14 +93,23 @@ export class ShowroomService {
       `${this.base}/carrito/items`, { sku, cantidad, forzar });
   }
 
-  actualizarCantidadItemCarrito(sku: string, cantidad: number): Observable<CarritoState> {
-    return this.http.patch<CarritoState>(
-      `${this.base}/carrito/items/${encodeURIComponent(sku)}`, { cantidad });
+  /** Agrega una línea de producto genérico (SKU comodín de DUX) al carrito.
+   *  El backend genera un uid sintético como itemKey para que varias líneas
+   *  con el mismo SKU comodín coexistan, cada una con su descripción y precio. */
+  agregarGenericoCarrito(req: CarritoAgregarGenericoRequest): Observable<CarritoState> {
+    return this.http.post<CarritoState>(`${this.base}/carrito/generico`, req);
   }
 
-  eliminarItemCarrito(sku: string): Observable<CarritoState> {
+  /** {@code itemKey} es la clave única dentro del carrito: SKU para items
+   *  normales, uid sintético para genéricos. Coincide con {@link CarritoItem.itemKey}. */
+  actualizarCantidadItemCarrito(itemKey: string, cantidad: number): Observable<CarritoState> {
+    return this.http.patch<CarritoState>(
+      `${this.base}/carrito/items/${encodeURIComponent(itemKey)}`, { cantidad });
+  }
+
+  eliminarItemCarrito(itemKey: string): Observable<CarritoState> {
     return this.http.delete<CarritoState>(
-      `${this.base}/carrito/items/${encodeURIComponent(sku)}`);
+      `${this.base}/carrito/items/${encodeURIComponent(itemKey)}`);
   }
 
   vaciarCarritoServer(): Observable<CarritoState> {

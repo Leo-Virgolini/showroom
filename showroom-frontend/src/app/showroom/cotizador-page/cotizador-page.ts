@@ -199,6 +199,111 @@ export class CotizadorPage {
     return `forma-pago-card ${colorClass}${mejorClass}`;
   }
 
+  // ============================================================
+  // Pago combinado: el cliente paga $X en una forma → cuánto le queda
+  // por pagar en cada otra forma. Útil cuando el cliente quiere
+  // adelantar parte del precio (ej. seña o pago en efectivo) y financiar
+  // el resto.
+  //
+  // Lógica: la forma "elegida" representa el 100% de la cotización a un
+  // precio total. Si el cliente paga $X de esos $totalForma, está cubriendo
+  // una fracción `X / totalForma` del valor. Para CUALQUIER otra forma,
+  // el restante a pagar = `(1 - fracción) × precioDeLaOtraForma`. Esto
+  // funciona aunque las formas mezclen con-IVA y sin-IVA, porque cada
+  // forma escala proporcionalmente con la cotización entera.
+  // ============================================================
+
+  /** Id de la forma de pago donde el cliente paga el "anticipo". Null = no
+   *  hay pago combinado configurado, no se muestra el panel de restantes. */
+  readonly pagoParcialFormaId = signal<number | null>(null);
+  /** Monto que el cliente paga en la forma elegida. */
+  readonly pagoParcialMonto = signal<number>(0);
+
+  /** Datos del pago parcial activo o null si todavía no hay forma + monto
+   *  válidos. {@code fraccionPagada} es lo que ya cubrió el cliente,
+   *  entre 0 y 1. {@code restanteEnEsaForma} es lo que le falta pagar
+   *  en la misma forma elegida (informativo). */
+  readonly pagoParcial = computed(() => {
+    const formaId = this.pagoParcialFormaId();
+    const monto = this.pagoParcialMonto() ?? 0;
+    if (formaId == null || monto <= 0) return null;
+    const forma = this.formasPagoCalculadas().find(
+      (f) => f.id === formaId,
+    );
+    if (!forma || forma.precioFinal <= 0) return null;
+    // Sobrepasar el total NO es válido — el computed retorna null para que
+    // el template muestre el mensaje de error y NO el grid de restantes
+    // (que daría todos en $0 y confundiría al operador).
+    if (monto > forma.precioFinal) return null;
+    const fraccionPagada = monto / forma.precioFinal;
+    return {
+      forma,
+      monto,
+      fraccionPagada,
+      fraccionRestante: 1 - fraccionPagada,
+      restanteEnEsaForma: forma.precioFinal - monto,
+    };
+  });
+
+  /** True si el operador ingresó un monto que supera el total de la forma
+   *  seleccionada — la simulación no tiene sentido y el template muestra
+   *  un error explicativo. */
+  readonly pagoParcialExcedido = computed(() => {
+    const formaId = this.pagoParcialFormaId();
+    const monto = this.pagoParcialMonto() ?? 0;
+    if (formaId == null || monto <= 0) return false;
+    const forma = this.formasPagoCalculadas().find(
+      (f) => f.id === formaId,
+    );
+    if (!forma || forma.precioFinal <= 0) return false;
+    return monto > forma.precioFinal;
+  });
+
+  /** Total de la forma seleccionada — null si no hay forma elegida.
+   *  Lo usa el template para sugerir un máximo y para el mensaje de error
+   *  cuando el operador se pasa. */
+  readonly pagoParcialTotalForma = computed(() => {
+    const formaId = this.pagoParcialFormaId();
+    if (formaId == null) return null;
+    const forma = this.formasPagoCalculadas().find(
+      (f) => f.id === formaId,
+    );
+    return forma?.precioFinal ?? null;
+  });
+
+  /** Lista de las demás formas con el restante calculado. Cuando hay pago
+   *  parcial activo, el template usa esto para mostrar las cards "te queda
+   *  $X en cada una de estas formas". */
+  readonly pagoParcialRestantes = computed(() => {
+    const pp = this.pagoParcial();
+    if (!pp) return [];
+    return this.formasPagoCalculadas()
+      .filter((f) => f.id !== pp.forma.id)
+      .map((f) => ({
+        ...f,
+        restante: redondearMoneda(f.precioFinal * pp.fraccionRestante),
+      }));
+  });
+
+  /** Forma de pago que el operador puede ofrecer al cliente como
+   *  "anticipo" (típicamente Efectivo). Solo nombre + id — el precio total
+   *  ya está visible en las cards de arriba, no hace falta repetirlo en el
+   *  dropdown porque agregaba ruido visual. */
+  readonly formasPagoOpcionesParcial = computed(() => {
+    return this.formasPagoCalculadas().map((f) => ({
+      label: f.nombre,
+      value: f.id,
+      precioFinal: f.precioFinal,
+    }));
+  });
+
+  /** Limpia el pago parcial — se invoca al cambiar montoBase o al
+   *  presionar "vaciar" para que el panel no muestre datos stale. */
+  limpiarPagoParcial(): void {
+    this.pagoParcialFormaId.set(null);
+    this.pagoParcialMonto.set(0);
+  }
+
   readonly indiceMejorPrecio = computed(() => {
     const formas = this.formasPagoCalculadas();
     if (formas.length <= 1) return -1;
@@ -338,6 +443,7 @@ export class CotizadorPage {
     this.rubro.set(null);
     this.rubroOtros.set('');
     this.observaciones.set('');
+    this.limpiarPagoParcial();
   }
 
   previsualizar(): void {

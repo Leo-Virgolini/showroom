@@ -370,7 +370,8 @@ public class PresupuestoComercialPdfGenerator {
                     BigDecimal.ONE,
                     s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
                     s.getPorcIva(),
-                    BigDecimal.ZERO));
+                    BigDecimal.ZERO,
+                    null));
         }
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(

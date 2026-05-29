@@ -316,7 +316,123 @@
       <div class="flex flex-col gap-4">
 
         @if (hayMonto()) {
-          <p-card class="kt-card sticky top-3">
+          <!-- ============= PAGO COMBINADO =============
+               Permite simular: "el cliente paga $X en una forma — ¿cuánto le
+               queda en las demás?". Útil para anticipos, señas o cualquier
+               combinación de formas (ej. mitad efectivo + mitad cuotas).
+               Se muestra ANTES del listado de formas (al tope de la columna)
+               para que el operador pueda usarlo sin tener que scrollear
+               hasta el final de las 8 cards. El panel solo aparece si hay
+               al menos 2 formas (sino no hay "otras formas" para mostrar). -->
+          @if (formasPagoCalculadas().length > 1) {
+            <p-card class="kt-card">
+              <ng-template #title>
+                <div class="kt-card-title">
+                  <i class="pi pi-calculator"></i>
+                  <span>Pago combinado</span>
+                </div>
+              </ng-template>
+
+              <p class="text-[11px] text-muted-color m-0 mb-3 flex items-start gap-1.5 leading-tight">
+                <i class="pi pi-info-circle text-[10px] text-[#FF861C] mt-0.5 shrink-0"></i>
+                <span>
+                  Simulá: si el cliente paga una parte en una forma,
+                  ¿cuánto le queda en cada otra?
+                </span>
+              </p>
+
+              <!-- Una sola fila compacta: "el cliente paga [monto] en [forma]".
+                   Ambos inputs son independientes — el operador puede entrar
+                   el monto o la forma en cualquier orden, lo que le sea más
+                   natural. La simulación se activa cuando los dos tienen
+                   valor válido. Si el monto excede el total de la forma
+                   elegida, se muestra un mensaje de error en lugar del
+                   resultado (porque seguir mostrando "restantes" cuando ya
+                   pagó más del total no tiene sentido). -->
+              <div class="flex flex-col gap-1.5">
+                <label class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/80 dark:text-surface-200 flex items-center gap-1">
+                  <i class="pi pi-wallet text-[#FF861C] text-[10px]"></i>
+                  El cliente paga
+                </label>
+                <div class="flex items-stretch gap-1.5">
+                  <p-inputNumber
+                    [ngModel]="pagoParcialMonto()"
+                    (ngModelChange)="pagoParcialMonto.set($event ?? 0)"
+                    mode="currency" currency="ARS" locale="es-AR"
+                    [maxFractionDigits]="0"
+                    [min]="0"
+                    placeholder="$ 0"
+                    [inputStyleClass]="'!font-bold !text-center !bg-white' + (pagoParcialExcedido() ? ' !border-red-500 !text-red-700' : '')"
+                    class="flex-1 min-w-0" />
+                  <p-select
+                    [options]="formasPagoOpcionesParcial()"
+                    optionLabel="label" optionValue="value"
+                    [ngModel]="pagoParcialFormaId()"
+                    (ngModelChange)="pagoParcialFormaId.set($event)"
+                    placeholder="Elegí forma…"
+                    [showClear]="true"
+                    appendTo="body"
+                    class="flex-1 min-w-0" />
+                </div>
+              </div>
+
+              <!-- Estados (orden importa — el primero que matchea gana):
+                   1. Excedió el total de la forma elegida → ERROR.
+                   2. Forma + monto válidos → resultado de la simulación.
+                   3. Solo monto cargado, falta forma → pide elegir forma.
+                   4. Solo forma cargada, falta monto → pide cargar monto.
+                   5. Ninguno cargado → hint inicial. -->
+              @if (pagoParcialExcedido()) {
+                <div class="mt-3 p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 flex items-start gap-1.5">
+                  <i class="pi pi-exclamation-triangle text-[12px] text-red-600 dark:text-red-400 mt-0.5 shrink-0"></i>
+                  <div class="text-[11px] text-red-700 dark:text-red-300 leading-tight">
+                    El monto supera el total de esta forma de pago
+                    <strong>({{ pagoParcialTotalForma() | currency:'ARS':'symbol':'1.0-0' }})</strong>.
+                    Bajalo o elegí una forma con un total más alto.
+                  </div>
+                </div>
+              } @else if (pagoParcial(); as pp) {
+                <div class="mt-3 pt-3 border-t border-[#FF861C]/20 flex flex-col gap-2">
+                  <div class="text-xs flex items-center justify-between gap-2 px-1">
+                    <span class="text-muted-color">
+                      Cubre <strong class="text-[#7EBA00]">{{ (pp.fraccionPagada * 100) | number:'1.0-1' }}%</strong>
+                      de la cotización
+                    </span>
+                    <span class="text-[10px] text-muted-color">
+                      restante {{ (pp.fraccionRestante * 100) | number:'1.0-1' }}%
+                    </span>
+                  </div>
+
+                  @if (pagoParcialRestantes().length > 0) {
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 mt-1 px-1">
+                      Le queda por pagar
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5">
+                      @for (r of pagoParcialRestantes(); track r.id) {
+                        <div class="p-2 rounded-lg border border-[#FF861C]/20 bg-white dark:bg-surface-900/40">
+                          <div class="text-[10px] font-semibold text-[#3B1E09] dark:text-surface-0 truncate">
+                            {{ r.nombre }}
+                          </div>
+                          <div class="text-[9px] text-muted-color">
+                            {{ r.aplicaIva ? 'c/IVA' : 's/IVA' }}
+                          </div>
+                          <div class="text-sm font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 mt-0.5">
+                            {{ r.restante | currency:'ARS':'symbol':'1.0-0' }}
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="text-[11px] text-muted-color text-center mt-3 m-0 italic">
+                  Ingresá el monto del anticipo.
+                </p>
+              }
+            </p-card>
+          }
+
+          <p-card class="kt-card">
             <ng-template #title>
               <div class="kt-card-title">
                 <i class="pi pi-credit-card"></i>
@@ -372,7 +488,7 @@
             }
           </p-card>
         } @else {
-          <p-card class="kt-card sticky top-3">
+          <p-card class="kt-card">
             <div class="flex flex-col items-center justify-center py-8 text-center gap-2">
               <div class="w-14 h-14 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                 <i class="pi pi-calculator text-2xl text-[#FF861C]"></i>

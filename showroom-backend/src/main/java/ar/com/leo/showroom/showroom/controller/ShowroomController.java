@@ -38,6 +38,7 @@ import ar.com.leo.showroom.sesion.repository.SesionShowroomRepository;
 import ar.com.leo.showroom.sesion.service.SesionShowroomService;
 import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CantidadRequestDTO;
+import ar.com.leo.showroom.showroom.dto.CarritoAgregarGenericoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarResponseDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoStateDTO;
@@ -357,17 +358,35 @@ public class ShowroomController {
                 CarritoStateDTO.Origen.OPERADOR, request.forzarFlag());
     }
 
-    @PatchMapping("/carrito/items/{sku}")
-    public CarritoStateDTO actualizarCantidadItemCarrito(
-            @PathVariable String sku,
-            @RequestBody @Valid CantidadRequestDTO request,
+    /**
+     * Agrega una línea de producto genérico al carrito (SKU comodín de DUX
+     * configurado en {@code dux.sku-producto-generico}). Cada llamada crea
+     * una línea nueva — varias líneas de genéricos con descripciones distintas
+     * conviven sin mergearse.
+     */
+    @PostMapping("/carrito/generico")
+    public CarritoStateDTO agregarGenericoCarrito(
+            @RequestBody @Valid CarritoAgregarGenericoRequestDTO request,
             Authentication auth) {
-        return carritoService.actualizarCantidad(auth.getName(), sku, request.cantidad());
+        return carritoService.agregarGenerico(
+                auth.getName(),
+                request.descripcion(),
+                request.precioConIva(),
+                request.porcIva(),
+                request.cantidad());
     }
 
-    @DeleteMapping("/carrito/items/{sku}")
-    public CarritoStateDTO eliminarItemCarrito(@PathVariable String sku, Authentication auth) {
-        return carritoService.eliminar(auth.getName(), sku);
+    @PatchMapping("/carrito/items/{itemKey}")
+    public CarritoStateDTO actualizarCantidadItemCarrito(
+            @PathVariable String itemKey,
+            @RequestBody @Valid CantidadRequestDTO request,
+            Authentication auth) {
+        return carritoService.actualizarCantidad(auth.getName(), itemKey, request.cantidad());
+    }
+
+    @DeleteMapping("/carrito/items/{itemKey}")
+    public CarritoStateDTO eliminarItemCarrito(@PathVariable String itemKey, Authentication auth) {
+        return carritoService.eliminar(auth.getName(), itemKey);
     }
 
     @DeleteMapping("/carrito")
@@ -1349,6 +1368,10 @@ public class ShowroomController {
         body.put("syncEnCurso", catalogoSync.isSyncEnCurso());
         body.put("listaPrecios", duxClient.getProperties().listaPreciosNombre());
         body.put("totalProductos", productoCacheRepository.count());
+        // SKU comodín de DUX para productos genéricos. El frontend lo usa
+        // para distinguir filas de items "cargados a mano" vs items reales
+        // del catálogo (render distinto, ocultar refresh contra DUX, etc.).
+        body.put("skuProductoGenerico", duxClient.getProperties().skuProductoGenerico());
         // Solo presente si hay un sync corriendo — el frontend lo usa para mostrar
         // "Sincronizando desde HH:mm" cuando un cliente se conecta tarde.
         catalogoSync.getSyncIniciadoAt().ifPresent(t -> body.put("syncIniciadoAt", t));

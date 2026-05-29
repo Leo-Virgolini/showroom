@@ -1,0 +1,82 @@
+<!-- ============= DIALOG "AGREGAR PRODUCTO GENÉRICO" =============
+     Componente reusable: se usa desde /showroom (carrito server-side) y
+     /presupuestos (estado local). La visibilidad la controla el padre con
+     [(visible)]; el padre se entera del confirm vía el evento (agregar).
+     El SKU comodín de DUX lo resuelve el padre (lo conoce desde el
+     BackendStatusService o el endpoint correspondiente), este dialog solo
+     recolecta los datos que tipea el operador. -->
+<p-dialog [visible]="visible()" (visibleChange)="visible.set($event)" [modal]="true"
+  [style]="{ width: '95vw', maxWidth: '36rem' }" [breakpoints]="{ '768px': '95vw' }"
+  [draggable]="false" [closable]="!procesando()">
+  <ng-template #header>
+    <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
+      <i class="pi pi-plus-circle text-[#FF861C]"></i>
+      <span class="font-bold">Agregar producto genérico</span>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-3">
+    <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-xs">
+      <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
+      <span class="text-surface-700 dark:text-surface-200">
+        Cargá un producto que <strong>no está en el catálogo</strong> KT GASTRO.
+        Se va a registrar con el SKU comodín
+        @if (sku()) {
+          <span class="font-mono font-bold text-[#3B1E09] dark:text-surface-0">{{ sku() }}</span>
+        }
+        de DUX y la descripción tipeada viaja como comentario de la línea del pedido.
+      </span>
+    </div>
+
+    <div>
+      <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+        <i class="pi pi-tag text-muted-color text-[10px]"></i>
+        Descripción <span class="text-red-500">*</span>
+      </label>
+      <textarea pTextarea #descripcionInput rows="2" class="w-full"
+        placeholder="Ej. Heladera Whirlpool 400L acero"
+        [ngModel]="descripcion()" (ngModelChange)="descripcion.set($event)"
+        maxlength="500"></textarea>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="sm:col-span-1">
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-hashtag text-muted-color text-[10px]"></i>
+          Cantidad <span class="text-red-500">*</span>
+        </label>
+        <p-inputNumber [ngModel]="cantidad()" (ngModelChange)="cantidad.set($event)"
+          [min]="1" [max]="9999" [showButtons]="true" class="w-full"
+          inputStyleClass="w-full" buttonLayout="horizontal" />
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-percentage text-muted-color text-[10px]"></i>
+          IVA <span class="text-red-500">*</span>
+        </label>
+        <p-select [options]="opcionesIva" [ngModel]="porcIva()"
+          (ngModelChange)="porcIva.set($event)" optionLabel="label" optionValue="value"
+          class="w-full" appendTo="body" />
+      </div>
+      <div class="sm:col-span-1">
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-dollar text-muted-color text-[10px]"></i>
+          Precio c/IVA <span class="text-red-500">*</span>
+        </label>
+        <p-inputNumber [ngModel]="precioConIva()" (ngModelChange)="precioConIva.set($event)"
+          [min]="0" [minFractionDigits]="0" [maxFractionDigits]="2"
+          mode="currency" currency="ARS" locale="es-AR"
+          class="w-full" inputStyleClass="w-full" />
+      </div>
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <div class="flex justify-end gap-2">
+      <p-button label="Cancelar" icon="pi pi-times" severity="secondary"
+        [outlined]="true" [disabled]="procesando()" (onClick)="visible.set(false)" />
+      <p-button label="Agregar" icon="pi pi-check"
+        [disabled]="!puedeAgregar()" [loading]="procesando()" (onClick)="confirmar()" />
+    </div>
+  </ng-template>
+</p-dialog>

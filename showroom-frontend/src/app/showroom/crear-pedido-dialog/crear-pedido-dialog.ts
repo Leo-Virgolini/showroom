@@ -108,13 +108,15 @@ export class CrearPedidoDialog {
   readonly enviandoPedido = signal(false);
 
   /** Items del detalle cargado — base para armar el payload + para calcular
-   *  totales por forma de pago en el select. */
+   *  totales por forma de pago en el select. {@code comentarios} se preserva
+   *  para forwardear al payload DUX (relevante en items genéricos). */
   readonly itemsDelPresupuesto = signal<{
     sku: string;
     cantidad: number;
     precioConIva: number;
     porcIva: number | null;
     descuentoPorcentaje: number | null;
+    comentarios: string | null;
   }[]>([]);
 
   // Datos del cliente — pre-llenados desde el presupuesto, editables.
@@ -236,6 +238,7 @@ export class CrearPedidoDialog {
           precioConIva: it.precioConIva,
           porcIva: it.porcIva,
           descuentoPorcentaje: it.descuentoPorcentaje,
+          comentarios: it.comentarios ?? null,
         })));
 
         this.cargarProvinciasSiHaceFalta();
@@ -363,6 +366,14 @@ export class CrearPedidoDialog {
         cantidad: it.cantidad,
         precioUnitario: it.precioConIva,
         descuentoPorcentaje: it.descuentoPorcentaje ?? undefined,
+        // porcIva: relevante solo para items genéricos (el backend usa el
+        // del cache para items normales). Lo forwardeamos siempre cuando
+        // está presente — no estorba para items normales.
+        porcIva: it.porcIva ?? undefined,
+        // Comentarios: viaja al campo `comentarios` de la línea en el
+        // payload DUX. Para items normales es null; para genéricos es la
+        // descripción tipeada por el operador en el presupuesto.
+        comentarios: it.comentarios ?? undefined,
       })),
     };
 

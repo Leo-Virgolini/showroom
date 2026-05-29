@@ -4,6 +4,7 @@ import ar.com.leo.showroom.catalogo.entity.ProductoCache;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.events.SesionCerradaEvent;
 import ar.com.leo.showroom.events.SyncCatalogoCompletadoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -23,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -52,6 +54,7 @@ public class CarritoService {
     private final CatalogoSyncService catalogoSync;
     private final ShowroomService showroomService;
     private final SyncEventService eventService;
+    private final DuxProperties duxProperties;
 
     /** Carrito por usuario. {@code computeIfAbsent} crea el espacio al primer
      *  acceso; nunca se elimina (sobrevive a logout — el operador encuentra
@@ -63,10 +66,12 @@ public class CarritoService {
     public CarritoService(
             CatalogoSyncService catalogoSync,
             @Lazy ShowroomService showroomService,
-            SyncEventService eventService) {
+            SyncEventService eventService,
+            DuxProperties duxProperties) {
         this.catalogoSync = catalogoSync;
         this.showroomService = showroomService;
         this.eventService = eventService;
+        this.duxProperties = duxProperties;
     }
 
     public CarritoStateDTO obtener(String username) {
@@ -97,6 +102,13 @@ public class CarritoService {
         }
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
+        }
+        // El SKU comodín se agrega solo vía `agregarGenerico` (con descripción
+        // + precio del operador). Si llega por la ruta de scan normal, lo
+        // rechazamos para no terminar con una línea sin datos útiles.
+        if (sku.trim().equals(duxProperties.skuProductoGenerico())) {
+            throw new ConflictException(
+                    "El SKU " + sku.trim() + " es comodín — cargalo desde \"+ Producto genérico\".");
         }
         ProductoCache pc = catalogoSync.buscarPorSkuOEan(sku.trim())
                 .orElseThrow(() -> new NotFoundException("Producto no encontrado: " + sku));
@@ -162,23 +174,41 @@ public class CarritoService {
         return agregar(username, sku, cantidad, origen, false);
     }
 
-    /** Reemplaza la cantidad de un item existente. Si la nueva cantidad supera
-     *  el stock disponible, se respeta la cantidad pedida y el ítem queda
-     *  marcado como excedido del lado del frontend — el operador decide si
-     *  ajusta o lo manda igual como pendiente de reposición al crear el
-     *  pedido en DUX. */
-    public CarritoStateDTO actualizarCantidad(String username, String sku, int cantidad) {
+    /**
+     * Agrega una línea de producto genérico al carrito: el SKU es el comodín
+     * configurado en {@code dux.sku-producto-generico} y los demás campos los
+     * carga el operador desde el dialog "+ Producto genérico". A diferencia
+     * de {@link #agregar}, cada llamada crea una línea NUEVA en el carrito
+     * (uid sintético como key) — varias líneas con el mismo SKU comodín
+     * pueden convivir, cada una con su propia descripción + precio.
+     *
+     * <p>No verifica catálogo ni stock — el genérico no existe como producto
+     * real; el SKU comodín en DUX no tiene precio ni stock asociado. El
+     * operador es responsable de la cantidad y el precio que tipea.
+     */
+    public CarritoStateDTO agregarGenerico(String username, String descripcion,
+                                           BigDecimal precioConIva, BigDecimal porcIva,
+                                           int cantidad) {
+        if (descripcion == null || descripcion.isBlank()) {
+            throw new ConflictException("La descripción es obligatoria para el producto genérico");
+        }
+        if (precioConIva == null || precioConIva.signum() <= 0) {
+            throw new ConflictException("El precio debe ser mayor a 0");
+        }
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
         }
+        BigDecimal iva = porcIva != null ? porcIva : new BigDecimal("21");
+        String skuGenerico = duxProperties.skuProductoGenerico();
+        String itemKey = "gen-" + System.currentTimeMillis() + "-"
+                + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFL);
+        CarritoItemDTO nuevo = CarritoItemDTO.generico(itemKey, skuGenerico,
+                descripcion.trim(), precioConIva, iva, cantidad);
+
         EspacioUsuario esp = espacioDe(username);
         esp.lock.lock();
         try {
-            CarritoItemDTO actual = esp.items.get(sku);
-            if (actual == null) {
-                throw new NotFoundException("El item no está en el carrito: " + sku);
-            }
-            esp.items.put(sku, actual.withCantidad(cantidad));
+            esp.items.put(itemKey, nuevo);
             CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
             broadcast(username, state);
             return state;
@@ -187,12 +217,41 @@ public class CarritoService {
         }
     }
 
-    public CarritoStateDTO eliminar(String username, String sku) {
+    /** Reemplaza la cantidad de un item existente. Si la nueva cantidad supera
+     *  el stock disponible, se respeta la cantidad pedida y el ítem queda
+     *  marcado como excedido del lado del frontend — el operador decide si
+     *  ajusta o lo manda igual como pendiente de reposición al crear el
+     *  pedido en DUX.
+     *
+     *  <p>{@code itemKey} es la clave única dentro del carrito: el SKU para
+     *  items normales, un uid sintético para genéricos. Coincide con
+     *  {@link CarritoItemDTO#itemKey()}. */
+    public CarritoStateDTO actualizarCantidad(String username, String itemKey, int cantidad) {
+        if (cantidad <= 0) {
+            throw new ConflictException("La cantidad debe ser mayor a 0");
+        }
         EspacioUsuario esp = espacioDe(username);
         esp.lock.lock();
         try {
-            if (esp.items.remove(sku) == null) {
-                throw new NotFoundException("El item no está en el carrito: " + sku);
+            CarritoItemDTO actual = esp.items.get(itemKey);
+            if (actual == null) {
+                throw new NotFoundException("El item no está en el carrito: " + itemKey);
+            }
+            esp.items.put(itemKey, actual.withCantidad(cantidad));
+            CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
+            broadcast(username, state);
+            return state;
+        } finally {
+            esp.lock.unlock();
+        }
+    }
+
+    public CarritoStateDTO eliminar(String username, String itemKey) {
+        EspacioUsuario esp = espacioDe(username);
+        esp.lock.lock();
+        try {
+            if (esp.items.remove(itemKey) == null) {
+                throw new NotFoundException("El item no está en el carrito: " + itemKey);
             }
             CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
             broadcast(username, state);
@@ -231,7 +290,14 @@ public class CarritoService {
         List<String> skus;
         esp.lock.lock();
         try {
-            skus = new ArrayList<>(esp.items.keySet());
+            // Solo los items normales se refrescan contra DUX. Los genéricos
+            // no tienen producto real en catálogo — el SKU comodín no representa
+            // un item con stock o precio que tenga sentido sincronizar.
+            skus = esp.items.values().stream()
+                    .filter(it -> !it.generico())
+                    .map(CarritoItemDTO::sku)
+                    .distinct()
+                    .toList();
         } finally {
             esp.lock.unlock();
         }
@@ -242,17 +308,19 @@ public class CarritoService {
         // FUERA del lock: cada SKU consume 1 request DUX (~7s). No podemos
         // tener el lock tomado mientras esperamos a la red.
         List<ProductoCache> frescos = catalogoSync.refrescarSkus(skus);
-        Map<String, ScanResultDTO> map = new LinkedHashMap<>();
+        Map<String, ScanResultDTO> porSku = new LinkedHashMap<>();
         for (ProductoCache pc : frescos) {
-            map.put(pc.getSku(), showroomService.toScanResult(pc));
+            porSku.put(pc.getSku(), showroomService.toScanResult(pc));
         }
 
         esp.lock.lock();
         try {
             for (Map.Entry<String, CarritoItemDTO> e : esp.items.entrySet()) {
-                ScanResultDTO fresh = map.get(e.getKey());
+                CarritoItemDTO item = e.getValue();
+                if (item.generico()) continue;
+                ScanResultDTO fresh = porSku.get(item.sku());
                 if (fresh != null) {
-                    esp.items.put(e.getKey(), e.getValue().withStockFrescoDe(fresh));
+                    esp.items.put(e.getKey(), item.withStockFrescoDe(fresh));
                 }
             }
             CarritoStateDTO state = snapshot(esp, CarritoStateDTO.Origen.OPERADOR);
@@ -301,11 +369,13 @@ public class CarritoService {
                 if (esp.items.isEmpty()) continue;
                 boolean huboCambio = false;
                 for (Map.Entry<String, CarritoItemDTO> entry : esp.items.entrySet()) {
-                    var pcOpt = catalogoSync.buscarPorSkuOEan(entry.getKey());
+                    CarritoItemDTO item = entry.getValue();
+                    if (item.generico()) continue;
+                    var pcOpt = catalogoSync.buscarPorSkuOEan(item.sku());
                     if (pcOpt.isEmpty()) continue;
                     ScanResultDTO fresh = showroomService.toScanResult(pcOpt.get());
-                    CarritoItemDTO actualizado = entry.getValue().withStockFrescoDe(fresh);
-                    if (!actualizado.equals(entry.getValue())) {
+                    CarritoItemDTO actualizado = item.withStockFrescoDe(fresh);
+                    if (!actualizado.equals(item)) {
                         esp.items.put(entry.getKey(), actualizado);
                         huboCambio = true;
                     }

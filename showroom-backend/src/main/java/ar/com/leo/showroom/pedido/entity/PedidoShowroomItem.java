@@ -45,4 +45,12 @@ public class PedidoShowroomItem {
      *  catálogo (que puede haber cambiado). */
     @Column(name = "porc_iva", precision = 6, scale = 2)
     private BigDecimal porcIva;
+
+    /** Texto libre que viaja al campo {@code comentarios} de la línea en el
+     *  payload DUX. Persistido para reconstruir el detalle del pedido sin
+     *  consultar a DUX. Usado principalmente con el SKU comodín (ver
+     *  {@code dux.sku-producto-generico}) para describir productos que no
+     *  están en catálogo KT GASTRO. Null cuando no aplica. */
+    @Column(name = "comentarios", length = 500)
+    private String comentarios;
 }
