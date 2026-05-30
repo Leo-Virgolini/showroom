@@ -62,24 +62,29 @@ export class MoreMenu {
         routerLink: '/etiquetas' },
     ]},
     { label: 'Consultas', items: [
+      // Pedidos arriba: es el outcome operacional (venta concretada) y lo
+      // que el operador consulta con más frecuencia.
       { label: 'Pedidos', icon: 'pi pi-receipt',
         iconClass: 'text-sky-700', styleClass: 'kt-menu-item-sky',
         routerLink: '/pedidos' },
+      // Los tres "Historial de…" agrupados, mismo prefijo verbal — el ojo los
+      // escanea como una sola sub-familia (vistas de auditoría / lookup).
       { label: 'Historial de presupuestos', icon: 'pi pi-file',
         iconClass: 'text-amber-700', styleClass: 'kt-menu-item-amber',
         routerLink: '/presupuestos/historial' },
       { label: 'Historial de cotizaciones', icon: 'pi pi-file-o',
         iconClass: 'text-teal-700', styleClass: 'kt-menu-item-teal',
         routerLink: '/cotizador/historial' },
+      { label: 'Historial de atenciones', icon: 'pi pi-history',
+        iconClass: 'text-indigo-700', styleClass: 'kt-menu-item-indigo',
+        routerLink: '/historial' },
+      // Master data al final — referencia/edición, no consulta operativa.
       { label: 'Clientes', icon: 'pi pi-users',
         iconClass: 'text-rose-700', styleClass: 'kt-menu-item-rose',
         routerLink: '/clientes' },
       { label: 'Productos', icon: 'pi pi-box',
         iconClass: 'text-emerald-700', styleClass: 'kt-menu-item-emerald',
         routerLink: '/productos' },
-      { label: 'Historial de atenciones', icon: 'pi pi-history',
-        iconClass: 'text-indigo-700', styleClass: 'kt-menu-item-indigo',
-        routerLink: '/historial' },
     ]},
     { label: 'Administración', items: [
       { label: 'Configuración', icon: 'pi pi-cog',
