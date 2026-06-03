@@ -155,27 +155,39 @@
 <!-- Precios de referencia -->
 @if (r.pvpKtGastroConIva != null && r.pvpKtGastroConIva > 0) {
 <div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm flex flex-col gap-3">
-  @if (formasReferencia().length > 0) {
-    @for (forma of formasReferencia(); track forma.id; let first = $first) {
-      @if (first) {
-        <div class="text-center">
-          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">{{ forma.nombre }}</div>
-          <div class="flex items-baseline gap-2 flex-wrap justify-center">
-            <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
-            <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | number:'1.0-0' }}</span>
+  @if (formaReferenciaPrimaria(); as primaria) {
+    <!-- Precio destacado: icono + nombre + monto grande -->
+    <div class="flex flex-col items-center text-center gap-2">
+      <div class="w-16 h-16 rounded-2xl bg-[#FF861C]/10 dark:bg-[#FF861C]/15 flex items-center justify-center">
+        <i [class]="iconoPrecioReferencia(primaria.nombre)" class="text-3xl text-[#FF861C]"></i>
+      </div>
+      <div class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ primaria.nombre }}</div>
+      <div class="flex items-baseline gap-2 justify-center">
+        <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
+        <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, primaria) | number:'1.0-0' }}</span>
+      </div>
+    </div>
+    <!-- Otras formas: tarjetas con icono -->
+    @if (formasReferenciaSecundarias().length > 0) {
+      <div class="grid grid-cols-2 gap-3 mt-1">
+        @for (forma of formasReferenciaSecundarias(); track forma.id) {
+          <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50 p-3 flex flex-col items-center text-center gap-1.5">
+            <div class="w-11 h-11 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
+              <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-xl text-[#FF861C]"></i>
+            </div>
+            <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-[#3B1E09]/60 dark:text-muted-color leading-tight">{{ forma.nombre }}</div>
+            <div class="text-xl sm:text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | currency:'ARS':'symbol':'1.0-0' }}</div>
           </div>
-        </div>
-      } @else {
-        <div class="flex items-baseline justify-between gap-2 border-t border-surface-200 dark:border-surface-700 pt-2">
-          <span class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/60 dark:text-muted-color">{{ forma.nombre }}</span>
-          <span class="text-xl sm:text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">{{ precioReferenciaPorForma(r, forma) | currency:'ARS':'symbol':'1.0-0' }}</span>
-        </div>
-      }
+        }
+      </div>
     }
   } @else {
-    <div class="text-center">
-      <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">Precio</div>
-      <div class="flex items-baseline gap-2 flex-wrap justify-center">
+    <div class="flex flex-col items-center text-center gap-2">
+      <div class="w-16 h-16 rounded-2xl bg-[#FF861C]/10 flex items-center justify-center">
+        <i class="pi pi-tag text-3xl text-[#FF861C]"></i>
+      </div>
+      <div class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">Precio</div>
+      <div class="flex items-baseline gap-2 justify-center">
         <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
         <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ r.pvpKtGastroConIva | number:'1.0-0' }}</span>
       </div>
@@ -237,7 +249,10 @@
         <div class="flex flex-col gap-1 mt-0.5">
           @for (forma of formasReferencia(); track forma.id) {
             <div class="flex items-baseline justify-between gap-2">
-              <span class="text-[0.7rem] font-medium" [class]="c.textSmall">{{ forma.nombre }}</span>
+              <span class="inline-flex items-center gap-1.5 text-[0.7rem] font-medium" [class]="c.textSmall">
+                <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-[0.7rem]"></i>
+                {{ forma.nombre }}
+              </span>
               <span class="text-base sm:text-lg font-bold tabular-nums" [class]="c.textBig">
                 {{ precioConDescuento(precioReferenciaPorForma(r, forma), escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
               </span>

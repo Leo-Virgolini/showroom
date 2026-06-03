@@ -42,3 +42,23 @@ export function precioPorForma(
   const aplicaIva = forma.aplicaIva ?? true;
   return aplicaIva && iva > 0 ? ajustadoSinIva * (1 + iva / 100) : ajustadoSinIva;
 }
+
+/**
+ * Ícono PrimeNG sugerido para una forma de pago, inferido de su nombre.
+ * Heurística simple para acompañar los precios de referencia en scan/visor.
+ * Cae a `pi-tag` para nombres no reconocidos.
+ */
+export function iconoFormaReferencia(nombre: string | null | undefined): string {
+  const n = (nombre ?? '').toLowerCase();
+  if (n.includes('efectivo') || n.includes('contado')) return 'pi pi-money-bill';
+  if (n.includes('transfer')) return 'pi pi-building';
+  if (
+    n.includes('tarjeta') ||
+    n.includes('crédito') || n.includes('credito') ||
+    n.includes('débito') || n.includes('debito') ||
+    n.includes('cuota')
+  ) {
+    return 'pi pi-credit-card';
+  }
+  return 'pi pi-tag';
+}

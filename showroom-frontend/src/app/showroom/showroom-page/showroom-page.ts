@@ -46,7 +46,7 @@ import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { precioPorForma } from '../precio-referencia.util';
+import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -359,6 +359,9 @@ export class ShowroomPage implements AfterViewInit {
   /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
   readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
 
+  /** Formas de referencia secundarias (todas menos la primera/destacada). */
+  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
   private readonly escalasDesc = computed(() =>
     [...this.escalasDescuento()].sort((a, b) => b.umbralMin - a.umbralMin),
@@ -639,6 +642,11 @@ export class ShowroomPage implements AfterViewInit {
     forma: FormaPago,
   ): number {
     return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+  }
+
+  /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
+  iconoPrecioReferencia(nombre: string): string {
+    return iconoFormaReferencia(nombre);
   }
 
   /** Precio de la forma de referencia primaria. Si no hay formas marcadas, cae al
