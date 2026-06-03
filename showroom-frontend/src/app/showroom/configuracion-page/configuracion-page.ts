@@ -259,6 +259,7 @@ export class ConfiguracionPage {
   readonly formAplicaIva = signal(true);
   readonly formActivoPago = signal(true);
   readonly formPrecioReferencia = signal(false);
+  readonly formPrecioReferenciaMaquinaria = signal(false);
   readonly formOrden = signal<number | null>(0);
 
 
@@ -1027,6 +1028,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
     this.formPrecioReferencia.set(false);
+    this.formPrecioReferenciaMaquinaria.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
     this.formOrden.set(maxOrden + 1);
     this.mostrarDialogForma.set(true);
@@ -1041,6 +1043,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
     this.formPrecioReferencia.set(f.precioReferencia ?? false);
+    this.formPrecioReferenciaMaquinaria.set(f.precioReferenciaMaquinaria ?? false);
     this.formOrden.set(f.orden);
     this.mostrarDialogForma.set(true);
   }
@@ -1080,6 +1083,7 @@ export class ConfiguracionPage {
       activo,
       orden,
       precioReferencia: this.formPrecioReferencia(),
+      precioReferenciaMaquinaria: this.formPrecioReferenciaMaquinaria(),
     };
     const obs = this.modoEdicionForma() === 'crear'
       ? this.api.crearFormaPago(payload)

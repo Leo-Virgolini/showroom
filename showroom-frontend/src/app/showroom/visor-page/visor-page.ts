@@ -89,15 +89,42 @@ export class VisorPage {
    *  la pantalla principal. Soporta N escalas (no sólo 2). */
   readonly escalas = signal<EscalaDescuento[]>([]);
 
-  /** Formas de pago marcadas como precio de referencia, ordenadas por `orden`.
-   *  Se cargan al iniciar vía el endpoint público de formas activas. */
-  readonly formasReferencia = signal<FormaPago[]>([]);
+  /** Todas las formas de pago activas. Se cargan al iniciar vía el endpoint
+   *  público y se filtran a referencia/maquinaria con los computeds de abajo. */
+  readonly formasActivas = signal<FormaPago[]>([]);
 
-  /** Primera forma de referencia (destacada). */
-  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+  /** Formas marcadas como precio de referencia (productos normales), por `orden`. */
+  readonly formasReferencia = computed(() =>
+    this.formasActivas()
+      .filter((f) => f.precioReferencia)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+  );
 
-  /** Formas de referencia secundarias (todas menos la destacada). */
-  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+  /** Formas de referencia para productos de rubro MAQUINAS INDUSTRIALES (reemplazan
+   *  a las normales para esos productos). */
+  readonly formasReferenciaMaquinaria = computed(() =>
+    this.formasActivas()
+      .filter((f) => f.precioReferenciaMaquinaria)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+  );
+
+  /** Formas de referencia que aplican a un producto según su rubro. */
+  formasReferenciaPara(rubro: string | null | undefined): FormaPago[] {
+    return rubroExcluyeDescuentos(rubro)
+      ? this.formasReferenciaMaquinaria()
+      : this.formasReferencia();
+  }
+
+  /** Formas de referencia del producto mostrado (según su rubro). */
+  readonly formasReferenciaScan = computed(() =>
+    this.formasReferenciaPara(this.ultimoScan()?.rubro),
+  );
+
+  /** Primera forma de referencia del producto mostrado (destacada), o null. */
+  readonly formaReferenciaPrimariaScan = computed(() => this.formasReferenciaScan()[0] ?? null);
+
+  /** Formas de referencia secundarias del producto mostrado. */
+  readonly formasReferenciaSecundariasScan = computed(() => this.formasReferenciaScan().slice(1));
 
   /** Cantidad seleccionada con el stepper antes de "Agregar al carrito". Se
    *  resetea a 1 cada vez que cambia el producto. */
@@ -170,12 +197,7 @@ export class VisorPage {
     });
 
     this.api.listarFormasPagoActivas().subscribe({
-      next: (lista) =>
-        this.formasReferencia.set(
-          lista
-            .filter((f) => f.precioReferencia)
-            .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
-        ),
+      next: (lista) => this.formasActivas.set(lista),
       error: () => {
         /* sin formas, el visor cae al precio lista en el display */
       },
@@ -392,9 +414,9 @@ export class VisorPage {
 
   /** Precio de la forma primaria; cae al PVP sin IVA si no hay formas marcadas. */
   precioReferenciaPrimario(
-    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null },
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
   ): number {
-    const f = this.formaReferenciaPrimaria();
+    const f = this.formasReferenciaPara(r.rubro)[0] ?? null;
     return f ? precioPorForma(r.pvpKtGastroConIva, r.porcIva, f) : (r.pvpKtGastroSinIva ?? 0);
   }
 

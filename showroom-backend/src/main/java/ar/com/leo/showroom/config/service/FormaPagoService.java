@@ -62,6 +62,7 @@ public class FormaPagoService {
                 .activo(dto.activo() == null ? Boolean.TRUE : dto.activo())
                 .orden(dto.orden() == null ? 0 : dto.orden())
                 .precioReferencia(dto.precioReferencia() != null && dto.precioReferencia())
+                .precioReferenciaMaquinaria(dto.precioReferenciaMaquinaria() != null && dto.precioReferenciaMaquinaria())
                 .creadoAt(Instant.now())
                 .build();
         FormaPago saved = repository.save(entity);
@@ -84,6 +85,7 @@ public class FormaPagoService {
         if (dto.activo() != null) entity.setActivo(dto.activo());
         if (dto.orden() != null) entity.setOrden(dto.orden());
         if (dto.precioReferencia() != null) entity.setPrecioReferencia(dto.precioReferencia());
+        if (dto.precioReferenciaMaquinaria() != null) entity.setPrecioReferenciaMaquinaria(dto.precioReferenciaMaquinaria());
         FormaPago saved = repository.save(entity);
         log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={} precioReferencia={}",
                 saved.getId(), saved.getNombre(), saved.getRecargoPorcentaje(),
@@ -137,6 +139,7 @@ public class FormaPagoService {
                 f.getActivo(),
                 f.getOrden(),
                 f.getPrecioReferencia() != null && f.getPrecioReferencia(),
+                f.getPrecioReferenciaMaquinaria() != null && f.getPrecioReferenciaMaquinaria(),
                 f.getCreadoAt() != null ? f.getCreadoAt().toString() : null);
     }
 }

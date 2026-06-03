@@ -98,6 +98,14 @@ public class FormaPago {
     @Column(name = "precio_referencia")
     private Boolean precioReferencia;
 
+    /** Si {@code true}, esta forma se muestra como precio de referencia para
+     *  productos de rubro MAQUINAS INDUSTRIALES. Para esos productos se muestran
+     *  ÚNICAMENTE las formas con este flag (reemplazan a las de
+     *  {@link #precioReferencia}); típicamente una sola con el PVP sin IVA.
+     *  Nullable por el mismo motivo que {@link #precioReferencia}; null = false. */
+    @Column(name = "precio_referencia_maquinaria")
+    private Boolean precioReferenciaMaquinaria;
+
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;
 }

@@ -45,6 +45,10 @@ public record FormaPagoDTO(
          *  Default false si viene null. */
         Boolean precioReferencia,
 
+        /** Si la forma se muestra como precio de referencia para productos de
+         *  rubro MAQUINAS INDUSTRIALES (reemplaza a las normales). Default false. */
+        Boolean precioReferenciaMaquinaria,
+
         String creadoAt
 ) {
 }
