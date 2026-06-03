@@ -46,6 +46,7 @@ import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
+import { precioPorForma } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -347,6 +348,17 @@ export class ShowroomPage implements AfterViewInit {
    *  (precio base, equivalente a "Efectivo 1 cuota / 0%"). */
   readonly formaPagoSeleccionada = signal<FormaPago | null>(null);
 
+  /** Formas de pago marcadas para mostrarse como precio de referencia, ordenadas
+   *  por `orden` asc. La primera es la destacada y la que usa el carrito por ítem. */
+  readonly formasReferencia = computed(() =>
+    this.formasPagoActivas()
+      .filter((f) => f.precioReferencia)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+  );
+
+  /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
+  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
   private readonly escalasDesc = computed(() =>
     [...this.escalasDescuento()].sort((a, b) => b.umbralMin - a.umbralMin),
@@ -564,9 +576,11 @@ export class ShowroomPage implements AfterViewInit {
     return base * (1 - this.descuentoParaItem(it) / 100);
   }
 
-  /** Subtotal de la línea SIN descuento — el descuento se muestra solo a nivel total. */
+  /** Subtotal de la línea SIN descuento, al precio de referencia primario
+   *  (mismo precio que se muestra como c/u). El descuento por escala se muestra
+   *  solo a nivel total. */
   subtotal(it: CarritoItem): number {
-    return (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
+    return this.precioReferenciaPrimario(it) * it.cantidad;
   }
 
   /** Próximo escalón a alcanzar (umbralMin > subtotal elegible actual), o
@@ -616,6 +630,24 @@ export class ShowroomPage implements AfterViewInit {
   precioConDescuento(base: number | null, descuento: number): number {
     if (base == null) return 0;
     return base - this.ahorro(base, descuento);
+  }
+
+  /** Precio de referencia de un producto (scan o ítem de carrito) para una
+   *  forma de pago dada. Calculado sobre el PVP gastro con IVA. */
+  precioReferenciaPorForma(
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null },
+    forma: FormaPago,
+  ): number {
+    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+  }
+
+  /** Precio de la forma de referencia primaria. Si no hay formas marcadas, cae al
+   *  PVP gastro sin IVA (comportamiento previo) para no romper el display. */
+  precioReferenciaPrimario(
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null },
+  ): number {
+    const f = this.formaReferenciaPrimaria();
+    return f ? precioPorForma(r.pvpKtGastroConIva, r.porcIva, f) : (r.pvpKtGastroSinIva ?? 0);
   }
 
   /** true si hay un escalón con umbral mayor (mejor descuento) que el precio
