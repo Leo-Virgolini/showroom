@@ -24,7 +24,7 @@ public record FormaPagoDTO(
         String nombre,
 
         @NotNull(message = "El recargo es requerido (usar 0 si no hay)")
-        @DecimalMin(value = "0.00", message = "El recargo no puede ser negativo")
+        @DecimalMin(value = "-99.99", message = "El recargo no puede ser menor a -99,99% (descuento)")
         @Digits(integer = 4, fraction = 2, message = "Recargo con máximo 4 dígitos enteros y 2 decimales")
         BigDecimal recargoPorcentaje,
 
@@ -40,6 +40,10 @@ public record FormaPagoDTO(
         Boolean activo,
 
         Integer orden,
+
+        /** Si la forma se muestra como precio de referencia en scan/visor/carrito.
+         *  Default false si viene null. */
+        Boolean precioReferencia,
 
         String creadoAt
 ) {

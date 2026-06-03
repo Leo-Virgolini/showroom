@@ -17,7 +17,14 @@ import { ImageModule } from 'primeng/image';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { TagModule } from 'primeng/tag';
 import { BackendStatusService } from '../backend-status.service';
-import { EscalaDescuento, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
+import {
+  EscalaDescuento,
+  FormaPago,
+  ScanResult,
+  SesionShowroom,
+  rubroExcluyeDescuentos,
+} from '../models';
+import { precioPorForma } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -81,6 +88,13 @@ export class VisorPage {
   /** Escalones de descuento. Se cargan al iniciar y son los mismos que usa
    *  la pantalla principal. Soporta N escalas (no sólo 2). */
   readonly escalas = signal<EscalaDescuento[]>([]);
+
+  /** Formas de pago marcadas como precio de referencia, ordenadas por `orden`.
+   *  Se cargan al iniciar vía el endpoint público de formas activas. */
+  readonly formasReferencia = signal<FormaPago[]>([]);
+
+  /** Primera forma de referencia (destacada). */
+  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
 
   /** Cantidad seleccionada con el stepper antes de "Agregar al carrito". Se
    *  resetea a 1 cada vez que cambia el producto. */
@@ -149,6 +163,18 @@ export class VisorPage {
       next: (lista) => this.escalas.set(lista),
       error: () => {
         /* sin escalas, sólo no se muestran los tiles de descuento */
+      },
+    });
+
+    this.api.listarFormasPagoActivas().subscribe({
+      next: (lista) =>
+        this.formasReferencia.set(
+          lista
+            .filter((f) => f.precioReferencia)
+            .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+        ),
+      error: () => {
+        /* sin formas, el visor cae al precio lista en el display */
       },
     });
 
@@ -346,6 +372,22 @@ export class VisorPage {
   precioConDescuento(precio: number | null, porcentaje: number): number {
     if (precio == null) return 0;
     return precio - this.ahorro(precio, porcentaje);
+  }
+
+  /** Precio de referencia de un producto para una forma de pago dada. */
+  precioReferenciaPorForma(
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null },
+    forma: FormaPago,
+  ): number {
+    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+  }
+
+  /** Precio de la forma primaria; cae al PVP sin IVA si no hay formas marcadas. */
+  precioReferenciaPrimario(
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null },
+  ): number {
+    const f = this.formaReferenciaPrimaria();
+    return f ? precioPorForma(r.pvpKtGastroConIva, r.porcIva, f) : (r.pvpKtGastroSinIva ?? 0);
   }
 
   /** true si hay un escalón con umbral mayor (y por tanto mejor) que ya

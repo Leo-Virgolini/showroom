@@ -61,6 +61,7 @@ public class FormaPagoService {
                 .aplicaIva(dto.aplicaIva() == null ? Boolean.TRUE : dto.aplicaIva())
                 .activo(dto.activo() == null ? Boolean.TRUE : dto.activo())
                 .orden(dto.orden() == null ? 0 : dto.orden())
+                .precioReferencia(dto.precioReferencia() != null && dto.precioReferencia())
                 .creadoAt(Instant.now())
                 .build();
         FormaPago saved = repository.save(entity);
@@ -82,10 +83,11 @@ public class FormaPagoService {
         if (dto.aplicaIva() != null) entity.setAplicaIva(dto.aplicaIva());
         if (dto.activo() != null) entity.setActivo(dto.activo());
         if (dto.orden() != null) entity.setOrden(dto.orden());
+        if (dto.precioReferencia() != null) entity.setPrecioReferencia(dto.precioReferencia());
         FormaPago saved = repository.save(entity);
-        log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={}",
+        log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={} precioReferencia={}",
                 saved.getId(), saved.getNombre(), saved.getRecargoPorcentaje(),
-                saved.getAplicaIva(), saved.getActivo());
+                saved.getAplicaIva(), saved.getActivo(), saved.getPrecioReferencia());
         return saved;
     }
 
@@ -105,6 +107,11 @@ public class FormaPagoService {
         if (dto.recargoPorcentaje() != null && dto.recargoPorcentaje().compareTo(CIEN.multiply(BigDecimal.TEN)) > 0) {
             // Sanity check: recargo > 1000% es probablemente un typo (3000% en vez de 30%).
             throw new IllegalArgumentException("Recargo mayor a 1000% — revisá el valor.");
+        }
+        if (dto.recargoPorcentaje() != null
+                && dto.recargoPorcentaje().compareTo(new BigDecimal("-99.99")) < 0) {
+            // Descuento mayor a 99,99% dejaría el precio en ~0 o negativo.
+            throw new IllegalArgumentException("Descuento mayor a 99,99% — revisá el valor.");
         }
         if (dto.cantidadCuotas() != null && dto.cantidadCuotas() > 99) {
             throw new IllegalArgumentException("Cantidad de cuotas mayor a 99 — revisá el valor.");
@@ -129,6 +136,7 @@ public class FormaPagoService {
                 f.getAplicaIva(),
                 f.getActivo(),
                 f.getOrden(),
+                f.getPrecioReferencia() != null && f.getPrecioReferencia(),
                 f.getCreadoAt() != null ? f.getCreadoAt().toString() : null);
     }
 }

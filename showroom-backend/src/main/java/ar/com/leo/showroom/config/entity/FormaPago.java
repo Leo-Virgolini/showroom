@@ -86,6 +86,18 @@ public class FormaPago {
     @Column(name = "orden", nullable = false)
     private Integer orden;
 
+    /** Si {@code true}, la forma se muestra como "precio de referencia" en el
+     *  panel de scan, el visor y el carrito (precio unitario por ítem). El
+     *  orden ({@link #orden}) define cuál es la primera/destacada.
+     *
+     *  <p>La columna es nullable para que el alta vía {@code ddl-auto=update}
+     *  no falle en tablas con filas existentes (MySQL rechaza ADD COLUMN NOT
+     *  NULL sin default). Las filas creadas por la app nunca quedan en NULL
+     *  ({@code crear} setea false); las filas legacy con NULL se tratan como
+     *  false en lectura ({@code toDTO}). */
+    @Column(name = "precio_referencia")
+    private Boolean precioReferencia;
+
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;
 }
