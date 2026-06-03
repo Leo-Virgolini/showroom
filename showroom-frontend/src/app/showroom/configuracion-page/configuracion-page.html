@@ -223,6 +223,7 @@
             <th class="text-center" style="width: 6rem">Cuotas</th>
             <th class="text-center" style="width: 6rem">IVA</th>
             <th class="text-center" style="width: 6rem">Activo</th>
+            <th class="text-center" style="width: 7rem">Precio ref.</th>
             <th style="width: 8rem"></th>
           </tr>
         </ng-template>
@@ -255,6 +256,14 @@
                 <i class="pi pi-ban text-red-600 dark:text-red-400"></i>
               }
             </td>
+            <td class="text-center">
+              @if (f.precioReferencia) {
+                <i class="pi pi-check-circle text-[#FF861C]" pTooltip="Se muestra como precio de referencia en scan, visor y carrito"
+                  tooltipPosition="top"></i>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
             <td class="text-right">
               <p-button icon="pi pi-pencil" severity="secondary" [text]="true" [rounded]="true" size="small"
                 (onClick)="abrirDialogEditarForma(f)" pTooltip="Editar" tooltipPosition="left" />
@@ -268,7 +277,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="6" class="text-center py-12 text-muted-color">
+            <td colspan="7" class="text-center py-12 text-muted-color">
               <i class="pi pi-credit-card text-3xl opacity-50 block mb-2"></i>
               No hay formas de pago configuradas.
               <div class="mt-3">
