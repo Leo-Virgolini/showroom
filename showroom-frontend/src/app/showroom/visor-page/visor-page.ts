@@ -24,7 +24,7 @@ import {
   SesionShowroom,
   rubroExcluyeDescuentos,
 } from '../models';
-import { precioPorForma } from '../precio-referencia.util';
+import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -95,6 +95,9 @@ export class VisorPage {
 
   /** Primera forma de referencia (destacada). */
   readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+
+  /** Formas de referencia secundarias (todas menos la destacada). */
+  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
 
   /** Cantidad seleccionada con el stepper antes de "Agregar al carrito". Se
    *  resetea a 1 cada vez que cambia el producto. */
@@ -380,6 +383,11 @@ export class VisorPage {
     forma: FormaPago,
   ): number {
     return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+  }
+
+  /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
+  iconoPrecioReferencia(nombre: string): string {
+    return iconoFormaReferencia(nombre);
   }
 
   /** Precio de la forma primaria; cae al PVP sin IVA si no hay formas marcadas. */
