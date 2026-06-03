@@ -152,18 +152,35 @@
 </div>
 }
 
-<!-- Precio principal -->
-@if (r.pvpKtGastroSinIva != null && r.pvpKtGastroSinIva > 0) {
-<div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm">
-  <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-2 text-center">
-    Precio
-  </div>
-  <div class="flex items-baseline gap-2 flex-wrap justify-center">
-    <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
-    <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">
-      {{ r.pvpKtGastroSinIva | number:'1.0-0' }}
-    </span>
-  </div>
+<!-- Precios de referencia -->
+@if (r.pvpKtGastroConIva != null && r.pvpKtGastroConIva > 0) {
+<div class="relative rounded-2xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm flex flex-col gap-3">
+  @if (formasReferencia().length > 0) {
+    @for (forma of formasReferencia(); track forma.id; let first = $first) {
+      @if (first) {
+        <div class="text-center">
+          <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">{{ forma.nombre }}</div>
+          <div class="flex items-baseline gap-2 flex-wrap justify-center">
+            <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
+            <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | number:'1.0-0' }}</span>
+          </div>
+        </div>
+      } @else {
+        <div class="flex items-baseline justify-between gap-2 border-t border-surface-200 dark:border-surface-700 pt-2">
+          <span class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/60 dark:text-muted-color">{{ forma.nombre }}</span>
+          <span class="text-xl sm:text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">{{ precioReferenciaPorForma(r, forma) | currency:'ARS':'symbol':'1.0-0' }}</span>
+        </div>
+      }
+    }
+  } @else {
+    <div class="text-center">
+      <div class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">Precio</div>
+      <div class="flex items-baseline gap-2 flex-wrap justify-center">
+        <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
+        <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ r.pvpKtGastroConIva | number:'1.0-0' }}</span>
+      </div>
+    </div>
+  }
 </div>
 
 <!-- Aviso cuando el producto es de un rubro excluido (MAQUINAS INDUSTRIALES):
@@ -196,16 +213,16 @@
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
     @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
     @let c = escalaColorScheme(i);
-    <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity" [class]="c.border + ' ' + c.bg" [class.opacity-50]="haySuperior(r.pvpKtGastroSinIva, escala)">
+    <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity" [class]="c.border + ' ' + c.bg" [class.opacity-50]="haySuperior(precioReferenciaPrimario(r), escala)">
       <div class="flex items-center gap-2 flex-wrap">
         <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
           −{{ escala.porcentaje }}%
         </span>
-        @if (haySuperior(r.pvpKtGastroSinIva, escala)) {
+        @if (haySuperior(precioReferenciaPrimario(r), escala)) {
         <span class="text-[0.7rem] font-medium italic" [class]="c.textItalic">
           Superado por mejor descuento
         </span>
-        } @else if (r.pvpKtGastroSinIva >= escala.umbralMin) {
+        } @else if (precioReferenciaPrimario(r) >= escala.umbralMin) {
         <span class="inline-flex items-center gap-1 text-[0.7rem] font-bold" [class]="c.textTitle">
           <i class="pi pi-check-circle text-[0.75rem]"></i>
           Aplicado
@@ -216,13 +233,22 @@
         </span>
         }
       </div>
-      <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
-        {{ precioConDescuento(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
-      </div>
-      <div class="text-xs inline-flex items-center gap-1" [class]="c.textSmall">
-        <i class="pi pi-arrow-down text-[0.65rem]"></i>
-        Ahorrás {{ ahorro(r.pvpKtGastroSinIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }} c/u
-      </div>
+      @if (formasReferencia().length > 0) {
+        <div class="flex flex-col gap-1 mt-0.5">
+          @for (forma of formasReferencia(); track forma.id) {
+            <div class="flex items-baseline justify-between gap-2">
+              <span class="text-[0.7rem] font-medium" [class]="c.textSmall">{{ forma.nombre }}</span>
+              <span class="text-base sm:text-lg font-bold tabular-nums" [class]="c.textBig">
+                {{ precioConDescuento(precioReferenciaPorForma(r, forma), escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
+              </span>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">
+          {{ precioConDescuento(r.pvpKtGastroConIva, escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
+        </div>
+      }
     </div>
     }
   </div>
