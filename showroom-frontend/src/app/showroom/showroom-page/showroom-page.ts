@@ -356,11 +356,32 @@ export class ShowroomPage implements AfterViewInit {
       .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
   );
 
-  /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
-  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+  /** Formas de referencia para productos de rubro MAQUINAS INDUSTRIALES. Para
+   *  esos productos reemplazan a las normales (típicamente una sola: PVP sin IVA). */
+  readonly formasReferenciaMaquinaria = computed(() =>
+    this.formasPagoActivas()
+      .filter((f) => f.precioReferenciaMaquinaria)
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+  );
 
-  /** Formas de referencia secundarias (todas menos la primera/destacada). */
-  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+  /** Formas de referencia que aplican a un producto según su rubro: las de
+   *  maquinaria si es MAQUINAS INDUSTRIALES, las normales en caso contrario. */
+  formasReferenciaPara(rubro: string | null | undefined): FormaPago[] {
+    return rubroExcluyeDescuentos(rubro)
+      ? this.formasReferenciaMaquinaria()
+      : this.formasReferencia();
+  }
+
+  /** Formas de referencia del producto escaneado (según su rubro). */
+  readonly formasReferenciaScan = computed(() =>
+    this.formasReferenciaPara(this.ultimoScan()?.rubro),
+  );
+
+  /** Primera forma de referencia del scan (destacada), o null si no hay ninguna. */
+  readonly formaReferenciaPrimariaScan = computed(() => this.formasReferenciaScan()[0] ?? null);
+
+  /** Formas de referencia secundarias del scan (todas menos la destacada). */
+  readonly formasReferenciaSecundariasScan = computed(() => this.formasReferenciaScan().slice(1));
 
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
   private readonly escalasDesc = computed(() =>
@@ -652,9 +673,9 @@ export class ShowroomPage implements AfterViewInit {
   /** Precio de la forma de referencia primaria. Si no hay formas marcadas, cae al
    *  PVP gastro sin IVA (comportamiento previo) para no romper el display. */
   precioReferenciaPrimario(
-    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null },
+    r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
   ): number {
-    const f = this.formaReferenciaPrimaria();
+    const f = this.formasReferenciaPara(r.rubro)[0] ?? null;
     return f ? precioPorForma(r.pvpKtGastroConIva, r.porcIva, f) : (r.pvpKtGastroSinIva ?? 0);
   }
 
