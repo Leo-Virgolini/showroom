@@ -85,9 +85,9 @@ public class FormaPagoService {
         if (dto.orden() != null) entity.setOrden(dto.orden());
         if (dto.precioReferencia() != null) entity.setPrecioReferencia(dto.precioReferencia());
         FormaPago saved = repository.save(entity);
-        log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={}",
+        log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={} precioReferencia={}",
                 saved.getId(), saved.getNombre(), saved.getRecargoPorcentaje(),
-                saved.getAplicaIva(), saved.getActivo());
+                saved.getAplicaIva(), saved.getActivo(), saved.getPrecioReferencia());
         return saved;
     }
 
