@@ -86,6 +86,15 @@ public class FormaPago {
     @Column(name = "orden", nullable = false)
     private Integer orden;
 
+    /** Si {@code true}, la forma se muestra como "precio de referencia" en el
+     *  panel de scan, el visor y el carrito (precio unitario por ítem). El
+     *  orden ({@link #orden}) define cuál es la primera/destacada. Default
+     *  {@code false}: las formas existentes no se muestran como referencia hasta
+     *  que el operador las marque. Filas viejas con NULL se tratan como false en
+     *  lectura. */
+    @Column(name = "precio_referencia", nullable = false)
+    private Boolean precioReferencia;
+
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;
 }
