@@ -1019,7 +1019,7 @@
         inputId="formRecargo"
         [ngModel]="formRecargo()"
         (ngModelChange)="formRecargo.set($event)"
-        [min]="0"
+        [min]="-99.99"
         [max]="99.99"
         [maxFractionDigits]="2"
         suffix=" %"
@@ -1027,9 +1027,7 @@
         class="w-full"
         inputStyleClass="w-full" />
       <span class="text-xs text-muted-color leading-relaxed">
-        Representa el <strong>descuento por pago contado</strong>: el efectivo sale ese % menos
-        que esta forma. Fórmula: <code class="font-mono">precio = efectivo / (1 − %/100)</code>.
-        Ej: 10% → factor 1/0,90 ≈ 1,111; 28% → factor 1/0,72 ≈ 1,389.
+        Positivo = <strong>recargo de financiación</strong> (<code class="font-mono">precio = efectivo / (1 − %/100)</code>). Negativo = <strong>descuento</strong> directo sobre el precio lista (<code class="font-mono">precio = lista × (1 − |%|/100)</code>), usado para los precios de referencia (Efectivo, Transferencia S/F).
       </span>
     </div>
 
@@ -1080,6 +1078,17 @@
       <p-checkbox [ngModel]="formActivoPago()" (ngModelChange)="formActivoPago.set($event)" [binary]="true" inputId="formActivoPago"
         [disabled]="guardandoForma()" />
       <span class="text-sm">Activo (visible en el selector del operador)</span>
+    </label>
+
+    <label class="flex items-start gap-2 cursor-pointer p-2 rounded-lg border border-surface-200 dark:border-surface-700">
+      <p-checkbox [ngModel]="formPrecioReferencia()" (ngModelChange)="formPrecioReferencia.set($event)" [binary]="true" inputId="formPrecioReferencia"
+        [disabled]="guardandoForma()" />
+      <div class="flex flex-col gap-0.5 flex-1">
+        <span class="text-sm font-medium">Mostrar como precio de referencia</span>
+        <span class="text-xs text-muted-color">
+          Se muestra en el panel de scan, el visor y el carrito. Usá un <strong>recargo negativo</strong> (ej. −13) para un descuento sobre el precio lista. El <strong>orden</strong> define cuál aparece primero (la primera es la destacada y la que usa el carrito).
+        </span>
+      </div>
     </label>
   </div>
 

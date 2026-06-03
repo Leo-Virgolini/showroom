@@ -258,6 +258,7 @@ export class ConfiguracionPage {
   readonly formCuotas = signal<number | null>(1);
   readonly formAplicaIva = signal(true);
   readonly formActivoPago = signal(true);
+  readonly formPrecioReferencia = signal(false);
   readonly formOrden = signal<number | null>(0);
 
 
@@ -1025,6 +1026,7 @@ export class ConfiguracionPage {
     this.formCuotas.set(1);
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
+    this.formPrecioReferencia.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
     this.formOrden.set(maxOrden + 1);
     this.mostrarDialogForma.set(true);
@@ -1038,6 +1040,7 @@ export class ConfiguracionPage {
     this.formCuotas.set(f.cantidadCuotas);
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
+    this.formPrecioReferencia.set(f.precioReferencia ?? false);
     this.formOrden.set(f.orden);
     this.mostrarDialogForma.set(true);
   }
@@ -1054,15 +1057,6 @@ export class ConfiguracionPage {
         severity: 'warn',
         summary: 'Datos incompletos',
         detail: 'Cargá un nombre para la forma de pago.',
-        life: 3000,
-      });
-      return;
-    }
-    if (recargo < 0) {
-      this.toast.add({
-        severity: 'warn',
-        summary: 'Recargo inválido',
-        detail: 'El recargo no puede ser negativo (usar 0 si no hay).',
         life: 3000,
       });
       return;
@@ -1085,6 +1079,7 @@ export class ConfiguracionPage {
       aplicaIva: this.formAplicaIva(),
       activo,
       orden,
+      precioReferencia: this.formPrecioReferencia(),
     };
     const obs = this.modoEdicionForma() === 'crear'
       ? this.api.crearFormaPago(payload)
