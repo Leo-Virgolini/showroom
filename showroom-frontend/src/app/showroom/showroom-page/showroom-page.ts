@@ -451,19 +451,106 @@ export class ShowroomPage implements AfterViewInit {
     return aplicable?.porcentaje ?? 0;
   });
 
-  /** % de descuento que aplica a un ítem individual: el {@link descuentoAplicado}
-   *  para los elegibles, 0 para los excluidos (por rubro o por ser genérico). */
-  private descuentoParaItem(it: { rubro?: string | null; generico?: boolean }): number {
+  /**
+   * Descuentos manuales por ítem del carrito (FASE 4). El carrito es estado del
+   * backend (single source of truth), así que para NO tocar el modelo del carrito
+   * en el backend mantenemos el descuento manual como estado LOCAL del componente:
+   * un mapa `itemKey → %` (0..100). Vive solo mientras dura la atención al cliente
+   * — al vaciar el carrito o enviar el pedido se limpia.
+   *
+   * Regla "manual reemplaza escala" (por ítem): si un ítem tiene manual > 0, ese
+   * ítem usa el manual y se ignora el descuento automático por escala; si el
+   * manual es 0 (o no existe), sigue aplicando la escala como hoy. Ver
+   * {@link descuentoParaItem}.
+   */
+  readonly descuentosManuales = signal<Record<string, number>>({});
+
+  /** % de descuento manual cargado para un ítem (0 si no tiene). */
+  descuentoManual(itemKey: string): number {
+    return this.descuentosManuales()[itemKey] ?? 0;
+  }
+
+  /** Setea el descuento manual % de un ítem (0..100). 0 lo borra del mapa para
+   *  que vuelva a regir la escala automática en esa línea. */
+  setDescuentoManual(itemKey: string, valor: number | null | undefined): void {
+    let v = Number(valor);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    const actual = { ...this.descuentosManuales() };
+    if (v > 0) actual[itemKey] = v;
+    else delete actual[itemKey];
+    this.descuentosManuales.set(actual);
+  }
+
+  /**
+   * Descuento global manual % (atajo) — al cambiarlo, COPIA el mismo % a TODOS
+   * los ítems del carrito (reflejo, no aditivo; igual que el presupuestador). El
+   * input lo muestra como reflejo del % EFECTIVO ({@link descuentoEfectivoPct}):
+   * cuando todos los ítems llevan el mismo descuento coincide con ese %; con una
+   * mezcla muestra el promedio efectivo. No es un descuento que se suma encima
+   * de los individuales.
+   */
+  aplicarDescuentoGlobal(valor: number | null | undefined): void {
+    let v = Number(valor);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    const mapa: Record<string, number> = {};
+    if (v > 0) {
+      for (const it of this.carrito()) mapa[it.itemKey] = v;
+    }
+    this.descuentosManuales.set(mapa);
+    this.focusInput();
+  }
+
+  /** % de descuento EFECTIVO que aplica a un ítem individual.
+   *  - Manual > 0 → ese ítem usa el manual y se ignora la escala (incluso para
+   *    rubros normalmente excluidos: el operador lo cargó a mano a propósito).
+   *  - Manual 0/ausente → escala automática para los elegibles, 0 para los
+   *    excluidos (por rubro o por ser genérico). */
+  private descuentoParaItem(it: { itemKey?: string; rubro?: string | null; generico?: boolean }): number {
+    const manual = it.itemKey ? this.descuentoManual(it.itemKey) : 0;
+    if (manual > 0) return manual;
     return this.excluidoDescuentoEscala(it) ? 0 : this.descuentoAplicado();
   }
 
-  /** Monto del descuento (en pesos) — solo sobre los ítems elegibles. */
-  readonly descuentoMonto = computed(
-    () => (this.subtotalElegibleDescuento() * this.descuentoAplicado()) / 100,
+  /** % de descuento EFECTIVO de un ítem del carrito (manual o escala) — para
+   *  mostrar el badge por línea en el template. */
+  descuentoEfectivoItem(it: CarritoItem): number {
+    return this.descuentoParaItem(it);
+  }
+
+  /** True si el descuento efectivo de la línea proviene de un manual cargado a
+   *  mano (no de la escala) — el template lo usa para diferenciar el badge. */
+  itemTieneDescuentoManual(it: CarritoItem): boolean {
+    return this.descuentoManual(it.itemKey) > 0;
+  }
+
+  /** Monto total de descuento (en pesos) — suma del descuento EFECTIVO por ítem
+   *  (manual o escala) sobre toda la lista. */
+  readonly descuentoMonto = computed(() =>
+    this.carrito().reduce((acc, it) => {
+      const base = (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
+      return acc + (base * this.descuentoParaItem(it)) / 100;
+    }, 0),
   );
 
   readonly totalCarrito = computed(
     () => this.subtotalPreDescuento() - this.descuentoMonto(),
+  );
+
+  /** % de descuento EFECTIVO sobre el subtotal completo del carrito (mezcla de
+   *  manuales por ítem y escala). Es lo que se muestra en el desglose del total
+   *  — reemplaza al viejo {@link descuentoAplicado} (puro escala) en el display
+   *  ahora que cada línea puede tener su propio %. 0 si no hay ningún descuento. */
+  readonly descuentoEfectivoPct = computed(() => {
+    const bruto = this.subtotalPreDescuento();
+    if (bruto <= 0) return 0;
+    return (this.descuentoMonto() / bruto) * 100;
+  });
+
+  /** True si en el carrito hay AL MENOS un ítem con descuento manual cargado. */
+  readonly hayDescuentoManual = computed(() =>
+    this.carrito().some((it) => this.descuentoManual(it.itemKey) > 0),
   );
 
   /** Recargo % vigente según la forma de pago elegida (0 si ninguna o si tiene 0%). */
@@ -1871,6 +1958,9 @@ export class ShowroomPage implements AfterViewInit {
     this.api.eliminarItemCarrito(itemKey).subscribe({
       next: (state) => {
         this.carrito.set(state.items);
+        // Limpiamos el descuento manual del ítem que se fue para no dejar
+        // entradas huérfanas en el mapa.
+        if (this.descuentoManual(itemKey) > 0) this.setDescuentoManual(itemKey, 0);
         this.focusInput();
       },
       error: (err) => {
@@ -1886,6 +1976,9 @@ export class ShowroomPage implements AfterViewInit {
     // viejo unos ms tras enviar el pedido.
     this.carrito.set([]);
     this.ultimoScan.set(null);
+    // Reset de los descuentos manuales (estado local) — el próximo cliente
+    // arranca sin descuentos cargados a mano.
+    this.descuentosManuales.set({});
     this.focusInput();
     this.api.vaciarCarritoServer().subscribe({
       next: (state) => this.carrito.set(state.items),
@@ -2309,8 +2402,10 @@ export class ShowroomPage implements AfterViewInit {
         // antes de mandar a DUX.
         formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
         items: this.carrito().map((it) => {
-          // Descuento per-item: los ítems excluidos por rubro
-          // (MAQUINAS INDUSTRIALES) NO reciben el descuento por escala —
+          // Descuento per-item EFECTIVO: si el ítem tiene descuento MANUAL (>0)
+          // se manda ese (reemplaza la escala para esa línea); sino el de escala
+          // para los elegibles. Los ítems excluidos por rubro (MAQUINAS
+          // INDUSTRIALES) sin manual NO reciben el descuento por escala —
           // mandamos `undefined` para que DUX los facture al PVP de lista.
           // Los genéricos marcados como "maquinaria" caen acá automáticamente
           // porque el backend les setea ese mismo rubro al crearlos.

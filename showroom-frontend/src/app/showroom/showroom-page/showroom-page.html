@@ -817,6 +817,17 @@
             <p-inputNumber class="shrink-0" [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.itemKey, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
               [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-20 text-center text-sm" />
 
+            <!-- Descuento manual % por ítem. Si > 0, reemplaza al descuento por
+                 escala para esta línea (y va a DUX como porc_desc). 0 = vuelve a
+                 regir la escala automática. -->
+            <div class="shrink-0 flex flex-col items-center leading-none">
+              <label class="text-[8px] uppercase tracking-wider text-muted-color font-semibold mb-0.5" [attr.for]="'descItem-' + it.itemKey">% Desc.</label>
+              <p-inputNumber [inputId]="'descItem-' + it.itemKey" [ngModel]="descuentoManual(it.itemKey)"
+                (ngModelChange)="setDescuentoManual(it.itemKey, $event)" [min]="0" [max]="100" [step]="1"
+                suffix="%" inputStyleClass="w-14 text-center text-sm" [allowEmpty]="false"
+                pTooltip="Descuento manual de esta línea (reemplaza el descuento por monto)" tooltipPosition="top" />
+            </div>
+
             <div class="text-right leading-tight shrink-0 min-w-[5.5rem]">
               <div class="tabular-nums font-semibold text-sm">
                 {{ subtotal(it) | currency:'ARS':'symbol':'1.0-0' }}
@@ -824,6 +835,12 @@
               <div class="tabular-nums text-[11px] text-muted-color">
                 {{ precioItemForma(it) | currency:'ARS':'symbol':'1.0-0' }} c/u
               </div>
+              @if (descuentoEfectivoItem(it) > 0) {
+                <div class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1 justify-end">
+                  <i class="text-[8px]" [class.pi]="true" [class.pi-pencil]="itemTieneDescuentoManual(it)" [class.pi-tag]="!itemTieneDescuentoManual(it)"></i>
+                  −{{ descuentoEfectivoItem(it) }}%
+                </div>
+              }
             </div>
 
             <p-button class="shrink-0" icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true" size="small" (onClick)="eliminarDelCarrito(it.itemKey)" pTooltip="Quitar del carrito" tooltipPosition="left" />
@@ -841,15 +858,30 @@
             </span>
             <span class="inline-flex items-baseline gap-2 tabular-nums">
               <span>{{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}</span>
-              @if (descuentoAplicado() > 0) {
+              @if (descuentoMonto() > 0) {
                 <span class="text-emerald-700 dark:text-emerald-300 font-medium">
-                  −{{ descuentoMonto() | currency:'ARS':'symbol':'1.0-0' }} ({{ descuentoAplicado() }}%)
+                  −{{ descuentoMonto() | currency:'ARS':'symbol':'1.0-0' }} ({{ descuentoEfectivoPct() | number:'1.0-1' }}%)
                 </span>
               }
             </span>
           </div>
 
-          @if (descuentoAplicado() > 0 && carritoTieneRubroExcluido()) {
+          <!-- Descuento global manual (atajo): al cambiarlo copia el mismo % a
+               TODAS las líneas (reflejo, no aditivo). 0 limpia los manuales y
+               vuelve la escala automática. -->
+          <div class="flex items-center justify-between gap-2 text-xs text-muted-color">
+            <label for="descGlobalCarrito" class="inline-flex items-center gap-1.5">
+              <i class="pi pi-percentage text-[0.65rem]"></i>
+              Descuento global
+            </label>
+            <p-inputNumber inputId="descGlobalCarrito" [ngModel]="descuentoEfectivoPct()"
+              (ngModelChange)="aplicarDescuentoGlobal($event)" [min]="0" [max]="100" [step]="1"
+              suffix="%" inputStyleClass="w-16 text-center text-sm" [allowEmpty]="false"
+              [disabled]="carrito().length === 0"
+              pTooltip="Aplica el mismo % a todos los ítems (reemplaza el descuento por monto)" tooltipPosition="left" />
+          </div>
+
+          @if (descuentoAplicado() > 0 && !hayDescuentoManual() && carritoTieneRubroExcluido()) {
             <div class="text-[10px] text-amber-700 dark:text-amber-300 inline-flex items-start gap-1 leading-tight">
               <i class="pi pi-info-circle text-[0.6rem] mt-0.5"></i>
               <span>El {{ descuentoAplicado() }}% no se aplica a los
