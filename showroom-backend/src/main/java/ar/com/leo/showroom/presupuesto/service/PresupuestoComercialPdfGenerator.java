@@ -526,12 +526,12 @@ public class PresupuestoComercialPdfGenerator {
                 // Chip azul con el precio (unitario si cant > 1, sino "Precio").
                 // Si hay descuento, agregamos al lado el precio de lista
                 // tachado en gris para reforzar el ahorro visualmente.
-                BigDecimal precioFinalSinIva = precioUnitarioSinIva(item);
+                BigDecimal precioFinalEfectivo = precioUnitarioEfectivo(item);
                 String label = cantMayorAUno ? "P. unitario: " : "Precio: ";
                 Paragraph contenido = new Paragraph()
-                        .add(new Text(label + formatPesos(precioFinalSinIva)));
+                        .add(new Text(label + formatPesos(precioFinalEfectivo)));
                 if (tieneDescuento) {
-                    BigDecimal listaSinIva = precioListaSinIva(item);
+                    BigDecimal listaSinIva = precioListaEfectivo(item);
                     // 4 espacios al tamaño normal (9pt) entre los dos precios
                     // para que la rayita del tachado no se conecte con el
                     // precio principal y haya aire visual.
@@ -1896,28 +1896,28 @@ public class PresupuestoComercialPdfGenerator {
     // Helpers
     // =====================================================
 
-    /** Precio unitario SIN IVA con descuento individual aplicado. Coincide
-     *  con el precio "Efectivo s/IVA" de las cards de formas de pago dividido
-     *  por la cantidad — útil para que el cliente pueda calcular fácil cuánto
-     *  le sale agregar o quitar unidades. */
-    private static BigDecimal precioUnitarioSinIva(GenerarPresupuestoRequestDTO.Item item) {
-        BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
-        BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
-        BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
-        BigDecimal precioConDesc = precioConIva.multiply(
-                BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-        return precioConDesc.divide(divisor, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Precio de lista unitario SIN IVA (sin aplicar el descuento individual).
-     *  Se usa para mostrar el precio tachado encima del precio con descuento
-     *  cuando el ítem tiene un descuento — refuerza visualmente el ahorro. */
-    private static BigDecimal precioListaSinIva(GenerarPresupuestoRequestDTO.Item item) {
+    /** Precio EFECTIVO unitario (precio con la forma Efectivo, ya según rubro:
+     *  c/IVA menaje, s/IVA maquinaria), SIN descuento individual. Es el precio
+     *  de lista que se muestra tachado cuando hay descuento. Fallback para
+     *  presupuestos viejos sin `precioEfectivo`: precio de lista sin IVA. */
+    private static BigDecimal precioListaEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+        if (item.precioEfectivo() != null) {
+            return item.precioEfectivo().setScale(2, RoundingMode.HALF_UP);
+        }
         BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
         BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
         BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
         return precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+    }
+
+    /** Precio EFECTIVO unitario con el descuento individual aplicado. Coincide
+     *  con el total de la card "Efectivo" dividido por la cantidad — útil para
+     *  que el cliente vea cuánto sale c/u al mejor precio. */
+    private static BigDecimal precioUnitarioEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+        BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
+        return precioListaEfectivo(item)
+                .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Chip/pill compacto a partir de un String simple — wrapper sobre
