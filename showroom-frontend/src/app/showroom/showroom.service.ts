@@ -220,6 +220,12 @@ export class ShowroomService {
     return this.http.delete<void>(`${this.base}/config/formas-pago/${id}`);
   }
 
+  /** Borrado definitivo (hard delete). Los pedidos históricos no se afectan
+   *  (snapshotean nombre + recargo). */
+  eliminarFormaPagoDefinitivo(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.base}/config/formas-pago/${id}/definitivo`);
+  }
+
   // ===========================================================
   // Perfiles de etiquetas — compartidos entre PCs.
   // El "perfil activo" lo elige cada PC localmente (localStorage).

@@ -1197,6 +1197,40 @@ export class ConfiguracionPage {
     });
   }
 
+  /** Borrado definitivo (hard delete) con confirmación. Disponible para cualquier
+   *  forma; los pedidos históricos preservan su snapshot. */
+  eliminarFormaDefinitivo(f: FormaPago): void {
+    this.confirmationService.confirm({
+      header: 'Eliminar definitivamente',
+      message: `¿Eliminar para siempre la forma de pago "${f.nombre}"? Esta acción no se puede deshacer. Los pedidos que la usaron conservan sus datos.`,
+      icon: 'pi pi-trash',
+      acceptButtonProps: {
+        label: 'Eliminar',
+        icon: 'pi pi-trash',
+        severity: 'danger',
+      },
+      rejectButtonProps: {
+        label: 'Cancelar',
+        severity: 'secondary',
+        outlined: true,
+      },
+      accept: () => {
+        this.api.eliminarFormaPagoDefinitivo(f.id).subscribe({
+          next: () => {
+            this.cargarFormasPago();
+            this.toast.add({
+              severity: 'success',
+              summary: 'Forma de pago eliminada',
+              detail: f.nombre,
+              life: 3000,
+            });
+          },
+          error: (err) => toastError(this.toast, 'Eliminar forma de pago', err, 'No se pudo eliminar'),
+        });
+      },
+    });
+  }
+
   trackByFormaPagoId = (_: number, f: FormaPago) => f.id;
 
   // ============================================================

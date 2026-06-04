@@ -103,6 +103,20 @@ public class FormaPagoService {
                 entity.getId(), entity.getNombre());
     }
 
+    /**
+     * Borrado definitivo (hard delete) de la forma. Es seguro: {@code pedido_showroom}
+     * referencia la forma solo por {@code forma_pago_id} (columna suelta, sin FK) y
+     * snapshotea nombre + recargo, así que los pedidos históricos no se ven afectados.
+     */
+    @Transactional
+    public void eliminarDefinitivo(Long id) {
+        FormaPago entity = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Forma de pago no encontrada: " + id));
+        repository.delete(entity);
+        log.info("Forma de pago ELIMINADA definitivamente: id={} nombre='{}'",
+                entity.getId(), entity.getNombre());
+    }
+
     private void validar(FormaPagoDTO dto) {
         if (dto.recargoPorcentaje() != null && dto.recargoPorcentaje().compareTo(CIEN.multiply(BigDecimal.TEN)) > 0) {
             // Sanity check: recargo > 1000% es probablemente un typo (3000% en vez de 30%).

@@ -1226,6 +1226,14 @@ public class ShowroomController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Borrado definitivo (hard delete). Seguro: los pedidos snapshotean nombre +
+     *  recargo y referencian la forma por una columna suelta (sin FK). */
+    @DeleteMapping("/config/formas-pago/{id}/definitivo")
+    public ResponseEntity<Void> eliminarFormaPagoDefinitivo(@PathVariable Long id) {
+        formaPagoService.eliminarDefinitivo(id);
+        return ResponseEntity.noContent().build();
+    }
+
     // =====================================================
     // Perfiles de etiquetas — compartidos entre PCs
     // =====================================================
