@@ -235,14 +235,14 @@
               <div class="flex flex-col gap-0.5 text-xs">
                 <span class="inline-flex items-center justify-end gap-1">
                   <span class="text-[0.6rem] text-muted-color uppercase">Men</span>
-                  @if (f.recargoPorcentaje > 0) { +{{ f.recargoPorcentaje }}% }
+                  @if (f.recargoPorcentaje > 0) { <span class="text-sky-600 dark:text-sky-400">+{{ f.recargoPorcentaje }}%</span> }
                   @else if (f.recargoPorcentaje < 0) { <span class="text-[#FF861C]">{{ f.recargoPorcentaje }}%</span> }
                   @else { <span class="text-muted-color">—</span> }
                 </span>
                 @let rm = f.recargoPorcentajeMaquinaria ?? 0;
                 <span class="inline-flex items-center justify-end gap-1">
                   <span class="text-[0.6rem] text-muted-color uppercase">Maq</span>
-                  @if (rm > 0) { +{{ rm }}% }
+                  @if (rm > 0) { <span class="text-sky-600 dark:text-sky-400">+{{ rm }}%</span> }
                   @else if (rm < 0) { <span class="text-[#FF861C]">{{ rm }}%</span> }
                   @else { <span class="text-muted-color">—</span> }
                 </span>
