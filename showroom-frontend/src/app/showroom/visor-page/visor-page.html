@@ -286,6 +286,12 @@
     <button pButton type="button" icon="pi pi-plus" severity="secondary" [outlined]="true" [disabled]="cantidad() >= maxCantidad()" (pointerdown)="iniciarStep(1)"
       (pointerup)="detenerStep()" (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Sumar uno"></button>
   </div>
+  @if (superaStock()) {
+  <div class="flex items-center justify-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
+    <i class="pi pi-info-circle"></i>
+    <span>La cantidad supera el stock disponible ({{ r.stockTotal }})</span>
+  </div>
+  }
   <button pButton type="button" (click)="agregar()" [disabled]="enviandoAgregar()" [loading]="enviandoAgregar()" icon="pi pi-shopping-cart" label="Agregar al carrito"
     class="!w-full !h-16 !text-lg !font-bold" severity="primary"></button>
 </div>

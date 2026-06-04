@@ -194,12 +194,17 @@ export class VisorPage {
     return true;
   });
 
-  /** Tope superior del stepper de cantidad. Si el stock no está confirmado
-   *  o es 0, dejamos el máximo en 999 para que el cliente pueda elegir
-   *  cualquier cantidad razonable (el ítem se agregará "forzado"). */
-  readonly maxCantidad = computed(() => {
+  /** Tope superior del stepper de cantidad. NO se topea al stock: se permite
+   *  pedir más de lo disponible (el excedente queda como pendiente de
+   *  reposición y el ítem se agrega "forzado"). Cap alto solo para evitar
+   *  cantidades absurdas. */
+  readonly maxCantidad = computed(() => 9999);
+
+  /** True cuando la cantidad elegida supera el stock disponible. Solo para un
+   *  aviso INFORMATIVO (no bloquea agregar). */
+  readonly superaStock = computed(() => {
     const r = this.ultimoScan();
-    return r?.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : 999;
+    return r?.stockTotal != null && r.stockTotal > 0 && this.cantidad() > r.stockTotal;
   });
 
   constructor() {
@@ -367,9 +372,10 @@ export class VisorPage {
     const r = this.ultimoScan();
     if (!r || !this.puedeAgregar() || this.enviandoAgregar()) return;
     const cant = Math.max(1, Math.min(this.cantidad(), this.maxCantidad()));
-    // forzar=true cuando el stock es 0 o desconocido: el backend acepta el
-    // ítem como pendiente de reposición en vez de rechazarlo.
-    const forzar = r.stockTotal == null || r.stockTotal <= 0;
+    // forzar=true cuando el stock es 0/desconocido O cuando la cantidad pedida
+    // supera el stock disponible: el backend acepta el ítem (o el excedente)
+    // como pendiente de reposición en vez de rechazarlo.
+    const forzar = r.stockTotal == null || r.stockTotal <= 0 || cant > r.stockTotal;
 
     this.enviandoAgregar.set(true);
     this.api.visorAgregarAlCarrito(this.operadorUsername, r.sku, cant, forzar).subscribe({

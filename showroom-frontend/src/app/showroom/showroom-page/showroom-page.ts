@@ -896,9 +896,18 @@ export class ShowroomPage implements AfterViewInit {
     return `hace ${d} día${d === 1 ? '' : 's'}`;
   }
 
-  /** Tope de cantidad para el InputNumber: stock conocido o 999 si DUX no informó. */
-  maxCantidad(stock: number | null | undefined): number {
-    return stock != null && stock > 0 ? stock : 999;
+  /** Tope de cantidad para los InputNumber. NO se topea al stock: se permite
+   *  pedir más de lo disponible (el excedente queda como pendiente de
+   *  reposición y el ítem se agrega "forzado"). Cap alto solo para evitar
+   *  cantidades absurdas. */
+  maxCantidad(_stock?: number | null | undefined): number {
+    return 9999;
+  }
+
+  /** True cuando una cantidad supera el stock disponible conocido. Solo para
+   *  un aviso INFORMATIVO (no bloquea agregar). */
+  superaStock(stock: number | null | undefined, cantidad: number): boolean {
+    return stock != null && stock > 0 && cantidad > stock;
   }
 
   excedeStock(it: CarritoItem): boolean {
@@ -1558,15 +1567,12 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /** Tope de cantidad para el input de la lista de resultados: stock
-   *  disponible cuando está sincronizado y es > 0. Null cuando el stock es
-   *  desconocido (no se sincronizó) o cuando no hay stock — en esos casos
-   *  el input queda sin tope (el agregado se bloquea aparte por
-   *  {@link agregarResultadoAlCarrito} si no hay precio/no está habilitado).
-   *  En el showroom-page, los productos sin stock se agregan vía el flujo
-   *  de scan unitario que sí permite forzar; desde la lista se evita. */
-  cantidadMaximaResultado(it: CatalogoItem): number | null {
-    return it.stockTotal != null && it.stockTotal > 0 ? it.stockTotal : null;
+  /** Tope de cantidad para el input de la lista de resultados. NO se topea al
+   *  stock: se permite pedir más de lo disponible (el excedente queda como
+   *  pendiente de reposición vía `forzar`). Cap alto solo para evitar
+   *  cantidades absurdas. */
+  cantidadMaximaResultado(_it: CatalogoItem): number {
+    return 9999;
   }
 
   /** Agregar directo al carrito desde la lista de resultados — saltea la
@@ -1597,7 +1603,9 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     const cant = this.cantidadResultado(it.sku);
-    const forzar = it.stockTotal != null && it.stockTotal <= 0;
+    // forzar=true si no hay stock O si la cantidad pedida lo supera: el backend
+    // acepta el ítem (o el excedente) como pendiente de reposición.
+    const forzar = it.stockTotal == null || it.stockTotal <= 0 || cant > it.stockTotal;
     this.api.agregarItemCarrito(it.sku, cant, forzar).subscribe({
       next: (res) => {
         this.carrito.set(res.carrito.items);
@@ -1706,7 +1714,10 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     const cant = cantidad <= 0 ? 1 : cantidad;
-    const forzar = this.sinStockDisponible(r);
+    // forzar=true si no hay stock O si la cantidad pedida lo supera: el backend
+    // acepta el ítem (o el excedente) como pendiente de reposición.
+    const forzar = this.sinStockDisponible(r)
+      || (r.stockTotal != null && cant > r.stockTotal);
     this.api.agregarItemCarrito(r.sku, cant, forzar).subscribe({
       next: (res) => {
         // El SSE carrito-updated ya va a llegar (con el state nuevo); igual

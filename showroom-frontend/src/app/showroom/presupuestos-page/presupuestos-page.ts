@@ -985,13 +985,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     });
   }
 
-  /** Tope de cantidad para el input de la lista de resultados: stock
-   *  disponible cuando está sincronizado y es > 0. Null cuando no se conoce
-   *  el stock (no sincronizado) o cuando no hay — esos casos quedan sin
-   *  tope; el operador ve la cantidad como pill amarillo "excede stock" en
-   *  la tabla del detalle si pasa el límite. */
-  cantidadMaximaResultado(r: CatalogoItem): number | null {
-    return r.stockTotal != null && r.stockTotal > 0 ? r.stockTotal : null;
+  /** Tope de cantidad para el input de la lista de resultados. NO se topea al
+   *  stock: el presupuesto no descuenta stock, así que el operador puede cargar
+   *  la cantidad que quiera; el detalle muestra un pill amarillo "excede stock"
+   *  si la cantidad supera el disponible. Cap alto solo para evitar absurdos. */
+  cantidadMaximaResultado(_r: CatalogoItem): number {
+    return 9999;
   }
 
   /** True si el producto es de un rubro excluido de los descuentos por
@@ -1158,8 +1157,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ============================================================
   actualizarCantidad(it: PresupuestoItem, valor: number): void {
     if (!Number.isFinite(valor) || valor <= 0) valor = 1;
-    const tope = this.cantidadMaximaDe(it);
-    if (tope != null && valor > tope) valor = tope;
+    // No se topea al stock: el presupuesto no descuenta stock. Si la cantidad
+    // supera el disponible, el detalle muestra un pill amarillo informativo.
     if (it.cantidad === valor) return;
     const prev = it.cantidad;
     it.cantidad = valor;
@@ -1168,13 +1167,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       `${this.etiquetaItem(it)}: ${prev}u → ${valor}u`);
   }
 
-  /** Tope de cantidad para el input: el stock disponible cuando está
-   *  sincronizado con DUX (> 0). Si el stock es null (no sincronizado) o 0
-   *  (sin stock) devolvemos null para no aplicar tope — el operador puede
-   *  cargar la cantidad que quiera y un pill amarillo le avisa que excede
-   *  el disponible. */
-  cantidadMaximaDe(it: PresupuestoItem): number | null {
-    return it.stockTotal != null && it.stockTotal > 0 ? it.stockTotal : null;
+  /** Tope de cantidad para el input. NO se topea al stock: el presupuesto no
+   *  descuenta stock, así que el operador puede cargar la cantidad que quiera y
+   *  un pill amarillo le avisa cuando excede el disponible. Cap alto solo para
+   *  evitar cantidades absurdas. */
+  cantidadMaximaDe(_it: PresupuestoItem): number {
+    return 9999;
   }
 
   actualizarDescuento(it: PresupuestoItem, valor: number): void {

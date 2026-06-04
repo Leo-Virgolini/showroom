@@ -501,6 +501,12 @@
               <p-button label="Agregar al carrito" icon="pi pi-cart-plus" size="large"
                 (onClick)="agregarAlCarrito(cantidadInput())" [disabled]="!productoVendible(r)" />
             </div>
+            @if (superaStock(r.stockTotal, cantidadInput())) {
+            <div class="basis-full flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-xs font-medium">
+              <i class="pi pi-info-circle text-[11px]"></i>
+              <span>La cantidad supera el stock disponible ({{ r.stockTotal }})</span>
+            </div>
+            }
           </div>
 
         </div>
@@ -529,7 +535,7 @@
                  sin volver a buscar. Para máquinas industriales (rubro
                  excluido de descuentos por escala) usamos un borde izquierdo
                  ámbar grueso como diferenciador visual a primera vista. -->
-            <li class="px-3 py-2.5 rounded-lg border bg-white dark:bg-surface-900/40 transition-colors flex items-center gap-3"
+            <li class="px-3 py-2.5 rounded-lg border bg-white dark:bg-surface-900/40 transition-colors flex flex-wrap items-center gap-3"
                 [class.border-amber-400]="esRubroSinDescuento(it.rubro)"
                 [class.dark:border-amber-600]="esRubroSinDescuento(it.rubro)"
                 [class.border-l-4]="esRubroSinDescuento(it.rubro)"
@@ -661,6 +667,12 @@
                     ariaLabel="Agregar al carrito" />
                 </div>
               </div>
+              @if (superaStock(it.stockTotal, cantidadResultado(it.sku))) {
+              <div class="basis-full flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-xs font-medium">
+                <i class="pi pi-info-circle text-[11px]"></i>
+                <span>La cantidad supera el stock disponible ({{ it.stockTotal }})</span>
+              </div>
+              }
             </li>
             }
           </ul>
