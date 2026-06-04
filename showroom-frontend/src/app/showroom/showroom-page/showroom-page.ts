@@ -345,15 +345,8 @@ export class ShowroomPage implements AfterViewInit {
    *  (precio base, equivalente a "Efectivo 1 cuota / 0%"). */
   readonly formaPagoSeleccionada = signal<FormaPago | null>(null);
 
-  /** Formas de pago marcadas para mostrarse como precio de referencia, ordenadas
-   *  por `orden` asc. La primera es la destacada y la que usa el carrito por ítem. */
-  readonly formasReferencia = computed(() =>
-    this.formasPagoActivas()
-      .filter((f) => f.precioReferencia)
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
-  );
-
-  /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
+  /** Forma destacada menaje por defecto (menor `orden`), o null. Fallback para
+   *  el precio cuando no hay forma efectiva resuelta. */
   readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
 
   /** Forma destacada/default para el perfil del producto: de las formas activas
