@@ -22,8 +22,8 @@ export interface FormaPagoCalc {
  * - Forma SIN IVA: primero se quita el IVA (el cliente paga sin IVA) y el factor
  *   se aplica sobre el neto.
  *
- * El backend del pedido ignora los recargos ≤ 0, así que un descuento acá solo
- * afecta el precio MOSTRADO, no lo que se factura en DUX (decisión del negocio).
+ * El backend del pedido usa la misma lógica (recargos negativos = descuento), así
+ * que lo que se factura en DUX coincide con este precio mostrado.
  */
 export function precioPorForma(
   conIva: number | null,
