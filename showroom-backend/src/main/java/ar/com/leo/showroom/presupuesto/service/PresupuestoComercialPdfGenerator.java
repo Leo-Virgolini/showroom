@@ -704,16 +704,9 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontSize(9)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
-        // Indicación de IVA del régimen de ESTE ítem (c/IVA o s/IVA). En modo
-        // individual cada hoja es un único producto, así que el régimen es
-        // inequívoco: maquinaria → perfil maquinaria, resto → perfil menaje.
-        if (badgeIva != null) {
-            info.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
-                    .setFontSize(7.5f)
-                    .setFontColor(GRIS_MEDIO)
-                    .setMargin(0)
-                    .setMarginTop(1));
-        }
+        // El régimen de IVA depende del producto, no de la forma de pago, así
+        // que las cards de formas de pago no muestran badge "c/IVA"/"s/IVA"
+        // (el precioFinal ya es correcto). El IVA se ve en la tabla de productos.
         // Limpiamos "s/IVA" si viene dentro de la descripción para no
         // duplicar el bloque de arriba (presupuestos viejos lo persistían).
         String desc = f.descripcion();
@@ -769,48 +762,29 @@ public class PresupuestoComercialPdfGenerator {
     // delega en la card de totales reutilizable.
     // =====================================================
     private void agregarTotalesAgregado(Document doc, GenerarPresupuestoRequestDTO datos) {
-        BigDecimal subtotalBrutoSinIva = BigDecimal.ZERO;
-        BigDecimal subtotalSinIva = BigDecimal.ZERO;
+        java.util.Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
+        BigDecimal subtotalBruto = BigDecimal.ZERO;
+        BigDecimal totalNeto = BigDecimal.ZERO;
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
-            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-
-            BigDecimal totalLineaBrutoSinIva = precio.multiply(cantidad)
-                    .divide(divisor, 4, RoundingMode.HALF_UP);
-            BigDecimal precioConDesc = precio.multiply(
-                    BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-            BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
-                    .divide(divisor, 4, RoundingMode.HALF_UP);
-
-            subtotalBrutoSinIva = subtotalBrutoSinIva.add(totalLineaBrutoSinIva);
-            subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
+            // Precio mostrado según el rubro, igual que la tabla de productos:
+            // maquinaria sin IVA, resto con IVA. El total ya no es uniformemente
+            // "sin IVA" — depende de los productos del presupuesto.
+            boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+            BigDecimal precioMostrado = esMaq
+                    ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
+                    : precioConIva;
+            subtotalBruto = subtotalBruto.add(precioMostrado.multiply(cantidad));
+            totalNeto = totalNeto.add(precioMostrado
+                    .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
+                    .multiply(cantidad));
         }
-        BigDecimal subtotalBruto = subtotalBrutoSinIva.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
-
-        agregarCardTotal(doc, subtotalBruto, totalSinIva);
-
-        if (datos.formasPago() == null || datos.formasPago().isEmpty()) return;
-        int maxDesc = porcMaxDescuento(totalSinIva, datos.formasPago());
-        if (maxDesc <= 0) return;
-
-        Paragraph badge = new Paragraph(
-                "¡Podés ahorrar hasta " + maxDesc + "% — mirá las formas de pago!")
-                .simulateBold()
-                .setFontSize(10)
-                .setFontColor(ColorConstants.WHITE)
-                .setBackgroundColor(VERDE_PRECIO)
-                .setBorderRadius(new BorderRadius(20f))
-                .setPaddings(8, 14, 8, 14)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(10)
-                .setMarginBottom(2)
-                .setHorizontalAlignment(HorizontalAlignment.CENTER)
-                .setWidth(UnitValue.createPercentValue(60));
-        doc.add(badge);
+        agregarCardTotal(doc,
+                subtotalBruto.setScale(2, RoundingMode.HALF_UP),
+                totalNeto.setScale(2, RoundingMode.HALF_UP));
     }
 
     // =====================================================
@@ -1035,11 +1009,10 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("CANT."));
-        // "PRECIO" a secas: el régimen (s/IVA para maquinaria, c/IVA para el
-        // resto) depende del rubro de cada ítem y se aclara por celda con una
-        // badge "s/IVA"/"c/IVA". Un único header "PRECIO EFECTIVO" sería
-        // engañoso en presupuestos mixtos (menaje + maquinaria).
-        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
+        // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
+        // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
+        // resto) y se aclara por celda con una badge "s/IVA"/"c/IVA".
+        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -1562,7 +1535,7 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal porcEfectivo = ahorro.multiply(BigDecimal.valueOf(100))
                     .divide(subtotalBruto, 2, RoundingMode.HALF_UP);
 
-            card.add(filaDesglose("Subtotal efectivo s/IVA", formatPesos(subtotalBruto), false, false));
+            card.add(filaDesglose("Subtotal efectivo", formatPesos(subtotalBruto), false, false));
             card.add(filaDesglose(
                     "Descuento (" + formatPorcentaje(porcEfectivo) + "%)",
                     "-" + formatPesos(ahorro), false, true));
@@ -1570,11 +1543,11 @@ public class PresupuestoComercialPdfGenerator {
                     .setMarginTop(4).setMarginBottom(4));
         }
 
-        // Total destacado — los textos "efectivo" + "s/IVA" comunican que es
-        // el precio s/IVA de contado, coherente con la columna "PRECIO
-        // EFECTIVO" de la tabla y con la card de formas de pago donde el
-        // cliente ve las alternativas con financiación.
-        card.add(filaDesglose("Total efectivo s/IVA", formatPesos(totalSinIva), true, false));
+        // Total destacado — "efectivo" = precio de contado (sin financiación),
+        // coherente con la columna "PRECIO EFECTIVO" de la tabla. Sin etiqueta
+        // "s/IVA": el monto sigue el régimen de cada producto (maquinaria s/IVA,
+        // resto c/IVA), así que ya no es uniformemente sin IVA.
+        card.add(filaDesglose("Total efectivo", formatPesos(totalSinIva), true, false));
         doc.add(card);
     }
 
@@ -1808,18 +1781,9 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0)
                 .setMarginBottom(2));
 
-        // Indicación de IVA debajo del nombre. El régimen depende del rubro de
-        // los ítems: en un presupuesto mixto (menaje + maquinaria) cuyos
-        // perfiles de la forma difieren en aplicaIva no hay un único valor, así
-        // que {@code badgeIva} viene null y la card NO lleva badge (el
-        // precioFinal ya es correcto; un "c/IVA"/"s/IVA" global sería ambiguo).
-        if (badgeIva != null) {
-            contenido.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
-                    .setFontSize(8)
-                    .setFontColor(GRIS_MEDIO)
-                    .setMargin(0)
-                    .setMarginBottom(2));
-        }
+        // Las cards de formas de pago no muestran badge "c/IVA"/"s/IVA": el
+        // régimen depende del producto, no de la forma de pago (el precioFinal
+        // ya es correcto). El IVA por producto se ve en la tabla de productos.
 
         // Limpiamos "s/IVA" si viene dentro de la descripción (presupuestos
         // viejos lo guardaban como parte del string). Ahora se renderiza
