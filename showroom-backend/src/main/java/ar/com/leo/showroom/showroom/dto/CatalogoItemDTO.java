@@ -19,6 +19,8 @@ public record CatalogoItemDTO(
         String descripcion,
         String rubro,
         BigDecimal pvpKtGastroSinIva,
+        BigDecimal pvpKtGastroConIva,
+        BigDecimal porcIva,
         Boolean habilitado,
         String imagenUrl,
         Integer stockTotal

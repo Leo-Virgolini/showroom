@@ -346,6 +346,10 @@ export interface CatalogoItem {
    *  agregarlo al carrito desde la lista de resultados de búsqueda. */
   rubro: string | null;
   pvpKtGastroSinIva: number | null;
+  /** PVP gastro CON IVA y % de IVA — necesarios para calcular los precios de
+   *  referencia (Efectivo/Transferencia/…) en los resultados de búsqueda. */
+  pvpKtGastroConIva: number | null;
+  porcIva: number | null;
   habilitado: boolean | null;
   /** URL del endpoint local de imagen, o null si no existe el archivo. */
   imagenUrl: string | null;
