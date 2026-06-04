@@ -464,14 +464,13 @@ export class ShowroomPage implements AfterViewInit {
     return fp ? (fp.aplicaIva ?? true) : false;
   });
 
-  /** Recargo financiero puro (sin IVA): lo que el cliente paga de más sobre
-   *  el subtotal sin IVA por elegir esta forma. Fórmula per-item:
-   *  {@code base × (1/(1-recargo/100) - 1)}. El descuento es per-item: los
-   *  ítems excluidos (MAQUINAS INDUSTRIALES) usan 0. */
+  /** Ajuste de la forma de pago sobre el subtotal sin IVA: positivo = recargo de
+   *  financiación, negativo = descuento (ej. Efectivo -13%). Per-ítem, con el
+   *  descuento por escala aplicado. */
   readonly recargoMontoSinIva = computed(() => {
     const recargo = this.recargoAplicado();
-    if (recargo <= 0) return 0;
-    const factorExtra = 1 / (1 - recargo / 100) - 1;
+    if (recargo === 0) return 0;
+    const factorExtra = this.factorForma(recargo) - 1;
     return this.carrito().reduce((acc, it) => {
       const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
@@ -479,19 +478,19 @@ export class ShowroomPage implements AfterViewInit {
     }, 0);
   });
 
-  /** IVA que paga el cliente al final (sobre el subtotal con recargo aplicado).
-   *  Cero si la forma de pago es "sin IVA" (operador absorbe). */
+  /** IVA contenido en el total. Per-ítem: solo los ítems cuyo precio para la
+   *  forma elegida lleva IVA (los de rubro sin IVA no). Se calcula sobre el neto
+   *  con el ajuste de la forma aplicado. */
   readonly ivaMontoCarrito = computed(() => {
-    if (!this.aplicaIvaCliente()) return 0;
-    const recargo = this.recargoAplicado();
-    const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
+    const factor = this.factorForma(this.recargoAplicado());
     return this.carrito().reduce((acc, it) => {
+      if (!this.itemCarritoTieneIva(it)) return acc;
       const porcIva = it.porcIva ?? 0;
       if (porcIva <= 0) return acc;
       const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
-      const conRecargoSinIva = baseSinIva / divisorRecargo;
-      return acc + conRecargoSinIva * (porcIva / 100) * it.cantidad;
+      const netoConForma = baseSinIva * factor;
+      return acc + netoConForma * (porcIva / 100) * it.cantidad;
     }, 0);
   });
 
@@ -507,17 +506,9 @@ export class ShowroomPage implements AfterViewInit {
    *  Descuento per-item para que los rubros excluidos (MAQUINAS INDUSTRIALES)
    *  no reciban la rebaja por escala. */
   totalParaForma(fp: FormaPago): number {
-    const recargo = fp.recargoPorcentaje ?? 0;
-    const aplicaIva = fp.aplicaIva ?? true;
-    const divisorRecargo = recargo > 0 ? 1 - recargo / 100 : 1;
     return this.carrito().reduce((acc, it) => {
       const descuento = this.descuentoParaItem(it);
-      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
-      const conRecargoSinIva = baseSinIva / divisorRecargo;
-      const porcIva = it.porcIva ?? 0;
-      const unit = aplicaIva && porcIva > 0
-        ? conRecargoSinIva * (1 + porcIva / 100)
-        : conRecargoSinIva;
+      const unit = this.precioReferenciaPorForma(it, fp) * (1 - descuento / 100);
       return acc + unit * it.cantidad;
     }, 0);
   }
@@ -594,11 +585,11 @@ export class ShowroomPage implements AfterViewInit {
     return base * (1 - this.descuentoParaItem(it) / 100);
   }
 
-  /** Subtotal de la línea SIN descuento, al precio de referencia primario
-   *  (mismo precio que se muestra como c/u). El descuento por escala se muestra
-   *  solo a nivel total. */
+  /** Subtotal de la línea SIN descuento por escala, al precio de la forma de pago
+   *  elegida (mismo precio que se muestra como c/u). El descuento por escala se
+   *  muestra solo a nivel total. */
   subtotal(it: CarritoItem): number {
-    return this.precioReferenciaPrimario(it) * it.cantidad;
+    return this.precioItemForma(it) * it.cantidad;
   }
 
   /** Próximo escalón a alcanzar (umbralMin > subtotal elegible actual), o
@@ -666,6 +657,29 @@ export class ShowroomPage implements AfterViewInit {
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
   iconoPrecioReferencia(nombre: string): string {
     return iconoFormaReferencia(nombre);
+  }
+
+  /** Factor del recargo/descuento de la forma sobre el neto. >0 financiación
+   *  (1/(1-r/100)); <0 descuento (1+r/100 = 1-|r|/100); 0 sin cambio. */
+  private factorForma(recargo: number): number {
+    if (recargo > 0) return 1 / (1 - recargo / 100);
+    if (recargo < 0) return 1 + recargo / 100;
+    return 1;
+  }
+
+  /** Precio unitario de un ítem del carrito según la forma elegida (o la primaria
+   *  si no hay forma seleccionada) y el rubro. */
+  precioItemForma(it: CarritoItem): number {
+    const fp = this.formaPagoSeleccionada();
+    return fp ? this.precioReferenciaPorForma(it, fp) : this.precioReferenciaPrimario(it);
+  }
+
+  /** True si el precio del ítem para la forma elegida lleva IVA (los rubros sin
+   *  IVA nunca; el resto según el flag de la forma elegida). */
+  itemCarritoTieneIva(it: { rubro?: string | null }): boolean {
+    if (this.rubroCotizaSinIva(it.rubro)) return false;
+    const fp = this.formaPagoSeleccionada();
+    return fp ? (fp.aplicaIva ?? true) : this.aplicaIvaCliente();
   }
 
   /** True si el precio mostrado para esta forma incluye IVA. Los rubros que
