@@ -27,11 +27,10 @@ import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProductoListItem, rubroExcluyeDescuentos } from '../models';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 @Component({
   selector: 'app-productos-page',
@@ -54,8 +53,7 @@ import { UserChip } from '../user-chip/user-chip';
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './productos-page.html',
   styleUrl: './productos-page.scss',

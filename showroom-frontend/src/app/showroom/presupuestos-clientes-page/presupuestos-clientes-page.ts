@@ -21,10 +21,9 @@ import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ActualizarClienteRequest, ClientePresupuestos } from '../models';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Lista de clientes únicos derivada de presupuestos comerciales + pedidos.
@@ -58,8 +57,7 @@ import { UserChip } from '../user-chip/user-chip';
     TextareaModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './presupuestos-clientes-page.html',
 })

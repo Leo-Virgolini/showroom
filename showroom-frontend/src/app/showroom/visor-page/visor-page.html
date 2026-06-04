@@ -90,8 +90,8 @@
   <main class="flex-1 flex flex-col gap-4 px-4 pb-6">
     <!-- Imagen grande -->
     @if (r.imagenUrl) {
-    <div class="rounded-2xl border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 p-3 flex items-center justify-center">
-      <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true" imageClass="w-full max-h-[55vh] object-contain rounded-md cursor-zoom-in" />
+    <div class="rounded-2xl border border-surface-200/70 dark:border-surface-700 bg-white dark:bg-surface-950 p-2 flex items-center justify-center shadow-sm">
+      <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true" imageClass="w-full max-h-[64vh] object-contain rounded-lg cursor-zoom-in" />
     </div>
     }
 
@@ -163,6 +163,11 @@
       </div>
       <div class="flex items-center gap-2 justify-center flex-wrap">
         <span class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ primaria.nombre }}</span>
+        @if (idFormaReferenciaMasBarata(r) === primaria.id) {
+        <span class="px-2 py-0.5 rounded-full text-[0.65rem] font-bold tracking-wide bg-emerald-600 text-white inline-flex items-center gap-1">
+          <i class="pi pi-star-fill text-[0.55rem]"></i> MEJOR PRECIO
+        </span>
+        }
         <span class="px-1.5 py-0.5 rounded text-[0.65rem] font-bold tracking-wide" [class]="badgeIvaClass(precioReferenciaTieneIva(r, primaria))">{{ precioReferenciaTieneIva(r, primaria) ? 'c/ IVA' : 's/ IVA' }}</span>
       </div>
       <div class="flex items-baseline gap-2 justify-center">
@@ -230,10 +235,10 @@
   <div class="text-xs font-semibold uppercase tracking-wider text-muted-color px-1 text-center">
     Comprá más y ahorrás
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
     @for (escala of escalasOrdenadas(); track escala.umbralMin; let i = $index) {
     @let c = escalaColorScheme(i);
-    <div class="rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-opacity" [class]="c.border + ' ' + c.bg" [class.opacity-50]="haySuperior(precioReferenciaPrimario(r), escala)">
+    <div class="rounded-xl border p-3 flex flex-col gap-1 transition-opacity" [class]="c.border + ' ' + c.bg" [class.opacity-50]="haySuperior(precioReferenciaPrimario(r), escala)">
       <div class="flex items-center gap-2 flex-wrap">
         <span class="px-2 py-0.5 rounded-full text-white text-xs font-bold" [class]="c.pill">
           −{{ escala.porcentaje }}%
@@ -261,7 +266,7 @@
                 <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-[0.7rem]"></i>
                 {{ forma.nombre }}
               </span>
-              <span class="text-base sm:text-lg font-bold tabular-nums" [class]="c.textBig">
+              <span class="text-sm sm:text-base font-bold tabular-nums" [class]="c.textBig">
                 {{ precioConDescuento(precioReferenciaPorForma(r, forma), escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
               </span>
             </div>

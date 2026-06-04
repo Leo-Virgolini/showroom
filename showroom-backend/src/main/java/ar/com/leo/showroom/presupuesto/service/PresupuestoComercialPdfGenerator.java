@@ -4,6 +4,7 @@ import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
@@ -165,26 +166,27 @@ public class PresupuestoComercialPdfGenerator {
      *  angosta — queda siempre en una sola línea. */
     private static final ISplitCharacters CODIGO_NO_SPLIT = (text, glyphPos) -> false;
 
-    /** Rubros DUX a los que NO se les aplican los descuentos generales por
-     *  escala (regla de negocio confirmada por el dueño el 2026-05-29). En la
-     *  tabla de "ítems de interés" estas filas muestran "—" en lugar de un
-     *  precio rebajado para cada escalón. La comparación es case-insensitive,
-     *  trimeada y SIN diacríticos para tolerar "MÁQUINAS INDUSTRIALES" /
-     *  "Maquinas Industriales" / etc. */
-    private static final Set<String> RUBROS_SIN_DESCUENTO_ESCALA = Set.of(
-            "MAQUINAS INDUSTRIALES");
-
-    private static boolean rubroExcluyeDescuentos(String rubro) {
-        if (rubro == null) return false;
-        String sinAcentos = java.text.Normalizer
-                .normalize(rubro.trim(), java.text.Normalizer.Form.NFD)
-                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        return RUBROS_SIN_DESCUENTO_ESCALA.contains(
-                sinAcentos.toUpperCase(Locale.of("es", "AR")));
-    }
-
     private final ImagenLocalService imagenLocalService;
     private final EscalaDescuentoService escalaDescuentoService;
+    /** Fuente única de la lógica "IVA por rubro" (menaje vs maquinaria) y de la
+     *  lista configurable de rubros de maquinaria. Reusada aquí para que la
+     *  exclusión de descuentos por escala y el precio mostrado por línea sigan
+     *  la misma regla que el showroom (scan/visor/carrito). */
+    private final PrecioPerfilCalculator precioPerfilCalculator;
+
+    /**
+     * Rubros DUX a los que NO se les aplican los descuentos generales por escala
+     * (regla de negocio confirmada por el dueño el 2026-05-29). Es la MISMA lista
+     * configurable de rubros de maquinaria ({@code precios.rubros-sin-iva}), leída
+     * vía {@link PrecioPerfilCalculator}. En la tabla de "ítems de interés" estas
+     * filas muestran "—" en lugar de un precio rebajado para cada escalón. La
+     * comparación es case-insensitive, trimeada y SIN diacríticos.
+     */
+    private boolean rubroExcluyeDescuentos(String rubro) {
+        if (rubro == null) return false;
+        return PrecioPerfilCalculator.esMaquinaria(
+                rubro, precioPerfilCalculator.rubrosMaquinariaNormalizados());
+    }
 
     public byte[] generar(PresupuestoComercial presupuesto,
                           GenerarPresupuestoRequestDTO datos) {
@@ -271,7 +273,7 @@ public class PresupuestoComercialPdfGenerator {
                 if (mostrarTotalesYFormas) {
                     agregarTablaDetalle(doc, datos.items(), sinImagen);
                     agregarTotalesAgregado(doc, datos);
-                    agregarFormasPago(doc, datos.formasPago());
+                    agregarFormasPago(doc, datos.formasPago(), datos.items());
                 } else {
                     List<EscalaDescuento> escalones = escalaDescuentoService.listar();
                     agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones);
@@ -623,11 +625,17 @@ public class PresupuestoComercialPdfGenerator {
                     filtrarFormasDelItem(todasFormas, item.sku());
             int indiceMejor = indiceMejorPrecio(formasItem);
             celdaFormas.setVerticalAlignment(VerticalAlignment.TOP);
+            // Régimen de IVA de ESTE ítem (una hoja = un producto): maquinaria
+            // usa el perfil maquinaria de la forma, el resto el perfil menaje.
+            boolean itemEsMaquinaria = precioPerfilCalculator.esMaquinaria(item.rubro());
             for (int i = 0; i < formasItem.size(); i++) {
+                GenerarPresupuestoRequestDTO.FormaPagoSnapshot f = formasItem.get(i);
+                Boolean badge = itemEsMaquinaria ? f.aplicaIvaMaquinaria() : f.aplicaIva();
                 celdaFormas.add(buildFilaFormaPagoItem(
-                        formasItem.get(i),
+                        f,
                         BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length],
-                        i == indiceMejor));
+                        i == indiceMejor,
+                        badge));
             }
         }
         grid.addCell(celdaFormas);
@@ -653,7 +661,7 @@ public class PresupuestoComercialPdfGenerator {
      *  derecha, con barrita lateral del color del índice y badge "Mejor precio"
      *  cuando corresponde. Usada solo en modo cotización individual. */
     private Div buildFilaFormaPagoItem(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f,
-                                       Color borde, boolean esMejorPrecio) {
+                                       Color borde, boolean esMejorPrecio, Boolean badgeIva) {
         Color colorBarra = esMejorPrecio ? VERDE_PRECIO : borde;
 
         Table fila = new Table(UnitValue.createPercentArray(new float[]{0.06f, 1.6f, 1f}))
@@ -696,11 +704,11 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontSize(9)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
-        // Indicación de IVA siempre visible (c/IVA o s/IVA). Igual que en la
-        // card grande del modo agregado, así el cliente no tiene que adivinar
-        // si el precio mostrado ya tiene IVA o se le suma aparte.
-        if (f.aplicaIva() != null) {
-            info.add(new Paragraph(f.aplicaIva() ? "c/IVA" : "s/IVA")
+        // Indicación de IVA del régimen de ESTE ítem (c/IVA o s/IVA). En modo
+        // individual cada hoja es un único producto, así que el régimen es
+        // inequívoco: maquinaria → perfil maquinaria, resto → perfil menaje.
+        if (badgeIva != null) {
+            info.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
                     .setFontSize(7.5f)
                     .setFontColor(GRIS_MEDIO)
                     .setMargin(0)
@@ -1027,12 +1035,16 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("CANT."));
-        // "Precio efectivo" — coincide con el header de la tabla de ítems de
-        // interés. Comunica al cliente que ese es el precio unitario s/IVA
-        // de contado, no un precio de lista ambiguo.
-        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
+        // "PRECIO" a secas: el régimen (s/IVA para maquinaria, c/IVA para el
+        // resto) depende del rubro de cada ítem y se aclara por celda con una
+        // badge "s/IVA"/"c/IVA". Un único header "PRECIO EFECTIVO" sería
+        // engañoso en presupuestos mixtos (menaje + maquinaria).
+        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
+
+        // Set de rubros de maquinaria calculado una sola vez para todo el loop.
+        Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
 
         int idx = 0;
         for (GenerarPresupuestoRequestDTO.Item it : items) {
@@ -1044,12 +1056,19 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            // Convertimos a precio SIN IVA — es el precio que el operador ve
-            // al escanear y el que se muestra al cliente como referencia
-            // comercial. Las formas de pago aplican IVA al facturar si
-            // corresponde (ej. "Transferencia con IVA").
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal precio = precioConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+            // Precio mostrado por línea SEGÚN EL RUBRO (misma lógica que el
+            // showroom): maquinaria se cotiza SIN IVA; el resto (menaje) CON
+            // IVA. La badge por celda aclara el régimen para que el cliente
+            // sepa si el monto ya incluye IVA. En presupuestos mixtos cada
+            // fila puede llevar régimen distinto.
+            boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+            BigDecimal precio;
+            if (esMaquinaria) {
+                BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+                precio = precioConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+            } else {
+                precio = precioConIva;
+            }
             BigDecimal precioConDesc = precio.multiply(
                     BigDecimal.ONE.subtract(desc.movePointLeft(2)));
             BigDecimal totalLinea = precioConDesc.multiply(cantidad);
@@ -1144,6 +1163,11 @@ public class PresupuestoComercialPdfGenerator {
                 celdaPrecio.add(new Paragraph(formatPesos(precio))
                         .setFontSize(10)
                         .setFontColor(GRIS_OSCURO)
+                        .setMargin(0));
+                // Régimen del precio mostrado (depende del rubro del ítem).
+                celdaPrecio.add(new Paragraph(esMaquinaria ? "s/IVA" : "c/IVA")
+                        .setFontSize(7)
+                        .setFontColor(GRIS_MEDIO)
                         .setMargin(0));
             }
             tabla.addCell(celdaPrecio);
@@ -1274,6 +1298,10 @@ public class PresupuestoComercialPdfGenerator {
                     DESC_FG[k % DESC_FG.length], DESC_BG[k % DESC_BG.length]));
         }
 
+        // Set de rubros de maquinaria calculado una sola vez (la lista es
+        // configurable; evitamos releerla/normalizarla por cada fila).
+        Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
+
         int idx = 0;
         for (GenerarPresupuestoRequestDTO.Item it : items) {
             // Fondo zebra en las filas pares (2da, 4ta, …) — ayuda a seguir la
@@ -1290,7 +1318,7 @@ public class PresupuestoComercialPdfGenerator {
              *  fila muestra el precio efectivo de contado pero las columnas
              *  de descuento por escala van en "—" para que no sugieran un
              *  precio rebajado que comercialmente no aplica. */
-            boolean sinDescuentos = rubroExcluyeDescuentos(it.rubro());
+            boolean sinDescuentos = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
 
             // Foto
             Cell celdaFoto = new Cell()
@@ -1577,8 +1605,26 @@ public class PresupuestoComercialPdfGenerator {
     // Formas de pago — cards en grid de 3 columnas
     // =====================================================
     private void agregarFormasPago(Document doc,
-            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas) {
+            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas,
+            List<GenerarPresupuestoRequestDTO.Item> items) {
         if (formas == null || formas.isEmpty()) return;
+
+        // Régimen de IVA presente en el presupuesto, para decidir qué badge
+        // ("c/IVA"/"s/IVA") mostrar en cada card. Maquinaria usa el perfil
+        // maquinaria de la forma; el resto (menaje) el perfil menaje. Si el
+        // presupuesto mezcla ambos rubros, una forma cuyo perfil menaje y
+        // maquinaria coincidan en aplicaIva muestra ese valor; si difieren, la
+        // card no lleva badge (el precioFinal ya es correcto, pero un único
+        // "c/IVA"/"s/IVA" sería ambiguo).
+        Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
+        boolean hayMenaje = false;
+        boolean hayMaquinaria = false;
+        if (items != null) {
+            for (GenerarPresupuestoRequestDTO.Item it : items) {
+                if (PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq)) hayMaquinaria = true;
+                else hayMenaje = true;
+            }
+        }
 
         // keepTogether evita que el contenedor con borde se parta entre dos
         // páginas: si lo que queda libre al final de la página actual no
@@ -1619,7 +1665,8 @@ public class PresupuestoComercialPdfGenerator {
                     .setPadding(5)
                     .add(buildCardFormaPago(formas.get(i),
                             BORDE_FORMA_PAGO[i % BORDE_FORMA_PAGO.length],
-                            i == indiceMejorPrecio));
+                            i == indiceMejorPrecio,
+                            badgeIva(formas.get(i), hayMenaje, hayMaquinaria)));
             grid.addCell(celda);
         }
         // Completar la última fila con celdas vacías para que el grid quede prolijo.
@@ -1630,6 +1677,35 @@ public class PresupuestoComercialPdfGenerator {
 
         seccion.add(grid);
         doc.add(seccion);
+    }
+
+    /**
+     * Resuelve qué badge de IVA mostrar en la card de una forma de pago, según
+     * los regímenes de rubro presentes en el presupuesto:
+     * <ul>
+     *   <li>Solo menaje → {@code aplicaIva} del perfil menaje.</li>
+     *   <li>Solo maquinaria → {@code aplicaIvaMaquinaria} del perfil maquinaria.</li>
+     *   <li>Mixto → si ambos perfiles coinciden en aplicaIva, ese valor; si
+     *       difieren, {@code null} (la card no lleva badge).</li>
+     * </ul>
+     * Devuelve {@code true} = "c/IVA", {@code false} = "s/IVA", {@code null} =
+     * sin badge. No recalcula precios: el {@code precioFinal} ya viene bien.
+     */
+    private static Boolean badgeIva(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f,
+                                    boolean hayMenaje, boolean hayMaquinaria) {
+        if (f == null) return null;
+        Boolean menaje = f.aplicaIva();
+        Boolean maquinaria = f.aplicaIvaMaquinaria();
+        if (hayMaquinaria && !hayMenaje) return maquinaria;
+        if (hayMenaje && !hayMaquinaria) return menaje;
+        if (!hayMenaje) return menaje; // presupuesto sin ítems → cae al menaje
+        // Mixto: solo si ambos perfiles coinciden mostramos un único valor.
+        boolean menajeIva = Boolean.TRUE.equals(menaje);
+        boolean maquinariaIva = Boolean.TRUE.equals(maquinaria);
+        if (menaje != null && maquinaria != null && menajeIva == maquinariaIva) {
+            return menajeIva;
+        }
+        return null;
     }
 
     /**
@@ -1665,7 +1741,7 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     private Div buildCardFormaPago(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f,
-                                   Color borde, boolean esMejorPrecio) {
+                                   Color borde, boolean esMejorPrecio, Boolean badgeIva) {
         // Wrapper que combina la barra superior coloreada + la card de contenido.
         // No usamos setBorderTop sobre la card porque iText no respeta bien la
         // combinación de bordes-distintos-por-lado con esquinas redondeadas
@@ -1732,14 +1808,13 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0)
                 .setMarginBottom(2));
 
-        // Indicación de IVA siempre visible cuando el snapshot tiene el flag
-        // poblado. Antes solo aparecía "s/IVA" si la forma NO incluía IVA
-        // (vía f.descripcion()), pero las que sí lo incluían quedaban sin
-        // aclaración y el cliente no podía distinguir si el precio mostrado
-        // ya tenía IVA o si se le sumaba aparte. Ahora marcamos siempre
-        // "c/IVA" o "s/IVA" debajo del nombre.
-        if (f.aplicaIva() != null) {
-            contenido.add(new Paragraph(f.aplicaIva() ? "c/IVA" : "s/IVA")
+        // Indicación de IVA debajo del nombre. El régimen depende del rubro de
+        // los ítems: en un presupuesto mixto (menaje + maquinaria) cuyos
+        // perfiles de la forma difieren en aplicaIva no hay un único valor, así
+        // que {@code badgeIva} viene null y la card NO lleva badge (el
+        // precioFinal ya es correcto; un "c/IVA"/"s/IVA" global sería ambiguo).
+        if (badgeIva != null) {
+            contenido.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
                     .setFontSize(8)
                     .setFontColor(GRIS_MEDIO)
                     .setMargin(0)

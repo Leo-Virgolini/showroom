@@ -38,10 +38,9 @@ import {
   SesionListItem,
 } from '../models';
 import { dispararDescargaBlob } from '../download.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 @Component({
   selector: 'app-historial-page',
@@ -68,8 +67,7 @@ import { UserChip } from '../user-chip/user-chip';
     TagModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './historial-page.html',
   styleUrl: './historial-page.scss',

@@ -5,6 +5,7 @@ import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
@@ -67,6 +68,9 @@ public class PresupuestoComercialService {
      *  historial al armar la vista de /clientes (nombre/email/rubro del master
      *  pisan los del último movimiento). */
     private final ClienteMasterService clienteMasterService;
+    /** Fórmula de precios por perfil (menaje/maquinaria), compartida con el
+     *  showroom para que el presupuesto calcule las formas igual que el carrito. */
+    private final PrecioPerfilCalculator precioPerfilCalculator;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -96,7 +100,8 @@ public class PresupuestoComercialService {
             ObjectMapper mapper,
             UsuarioRepository usuarioRepository,
             ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository,
-            ClienteMasterService clienteMasterService) {
+            ClienteMasterService clienteMasterService,
+            PrecioPerfilCalculator precioPerfilCalculator) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
@@ -105,6 +110,7 @@ public class PresupuestoComercialService {
         this.usuarioRepository = usuarioRepository;
         this.pedidoRepository = pedidoRepository;
         this.clienteMasterService = clienteMasterService;
+        this.precioPerfilCalculator = precioPerfilCalculator;
     }
 
     /** Resuelve username a usuarioId. Null si el username no existe (caso
@@ -515,38 +521,24 @@ public class PresupuestoComercialService {
      *  cantidadCuotas} son la misma) y recalcula {@code precioFinal} sobre
      *  el subtotal del presupuesto. Limpia {@code itemSku} a null. */
     private GenerarPresupuestoRequestDTO forzarModoAgregado(GenerarPresupuestoRequestDTO datos) {
-        BigDecimal subtotalSinIva = BigDecimal.ZERO;
-        BigDecimal subtotalConIva = BigDecimal.ZERO;
-        for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
-            BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
-            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
-            BigDecimal d = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            BigDecimal factor = BigDecimal.ONE.subtract(d.movePointLeft(2));
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal lineaConIva = precio.multiply(factor).multiply(cantidad);
-            BigDecimal lineaSinIva = lineaConIva.divide(divisor, 4, RoundingMode.HALF_UP);
-            subtotalConIva = subtotalConIva.add(lineaConIva);
-            subtotalSinIva = subtotalSinIva.add(lineaSinIva);
-        }
+        java.util.Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasUnicas =
                 deduplicarFormas(datos.formasPago());
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasAgregadas = new java.util.ArrayList<>();
         for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formasUnicas) {
-            BigDecimal recargo = f.recargoPorcentaje() == null
-                    ? BigDecimal.ZERO
-                    : f.recargoPorcentaje().movePointLeft(2);
-            boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
-            BigDecimal base = aplicaIva ? subtotalConIva : subtotalSinIva;
-            // El "recargo %" representa el descuento por pago contado, no un
-            // sobrecargo aditivo: precio = base / (1 - recargo). Para 12 cuotas
-            // al 28%, el factor real es 1/0,72 ≈ 1,389 (no 1,28).
-            BigDecimal precioFinal = base.divide(
-                    BigDecimal.ONE.subtract(recargo), 2, RoundingMode.HALF_UP);
+            // El precio de la forma es la suma por ítem usando el perfil
+            // (menaje/maquinaria) del rubro de cada ítem — coincide con el
+            // carrito del showroom para presupuestos mixtos.
+            BigDecimal precioFinal = BigDecimal.ZERO;
+            for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
+                boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+                precioFinal = precioFinal.add(precioFormaPerfil(f, esMaq, it));
+            }
+            precioFinal = precioFinal.setScale(2, RoundingMode.HALF_UP);
             formasAgregadas.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
                     f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
                     f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),
-                    null));
+                    null, f.recargoPorcentajeMaquinaria(), f.aplicaIvaMaquinaria()));
         }
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
@@ -554,34 +546,49 @@ public class PresupuestoComercialService {
                 false, datos.items(), formasAgregadas);
     }
 
+    /** Total con IVA de una línea: precio con IVA × (1 − desc%) × cantidad. */
+    private static BigDecimal totalLineaConIva(GenerarPresupuestoRequestDTO.Item it) {
+        BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
+        BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+        BigDecimal d = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
+        BigDecimal factor = BigDecimal.ONE.subtract(d.movePointLeft(2));
+        return precio.multiply(factor).multiply(cantidad);
+    }
+
+    /** Precio que paga el cliente por un total de línea (con IVA) con una forma,
+     *  según el perfil (menaje/maquinaria) que corresponde al rubro. Usa el
+     *  calculador compartido para coincidir exactamente con el showroom: recargo
+     *  &gt;0 financia (÷(1−r)), recargo &lt;0 descuenta (×(1+r)), e IVA según perfil. */
+    private static BigDecimal precioFormaPerfil(
+            GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq,
+            GenerarPresupuestoRequestDTO.Item it) {
+        BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+        BigDecimal recargo = esMaq
+                ? (f.recargoPorcentajeMaquinaria() != null ? f.recargoPorcentajeMaquinaria() : BigDecimal.ZERO)
+                : (f.recargoPorcentaje() != null ? f.recargoPorcentaje() : BigDecimal.ZERO);
+        boolean aplicaIva = esMaq
+                ? Boolean.TRUE.equals(f.aplicaIvaMaquinaria())
+                : !Boolean.FALSE.equals(f.aplicaIva());
+        BigDecimal pf = PrecioPerfilCalculator.calcularPrecioFinal(totalLineaConIva(it), porcIva, recargo, aplicaIva);
+        return pf != null ? pf : BigDecimal.ZERO;
+    }
+
     /** Convierte un DTO en modo agregado al modo individual: deduplica las
      *  formas y, para cada ítem, calcula su propio {@code precioFinal} por
      *  forma sobre el precio del ítem (cantidad × precio × (1-desc)). */
     private GenerarPresupuestoRequestDTO forzarModoIndividual(GenerarPresupuestoRequestDTO datos) {
+        java.util.Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasUnicas =
                 deduplicarFormas(datos.formasPago());
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasIndividuales = new java.util.ArrayList<>();
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
-            BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
-            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
-            BigDecimal d = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            BigDecimal factor = BigDecimal.ONE.subtract(d.movePointLeft(2));
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal totalItemConIva = precio.multiply(factor).multiply(cantidad);
-            BigDecimal totalItemSinIva = totalItemConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+            boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
             for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formasUnicas) {
-                BigDecimal recargo = f.recargoPorcentaje() == null
-                        ? BigDecimal.ZERO
-                        : f.recargoPorcentaje().movePointLeft(2);
-                boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
-                BigDecimal base = aplicaIva ? totalItemConIva : totalItemSinIva;
-                BigDecimal precioFinal = base.divide(
-                        BigDecimal.ONE.subtract(recargo), 2, RoundingMode.HALF_UP);
+                BigDecimal precioFinal = precioFormaPerfil(f, esMaq, it).setScale(2, RoundingMode.HALF_UP);
                 formasIndividuales.add(new GenerarPresupuestoRequestDTO.FormaPagoSnapshot(
                         f.id(), f.nombre(), f.recargoPorcentaje(), f.cantidadCuotas(),
                         f.aplicaIva(), precioFinal, f.descripcion(), f.monedaSimbolo(),
-                        it.sku()));
+                        it.sku(), f.recargoPorcentajeMaquinaria(), f.aplicaIvaMaquinaria()));
             }
         }
         return new GenerarPresupuestoRequestDTO(

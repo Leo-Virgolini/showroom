@@ -41,8 +41,9 @@ import {
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
   ScanResult,
-  rubroExcluyeDescuentos,
+  normalizarRubro,
 } from '../models';
+import { precioPorForma } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
@@ -52,9 +53,8 @@ import {
 } from '../producto-generico-dialog/producto-generico-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 import { HasUnsavedChanges } from './unsaved-changes.guard';
 
 /** Redondeo HALF_UP a 2 decimales para que el preview en pantalla coincida
@@ -105,8 +105,7 @@ const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
     TooltipModule,
     CrearPedidoDialog,
     ProductoGenericoDialog,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './presupuestos-page.html',
   styleUrl: './presupuestos-page.scss',
@@ -250,6 +249,39 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ------------------------------------------------------------
   readonly formasPago = signal<FormaPago[]>([]);
 
+  /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se
+   *  cargan al iniciar desde el mismo endpoint que el showroom. Default del
+   *  backend = MAQUINAS INDUSTRIALES. Mientras llegan se asume lista vacía. */
+  readonly rubrosSinIva = signal<string[]>([]);
+
+  /** Set normalizado para comparar rubros sin importar acentos/casing. */
+  private readonly rubrosSinIvaSet = computed(
+    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
+  );
+
+  /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA y queda
+   *  fuera del descuento por escala). Copiado de showroom-page. */
+  rubroCotizaSinIva(rubro: string | null | undefined): boolean {
+    const n = normalizarRubro(rubro);
+    return n !== '' && this.rubrosSinIvaSet().has(n);
+  }
+
+  /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
+   *  rubro del ítem. Maquinaria: recargo null → 0 (no hereda del normal);
+   *  aplicaIva null → false. Misma lógica que showroom-page.perfilForma. */
+  perfilForma(
+    forma: FormaPago,
+    esMaquinaria: boolean,
+  ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
+    if (esMaquinaria) {
+      return {
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
+        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+      };
+    }
+    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+  }
+
   // ------------------------------------------------------------
   // Operaciones en curso
   // ------------------------------------------------------------
@@ -361,26 +393,37 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Snapshots de las formas de pago con el precio final ya calculado, listo
    *  para mandar al backend al generar el PDF.
    *
-   *  El "recargo %" se interpreta como **descuento por pago contado**, no
-   *  como sobrecargo aditivo: el efectivo es un X% menos que el precio en
-   *  esa forma, así que el precio = `efectivo / (1 - X/100)`. Para 12 cuotas
-   *  al 28%, el factor real es 1/0,72 ≈ 1,389 (no 1,28). */
+   *  El precio de cada forma se calcula **por ítem** con {@link precioPorForma}
+   *  usando el perfil (Normal/Maquinaria) que le corresponde al rubro de cada
+   *  línea — idéntico al carrito mixto del showroom: un recargo negativo
+   *  descuenta (×(1+r/100)), positivo financia (/(1-r/100)) y el IVA se aplica
+   *  según el perfil del rubro. El descuento individual de la línea se aplica
+   *  encima. El total de la forma es la suma de esos precios por ítem.
+   *
+   *  Como `aplicaIva` puede diferir por ítem (un mismo presupuesto puede mezclar
+   *  menaje c/IVA y maquinaria s/IVA), el flag del snapshot global refleja el
+   *  perfil "normal" de la forma — es solo informativo para el footer; el monto
+   *  ya viene resuelto por ítem. */
   readonly formasPagoCalculadas = computed<PresupuestoFormaPagoSnapshot[]>(() => {
-    const baseConIva = this.totalConIva();
-    const baseSinIva = this.totalSinIva();
+    this.itemsTick();
+    const items = this.items();
     return this.formasPago().map((f) => {
-      const recargo = (f.recargoPorcentaje ?? 0) / 100;
-      const aplicaIva = f.aplicaIva ?? true;
-      const base = aplicaIva ? baseConIva : baseSinIva;
-      const precioFinal = redondearMoneda(base / (1 - recargo));
+      const total = items.reduce((acc, it) => {
+        const perfil = this.perfilForma(f, this.rubroCotizaSinIva(it.rubro));
+        const unit = precioPorForma(it.pvpKtGastroConIva, it.porcIva, perfil);
+        const factorDesc = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+        return acc + unit * factorDesc * it.cantidad;
+      }, 0);
       return {
         id: f.id,
         nombre: f.nombre,
         recargoPorcentaje: f.recargoPorcentaje ?? 0,
         cantidadCuotas: f.cantidadCuotas,
-        aplicaIva,
-        precioFinal,
+        aplicaIva: f.aplicaIva ?? true,
+        precioFinal: redondearMoneda(total),
         descripcion: this.descripcionForma(f),
+        recargoPorcentajeMaquinaria: f.recargoPorcentajeMaquinaria,
+        aplicaIvaMaquinaria: f.aplicaIvaMaquinaria,
       };
     });
   });
@@ -437,25 +480,28 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     if (!this.cotizacionIndividual()) return [];
     const formasBase = this.formasPago();
     return this.items().map((it) => {
+      const esMaq = this.rubroCotizaSinIva(it.rubro);
       const pSI = it.pvpKtGastroSinIva ?? 0;
-      const pCI = it.pvpKtGastroConIva ?? 0;
       const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
       const totalSinIva = pSI * factor * it.cantidad;
-      const totalConIva = pCI * factor * it.cantidad;
       const formas: PresupuestoFormaPagoSnapshot[] = formasBase.map((f) => {
-        const recargo = (f.recargoPorcentaje ?? 0) / 100;
-        const aplicaIva = f.aplicaIva ?? true;
-        const base = aplicaIva ? totalConIva : totalSinIva;
-        const precioFinal = redondearMoneda(base / (1 - recargo));
+        const perfil = this.perfilForma(f, esMaq);
+        // precioPorForma da el precio unitario con el recargo del perfil ya
+        // aplicado y el IVA según corresponda al rubro; el descuento de la
+        // línea se aplica encima, y se multiplica por la cantidad.
+        const unit = precioPorForma(it.pvpKtGastroConIva, it.porcIva, perfil);
+        const precioFinal = redondearMoneda(unit * factor * it.cantidad);
         return {
           id: f.id,
           nombre: f.nombre,
           recargoPorcentaje: f.recargoPorcentaje ?? 0,
           cantidadCuotas: f.cantidadCuotas,
-          aplicaIva,
+          aplicaIva: perfil.aplicaIva ?? true,
           precioFinal,
           descripcion: this.descripcionForma(f),
           itemSku: it.sku,
+          recargoPorcentajeMaquinaria: f.recargoPorcentajeMaquinaria,
+          aplicaIvaMaquinaria: f.aplicaIvaMaquinaria,
         };
       });
       return {
@@ -494,6 +540,17 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         this.formasPago.set([]);
       },
     });
+
+    // Rubros que cotizan sin IVA — mismo endpoint que el showroom. Definen qué
+    // productos usan el PVP sin IVA como base y quedan fuera del descuento por
+    // escala. Si falla, queda lista vacía (todos cotizan con IVA).
+    this.api.obtenerRubrosSinIva()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.rubrosSinIva.set(lista),
+        error: (err) =>
+          console.warn('[rubros-sin-iva] no se pudieron cargar:', err),
+      });
 
     // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
     // edición: cargamos el detalle del presupuesto y poblamos el form.
@@ -938,7 +995,23 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  filas — tanto en los resultados de búsqueda como en la tabla del
    *  detalle del presupuesto — con un badge visible. */
   esRubroSinDescuento(rubro: string | null | undefined): boolean {
-    return rubroExcluyeDescuentos(rubro);
+    return this.rubroCotizaSinIva(rubro);
+  }
+
+  /** Precio base a mostrar para un producto en la lista/detalle según su rubro:
+   *  los rubros sin IVA muestran el PVP s/IVA; el resto el PVP c/IVA. Mismo
+   *  criterio que el showroom para que ambas pantallas coincidan. */
+  precioMostrado(
+    r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
+  ): number {
+    return this.rubroCotizaSinIva(r.rubro)
+      ? (r.pvpKtGastroSinIva ?? 0)
+      : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
+  }
+
+  /** Etiqueta "s/IVA" o "c/IVA" que acompaña a {@link precioMostrado}. */
+  etiquetaIvaMostrada(rubro: string | null | undefined): string {
+    return this.rubroCotizaSinIva(rubro) ? 's/IVA' : 'c/IVA';
   }
 
   agregarResultado(sku: string): void {

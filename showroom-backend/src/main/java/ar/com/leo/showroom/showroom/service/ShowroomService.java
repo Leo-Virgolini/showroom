@@ -11,6 +11,7 @@ import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.config.service.ConfiguracionService;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.config.entity.FormaPago;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
 import ar.com.leo.showroom.config.service.FormaPagoService;
@@ -98,6 +99,7 @@ public class ShowroomService {
     private final FormaPagoService formaPagoService;
     private final HorarioSyncSchedulerService horarioSyncService;
     private final ConfiguracionService configuracionService;
+    private final PrecioPerfilCalculator precioPerfilCalculator;
 
     /**
      * Lookup en cache local por SKU o código de barras:
@@ -531,6 +533,7 @@ public class ShowroomService {
                         it.getCantidad(),
                         it.getPrecioUnitario(),
                         it.getPorcIva(),
+                        it.getAplicaIva(),
                         urlImagenLocal(it.getSku()),
                         it.getComentarios()))
                 .toList();
@@ -827,6 +830,7 @@ public class ShowroomService {
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
                     .porcIva(porcIva)
+                    .aplicaIva(aplicaIvaItem)
                     .comentarios(StringUtils.hasText(it.comentarios()) ? it.comentarios().trim() : null)
                     .build();
             pedido.getItems().add(item);
@@ -990,10 +994,7 @@ public class ShowroomService {
     }
 
     private BigDecimal calcularSinIva(BigDecimal conIva, BigDecimal porcIva) {
-        if (conIva == null) return null;
-        if (porcIva == null || porcIva.signum() == 0) return conIva.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal divisor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
-        return conIva.divide(divisor, 2, RoundingMode.HALF_UP);
+        return PrecioPerfilCalculator.calcularSinIva(conIva, porcIva);
     }
 
     /**
@@ -1021,69 +1022,34 @@ public class ShowroomService {
      * con el precio mostrado en scan/visor/carrito. Recargo 0 = sin cambio.
      */
     private BigDecimal aplicarRecargoSinIva(BigDecimal precioBaseSinIva, BigDecimal recargoPorc) {
-        if (recargoPorc.signum() > 0) {
-            return precioBaseSinIva.divide(
-                    BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
-                    6, RoundingMode.HALF_UP);
-        }
-        if (recargoPorc.signum() < 0) {
-            return precioBaseSinIva.multiply(
-                    BigDecimal.ONE.add(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)));
-        }
-        return precioBaseSinIva;
+        return PrecioPerfilCalculator.aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
     }
 
     private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva,
                                            BigDecimal recargoPorc, boolean aplicaIva) {
-        if (precioBaseConIva == null) return null;
-        BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
-        if (precioBaseSinIva == null) return precioBaseConIva;
-
-        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(
-                precioBaseSinIva, recargoPorc != null ? recargoPorc : BigDecimal.ZERO);
-
-        if (aplicaIva && porcIva != null && porcIva.signum() > 0) {
-            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
-            return precioRecargadoSinIva.multiply(ivaFactor).setScale(4, RoundingMode.HALF_UP);
-        }
-        return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
+        return PrecioPerfilCalculator.calcularPrecioFinal(precioBaseConIva, porcIva, recargoPorc, aplicaIva);
     }
 
     /** Normaliza un rubro para comparación robusta (trim, sin acentos, mayúsculas). */
     private static String normalizarRubro(String rubro) {
-        if (rubro == null) return "";
-        return java.text.Normalizer.normalize(rubro.trim(), java.text.Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "").toUpperCase();
+        return PrecioPerfilCalculator.normalizarRubro(rubro);
     }
 
     /** Set normalizado de rubros de maquinaria (configurables; misma lista que
      *  "rubros que cotizan sin IVA"). */
     private java.util.Set<String> rubrosMaquinariaNormalizados() {
-        java.util.Set<String> set = new java.util.HashSet<>();
-        for (String r : configuracionService.getRubrosSinIva()) {
-            String n = normalizarRubro(r);
-            if (!n.isEmpty()) set.add(n);
-        }
-        return set;
+        return precioPerfilCalculator.rubrosMaquinariaNormalizados();
     }
 
     /** Recargo del perfil del rubro. Maquinaria: su propio recargo (null → 0, NO
      *  hereda del normal). Normal: recargoPorcentaje (null → 0). */
     private static BigDecimal recargoPerfil(FormaPago fp, boolean esMaquinaria) {
-        if (fp == null) return BigDecimal.ZERO;
-        if (esMaquinaria) {
-            // null → 0 (NO hereda del perfil normal).
-            return fp.getRecargoPorcentajeMaquinaria() != null
-                    ? fp.getRecargoPorcentajeMaquinaria() : BigDecimal.ZERO;
-        }
-        return fp.getRecargoPorcentaje() != null ? fp.getRecargoPorcentaje() : BigDecimal.ZERO;
+        return PrecioPerfilCalculator.recargoPerfil(fp, esMaquinaria);
     }
 
     /** aplicaIva del perfil: maquinaria null→false; normal null→true. */
     private static boolean aplicaIvaPerfil(FormaPago fp, boolean esMaquinaria) {
-        if (fp == null) return true;
-        if (esMaquinaria) return Boolean.TRUE.equals(fp.getAplicaIvaMaquinaria());
-        return !Boolean.FALSE.equals(fp.getAplicaIva());
+        return PrecioPerfilCalculator.aplicaIvaPerfil(fp, esMaquinaria);
     }
 
     /**
@@ -1093,18 +1059,7 @@ public class ShowroomService {
      * la absorbe el operador.
      */
     private BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva, BigDecimal recargoPorc) {
-        if (precioBaseConIva == null) return null;
-        BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
-        if (precioBaseSinIva == null) return precioBaseConIva;
-
-        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(
-                precioBaseSinIva, recargoPorc != null ? recargoPorc : BigDecimal.ZERO);
-
-        if (porcIva != null && porcIva.signum() > 0) {
-            BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
-            return precioRecargadoSinIva.multiply(ivaFactor).setScale(4, RoundingMode.HALF_UP);
-        }
-        return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
+        return PrecioPerfilCalculator.calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPorc);
     }
 
     /**

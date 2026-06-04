@@ -10,6 +10,10 @@ public record PedidoItemDTO(
         BigDecimal precioUnitario,
         /** % de IVA aplicado en el momento del pedido. Null para pedidos viejos. */
         BigDecimal porcIva,
+        /** Si el {@code precioUnitario} lleva IVA (lo decide el perfil del rubro
+         *  del ítem). Null para pedidos anteriores a esta columna → el frontend
+         *  cae al flag global {@code formaPagoAplicaIva}. */
+        Boolean aplicaIva,
         /** URL del endpoint local que sirve la imagen del producto, o null si no
          *  hay archivo. Se calcula al leer el pedido (no se persiste con el item). */
         String imagenUrl,

@@ -35,9 +35,8 @@ import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /** Redondeo HALF_UP a 2 decimales — alinea preview con el backend (BigDecimal). */
 const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
@@ -76,8 +75,7 @@ const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
     TextareaModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './cotizador-page.html',
   styleUrl: './cotizador-page.scss',

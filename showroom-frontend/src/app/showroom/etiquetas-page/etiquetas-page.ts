@@ -26,10 +26,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 interface EtiquetaImprimible {
   sku: string;
@@ -174,8 +173,7 @@ function guardarPerfilActivoIdLocal(id: number | null): void {
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './etiquetas-page.html',
   styleUrl: './etiquetas-page.scss',

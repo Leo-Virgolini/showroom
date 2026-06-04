@@ -26,10 +26,9 @@ import { TooltipModule } from 'primeng/tooltip';
 import { PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -60,8 +59,7 @@ import { UserChip } from '../user-chip/user-chip';
     ToolbarModule,
     TooltipModule,
     CrearPedidoDialog,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './presupuestos-historial-page.html',
   styleUrl: './presupuestos-historial-page.scss',

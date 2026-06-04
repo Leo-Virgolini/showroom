@@ -25,10 +25,9 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { CotizacionListItem } from '../models';
 import { abrirPdfEnPreview } from '../download.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Listado histórico de cotizaciones financieras guardadas — mismo patrón
@@ -53,8 +52,7 @@ import { UserChip } from '../user-chip/user-chip';
     TableModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './cotizador-historial-page.html',
   styleUrl: './cotizador-historial-page.scss',
