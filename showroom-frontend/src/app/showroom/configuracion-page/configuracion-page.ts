@@ -262,6 +262,7 @@ export class ConfiguracionPage {
   readonly formAplicaIva = signal(true);
   readonly formActivoPago = signal(true);
   readonly formPrecioReferencia = signal(false);
+  readonly formPrecioRefMaquinaria = signal(false);
   readonly formOrden = signal<number | null>(0);
 
   // Rubros que cotizan sin IVA (precio base = PVP sin IVA)
@@ -1089,6 +1090,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
     this.formPrecioReferencia.set(false);
+    this.formPrecioRefMaquinaria.set(false);
     this.formRecargoMaquinaria.set(0);
     this.formAplicaIvaMaquinaria.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
@@ -1105,6 +1107,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
     this.formPrecioReferencia.set(f.precioReferencia ?? false);
+    this.formPrecioRefMaquinaria.set(f.precioReferenciaMaquinaria ?? false);
     this.formRecargoMaquinaria.set(f.recargoPorcentajeMaquinaria ?? 0);
     this.formAplicaIvaMaquinaria.set(f.aplicaIvaMaquinaria ?? false);
     this.formOrden.set(f.orden);
@@ -1148,6 +1151,7 @@ export class ConfiguracionPage {
       activo,
       orden,
       precioReferencia: this.formPrecioReferencia(),
+      precioReferenciaMaquinaria: this.formPrecioRefMaquinaria(),
     };
     const obs = this.modoEdicionForma() === 'crear'
       ? this.api.crearFormaPago(payload)

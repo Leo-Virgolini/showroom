@@ -49,9 +49,13 @@ public record FormaPagoDTO(
 
         Integer orden,
 
-        /** Si la forma se muestra como precio de referencia en scan/visor/carrito.
-         *  Default false si viene null. */
+        /** Si la forma se muestra como precio de referencia (perfil menaje) en
+         *  scan/visor/carrito. Default false si viene null. */
         Boolean precioReferencia,
+
+        /** Si la forma se muestra como precio de referencia para el perfil
+         *  maquinaria. Default false si viene null. */
+        Boolean precioReferenciaMaquinaria,
 
         String creadoAt
 ) {

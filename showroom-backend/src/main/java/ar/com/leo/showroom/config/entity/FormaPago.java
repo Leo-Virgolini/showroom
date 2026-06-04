@@ -108,6 +108,12 @@ public class FormaPago {
     @Column(name = "precio_referencia")
     private Boolean precioReferencia;
 
+    /** Marca la forma destacada/default para productos de <strong>maquinaria</strong>
+     *  (análogo a {@link #precioReferencia}, que ahora aplica al perfil menaje).
+     *  Nullable; {@code null} se trata como {@code false}. */
+    @Column(name = "precio_referencia_maquinaria")
+    private Boolean precioReferenciaMaquinaria;
+
     @Column(name = "creado_at", nullable = false)
     private Instant creadoAt;
 }

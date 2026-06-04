@@ -321,6 +321,13 @@ export interface ScanVisorError {
   codigo: string;
 }
 
+/** Forma de pago elegida por el operador en el scan, reemitida al visor para
+ *  que la pantalla del cliente muestre el precio con esa misma forma. El visor
+ *  mantiene el último `formaId` recibido (sticky). */
+export interface VisorFormaEvent {
+  formaId: number;
+}
+
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
  *  diferenciado cuando un cliente desde /visor agrega algo. */
 export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';
@@ -517,9 +524,13 @@ export interface FormaPago {
   aplicaIvaMaquinaria: boolean | null;
   activo: boolean;
   orden: number;
-  /** Si la forma se muestra como precio de referencia en scan/visor/carrito.
-   *  El `orden` define cuál es la primera/destacada. Default false. */
+  /** Si la forma se muestra como precio de referencia (perfil menaje) en
+   *  scan/visor/carrito. El `orden` define cuál es la primera/destacada.
+   *  Default false. */
   precioReferencia: boolean;
+  /** Si la forma se muestra como precio de referencia para el perfil
+   *  maquinaria. Default false. */
+  precioReferenciaMaquinaria: boolean;
   /** ISO timestamp; null al crear desde el form. */
   creadoAt: string | null;
 }

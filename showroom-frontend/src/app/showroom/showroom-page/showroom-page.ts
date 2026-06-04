@@ -354,10 +354,31 @@ export class ShowroomPage implements AfterViewInit {
   );
 
   /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
-  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+  readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
 
-  /** Formas de referencia secundarias (todas menos la primera/destacada). */
-  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+  /** Forma destacada/default para el perfil del producto: de las formas activas
+   *  marcadas como referencia de ese perfil (menaje → `precioReferencia`;
+   *  maquinaria → `precioReferenciaMaquinaria`), la de menor `orden`. Null si
+   *  ninguna marcada (entonces se cae al precio de lista según rubro). Mismo
+   *  criterio que el presupuestador. */
+  formaDestacada(esMaquinaria: boolean): FormaPago | null {
+    return this.formasPagoActivas()
+      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+  }
+
+  /** Forma elegida por el operador en el selector del scan (sticky). Mientras
+   *  sea null, el precio mostrado usa la {@link formaDestacada} del rubro del
+   *  producto escaneado; al elegir una se mantiene entre productos. */
+  readonly formaScanSeleccionada = signal<FormaPago | null>(null);
+
+  /** Forma EFECTIVA del scan = la elegida por el operador, o la destacada del
+   *  perfil del producto escaneado si todavía no eligió ninguna. */
+  readonly formaScanEfectiva = computed<FormaPago | null>(() => {
+    const elegida = this.formaScanSeleccionada();
+    if (elegida) return elegida;
+    return this.formaDestacada(this.rubroCotizaSinIva(this.ultimoScan()?.rubro));
+  });
 
   /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
    *  al iniciar; default del backend = MAQUINAS INDUSTRIALES. */
@@ -430,19 +451,106 @@ export class ShowroomPage implements AfterViewInit {
     return aplicable?.porcentaje ?? 0;
   });
 
-  /** % de descuento que aplica a un ítem individual: el {@link descuentoAplicado}
-   *  para los elegibles, 0 para los excluidos (por rubro o por ser genérico). */
-  private descuentoParaItem(it: { rubro?: string | null; generico?: boolean }): number {
+  /**
+   * Descuentos manuales por ítem del carrito (FASE 4). El carrito es estado del
+   * backend (single source of truth), así que para NO tocar el modelo del carrito
+   * en el backend mantenemos el descuento manual como estado LOCAL del componente:
+   * un mapa `itemKey → %` (0..100). Vive solo mientras dura la atención al cliente
+   * — al vaciar el carrito o enviar el pedido se limpia.
+   *
+   * Regla "manual reemplaza escala" (por ítem): si un ítem tiene manual > 0, ese
+   * ítem usa el manual y se ignora el descuento automático por escala; si el
+   * manual es 0 (o no existe), sigue aplicando la escala como hoy. Ver
+   * {@link descuentoParaItem}.
+   */
+  readonly descuentosManuales = signal<Record<string, number>>({});
+
+  /** % de descuento manual cargado para un ítem (0 si no tiene). */
+  descuentoManual(itemKey: string): number {
+    return this.descuentosManuales()[itemKey] ?? 0;
+  }
+
+  /** Setea el descuento manual % de un ítem (0..100). 0 lo borra del mapa para
+   *  que vuelva a regir la escala automática en esa línea. */
+  setDescuentoManual(itemKey: string, valor: number | null | undefined): void {
+    let v = Number(valor);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    const actual = { ...this.descuentosManuales() };
+    if (v > 0) actual[itemKey] = v;
+    else delete actual[itemKey];
+    this.descuentosManuales.set(actual);
+  }
+
+  /**
+   * Descuento global manual % (atajo) — al cambiarlo, COPIA el mismo % a TODOS
+   * los ítems del carrito (reflejo, no aditivo; igual que el presupuestador). El
+   * input lo muestra como reflejo del % EFECTIVO ({@link descuentoEfectivoPct}):
+   * cuando todos los ítems llevan el mismo descuento coincide con ese %; con una
+   * mezcla muestra el promedio efectivo. No es un descuento que se suma encima
+   * de los individuales.
+   */
+  aplicarDescuentoGlobal(valor: number | null | undefined): void {
+    let v = Number(valor);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    if (v > 100) v = 100;
+    const mapa: Record<string, number> = {};
+    if (v > 0) {
+      for (const it of this.carrito()) mapa[it.itemKey] = v;
+    }
+    this.descuentosManuales.set(mapa);
+    this.focusInput();
+  }
+
+  /** % de descuento EFECTIVO que aplica a un ítem individual.
+   *  - Manual > 0 → ese ítem usa el manual y se ignora la escala (incluso para
+   *    rubros normalmente excluidos: el operador lo cargó a mano a propósito).
+   *  - Manual 0/ausente → escala automática para los elegibles, 0 para los
+   *    excluidos (por rubro o por ser genérico). */
+  private descuentoParaItem(it: { itemKey?: string; rubro?: string | null; generico?: boolean }): number {
+    const manual = it.itemKey ? this.descuentoManual(it.itemKey) : 0;
+    if (manual > 0) return manual;
     return this.excluidoDescuentoEscala(it) ? 0 : this.descuentoAplicado();
   }
 
-  /** Monto del descuento (en pesos) — solo sobre los ítems elegibles. */
-  readonly descuentoMonto = computed(
-    () => (this.subtotalElegibleDescuento() * this.descuentoAplicado()) / 100,
+  /** % de descuento EFECTIVO de un ítem del carrito (manual o escala) — para
+   *  mostrar el badge por línea en el template. */
+  descuentoEfectivoItem(it: CarritoItem): number {
+    return this.descuentoParaItem(it);
+  }
+
+  /** True si el descuento efectivo de la línea proviene de un manual cargado a
+   *  mano (no de la escala) — el template lo usa para diferenciar el badge. */
+  itemTieneDescuentoManual(it: CarritoItem): boolean {
+    return this.descuentoManual(it.itemKey) > 0;
+  }
+
+  /** Monto total de descuento (en pesos) — suma del descuento EFECTIVO por ítem
+   *  (manual o escala) sobre toda la lista. */
+  readonly descuentoMonto = computed(() =>
+    this.carrito().reduce((acc, it) => {
+      const base = (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
+      return acc + (base * this.descuentoParaItem(it)) / 100;
+    }, 0),
   );
 
   readonly totalCarrito = computed(
     () => this.subtotalPreDescuento() - this.descuentoMonto(),
+  );
+
+  /** % de descuento EFECTIVO sobre el subtotal completo del carrito (mezcla de
+   *  manuales por ítem y escala). Es lo que se muestra en el desglose del total
+   *  — reemplaza al viejo {@link descuentoAplicado} (puro escala) en el display
+   *  ahora que cada línea puede tener su propio %. 0 si no hay ningún descuento. */
+  readonly descuentoEfectivoPct = computed(() => {
+    const bruto = this.subtotalPreDescuento();
+    if (bruto <= 0) return 0;
+    return (this.descuentoMonto() / bruto) * 100;
+  });
+
+  /** True si en el carrito hay AL MENOS un ítem con descuento manual cargado. */
+  readonly hayDescuentoManual = computed(() =>
+    this.carrito().some((it) => this.descuentoManual(it.itemKey) > 0),
   );
 
   /** Recargo % vigente según la forma de pago elegida (0 si ninguna o si tiene 0%). */
@@ -788,9 +896,18 @@ export class ShowroomPage implements AfterViewInit {
     return `hace ${d} día${d === 1 ? '' : 's'}`;
   }
 
-  /** Tope de cantidad para el InputNumber: stock conocido o 999 si DUX no informó. */
-  maxCantidad(stock: number | null | undefined): number {
-    return stock != null && stock > 0 ? stock : 999;
+  /** Tope de cantidad para los InputNumber. NO se topea al stock: se permite
+   *  pedir más de lo disponible (el excedente queda como pendiente de
+   *  reposición y el ítem se agrega "forzado"). Cap alto solo para evitar
+   *  cantidades absurdas. */
+  maxCantidad(_stock?: number | null | undefined): number {
+    return 9999;
+  }
+
+  /** True cuando una cantidad supera el stock disponible conocido. Solo para
+   *  un aviso INFORMATIVO (no bloquea agregar). */
+  superaStock(stock: number | null | undefined, cantidad: number): boolean {
+    return stock != null && stock > 0 && cantidad > stock;
   }
 
   excedeStock(it: CarritoItem): boolean {
@@ -1145,6 +1262,29 @@ export class ShowroomPage implements AfterViewInit {
     this.focusInput();
   }
 
+  /** El operador eligió una forma en el selector del scan. Queda sticky y se
+   *  refleja en el visor del cliente. Devuelve el foco al input para seguir
+   *  escaneando. */
+  onCambiarFormaScan(fp: FormaPago | null): void {
+    this.formaScanSeleccionada.set(fp);
+    this.publicarFormaEnVisor();
+    this.focusInput();
+  }
+
+  /** Publica la forma EFECTIVA del scan al visor del operador (SSE
+   *  `visor-forma`). Best-effort: si la request falla, solo lo logueamos — la
+   *  pantalla del operador no depende de esto. No publica si no hay forma
+   *  efectiva (sin formas marcadas) ni id. */
+  private publicarFormaEnVisor(): void {
+    const forma = this.formaScanEfectiva();
+    if (forma?.id == null) return;
+    this.api.publicarFormaVisor(forma.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        error: (err) => console.warn('[visor-forma] no se pudo publicar:', err),
+      });
+  }
+
   confirmarSincronizar(): void {
     if (this.health()?.syncEnCurso) {
       this.toast.add({
@@ -1293,6 +1433,10 @@ export class ShowroomPage implements AfterViewInit {
           this.cargandoScan.set(false);
           this.ultimoScan.set(r);
           this.cantidadInput.set(1);
+          // Reflejar en el visor el precio con la forma efectiva del producto
+          // recién escaneado (sticky si el operador ya eligió una; sino la
+          // destacada del rubro). El scan ya publicó al visor el producto.
+          this.publicarFormaEnVisor();
           this.focusInput();
           if (r.habilitado === false) {
             this.toast.add({
@@ -1423,15 +1567,12 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /** Tope de cantidad para el input de la lista de resultados: stock
-   *  disponible cuando está sincronizado y es > 0. Null cuando el stock es
-   *  desconocido (no se sincronizó) o cuando no hay stock — en esos casos
-   *  el input queda sin tope (el agregado se bloquea aparte por
-   *  {@link agregarResultadoAlCarrito} si no hay precio/no está habilitado).
-   *  En el showroom-page, los productos sin stock se agregan vía el flujo
-   *  de scan unitario que sí permite forzar; desde la lista se evita. */
-  cantidadMaximaResultado(it: CatalogoItem): number | null {
-    return it.stockTotal != null && it.stockTotal > 0 ? it.stockTotal : null;
+  /** Tope de cantidad para el input de la lista de resultados. NO se topea al
+   *  stock: se permite pedir más de lo disponible (el excedente queda como
+   *  pendiente de reposición vía `forzar`). Cap alto solo para evitar
+   *  cantidades absurdas. */
+  cantidadMaximaResultado(_it: CatalogoItem): number {
+    return 9999;
   }
 
   /** Agregar directo al carrito desde la lista de resultados — saltea la
@@ -1462,7 +1603,9 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     const cant = this.cantidadResultado(it.sku);
-    const forzar = it.stockTotal != null && it.stockTotal <= 0;
+    // forzar=true si no hay stock O si la cantidad pedida lo supera: el backend
+    // acepta el ítem (o el excedente) como pendiente de reposición.
+    const forzar = it.stockTotal == null || it.stockTotal <= 0 || cant > it.stockTotal;
     this.api.agregarItemCarrito(it.sku, cant, forzar).subscribe({
       next: (res) => {
         this.carrito.set(res.carrito.items);
@@ -1525,6 +1668,7 @@ export class ShowroomPage implements AfterViewInit {
         this.cargandoScan.set(false);
         this.ultimoScan.set(r);
         this.cantidadInput.set(1);
+        this.publicarFormaEnVisor();
         this.focusInput();
       },
       error: (err) => {
@@ -1570,7 +1714,10 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     const cant = cantidad <= 0 ? 1 : cantidad;
-    const forzar = this.sinStockDisponible(r);
+    // forzar=true si no hay stock O si la cantidad pedida lo supera: el backend
+    // acepta el ítem (o el excedente) como pendiente de reposición.
+    const forzar = this.sinStockDisponible(r)
+      || (r.stockTotal != null && cant > r.stockTotal);
     this.api.agregarItemCarrito(r.sku, cant, forzar).subscribe({
       next: (res) => {
         // El SSE carrito-updated ya va a llegar (con el state nuevo); igual
@@ -1822,6 +1969,9 @@ export class ShowroomPage implements AfterViewInit {
     this.api.eliminarItemCarrito(itemKey).subscribe({
       next: (state) => {
         this.carrito.set(state.items);
+        // Limpiamos el descuento manual del ítem que se fue para no dejar
+        // entradas huérfanas en el mapa.
+        if (this.descuentoManual(itemKey) > 0) this.setDescuentoManual(itemKey, 0);
         this.focusInput();
       },
       error: (err) => {
@@ -1837,6 +1987,9 @@ export class ShowroomPage implements AfterViewInit {
     // viejo unos ms tras enviar el pedido.
     this.carrito.set([]);
     this.ultimoScan.set(null);
+    // Reset de los descuentos manuales (estado local) — el próximo cliente
+    // arranca sin descuentos cargados a mano.
+    this.descuentosManuales.set({});
     this.focusInput();
     this.api.vaciarCarritoServer().subscribe({
       next: (state) => this.carrito.set(state.items),
@@ -2260,8 +2413,10 @@ export class ShowroomPage implements AfterViewInit {
         // antes de mandar a DUX.
         formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
         items: this.carrito().map((it) => {
-          // Descuento per-item: los ítems excluidos por rubro
-          // (MAQUINAS INDUSTRIALES) NO reciben el descuento por escala —
+          // Descuento per-item EFECTIVO: si el ítem tiene descuento MANUAL (>0)
+          // se manda ese (reemplaza la escala para esa línea); sino el de escala
+          // para los elegibles. Los ítems excluidos por rubro (MAQUINAS
+          // INDUSTRIALES) sin manual NO reciben el descuento por escala —
           // mandamos `undefined` para que DUX los facture al PVP de lista.
           // Los genéricos marcados como "maquinaria" caen acá automáticamente
           // porque el backend les setea ese mismo rubro al crearlos.

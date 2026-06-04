@@ -40,6 +40,7 @@ import ar.com.leo.showroom.showroom.dto.AnularPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CantidadRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarGenericoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarRequestDTO;
+import ar.com.leo.showroom.showroom.dto.VisorFormaRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoAgregarResponseDTO;
 import ar.com.leo.showroom.showroom.dto.CarritoStateDTO;
 import ar.com.leo.showroom.showroom.dto.CatalogoItemDTO;
@@ -154,6 +155,21 @@ public class ShowroomController {
             }
             throw e;
         }
+    }
+
+    /**
+     * Publica al visor del operador la forma de pago elegida en el scan. El
+     * operador se resuelve por la autenticación (mismo criterio que el scan),
+     * de modo que el evento SSE {@code visor-forma} solo le llega a los visores
+     * ligados a ese operador. El visor recalcula el precio mostrado con esa
+     * forma y mantiene el último valor recibido (sticky).
+     */
+    @PostMapping("/visor/forma")
+    public void publicarFormaVisor(
+            @RequestBody @Valid VisorFormaRequestDTO body,
+            Authentication auth) {
+        if (auth == null) return;
+        visorService.publicarForma(auth.getName(), body.formaId());
     }
 
     /**
