@@ -48,7 +48,7 @@ export function precioPorForma(
 export function iconoFormaReferencia(nombre: string | null | undefined): string {
   const n = (nombre ?? '').toLowerCase();
   if (n.includes('efectivo') || n.includes('contado')) return 'pi pi-money-bill';
-  if (n.includes('transfer')) return 'pi pi-building';
+  if (n.includes('transfer')) return 'pi pi-arrow-right-arrow-left';
   if (
     n.includes('tarjeta') ||
     n.includes('crédito') || n.includes('credito') ||
