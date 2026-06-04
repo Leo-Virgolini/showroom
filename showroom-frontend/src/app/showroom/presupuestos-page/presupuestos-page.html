@@ -269,7 +269,6 @@
                       <div class="text-sm font-semibold text-surface-800 dark:text-surface-100">
                         {{ precioMostrado(r) | currency:'ARS':'symbol':'1.0-0' }}
                       </div>
-                      <div class="text-[10px] text-muted-color">{{ etiquetaIvaMostrada(r.rubro) }}</div>
                     </div>
                     </div>
                     <!-- Layout: 3 columnas (Ver, Cantidad, Agregar) con la
@@ -525,7 +524,6 @@
                     <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
                       {{ precioMostrado(it) | currency:'ARS':'symbol':'1.0-0' }}
                     </span>
-                    <span class="block text-[10px] text-muted-color">{{ etiquetaIvaMostrada(it.rubro) }}</span>
                   </td>
                   <td class="text-center">
                     <p-inputNumber [ngModel]="it.descuentoPorcentaje"
@@ -1001,11 +999,11 @@
       <div class="grid grid-cols-2 gap-3">
         <div class="p-3 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20">
           <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">
-            Precio s/IVA
+            Precio
           </div>
-          @if (p.pvpKtGastroSinIva != null && p.pvpKtGastroSinIva > 0) {
+          @if (p.pvpKtGastroConIva != null && p.pvpKtGastroConIva > 0) {
             <div class="text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
-              {{ p.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
+              {{ precioMostrado(p) | currency:'ARS':'symbol':'1.0-0' }}
             </div>
           } @else {
             <div class="text-sm text-red-600 dark:text-red-400 font-bold inline-flex items-center gap-1">
