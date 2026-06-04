@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import {
   ActualizarClienteRequest,
   CarritoAgregarGenericoRequest,
@@ -295,6 +295,22 @@ export class ShowroomService {
    *  heredar el origin del navegador. */
   guardarVisorConfig(cfg: VisorConfig): Observable<VisorConfig> {
     return this.http.put<VisorConfig>(`${this.base}/config/visor`, cfg);
+  }
+
+  /** Rubros cuyos productos cotizan SIN IVA (precio base = PVP sin IVA). Endpoint
+   *  público: lo consume también el visor sin autenticar. */
+  obtenerRubrosSinIva(): Observable<string[]> {
+    return this.http
+      .get<{ rubros: string[] }>(`${this.base}/config/rubros-sin-iva`)
+      .pipe(map((r) => r.rubros ?? []));
+  }
+
+  /** Guarda la lista de rubros sin IVA. Lista vacía → vuelve al default
+   *  (MAQUINAS INDUSTRIALES). */
+  guardarRubrosSinIva(rubros: string[]): Observable<string[]> {
+    return this.http
+      .put<{ rubros: string[] }>(`${this.base}/config/rubros-sin-iva`, { rubros })
+      .pipe(map((r) => r.rubros ?? []));
   }
 
   /** Regenera el pickit externo manualmente para un pedido ya existente. El

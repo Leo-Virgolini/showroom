@@ -79,6 +79,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/showroom/productos/*/imagen").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/config/escalas-descuento").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/formas-pago/activas").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/showroom/config/rubros-sin-iva").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
                         // Endpoints del visor por operador — todos públicos. El
                         // {username} en el path identifica el canal del operador.

@@ -11,6 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
  * Lectura/escritura de configuración runtime (tabla {@code configuracion}).
  * La BD es la única fuente de verdad — no hay fallback a propiedades ni a
@@ -54,6 +58,14 @@ public class ConfiguracionService {
      *  cuando el operador entra a la app por hostname/DNS (ej. "servidor") que los
      *  celulares no resuelven. Sin valor → el frontend cae al origin del navegador. */
     public static final String CLAVE_VISOR_BASE_URL = "visor.base-url";
+
+    /** Rubros (uno por línea) cuyos productos cotizan SIN IVA: el scan/visor/carrito
+     *  calculan sus precios de referencia sobre el PVP sin IVA en vez del PVP con
+     *  IVA. Si la fila no existe, se asume el default {@link #RUBROS_SIN_IVA_DEFAULT}. */
+    public static final String CLAVE_PRECIOS_RUBROS_SIN_IVA = "precios.rubros-sin-iva";
+
+    /** Default cuando nunca se configuró: las máquinas industriales cotizan sin IVA. */
+    private static final List<String> RUBROS_SIN_IVA_DEFAULT = List.of("MAQUINAS INDUSTRIALES");
 
     private final ConfiguracionRepository repository;
 
@@ -245,6 +257,47 @@ public class ConfiguracionService {
         guardar(CLAVE_VISOR_BASE_URL, v);
         log.info("Config visor base-url {}", v.isEmpty() ? "BORRADA (usa origin del navegador)" : "= " + v);
         return v;
+    }
+
+    // =====================================================================
+    // Rubros que cotizan sin IVA (precio base = PVP sin IVA)
+    // =====================================================================
+
+    /**
+     * Lista de rubros cuyos productos cotizan sin IVA. Si nunca se configuró
+     * (fila ausente), devuelve el default {@link #RUBROS_SIN_IVA_DEFAULT}
+     * (MAQUINAS INDUSTRIALES) para preservar el comportamiento histórico.
+     */
+    @Transactional(readOnly = true)
+    public List<String> getRubrosSinIva() {
+        String valor = leer(CLAVE_PRECIOS_RUBROS_SIN_IVA);
+        if (valor == null || valor.isBlank()) {
+            return RUBROS_SIN_IVA_DEFAULT;
+        }
+        return normalizarLista(valor.split("\n"));
+    }
+
+    /**
+     * Persiste la lista de rubros sin IVA (uno por línea). Limpia espacios,
+     * descarta vacíos y deduplica. Pasar lista vacía borra la fila → vuelve al
+     * default (MAQUINAS INDUSTRIALES).
+     */
+    @Transactional
+    public List<String> saveRubrosSinIva(List<String> rubros) {
+        List<String> limpios = rubros == null ? List.of() : normalizarLista(rubros.toArray(new String[0]));
+        guardar(CLAVE_PRECIOS_RUBROS_SIN_IVA, String.join("\n", limpios));
+        log.info("Config rubros sin IVA = {}", limpios);
+        return getRubrosSinIva();
+    }
+
+    /** Trimea, descarta vacíos y deduplica preservando el orden. */
+    private static List<String> normalizarLista(String[] valores) {
+        Set<String> set = new LinkedHashSet<>();
+        for (String v : valores) {
+            String t = v == null ? "" : v.trim();
+            if (!t.isEmpty()) set.add(t);
+        }
+        return List.copyOf(set);
     }
 
     private String leer(String clave) {

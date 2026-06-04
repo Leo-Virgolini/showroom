@@ -18,6 +18,7 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
+import { MultiSelectModule } from 'primeng/multiselect';
 import { TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
 import { TextareaModule } from 'primeng/textarea';
@@ -69,6 +70,7 @@ interface FilaHorario {
     InputIconModule,
     InputNumberModule,
     InputTextModule,
+    MultiSelectModule,
     TableModule,
     TabsModule,
     TextareaModule,
@@ -259,8 +261,21 @@ export class ConfiguracionPage {
   readonly formAplicaIva = signal(true);
   readonly formActivoPago = signal(true);
   readonly formPrecioReferencia = signal(false);
-  readonly formPrecioReferenciaMaquinaria = signal(false);
   readonly formOrden = signal<number | null>(0);
+
+  // Rubros que cotizan sin IVA (precio base = PVP sin IVA)
+  readonly cargandoRubrosSinIva = signal(false);
+  readonly guardandoRubrosSinIva = signal(false);
+  /** Rubros disponibles en DUX (opciones del multiselect). */
+  readonly rubrosDisponibles = signal<string[]>([]);
+  /** Rubros seleccionados que cotizan sin IVA. */
+  readonly rubrosSinIvaSeleccionados = signal<string[]>([]);
+  /** Opciones del multiselect: rubros de DUX + los seleccionados que ya no existan. */
+  readonly rubrosOpciones = computed(() => {
+    const set = new Set<string>(this.rubrosDisponibles());
+    for (const r of this.rubrosSinIvaSeleccionados()) set.add(r);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  });
 
 
   constructor() {
@@ -269,6 +284,7 @@ export class ConfiguracionPage {
     this.cargarPickit();
     this.cargarUsuarios();
     this.cargarFormasPago();
+    this.cargarRubrosSinIva();
     this.cargarNotificacionesAuto();
     this.cargarSyncAuto();
     this.cargarWhatsappMensaje();
@@ -1002,6 +1018,50 @@ export class ConfiguracionPage {
   trackByIndex = (i: number) => i;
 
   // ============================================================
+  // Rubros que cotizan sin IVA — métodos
+  // ============================================================
+
+  private cargarRubrosSinIva(): void {
+    this.cargandoRubrosSinIva.set(true);
+    this.api.listarRubrosProductos().subscribe({
+      next: (lista) => this.rubrosDisponibles.set(lista),
+      error: () => {
+        /* sin lista, el multiselect queda solo con los rubros ya seleccionados */
+      },
+    });
+    this.api.obtenerRubrosSinIva().subscribe({
+      next: (lista) => {
+        this.rubrosSinIvaSeleccionados.set(lista);
+        this.cargandoRubrosSinIva.set(false);
+      },
+      error: (err) => {
+        this.cargandoRubrosSinIva.set(false);
+        toastError(this.toast, 'Rubros sin IVA', err, 'No se pudieron cargar los rubros sin IVA');
+      },
+    });
+  }
+
+  guardarRubrosSinIva(): void {
+    this.guardandoRubrosSinIva.set(true);
+    this.api.guardarRubrosSinIva(this.rubrosSinIvaSeleccionados()).subscribe({
+      next: (lista) => {
+        this.rubrosSinIvaSeleccionados.set(lista);
+        this.guardandoRubrosSinIva.set(false);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Guardado',
+          detail: 'Rubros que cotizan sin IVA actualizados.',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.guardandoRubrosSinIva.set(false);
+        toastError(this.toast, 'Rubros sin IVA', err, 'No se pudieron guardar los rubros sin IVA');
+      },
+    });
+  }
+
+  // ============================================================
   // Formas de pago — métodos
   // ============================================================
 
@@ -1028,7 +1088,6 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
     this.formPrecioReferencia.set(false);
-    this.formPrecioReferenciaMaquinaria.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
     this.formOrden.set(maxOrden + 1);
     this.mostrarDialogForma.set(true);
@@ -1043,7 +1102,6 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
     this.formPrecioReferencia.set(f.precioReferencia ?? false);
-    this.formPrecioReferenciaMaquinaria.set(f.precioReferenciaMaquinaria ?? false);
     this.formOrden.set(f.orden);
     this.mostrarDialogForma.set(true);
   }
@@ -1083,7 +1141,6 @@ export class ConfiguracionPage {
       activo,
       orden,
       precioReferencia: this.formPrecioReferencia(),
-      precioReferenciaMaquinaria: this.formPrecioReferenciaMaquinaria(),
     };
     const obs = this.modoEdicionForma() === 'crear'
       ? this.api.crearFormaPago(payload)

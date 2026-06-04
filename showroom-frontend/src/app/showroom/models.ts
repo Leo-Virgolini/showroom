@@ -25,12 +25,19 @@ export const RUBROS_SIN_DESCUENTO_ESCALA = new Set(['MAQUINAS INDUSTRIALES']);
  *  Tolera null/whitespace/casing/diacríticos — DUX a veces devuelve
  *  "Máquinas Industriales" con tilde o lowercase, lo aceptamos igual. */
 export function rubroExcluyeDescuentos(rubro: string | null | undefined): boolean {
-  if (!rubro) return false;
-  const sinAcentos = rubro.trim()
+  const n = normalizarRubro(rubro);
+  return n !== '' && RUBROS_SIN_DESCUENTO_ESCALA.has(n);
+}
+
+/** Normaliza un rubro para comparaciones robustas: trim, sin acentos, mayúsculas.
+ *  DUX a veces devuelve el mismo rubro con tilde o lowercase; esto los unifica.
+ *  Devuelve cadena vacía para null/whitespace. */
+export function normalizarRubro(rubro: string | null | undefined): string {
+  if (!rubro) return '';
+  return rubro.trim()
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toUpperCase();
-  return RUBROS_SIN_DESCUENTO_ESCALA.has(sinAcentos);
 }
 
 export interface CarritoItem extends ScanResult {
@@ -501,9 +508,6 @@ export interface FormaPago {
   /** Si la forma se muestra como precio de referencia en scan/visor/carrito.
    *  El `orden` define cuál es la primera/destacada. Default false. */
   precioReferencia: boolean;
-  /** Si la forma se muestra como precio de referencia para productos de rubro
-   *  MAQUINAS INDUSTRIALES (reemplaza a las normales). Default false. */
-  precioReferenciaMaquinaria: boolean;
   /** ISO timestamp; null al crear desde el form. */
   creadoAt: string | null;
 }

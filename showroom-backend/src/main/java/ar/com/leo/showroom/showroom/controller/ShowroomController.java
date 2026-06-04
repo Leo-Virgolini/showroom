@@ -1339,6 +1339,21 @@ public class ShowroomController {
     }
 
     /**
+     * Rubros cuyos productos cotizan SIN IVA: el scan, el visor y el carrito
+     * calculan sus precios de referencia sobre el PVP sin IVA. El GET es público
+     * porque el visor (sin autenticar) necesita la lista para mostrar los precios.
+     */
+    @GetMapping("/config/rubros-sin-iva")
+    public Map<String, List<String>> obtenerRubrosSinIva() {
+        return Map.of("rubros", service.getRubrosSinIva());
+    }
+
+    @PutMapping("/config/rubros-sin-iva")
+    public Map<String, List<String>> actualizarRubrosSinIva(@RequestBody Map<String, List<String>> body) {
+        return Map.of("rubros", service.saveRubrosSinIva(body.getOrDefault("rubros", List.of())));
+    }
+
+    /**
      * Toggle global de sincronización automática con DUX. Cuando es false los
      * disparos de los horarios programados se saltean (los horarios no se borran,
      * solo se pausa). Útil para pausar la sync cuando DUX está caído.
