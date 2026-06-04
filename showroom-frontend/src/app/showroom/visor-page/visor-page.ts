@@ -457,6 +457,20 @@ export class VisorPage {
       : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
   }
 
+  /** Id de la forma de referencia con el menor precio mostrado, o null si hay
+   *  menos de dos formas. Permite marcar "Mejor precio" en la que más le conviene
+   *  al cliente sin asumir que la destacada (por `orden`) es siempre la más
+   *  barata — el operador podría reordenarlas o cambiar los recargos. */
+  idFormaReferenciaMasBarata(r: ScanResult): number | null {
+    const formas = this.formasReferencia();
+    if (formas.length < 2) return null;
+    let mejor = formas[0];
+    for (const f of formas) {
+      if (this.precioReferenciaPorForma(r, f) < this.precioReferenciaPorForma(r, mejor)) mejor = f;
+    }
+    return mejor.id;
+  }
+
   /** true si hay un escalón con umbral mayor (y por tanto mejor) que ya
    *  aplica al precio. Lo usamos para atenuar las tarjetas de escalones
    *  "menores" cuando un cliente ya califica para uno mejor. */

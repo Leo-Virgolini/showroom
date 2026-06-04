@@ -36,10 +36,9 @@ import {
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
 import { dispararDescargaBlob } from '../download.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 @Component({
   selector: 'app-pedidos-page',
@@ -65,8 +64,7 @@ import { UserChip } from '../user-chip/user-chip';
     TextareaModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './pedidos-page.html',
   styleUrl: './pedidos-page.scss',

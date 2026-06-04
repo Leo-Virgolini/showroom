@@ -52,9 +52,8 @@ import {
 } from '../producto-generico-dialog/producto-generico-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 import { HasUnsavedChanges } from './unsaved-changes.guard';
 
 /** Redondeo HALF_UP a 2 decimales para que el preview en pantalla coincida
@@ -105,8 +104,7 @@ const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
     TooltipModule,
     CrearPedidoDialog,
     ProductoGenericoDialog,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './presupuestos-page.html',
   styleUrl: './presupuestos-page.scss',

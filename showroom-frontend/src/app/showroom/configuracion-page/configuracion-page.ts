@@ -27,10 +27,9 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
 import { EscalaDescuento, FormaPago, HorarioSync, NotificacionesAutoConfig, PickitConfig } from '../models';
-import { MoreMenu } from '../more-menu/more-menu';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Fila editable de la tabla de escalones. {@code umbralMin} y {@code porcentaje}
@@ -77,8 +76,7 @@ interface FilaHorario {
     ToggleSwitchModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './configuracion-page.html',
   styleUrl: './configuracion-page.scss',

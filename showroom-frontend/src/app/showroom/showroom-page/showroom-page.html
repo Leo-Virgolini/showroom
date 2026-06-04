@@ -204,10 +204,7 @@
         <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
           [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
 
-        <app-more-menu />
-
-        <app-user-chip />
-        <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo" (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />
+        <app-top-actions />
       </div>
     </ng-template>
   </p-toolbar>
@@ -932,10 +929,14 @@
               optionLabel="nombre"
               class="w-full">
               <ng-template let-fp #item>
-                <span class="inline-flex items-center gap-1.5">{{ fp.nombre }}</span>
+                <span class="inline-flex items-center gap-1.5">
+                  <i [class]="iconoForma(fp)" class="text-sm text-muted-color shrink-0"></i>{{ fp.nombre }}
+                </span>
               </ng-template>
               <ng-template let-fp #selectedItem>
-                <span class="inline-flex items-center gap-1.5">{{ fp.nombre }}</span>
+                <span class="inline-flex items-center gap-1.5">
+                  <i [class]="iconoForma(fp)" class="text-sm text-muted-color shrink-0"></i>{{ fp.nombre }}
+                </span>
               </ng-template>
             </p-select>
           </div>

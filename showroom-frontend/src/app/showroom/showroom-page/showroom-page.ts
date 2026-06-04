@@ -14,7 +14,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { EMPTY, Subject, Subscription, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { ConfirmationService, MessageService } from 'primeng/api';
@@ -50,12 +50,11 @@ import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util'
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
-import { MoreMenu } from '../more-menu/more-menu';
 import {
   ProductoGenericoData,
   ProductoGenericoDialog,
 } from '../producto-generico-dialog/producto-generico-dialog';
-import { UserChip } from '../user-chip/user-chip';
+import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Datos del cliente que el vendedor completa al cerrar el pedido.
@@ -171,9 +170,8 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     TextareaModule,
     ToolbarModule,
     TooltipModule,
-    MoreMenu,
     ProductoGenericoDialog,
-    UserChip,
+    TopActions,
   ],
   templateUrl: './showroom-page.html',
   styleUrl: './showroom-page.scss',
@@ -181,7 +179,6 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
 export class ShowroomPage implements AfterViewInit {
   private readonly api = inject(ShowroomService);
   private readonly auth = inject(AuthService);
-  private readonly router = inject(Router);
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly syncState = inject(SyncStateService);
@@ -574,9 +571,13 @@ export class ShowroomPage implements AfterViewInit {
     return min;
   });
 
-  /** Ícono según cantidad de cuotas: pago contado vs financiado. */
+  /** Ícono de la forma de pago. Cuotas → tarjeta (señal inequívoca de
+   *  financiación). El resto se infiere del nombre (efectivo, transferencia…)
+   *  con la misma heurística que los precios de referencia, para no mostrar
+   *  todas las formas de pago contado con el mismo ícono. */
   iconoForma(fp: FormaPago): string {
-    return fp.cantidadCuotas && fp.cantidadCuotas > 1 ? 'pi pi-credit-card' : 'pi pi-money-bill';
+    if (fp.cantidadCuotas && fp.cantidadCuotas > 1) return 'pi pi-credit-card';
+    return iconoFormaReferencia(fp.nombre);
   }
 
   readonly cantidadTotal = computed(() =>
@@ -1255,17 +1256,6 @@ export class ShowroomPage implements AfterViewInit {
     const base = this.visorBaseConfig() || window.location.origin;
     return `${base}/visor/${encodeURIComponent(username)}`;
   });
-
-  /** Cierra la sesión y redirige al login. */
-  cerrarSesion(): void {
-    this.auth.logout().subscribe({
-      next: () => this.router.navigate(['/login']),
-      error: () => {
-        // Igual mandamos al login — el logout también limpió el signal local.
-        this.router.navigate(['/login']);
-      },
-    });
-  }
 
   /**
    * Submit del input principal. Si la entrada parece un código (solo dígitos),
