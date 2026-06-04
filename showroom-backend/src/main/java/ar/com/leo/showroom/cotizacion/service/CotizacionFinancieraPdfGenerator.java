@@ -529,32 +529,27 @@ public class CotizacionFinancieraPdfGenerator {
                 .setMarginLeft(6)
                 .setMarginRight(6));
 
-        // Línea de detalle: "N cuotas de $valor" si aplica, o descuento por
-        // contado si la forma trae recargo negativo. Centrado debajo del precio.
+        // Línea de detalle: "N × $valor" para cuotas, o "pago único". El "%
+        // de descuento" NO se muestra: depende del perfil (menaje/maquinaria) de
+        // cada monto según su tasa de IVA, así que a nivel forma sería engañoso.
         Integer cuotas = f.cantidadCuotas();
         boolean hayCuotas = cuotas != null && cuotas > 1;
         String detalleTexto;
-        boolean detalleEsDescuento = false;
         if (hayCuotas) {
             BigDecimal valorCuota = precio.divide(BigDecimal.valueOf(cuotas),
                     2, RoundingMode.HALF_UP);
             detalleTexto = cuotas + " × " + PESO_FMT.format(valorCuota);
-        } else if (f.recargoPorcentaje() != null && f.recargoPorcentaje().signum() < 0) {
-            detalleTexto = f.recargoPorcentaje().abs().stripTrailingZeros().toPlainString()
-                    + "% de descuento";
-            detalleEsDescuento = true;
         } else {
             detalleTexto = "pago único";
         }
         Paragraph detalle = new Paragraph(detalleTexto)
                 .setFontSize(7.5f)
-                .setFontColor(detalleEsDescuento ? KT_VERDE : GRIS_MEDIO)
+                .setFontColor(GRIS_MEDIO)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
                 .setMarginTop(2)
                 .setMarginLeft(6)
                 .setMarginRight(6);
-        if (detalleEsDescuento) detalle.simulateBold();
         card.add(detalle);
 
         return card;

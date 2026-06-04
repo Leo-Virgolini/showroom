@@ -619,15 +619,12 @@ export class CotizadorPage {
     return 'pi pi-tag';
   }
 
-  private descripcionForma(f: FormaPago): string {
-    const partes: string[] = [];
-    if ((f.recargoPorcentaje ?? 0) < 0) {
-      partes.push(`${Math.abs(f.recargoPorcentaje)}% de descuento`);
-    }
-    if ((f.cantidadCuotas ?? 1) > 1) {
-      partes.push(`${f.cantidadCuotas} cuotas`);
-    }
-    return partes.join(' · ');
+  private descripcionForma(_f: FormaPago): string {
+    // No derivamos descripción para la forma: el "% de descuento" depende del
+    // perfil (menaje/maquinaria) de cada monto —según su tasa de IVA—, así que
+    // sería engañoso mostrar uno solo a nivel forma. El detalle de cuotas
+    // ("N × $") se muestra aparte y el nombre ya dice "N cuotas".
+    return '';
   }
 
   private formatear(n: number): string {
