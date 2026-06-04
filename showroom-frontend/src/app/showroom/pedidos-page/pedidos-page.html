@@ -214,9 +214,6 @@
                     @if (p.cantidadCuotas && p.cantidadCuotas > 1) {
                       <span class="text-[0.65rem] text-muted-color tabular-nums">{{ p.cantidadCuotas }} cuotas</span>
                     }
-                    @if (p.formaPagoAplicaIva === false) {
-                      <span class="text-[0.55rem] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-                    }
                   </div>
                 </div>
               } @else {
@@ -397,10 +394,6 @@
                                 +{{ det.recargoPorcentaje }}%
                               </span>
                             }
-                            @if (det.formaPagoAplicaIva === false) {
-                              <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 ml-1"
-                                pTooltip="El cliente pagó sin IVA. DUX igual facturó con IVA y el operador absorbió la diferencia." tooltipPosition="top">SIN IVA</span>
-                            }
                           </dd>
                         }
                         @if (det.totalSinRecargo != null && det.total != null) {
@@ -413,18 +406,15 @@
                         <dt class="text-muted-color">Cliente paga</dt>
                         <dd class="tabular-nums font-bold text-base text-primary">
                           {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
-                          <span class="text-xs font-normal text-muted-color ml-1">
-                            {{ det.formaPagoAplicaIva === false ? 's/IVA' : 'c/IVA' }}
-                          </span>
                         </dd>
-                        @if (det.formaPagoAplicaIva === false && totalDux(det); as tDux) {
+                        @if (huboAbsorcion(det)) {
                           <dt class="text-muted-color">+ IVA absorbido</dt>
                           <dd class="tabular-nums text-amber-700 dark:text-amber-300">
-                            {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ ivaAbsorbido(det) | currency:'ARS':'symbol':'1.0-0' }}
                           </dd>
                           <dt class="text-muted-color">DUX facturó</dt>
                           <dd class="tabular-nums font-semibold">
-                            {{ tDux | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ totalDux(det) | currency:'ARS':'symbol':'1.0-0' }}
                             <span class="text-xs font-normal text-muted-color ml-1">c/IVA</span>
                           </dd>
                         } @else if (det.totalSinIva != null && det.total != null && det.totalSinIva !== det.total) {
@@ -434,7 +424,7 @@
                           </dd>
                           <dt class="text-muted-color">IVA</dt>
                           <dd class="tabular-nums">
-                            {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ ivaContenido(det) | currency:'ARS':'symbol':'1.0-0' }}
                           </dd>
                         }
                       </dl>
@@ -482,19 +472,18 @@
                       @if (det.total != null) {
                         <div class="flex items-baseline gap-3 text-xs tabular-nums">
                           <span class="text-primary font-semibold">
-                            Cliente paga ({{ det.formaPagoAplicaIva === false ? 's/IVA' : 'c/IVA' }}):
-                            {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
+                            Cliente paga: {{ det.total | currency:'ARS':'symbol':'1.0-0' }}
                           </span>
-                          @if (det.formaPagoAplicaIva === false && totalDux(det); as tDux) {
+                          @if (huboAbsorcion(det)) {
                             <span class="text-amber-700 dark:text-amber-300">
-                              + IVA absorbido: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}
+                              + IVA absorbido: {{ ivaAbsorbido(det) | currency:'ARS':'symbol':'1.0-0' }}
                             </span>
                             <span class="text-muted-color">
-                              DUX facturó: {{ tDux | currency:'ARS':'symbol':'1.0-0' }}
+                              DUX facturó: {{ totalDux(det) | currency:'ARS':'symbol':'1.0-0' }}
                             </span>
                           } @else if (det.totalSinIva != null && det.totalSinIva !== det.total) {
                             <span class="text-muted-color">Sin IVA: {{ det.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}</span>
-                            <span class="text-muted-color">IVA: {{ ivaTotal(det) | currency:'ARS':'symbol':'1.0-0' }}</span>
+                            <span class="text-muted-color">IVA: {{ ivaContenido(det) | currency:'ARS':'symbol':'1.0-0' }}</span>
                           }
                         </div>
                       }

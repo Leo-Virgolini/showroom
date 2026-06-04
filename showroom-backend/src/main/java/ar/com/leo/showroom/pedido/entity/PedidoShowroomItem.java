@@ -46,6 +46,16 @@ public class PedidoShowroomItem {
     @Column(name = "porc_iva", precision = 6, scale = 2)
     private BigDecimal porcIva;
 
+    /** Si el {@code precioUnitario} de este ítem lleva IVA. Lo define el perfil
+     *  (menaje/maquinaria) del rubro del ítem al crear el pedido — un pedido
+     *  mixto puede tener ítems con IVA (menaje) y sin IVA (maquinaria) bajo la
+     *  misma forma de pago. Necesario para reconstruir el desglose por ítem en
+     *  la pantalla /pedidos sin asumir un único régimen para todo el pedido.
+     *  Nullable: los pedidos anteriores a esta columna caen al flag global de
+     *  la forma de pago ({@code formaPagoAplicaIva}). */
+    @Column(name = "aplica_iva")
+    private Boolean aplicaIva;
+
     /** Texto libre que viaja al campo {@code comentarios} de la línea en el
      *  payload DUX. Persistido para reconstruir el detalle del pedido sin
      *  consultar a DUX. Usado principalmente con el SKU comodín (ver

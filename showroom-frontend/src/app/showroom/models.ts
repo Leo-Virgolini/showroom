@@ -577,6 +577,10 @@ export interface PedidoItemDetalle {
   precioUnitario: number | null;
   /** % de IVA aplicado al producto al momento del pedido. */
   porcIva: number | null;
+  /** Si el {@code precioUnitario} de este ítem lleva IVA, según el perfil
+   *  (menaje/maquinaria) del rubro. Null en pedidos anteriores a esta columna
+   *  → se cae al flag global {@code formaPagoAplicaIva} del pedido. */
+  aplicaIva: boolean | null;
   /** URL del endpoint local de imagen del producto, o null si no existe el archivo. */
   imagenUrl: string | null;
   /** Comentarios libres de la línea (se envió a DUX como {@code comentarios}).

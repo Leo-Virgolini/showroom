@@ -531,6 +531,7 @@ public class ShowroomService {
                         it.getCantidad(),
                         it.getPrecioUnitario(),
                         it.getPorcIva(),
+                        it.getAplicaIva(),
                         urlImagenLocal(it.getSku()),
                         it.getComentarios()))
                 .toList();
@@ -827,6 +828,7 @@ public class ShowroomService {
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
                     .porcIva(porcIva)
+                    .aplicaIva(aplicaIvaItem)
                     .comentarios(StringUtils.hasText(it.comentarios()) ? it.comentarios().trim() : null)
                     .build();
             pedido.getItems().add(item);

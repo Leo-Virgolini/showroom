@@ -359,31 +359,44 @@ export class PedidosPage {
     return p * it.cantidad;
   }
 
-  /** Monto total del IVA del pedido. Cuando la forma aplica IVA usa los snapshots
-   *  guardados (total - totalSinIva). Cuando NO aplica IVA, el cliente pagó sin
-   *  IVA pero DUX igual lo facturó: lo recalculamos per-item porque
-   *  {@code total === totalSinIva} en ese caso. */
-  ivaTotal(det: PedidoDetalle): number | null {
-    if (det.total == null || det.totalSinIva == null) return null;
-    if (det.formaPagoAplicaIva === false) {
-      const totalDux = this.totalDux(det);
-      return totalDux != null ? totalDux - det.total : null;
-    }
-    return det.total - det.totalSinIva;
-  }
-
-  /** Total c/IVA que recibió DUX. En el caso normal coincide con {@code det.total}.
-   *  En forma "sin IVA" hay que recalcularlo: el operador absorbe la diferencia. */
+  /** Total c/IVA que DUX facturó = suma por ítem del precio con IVA. Para ítems
+   *  que el cliente pagó sin IVA, DUX igual facturó con IVA (el operador absorbe
+   *  la diferencia). Usa el {@code aplicaIva} por ítem — un pedido mixto tiene
+   *  ítems con IVA (menaje) y sin IVA (maquinaria); cae al flag global del
+   *  pedido en pedidos anteriores a esa columna. */
   totalDux(det: PedidoDetalle): number | null {
-    if (det.formaPagoAplicaIva !== false) return det.total;
+    if (det.total == null) return null;
     if (!det.items?.length) return det.total;
     let suma = 0;
     for (const it of det.items) {
-      const p = this.precioConIva(it.precioUnitario, it.porcIva, false);
-      if (p == null) continue;
+      const ai = it.aplicaIva ?? det.formaPagoAplicaIva;
+      const p = this.precioConIva(it.precioUnitario, it.porcIva, ai);
+      if (p == null) return det.total;
       suma += p * (it.cantidad ?? 0);
     }
     return suma;
+  }
+
+  /** IVA que el operador absorbió: lo que DUX facturó de más respecto de lo que
+   *  pagó el cliente. ~0 cuando el cliente pagó todo con IVA. */
+  ivaAbsorbido(det: PedidoDetalle): number | null {
+    const tDux = this.totalDux(det);
+    if (tDux == null || det.total == null) return null;
+    return tDux - det.total;
+  }
+
+  /** True si hubo al menos un ítem que el cliente pagó sin IVA (DUX facturó de
+   *  más). Tolerancia de medio peso para no disparar por redondeo. */
+  huboAbsorcion(det: PedidoDetalle): boolean {
+    const a = this.ivaAbsorbido(det);
+    return a != null && a > 0.5;
+  }
+
+  /** IVA contenido en lo que pagó el cliente. Sólo tiene sentido cuando NO hubo
+   *  absorción (el cliente pagó con IVA). */
+  ivaContenido(det: PedidoDetalle): number | null {
+    if (det.total == null || det.totalSinIva == null) return null;
+    return det.total - det.totalSinIva;
   }
 
   trackById = (_: number, it: PedidoListItem) => it.id;
