@@ -658,11 +658,11 @@
             </span>
             <div class="flex items-baseline gap-2 flex-wrap">
               <span class="text-xl sm:text-2xl font-bold text-[#3B1E09] dark:text-surface-0">
-                {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+                {{ totalEfectivo() | currency:'ARS':'symbol':'1.0-0' }}
               </span>
               @if (descuentoTotalMonto() > 0) {
                 <span class="text-[11px] text-muted-color line-through">
-                  {{ subtotalBrutoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+                  {{ subtotalBrutoEfectivo() | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
                 <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
                   −{{ descuentoTotalMonto() | currency:'ARS':'symbol':'1.0-0' }}
@@ -883,7 +883,7 @@
         <div class="text-right leading-tight">
           <div class="text-[10px] uppercase tracking-wider font-bold text-[#FF861C]">Total</div>
           <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
-            {{ totalSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+            {{ totalEfectivo() | currency:'ARS':'symbol':'1.0-0' }}
           </span>
         </div>
       </div>

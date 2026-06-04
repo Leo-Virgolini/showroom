@@ -731,6 +731,10 @@ export interface GenerarPresupuestoRequest {
     precioConIva: number;
     porcIva?: number | null;
     descuentoPorcentaje?: number | null;
+    /** Precio unitario con la forma Efectivo (forma primaria), ya según rubro
+     *  (c/IVA menaje, s/IVA maquinaria). Es lo que se muestra como "precio del
+     *  producto" y la base de los totales. Null en presupuestos viejos. */
+    precioEfectivo?: number | null;
     /** Texto libre que viaja como {@code comentarios} a DUX cuando el
      *  presupuesto se transforma en pedido. Usado para productos genéricos. */
     comentarios?: string | null;
@@ -793,6 +797,10 @@ export interface PresupuestoDetalle {
     precioConIva: number;
     porcIva: number | null;
     descuentoPorcentaje: number | null;
+    /** Precio unitario con la forma Efectivo (forma primaria), ya según rubro.
+     *  Null en presupuestos viejos persistidos antes de este campo — al editar,
+     *  el frontend lo recalcula y no rompe si viene ausente. */
+    precioEfectivo?: number | null;
     /** Comentarios libres persistidos junto al item — para items genéricos
      *  trae la descripción tipeada por el operador. Null en items normales. */
     comentarios?: string | null;

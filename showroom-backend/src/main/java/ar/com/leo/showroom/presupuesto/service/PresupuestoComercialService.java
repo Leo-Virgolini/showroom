@@ -802,19 +802,32 @@ public class PresupuestoComercialService {
      *  El total se recalcula a partir de los items con sus descuentos
      *  individuales aplicados (ver feedback del 2026-05-20). */
     private void aplicarDatos(PresupuestoComercial p, GenerarPresupuestoRequestDTO datos) {
+        // El campo `subtotalSinIva` de la entity ahora guarda el TOTAL EFECTIVO
+        // (precio con la forma Efectivo según rubro, con descuentos individuales
+        // aplicados) — es lo que se muestra como total en el historial. Se
+        // conserva el nombre del campo para no migrar la columna. Para
+        // presupuestos viejos sin `precioEfectivo` por ítem, cae al cálculo
+        // anterior (total sin IVA) como fallback.
         BigDecimal subtotalSinIva = BigDecimal.ZERO;
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
+            BigDecimal factorDesc = BigDecimal.ONE.subtract(desc.movePointLeft(2));
 
-            BigDecimal precioConDesc = precio.multiply(
-                    BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
-                    .divide(divisor, 4, RoundingMode.HALF_UP);
-            subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
+            BigDecimal totalLinea;
+            if (it.precioEfectivo() != null) {
+                // Total efectivo: precioEfectivo × (1 − desc) × cantidad.
+                totalLinea = it.precioEfectivo().multiply(factorDesc).multiply(cantidad);
+            } else {
+                // Fallback presupuestos viejos: total sin IVA.
+                BigDecimal precioConDesc = precio.multiply(factorDesc);
+                BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
+                totalLinea = precioConDesc.multiply(cantidad)
+                        .divide(divisor, 4, RoundingMode.HALF_UP);
+            }
+            subtotalSinIva = subtotalSinIva.add(totalLinea);
         }
         BigDecimal descGlobal = datos.descuentoGlobalPorcentaje() == null
                 ? BigDecimal.ZERO

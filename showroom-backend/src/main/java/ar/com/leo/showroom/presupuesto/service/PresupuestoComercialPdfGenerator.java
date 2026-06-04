@@ -373,6 +373,9 @@ public class PresupuestoComercialPdfGenerator {
                     s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
                     s.getPorcIva(),
                     BigDecimal.ZERO,
+                    null,
+                    // Ítems de interés: no hay precio efectivo calculado →
+                    // null hace que el PDF caiga al precio de lista por rubro.
                     null));
         }
 
@@ -770,13 +773,15 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            // Precio mostrado según el rubro, igual que la tabla de productos:
-            // maquinaria sin IVA, resto con IVA. El total ya no es uniformemente
-            // "sin IVA" — depende de los productos del presupuesto.
+            // Precio EFECTIVO (forma primaria), igual que la tabla de productos.
+            // Fallback presupuestos viejos: precio de lista según rubro
+            // (maquinaria sin IVA, resto con IVA).
             boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
-            BigDecimal precioMostrado = esMaq
-                    ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
-                    : precioConIva;
+            BigDecimal precioMostrado = it.precioEfectivo() != null
+                    ? it.precioEfectivo()
+                    : (esMaq
+                        ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
+                        : precioConIva);
             subtotalBruto = subtotalBruto.add(precioMostrado.multiply(cantidad));
             totalNeto = totalNeto.add(precioMostrado
                     .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
@@ -1035,8 +1040,13 @@ public class PresupuestoComercialPdfGenerator {
             // sepa si el monto ya incluye IVA. En presupuestos mixtos cada
             // fila puede llevar régimen distinto.
             boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+            // Precio mostrado = PRECIO EFECTIVO (forma primaria), ya según rubro.
+            // Si el presupuesto es viejo y no trae `precioEfectivo`, caemos al
+            // precio de lista por rubro (maquinaria s/IVA, resto c/IVA).
             BigDecimal precio;
-            if (esMaquinaria) {
+            if (it.precioEfectivo() != null) {
+                precio = it.precioEfectivo();
+            } else if (esMaquinaria) {
                 BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
                 precio = precioConIva.divide(divisor, 4, RoundingMode.HALF_UP);
             } else {
