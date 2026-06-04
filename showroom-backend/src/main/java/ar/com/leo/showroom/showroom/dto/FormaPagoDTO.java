@@ -28,6 +28,11 @@ public record FormaPagoDTO(
         @Digits(integer = 4, fraction = 2, message = "Recargo con máximo 4 dígitos enteros y 2 decimales")
         BigDecimal recargoPorcentaje,
 
+        /** Recargo % del perfil maquinaria. Null = usa {@link #recargoPorcentaje}. */
+        @DecimalMin(value = "-99.99", message = "El recargo de maquinaria no puede ser menor a -99,99%")
+        @Digits(integer = 4, fraction = 2, message = "Recargo de maquinaria con máximo 4 dígitos enteros y 2 decimales")
+        BigDecimal recargoPorcentajeMaquinaria,
+
         @NotNull(message = "La cantidad de cuotas es requerida")
         @Min(value = 1, message = "Mínimo 1 cuota")
         Integer cantidadCuotas,
@@ -36,6 +41,9 @@ public record FormaPagoDTO(
          *  ventas con factura). Solo se setea false en casos especiales como
          *  "transferencia sin IVA" o ventas exentas. */
         Boolean aplicaIva,
+
+        /** Aplica IVA del perfil maquinaria. Null = false (sin IVA). */
+        Boolean aplicaIvaMaquinaria,
 
         Boolean activo,
 

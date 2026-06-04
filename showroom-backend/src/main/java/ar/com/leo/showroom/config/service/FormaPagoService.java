@@ -57,8 +57,10 @@ public class FormaPagoService {
         FormaPago entity = FormaPago.builder()
                 .nombre(dto.nombre().trim())
                 .recargoPorcentaje(dto.recargoPorcentaje())
+                .recargoPorcentajeMaquinaria(dto.recargoPorcentajeMaquinaria())
                 .cantidadCuotas(dto.cantidadCuotas())
                 .aplicaIva(dto.aplicaIva() == null ? Boolean.TRUE : dto.aplicaIva())
+                .aplicaIvaMaquinaria(dto.aplicaIvaMaquinaria())
                 .activo(dto.activo() == null ? Boolean.TRUE : dto.activo())
                 .orden(dto.orden() == null ? 0 : dto.orden())
                 .precioReferencia(dto.precioReferencia() != null && dto.precioReferencia())
@@ -79,8 +81,10 @@ public class FormaPagoService {
         chequearNombreUnico(dto.nombre(), id);
         entity.setNombre(dto.nombre().trim());
         entity.setRecargoPorcentaje(dto.recargoPorcentaje());
+        entity.setRecargoPorcentajeMaquinaria(dto.recargoPorcentajeMaquinaria());
         entity.setCantidadCuotas(dto.cantidadCuotas());
         if (dto.aplicaIva() != null) entity.setAplicaIva(dto.aplicaIva());
+        entity.setAplicaIvaMaquinaria(dto.aplicaIvaMaquinaria());
         if (dto.activo() != null) entity.setActivo(dto.activo());
         if (dto.orden() != null) entity.setOrden(dto.orden());
         if (dto.precioReferencia() != null) entity.setPrecioReferencia(dto.precioReferencia());
@@ -130,6 +134,11 @@ public class FormaPagoService {
         if (dto.cantidadCuotas() != null && dto.cantidadCuotas() > 99) {
             throw new IllegalArgumentException("Cantidad de cuotas mayor a 99 — revisá el valor.");
         }
+        BigDecimal recMaq = dto.recargoPorcentajeMaquinaria();
+        if (recMaq != null && (recMaq.compareTo(CIEN.multiply(BigDecimal.TEN)) > 0
+                || recMaq.compareTo(new BigDecimal("-99.99")) < 0)) {
+            throw new IllegalArgumentException("Recargo de maquinaria fuera de rango (-99,99% a 1000%).");
+        }
     }
 
     private void chequearNombreUnico(String nombre, Long excluirId) {
@@ -146,8 +155,10 @@ public class FormaPagoService {
                 f.getId(),
                 f.getNombre(),
                 f.getRecargoPorcentaje(),
+                f.getRecargoPorcentajeMaquinaria(),
                 f.getCantidadCuotas(),
                 f.getAplicaIva(),
+                f.getAplicaIvaMaquinaria(),
                 f.getActivo(),
                 f.getOrden(),
                 f.getPrecioReferencia() != null && f.getPrecioReferencia(),

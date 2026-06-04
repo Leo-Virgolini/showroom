@@ -402,16 +402,27 @@ export class VisorPage {
     return precio - this.ahorro(precio, porcentaje);
   }
 
-  /** Precio de referencia de un producto para una forma de pago dada. La base
-   *  depende del rubro: sin IVA para los rubros que cotizan sin IVA, con IVA el resto. */
+  /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
+   *  rubro. Maquinaria: recargo null → cae al normal; aplicaIva null → false. */
+  perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
+    if (esMaquinaria) {
+      return {
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? forma.recargoPorcentaje,
+        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+      };
+    }
+    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+  }
+
+  /** Precio de referencia de un producto para una forma de pago dada. Siempre
+   *  parte del PVP con IVA; el perfil (Normal/Maquinaria) del rubro decide el
+   *  recargo y si lleva IVA. */
   precioReferenciaPorForma(
     r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; porcIva: number | null; rubro?: string | null },
     forma: FormaPago,
   ): number {
-    if (this.rubroCotizaSinIva(r.rubro)) {
-      return precioPorForma(r.pvpKtGastroSinIva ?? 0, 0, forma);
-    }
-    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro));
+    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, perfil);
   }
 
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
@@ -419,14 +430,13 @@ export class VisorPage {
     return iconoFormaReferencia(nombre);
   }
 
-  /** True si el precio mostrado para esta forma incluye IVA. Los rubros que
-   *  cotizan sin IVA muestran todo sin IVA; el resto depende del flag de la forma. */
+  /** True si el precio mostrado para esta forma incluye IVA, según el perfil del
+   *  rubro: maquinaria usa `aplicaIvaMaquinaria` (null→false); el resto `aplicaIva`. */
   precioReferenciaTieneIva(
     r: { rubro?: string | null },
-    forma: { aplicaIva: boolean | null },
+    forma: FormaPago,
   ): boolean {
-    if (this.rubroCotizaSinIva(r.rubro)) return false;
-    return forma.aplicaIva ?? true;
+    return this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro)).aplicaIva ?? true;
   }
 
   /** Clases del badge c/IVA (verde) o s/IVA (ámbar). */

@@ -232,24 +232,36 @@
           <tr [class.opacity-60]="!f.activo">
             <td>{{ f.nombre }}</td>
             <td class="text-right tabular-nums">
-              @if (f.recargoPorcentaje > 0) {
-                +{{ f.recargoPorcentaje }}%
-              } @else if (f.recargoPorcentaje < 0) {
-                <span class="text-[#FF861C]" pTooltip="Descuento sobre el precio lista" tooltipPosition="top">{{ f.recargoPorcentaje }}%</span>
-              } @else {
-                <span class="text-muted-color">—</span>
-              }
+              <div class="flex flex-col gap-0.5 text-xs">
+                <span class="inline-flex items-center justify-end gap-1">
+                  <span class="text-[0.6rem] text-muted-color uppercase">Nor</span>
+                  @if (f.recargoPorcentaje > 0) { +{{ f.recargoPorcentaje }}% }
+                  @else if (f.recargoPorcentaje < 0) { <span class="text-[#FF861C]">{{ f.recargoPorcentaje }}%</span> }
+                  @else { <span class="text-muted-color">—</span> }
+                </span>
+                @let rm = f.recargoPorcentajeMaquinaria ?? f.recargoPorcentaje;
+                <span class="inline-flex items-center justify-end gap-1">
+                  <span class="text-[0.6rem] text-muted-color uppercase">Maq</span>
+                  @if (rm > 0) { +{{ rm }}% }
+                  @else if (rm < 0) { <span class="text-[#FF861C]">{{ rm }}%</span> }
+                  @else { <span class="text-muted-color">—</span> }
+                </span>
+              </div>
             </td>
             <td class="text-center tabular-nums">{{ f.cantidadCuotas }}</td>
             <td class="text-center">
-              @if (f.aplicaIva) {
-                <span class="text-xs font-medium text-emerald-700 dark:text-emerald-400" pTooltip="El cliente paga el precio con IVA"
-                  tooltipPosition="top">CON IVA</span>
-              } @else {
-                <span class="text-xs font-medium text-amber-700 dark:text-amber-400"
-                  pTooltip="El cliente paga sin IVA — DUX igual factura con IVA, el operador absorbe la diferencia"
-                  tooltipPosition="top">SIN IVA</span>
-              }
+              <div class="flex flex-col gap-0.5 text-xs font-medium">
+                <span class="inline-flex items-center justify-center gap-1">
+                  <span class="text-[0.6rem] text-muted-color uppercase">Nor</span>
+                  @if (f.aplicaIva) { <span class="text-emerald-700 dark:text-emerald-400">CON IVA</span> }
+                  @else { <span class="text-amber-700 dark:text-amber-400">SIN IVA</span> }
+                </span>
+                <span class="inline-flex items-center justify-center gap-1">
+                  <span class="text-[0.6rem] text-muted-color uppercase">Maq</span>
+                  @if (f.aplicaIvaMaquinaria) { <span class="text-emerald-700 dark:text-emerald-400">CON IVA</span> }
+                  @else { <span class="text-amber-700 dark:text-amber-400">SIN IVA</span> }
+                </span>
+              </div>
             </td>
             <td class="text-center">
               @if (f.activo) {
@@ -299,13 +311,13 @@
     </p-card>
 
     <!-- ============================================================
-         Rubros que cotizan sin IVA (precio base = PVP sin IVA)
+         Rubros de maquinaria (usan el perfil "maquinaria" de cada forma)
          ============================================================ -->
     <p-card>
       <div class="flex flex-col gap-2 mb-4">
-        <h3 class="text-base font-semibold m-0">Rubros que cotizan sin IVA</h3>
+        <h3 class="text-base font-semibold m-0">Rubros de maquinaria</h3>
         <div class="text-sm text-surface-700 dark:text-surface-200">
-          Los productos de estos rubros muestran sus precios de referencia (scan, visor y carrito) calculados sobre el <strong>PVP sin IVA</strong>, en vez del PVP con IVA. El resto de los rubros usa el PVP con IVA.
+          Los productos de estos rubros usan el <strong>perfil "maquinaria"</strong> de cada forma de pago (su recargo y su IVA propios). El resto de los rubros usa el perfil normal.
         </div>
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1059,7 +1071,7 @@
 
     <div class="flex flex-col gap-1.5">
       <label for="formRecargo" class="text-sm font-medium text-muted-color">
-        Recargo (%) — usar 0 si no hay
+        Recargo — productos normales (%) — usar 0 si no hay
       </label>
       <p-inputnumber
         inputId="formRecargo"
@@ -1075,6 +1087,36 @@
       <span class="text-xs text-muted-color leading-relaxed">
         Positivo = <strong>recargo de financiación</strong> (<code class="font-mono">precio = efectivo / (1 − %/100)</code>). Negativo = <strong>descuento</strong> directo sobre el precio lista (<code class="font-mono">precio = lista × (1 − |%|/100)</code>), usado para los precios de referencia (Efectivo, Transferencia S/F).
       </span>
+    </div>
+
+    <!-- Perfil maquinaria: condiciones para productos de rubro de maquinaria -->
+    <div class="flex flex-col gap-2 p-2.5 rounded-lg border border-[#FF861C]/40 bg-[#FF861C]/5">
+      <span class="text-xs font-semibold uppercase tracking-wide text-[#FF861C] inline-flex items-center gap-1.5">
+        <i class="pi pi-cog text-[0.7rem]"></i> Perfil maquinaria
+      </span>
+      <span class="text-xs text-muted-color">
+        Condiciones para productos de los <strong>rubros de maquinaria</strong>. Si dejás el recargo vacío, usa el mismo que el normal.
+      </span>
+      <div class="flex flex-col gap-1.5">
+        <label for="formRecargoMaq" class="text-sm font-medium text-muted-color">Recargo maquinaria (%)</label>
+        <p-inputnumber
+          inputId="formRecargoMaq"
+          [ngModel]="formRecargoMaquinaria()"
+          (ngModelChange)="formRecargoMaquinaria.set($event)"
+          [min]="-99.99"
+          [max]="99.99"
+          [maxFractionDigits]="2"
+          suffix=" %"
+          placeholder="(usa el recargo normal)"
+          [disabled]="guardandoForma()"
+          class="w-full"
+          inputStyleClass="w-full" />
+      </div>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <p-checkbox [ngModel]="formAplicaIvaMaquinaria()" (ngModelChange)="formAplicaIvaMaquinaria.set($event)" [binary]="true" inputId="formAplicaIvaMaq"
+          [disabled]="guardandoForma()" />
+        <span class="text-sm">Aplica IVA a maquinaria <span class="text-muted-color">(destildado = sin IVA)</span></span>
+      </label>
     </div>
 
     <div class="flex flex-col gap-1.5">
@@ -1094,9 +1136,9 @@
       <p-checkbox [ngModel]="formAplicaIva()" (ngModelChange)="formAplicaIva.set($event)" [binary]="true" inputId="formAplicaIva"
         [disabled]="guardandoForma()" />
       <div class="flex flex-col gap-0.5 flex-1">
-        <span class="text-sm font-medium">Aplica IVA al precio del cliente</span>
+        <span class="text-sm font-medium">Aplica IVA al precio del cliente <span class="text-muted-color">(productos normales)</span></span>
         <span class="text-xs text-muted-color">
-          <strong>Tildado</strong> (caso normal): el cliente paga precio con IVA. <strong>Destildado</strong> (ej: "transferencia sin IVA"): el cliente paga sin IVA — DUX igual factura con IVA y el operador absorbe la diferencia.
+          <strong>Tildado</strong> (caso normal): el cliente paga precio con IVA. <strong>Destildado</strong> (ej: "transferencia sin IVA"): el cliente paga sin IVA — DUX igual factura con IVA y el operador absorbe la diferencia. (El IVA de maquinaria se configura arriba en su perfil.)
         </span>
       </div>
     </label>

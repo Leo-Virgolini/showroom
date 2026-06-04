@@ -113,6 +113,9 @@ export interface CrearPedidoRequest {
   items: {
     sku: string;
     cantidad: number;
+    /** Rubro DUX del producto — el backend lo usa para resolver el perfil
+     *  (Normal/Maquinaria) de la forma de pago. */
+    rubro?: string | null;
     precioUnitario: number | null;
     descuentoPorcentaje?: number | null;
     /** % de IVA del producto. Solo se considera para ítems genéricos (SKU
@@ -507,6 +510,11 @@ export interface FormaPago {
    *  Cuando es false (ej: "transferencia sin IVA"), el operador absorbe el
    *  IVA — DUX igual factura con IVA pero el cliente paga sin. */
   aplicaIva: boolean;
+  /** Recargo % del perfil "maquinaria" (rubros de maquinaria). Null = usa
+   *  `recargoPorcentaje`. */
+  recargoPorcentajeMaquinaria: number | null;
+  /** Aplica IVA del perfil "maquinaria". Null = false (sin IVA). */
+  aplicaIvaMaquinaria: boolean | null;
   activo: boolean;
   orden: number;
   /** Si la forma se muestra como precio de referencia en scan/visor/carrito.

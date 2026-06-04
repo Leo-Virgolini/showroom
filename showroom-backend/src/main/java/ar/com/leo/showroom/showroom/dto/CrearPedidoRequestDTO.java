@@ -76,6 +76,11 @@ public record CrearPedidoRequestDTO(
             @NotNull @Positive Integer cantidad,
             BigDecimal precioUnitario,
             BigDecimal descuentoPorcentaje,
+            /** Rubro DUX del producto. Lo manda el frontend para que el backend
+             *  resuelva el perfil (Normal/Maquinaria) de la forma de pago — sobre
+             *  todo en genéricos, cuyo rubro real no está en el cache del comodín.
+             *  Si null, el backend cae al rubro del cache. */
+            String rubro,
             /** % de IVA del producto (21 o 10.5 en AR). Solo se considera para
              *  ítems genéricos (SKU comodín de {@code dux.sku-producto-generico}):
              *  el cache del SKU 9999990 no tiene un IVA representativo del
