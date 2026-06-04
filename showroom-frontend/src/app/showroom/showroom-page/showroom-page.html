@@ -932,24 +932,10 @@
               optionLabel="nombre"
               class="w-full">
               <ng-template let-fp #item>
-                <span class="inline-flex items-center gap-1.5">
-                  {{ fp.nombre }}
-                  @if (fp.aplicaIva) {
-                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
-                  } @else {
-                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-                  }
-                </span>
+                <span class="inline-flex items-center gap-1.5">{{ fp.nombre }}</span>
               </ng-template>
               <ng-template let-fp #selectedItem>
-                <span class="inline-flex items-center gap-1.5">
-                  {{ fp.nombre }}
-                  @if (fp.aplicaIva) {
-                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
-                  } @else {
-                    <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-                  }
-                </span>
+                <span class="inline-flex items-center gap-1.5">{{ fp.nombre }}</span>
               </ng-template>
             </p-select>
           </div>
@@ -1288,11 +1274,6 @@
           <div class="flex flex-col gap-0.5 min-w-0">
             <span class="font-semibold inline-flex items-center gap-1.5 flex-wrap">
               {{ fp.nombre }}
-              @if (fp.aplicaIva) {
-                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200">CON IVA</span>
-              } @else {
-                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-              }
               @if (masBarata && formasPagoActivas().length > 1) {
                 <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-emerald-600 text-white inline-flex items-center gap-1">
                   <i class="pi pi-star-fill text-[0.55rem]"></i>
