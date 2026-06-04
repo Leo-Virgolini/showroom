@@ -647,11 +647,11 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
-   *  rubro. Maquinaria: recargo null → cae al normal; aplicaIva null → false. */
+   *  rubro. Maquinaria: recargo null → 0 (no hereda del normal); aplicaIva null → false. */
   perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
     if (esMaquinaria) {
       return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? forma.recargoPorcentaje,
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
         aplicaIva: forma.aplicaIvaMaquinaria ?? false,
       };
     }

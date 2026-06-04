@@ -239,7 +239,7 @@
                   @else if (f.recargoPorcentaje < 0) { <span class="text-[#FF861C]">{{ f.recargoPorcentaje }}%</span> }
                   @else { <span class="text-muted-color">—</span> }
                 </span>
-                @let rm = f.recargoPorcentajeMaquinaria ?? f.recargoPorcentaje;
+                @let rm = f.recargoPorcentajeMaquinaria ?? 0;
                 <span class="inline-flex items-center justify-end gap-1">
                   <span class="text-[0.6rem] text-muted-color uppercase">Maq</span>
                   @if (rm > 0) { +{{ rm }}% }
@@ -1117,9 +1117,9 @@
       <span class="text-xs font-semibold uppercase tracking-wide text-[#FF861C] inline-flex items-center gap-1.5">
         <i class="pi pi-cog text-[0.7rem]"></i> Perfil maquinaria
       </span>
-      <span class="text-xs text-muted-color">Para los productos de los <strong>rubros de maquinaria</strong>. Recargo vacío = usa el del perfil normal.</span>
+      <span class="text-xs text-muted-color">Para los productos de los <strong>rubros de maquinaria</strong>.</span>
       <div class="flex flex-col gap-1.5">
-        <label for="formRecargoMaq" class="text-sm font-medium text-muted-color">Recargo (%)</label>
+        <label for="formRecargoMaq" class="text-sm font-medium text-muted-color">Recargo (%) — usar 0 si no hay</label>
         <p-inputnumber
           inputId="formRecargoMaq"
           [ngModel]="formRecargoMaquinaria()"
@@ -1128,7 +1128,6 @@
           [max]="99.99"
           [maxFractionDigits]="2"
           suffix=" %"
-          placeholder="(usa el recargo normal)"
           [disabled]="guardandoForma()"
           class="w-full"
           inputStyleClass="w-full" />
