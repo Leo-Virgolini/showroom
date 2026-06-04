@@ -252,6 +252,33 @@
           }
         </div>
 
+        <!-- Selector de forma de pago — FUERA del card del producto para que el
+             operador elija ANTES de escanear qué precio mostrar (al cliente y en
+             el visor). Sticky entre productos; mientras no elija usa la forma
+             destacada del rubro. -->
+        @if (formasPagoActivas().length > 0) {
+        <div class="rounded-xl border-2 border-[#FF861C]/40 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-3 sm:p-4 shadow-sm flex items-center gap-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color shrink-0 hidden sm:inline">Mostrar precio en</span>
+          <p-select [options]="formasPagoActivas()" optionLabel="nombre"
+            [ngModel]="formaScanEfectiva()"
+            (ngModelChange)="onCambiarFormaScan($event)"
+            placeholder="Forma de pago" appendTo="body" class="flex-1">
+            <ng-template let-fp #selectedItem>
+              <span class="inline-flex items-center gap-2">
+                <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
+                {{ fp.nombre }}
+              </span>
+            </ng-template>
+            <ng-template let-fp #item>
+              <span class="inline-flex items-center gap-2">
+                <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
+                {{ fp.nombre }}
+              </span>
+            </ng-template>
+          </p-select>
+        </div>
+        }
+
         @if (cargandoScan()) {
         <div class="flex flex-col items-center justify-center flex-1 px-4 gap-3">
           <p-progressSpinner class="!w-16 !h-16" strokeWidth="4" />
@@ -331,26 +358,6 @@
                se refleja en el visor del cliente vía SSE. -->
           @if (r.pvpKtGastroConIva != null && r.pvpKtGastroConIva > 0) {
           <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm flex flex-col gap-4">
-            @if (formasPagoActivas().length > 0) {
-              <!-- Selector de forma de pago -->
-              <p-select [options]="formasPagoActivas()" optionLabel="nombre"
-                [ngModel]="formaScanEfectiva()"
-                (ngModelChange)="onCambiarFormaScan($event)"
-                placeholder="Forma de pago" appendTo="body" class="w-full">
-                <ng-template let-fp #selectedItem>
-                  <span class="inline-flex items-center gap-2">
-                    <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
-                    {{ fp.nombre }}
-                  </span>
-                </ng-template>
-                <ng-template let-fp #item>
-                  <span class="inline-flex items-center gap-2">
-                    <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
-                    {{ fp.nombre }}
-                  </span>
-                </ng-template>
-              </p-select>
-            }
             @if (formaScanEfectiva(); as forma) {
               <!-- Precio destacado con la forma efectiva -->
               <div class="flex items-center gap-4">
@@ -483,7 +490,7 @@
                 Cantidad
                 @if (r.stockTotal != null && r.stockTotal > 0) {
                   <span class="text-[9px] font-normal text-muted-color normal-case tracking-normal">
-                    (máx {{ r.stockTotal }})
+                    (stock: {{ r.stockTotal }})
                   </span>
                 }
               </label>
