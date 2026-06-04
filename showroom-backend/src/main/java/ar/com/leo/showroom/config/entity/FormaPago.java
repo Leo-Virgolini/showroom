@@ -58,6 +58,11 @@ public class FormaPago {
     @Column(name = "recargo_porcentaje", nullable = false, precision = 6, scale = 2)
     private BigDecimal recargoPorcentaje;
 
+    /** Recargo % del perfil "maquinaria" (productos de rubro de maquinaria). Si
+     *  es null, se usa {@link #recargoPorcentaje}. Nullable (ddl-auto seguro). */
+    @Column(name = "recargo_porcentaje_maquinaria", precision = 6, scale = 2)
+    private BigDecimal recargoPorcentajeMaquinaria;
+
     /** Cantidad de cuotas — informativo para mostrar al operador y al cliente.
      *  No afecta el cálculo (el recargo es total, no por cuota). */
     @Column(name = "cantidad_cuotas", nullable = false)
@@ -76,6 +81,11 @@ public class FormaPago {
      *  operador no tildó el campo al crearla, asumimos comportamiento estándar. */
     @Column(name = "aplica_iva", nullable = false)
     private Boolean aplicaIva;
+
+    /** Aplica IVA del perfil "maquinaria". Si es null, se trata como false (las
+     *  máquinas cotizan sin IVA salvo que se configure lo contrario). Nullable. */
+    @Column(name = "aplica_iva_maquinaria")
+    private Boolean aplicaIvaMaquinaria;
 
     /** Si false, no aparece en el selector del operador. Pedidos históricos
      *  que la referencian preservan sus datos via snapshot. */

@@ -784,6 +784,7 @@ public class ShowroomService {
         Map<String, ProductoCache> caches = catalogoSync.obtenerPorSkus(
                 request.items().stream().map(CrearPedidoRequestDTO.Item::sku).toList()
         );
+        java.util.Set<String> rubrosMaq = rubrosMaquinariaNormalizados();
 
         String skuGenerico = duxProperties.skuProductoGenerico();
         for (CrearPedidoRequestDTO.Item it : request.items()) {
@@ -809,9 +810,15 @@ public class ShowroomService {
                     ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
                     : (pc != null ? pc.getPorcIva() : null);
 
-            // Aplicar recargo (dividir, no multiplicar) y resolver IVA según la
-            // forma. Sin formaPago: precio queda igual al base.
-            BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, formaPago);
+            // Perfil (Normal/Maquinaria) según el rubro del ítem: el del item si
+            // viene (genéricos) o el del cache. Define el recargo y si aplica IVA.
+            String rubroItem = it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null);
+            boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
+            BigDecimal recargoItem = recargoPerfil(formaPago, esMaq);
+            boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
+
+            // Precio que paga el cliente: recargo/descuento del perfil + IVA del perfil.
+            BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
 
             PedidoShowroomItem item = PedidoShowroomItem.builder()
                     .pedido(pedido)
@@ -831,7 +838,7 @@ public class ShowroomService {
                 // totalSinIva del comprobante DUX: si la forma aplica IVA, el
                 // precio_final ya tiene IVA → dividimos. Si no aplica IVA, el
                 // precio_final ya es sin IVA → es directo.
-                BigDecimal precioSinIvaItem = aplicaIva
+                BigDecimal precioSinIvaItem = aplicaIvaItem
                         ? calcularSinIva(precioFinal, porcIva)
                         : precioFinal;
                 if (precioSinIvaItem != null) {
@@ -1026,22 +1033,54 @@ public class ShowroomService {
         return precioBaseSinIva;
     }
 
-    private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva, FormaPago formaPago) {
+    private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva,
+                                           BigDecimal recargoPorc, boolean aplicaIva) {
         if (precioBaseConIva == null) return null;
-        if (formaPago == null) return precioBaseConIva;
         BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
         if (precioBaseSinIva == null) return precioBaseConIva;
 
-        BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
-                ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
-        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
+        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(
+                precioBaseSinIva, recargoPorc != null ? recargoPorc : BigDecimal.ZERO);
 
-        boolean aplicaIva = !Boolean.FALSE.equals(formaPago.getAplicaIva());
         if (aplicaIva && porcIva != null && porcIva.signum() > 0) {
             BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
             return precioRecargadoSinIva.multiply(ivaFactor).setScale(4, RoundingMode.HALF_UP);
         }
         return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
+    }
+
+    /** Normaliza un rubro para comparación robusta (trim, sin acentos, mayúsculas). */
+    private static String normalizarRubro(String rubro) {
+        if (rubro == null) return "";
+        return java.text.Normalizer.normalize(rubro.trim(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toUpperCase();
+    }
+
+    /** Set normalizado de rubros de maquinaria (configurables; misma lista que
+     *  "rubros que cotizan sin IVA"). */
+    private java.util.Set<String> rubrosMaquinariaNormalizados() {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        for (String r : configuracionService.getRubrosSinIva()) {
+            String n = normalizarRubro(r);
+            if (!n.isEmpty()) set.add(n);
+        }
+        return set;
+    }
+
+    /** Recargo del perfil (maquinaria si el rubro lo es y tiene valor; normal si no). */
+    private static BigDecimal recargoPerfil(FormaPago fp, boolean esMaquinaria) {
+        if (fp == null) return BigDecimal.ZERO;
+        if (esMaquinaria && fp.getRecargoPorcentajeMaquinaria() != null) {
+            return fp.getRecargoPorcentajeMaquinaria();
+        }
+        return fp.getRecargoPorcentaje() != null ? fp.getRecargoPorcentaje() : BigDecimal.ZERO;
+    }
+
+    /** aplicaIva del perfil: maquinaria null→false; normal null→true. */
+    private static boolean aplicaIvaPerfil(FormaPago fp, boolean esMaquinaria) {
+        if (fp == null) return true;
+        if (esMaquinaria) return Boolean.TRUE.equals(fp.getAplicaIvaMaquinaria());
+        return !Boolean.FALSE.equals(fp.getAplicaIva());
     }
 
     /**
@@ -1050,15 +1089,13 @@ public class ShowroomService {
      * sea lo que pagó el cliente. Para "transferencia sin IVA" la diferencia
      * la absorbe el operador.
      */
-    private BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva, FormaPago formaPago) {
+    private BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva, BigDecimal recargoPorc) {
         if (precioBaseConIva == null) return null;
-        if (formaPago == null) return precioBaseConIva;
         BigDecimal precioBaseSinIva = calcularSinIva(precioBaseConIva, porcIva);
         if (precioBaseSinIva == null) return precioBaseConIva;
 
-        BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
-                ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
-        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
+        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(
+                precioBaseSinIva, recargoPorc != null ? recargoPorc : BigDecimal.ZERO);
 
         if (porcIva != null && porcIva.signum() > 0) {
             BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
@@ -1135,6 +1172,7 @@ public class ShowroomService {
         // Los 4 son obligatorios — si falta cualquiera, DUX devuelve 200 con
         // {"message":"Debe completar todos los campos requeridos."} y NO crea el pedido.
         String skuGenericoDux = duxProperties.skuProductoGenerico();
+        java.util.Set<String> rubrosMaq = rubrosMaquinariaNormalizados();
         List<Map<String, Object>> productos = new ArrayList<>();
         for (CrearPedidoRequestDTO.Item it : request.items()) {
             boolean esGenerico = skuGenericoDux != null && skuGenericoDux.equals(it.sku());
@@ -1156,8 +1194,12 @@ public class ShowroomService {
             BigDecimal porcIva = esGenerico
                     ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
                     : (pc != null ? pc.getPorcIva() : null);
+            // Perfil del ítem según rubro: define el recargo. A DUX siempre va
+            // con IVA (se ignora el aplicaIva del perfil).
+            String rubroItem = it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null);
+            boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
             BigDecimal precioDux = formaPago != null
-                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, formaPago)
+                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
                     : precioBaseConIva;
             d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);

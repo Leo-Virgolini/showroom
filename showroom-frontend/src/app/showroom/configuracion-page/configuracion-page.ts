@@ -257,6 +257,9 @@ export class ConfiguracionPage {
   readonly guardandoForma = signal(false);
   readonly formNombrePago = signal('');
   readonly formRecargo = signal<number | null>(0);
+  /** Perfil maquinaria: recargo (null = usa el normal) y aplica IVA. */
+  readonly formRecargoMaquinaria = signal<number | null>(null);
+  readonly formAplicaIvaMaquinaria = signal(false);
   readonly formCuotas = signal<number | null>(1);
   readonly formAplicaIva = signal(true);
   readonly formActivoPago = signal(true);
@@ -1088,6 +1091,8 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
     this.formPrecioReferencia.set(false);
+    this.formRecargoMaquinaria.set(null);
+    this.formAplicaIvaMaquinaria.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
     this.formOrden.set(maxOrden + 1);
     this.mostrarDialogForma.set(true);
@@ -1102,6 +1107,8 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
     this.formPrecioReferencia.set(f.precioReferencia ?? false);
+    this.formRecargoMaquinaria.set(f.recargoPorcentajeMaquinaria ?? null);
+    this.formAplicaIvaMaquinaria.set(f.aplicaIvaMaquinaria ?? false);
     this.formOrden.set(f.orden);
     this.mostrarDialogForma.set(true);
   }
@@ -1138,6 +1145,8 @@ export class ConfiguracionPage {
       recargoPorcentaje: recargo,
       cantidadCuotas: cuotas,
       aplicaIva: this.formAplicaIva(),
+      recargoPorcentajeMaquinaria: this.formRecargoMaquinaria(),
+      aplicaIvaMaquinaria: this.formAplicaIvaMaquinaria(),
       activo,
       orden,
       precioReferencia: this.formPrecioReferencia(),

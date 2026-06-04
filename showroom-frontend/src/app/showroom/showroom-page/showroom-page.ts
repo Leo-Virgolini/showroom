@@ -468,25 +468,29 @@ export class ShowroomPage implements AfterViewInit {
    *  financiación, negativo = descuento (ej. Efectivo -13%). Per-ítem, con el
    *  descuento por escala aplicado. */
   readonly recargoMontoSinIva = computed(() => {
-    const recargo = this.recargoAplicado();
-    if (recargo === 0) return 0;
-    const factorExtra = this.factorForma(recargo) - 1;
+    const fp = this.formaPagoSeleccionada();
+    if (!fp) return 0;
     return this.carrito().reduce((acc, it) => {
+      const recargo = this.perfilForma(fp, this.rubroCotizaSinIva(it.rubro)).recargoPorcentaje ?? 0;
+      if (recargo === 0) return acc;
+      const factorExtra = this.factorForma(recargo) - 1;
       const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
       return acc + baseSinIva * factorExtra * it.cantidad;
     }, 0);
   });
 
-  /** IVA contenido en el total. Per-ítem: solo los ítems cuyo precio para la
-   *  forma elegida lleva IVA (los de rubro sin IVA no). Se calcula sobre el neto
-   *  con el ajuste de la forma aplicado. */
+  /** IVA contenido en el total. Per-ítem: solo los ítems cuyo perfil (según rubro
+   *  y forma elegida) lleva IVA. Se calcula sobre el neto con el recargo del
+   *  perfil aplicado. */
   readonly ivaMontoCarrito = computed(() => {
-    const factor = this.factorForma(this.recargoAplicado());
+    const fp = this.formaPagoSeleccionada();
     return this.carrito().reduce((acc, it) => {
       if (!this.itemCarritoTieneIva(it)) return acc;
       const porcIva = it.porcIva ?? 0;
       if (porcIva <= 0) return acc;
+      const recargo = fp ? (this.perfilForma(fp, this.rubroCotizaSinIva(it.rubro)).recargoPorcentaje ?? 0) : 0;
+      const factor = this.factorForma(recargo);
       const descuento = this.descuentoParaItem(it);
       const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
       const netoConForma = baseSinIva * factor;
@@ -641,17 +645,27 @@ export class ShowroomPage implements AfterViewInit {
     return base - this.ahorro(base, descuento);
   }
 
+  /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
+   *  rubro. Maquinaria: recargo null → cae al normal; aplicaIva null → false. */
+  perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
+    if (esMaquinaria) {
+      return {
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? forma.recargoPorcentaje,
+        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+      };
+    }
+    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+  }
+
   /** Precio de referencia de un producto (scan o ítem de carrito) para una forma
-   *  de pago dada. La base depende del rubro: los rubros que cotizan sin IVA usan
-   *  el PVP sin IVA (neto); el resto, el PVP con IVA. */
+   *  de pago dada. Siempre parte del PVP con IVA; el perfil (Normal/Maquinaria)
+   *  del rubro decide el recargo y si lleva IVA. */
   precioReferenciaPorForma(
     r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; porcIva: number | null; rubro?: string | null },
     forma: FormaPago,
   ): number {
-    if (this.rubroCotizaSinIva(r.rubro)) {
-      return precioPorForma(r.pvpKtGastroSinIva ?? 0, 0, forma);
-    }
-    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
+    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro));
+    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, perfil);
   }
 
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
@@ -674,22 +688,21 @@ export class ShowroomPage implements AfterViewInit {
     return fp ? this.precioReferenciaPorForma(it, fp) : this.precioReferenciaPrimario(it);
   }
 
-  /** True si el precio del ítem para la forma elegida lleva IVA (los rubros sin
-   *  IVA nunca; el resto según el flag de la forma elegida). */
+  /** True si el precio del ítem para la forma elegida lleva IVA, según el perfil
+   *  (Normal/Maquinaria) de su rubro. */
   itemCarritoTieneIva(it: { rubro?: string | null }): boolean {
-    if (this.rubroCotizaSinIva(it.rubro)) return false;
     const fp = this.formaPagoSeleccionada();
-    return fp ? (fp.aplicaIva ?? true) : this.aplicaIvaCliente();
+    if (!fp) return this.aplicaIvaCliente();
+    return this.precioReferenciaTieneIva(it, fp);
   }
 
-  /** True si el precio mostrado para esta forma incluye IVA. Los rubros que
-   *  cotizan sin IVA muestran todo sin IVA; el resto depende del flag de la forma. */
+  /** True si el precio mostrado para esta forma incluye IVA, según el perfil del
+   *  rubro: maquinaria usa `aplicaIvaMaquinaria` (null→false); el resto `aplicaIva`. */
   precioReferenciaTieneIva(
     r: { rubro?: string | null },
-    forma: { aplicaIva: boolean | null },
+    forma: FormaPago,
   ): boolean {
-    if (this.rubroCotizaSinIva(r.rubro)) return false;
-    return forma.aplicaIva ?? true;
+    return this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro)).aplicaIva ?? true;
   }
 
   /** Clases del badge c/IVA (verde) o s/IVA (ámbar), reusando la paleta de la
@@ -2265,6 +2278,10 @@ export class ShowroomPage implements AfterViewInit {
           return {
             sku: it.sku,
             cantidad: it.cantidad,
+            // Rubro del ítem: el backend lo usa para resolver el perfil
+            // (Normal/Maquinaria) de la forma de pago. Imprescindible para
+            // genéricos, cuyo rubro real no está en el cache del comodín.
+            rubro: it.rubro ?? undefined,
             // Mandamos el precio CON IVA: la lista "KT GASTRO" en DUX está configurada
             // como "incluye IVA", entonces DUX espera valores con-IVA y descuenta el IVA
             // internamente. Si mandamos sin-IVA, DUX lo trata como con-IVA y queda mal.
