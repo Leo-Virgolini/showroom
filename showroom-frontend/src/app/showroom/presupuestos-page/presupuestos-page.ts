@@ -255,12 +255,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  producto y los totales del presupuesto se calculan con esta forma para
    *  coincidir con el scan/visor del showroom. Null si ninguna forma activa
    *  es de referencia (entonces se cae al precio de lista según rubro). */
-  readonly formaPrimaria = computed<FormaPago | null>(
-    () =>
-      this.formasPago()
-        .filter((f) => f.precioReferencia)
-        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null,
-  );
+  /** Forma destacada/default para el perfil del producto: de las formas marcadas
+   *  como referencia de ese perfil (menaje → `precioReferencia`; maquinaria →
+   *  `precioReferenciaMaquinaria`), la de menor `orden`. Null si ninguna marcada
+   *  (entonces se cae al precio de lista según rubro). */
+  formaDestacada(esMaquinaria: boolean): FormaPago | null {
+    return this.formasPago()
+      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+  }
 
   /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se
    *  cargan al iniciar desde el mismo endpoint que el showroom. Default del
@@ -1015,7 +1018,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     },
   ): number {
     const esMaq = this.rubroCotizaSinIva(r.rubro);
-    const forma = this.formaPrimaria();
+    const forma = this.formaDestacada(esMaq);
     if (!forma) {
       // Fallback: precio de lista según rubro.
       return esMaq
