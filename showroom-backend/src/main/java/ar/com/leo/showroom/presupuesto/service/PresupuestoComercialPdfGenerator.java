@@ -373,6 +373,9 @@ public class PresupuestoComercialPdfGenerator {
                     s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
                     s.getPorcIva(),
                     BigDecimal.ZERO,
+                    null,
+                    // Ítems de interés: no hay precio efectivo calculado →
+                    // null hace que el PDF caiga al precio de lista por rubro.
                     null));
         }
 
@@ -523,12 +526,12 @@ public class PresupuestoComercialPdfGenerator {
                 // Chip azul con el precio (unitario si cant > 1, sino "Precio").
                 // Si hay descuento, agregamos al lado el precio de lista
                 // tachado en gris para reforzar el ahorro visualmente.
-                BigDecimal precioFinalSinIva = precioUnitarioSinIva(item);
+                BigDecimal precioFinalEfectivo = precioUnitarioEfectivo(item);
                 String label = cantMayorAUno ? "P. unitario: " : "Precio: ";
                 Paragraph contenido = new Paragraph()
-                        .add(new Text(label + formatPesos(precioFinalSinIva)));
+                        .add(new Text(label + formatPesos(precioFinalEfectivo)));
                 if (tieneDescuento) {
-                    BigDecimal listaSinIva = precioListaSinIva(item);
+                    BigDecimal listaSinIva = precioListaEfectivo(item);
                     // 4 espacios al tamaño normal (9pt) entre los dos precios
                     // para que la rayita del tachado no se conecte con el
                     // precio principal y haya aire visual.
@@ -704,16 +707,9 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontSize(9)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
-        // Indicación de IVA del régimen de ESTE ítem (c/IVA o s/IVA). En modo
-        // individual cada hoja es un único producto, así que el régimen es
-        // inequívoco: maquinaria → perfil maquinaria, resto → perfil menaje.
-        if (badgeIva != null) {
-            info.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
-                    .setFontSize(7.5f)
-                    .setFontColor(GRIS_MEDIO)
-                    .setMargin(0)
-                    .setMarginTop(1));
-        }
+        // El régimen de IVA depende del producto, no de la forma de pago, así
+        // que las cards de formas de pago no muestran badge "c/IVA"/"s/IVA"
+        // (el precioFinal ya es correcto). El IVA se ve en la tabla de productos.
         // Limpiamos "s/IVA" si viene dentro de la descripción para no
         // duplicar el bloque de arriba (presupuestos viejos lo persistían).
         String desc = f.descripcion();
@@ -721,6 +717,17 @@ public class PresupuestoComercialPdfGenerator {
             desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
                     .replaceAll("^s/IVA\\s*·\\s*", "")
                     .replaceAll("^s/IVA$", "")
+                    // El "% de descuento" depende del perfil del producto; no se
+                    // muestra a nivel forma. Limpiamos el texto de presupuestos
+                    // viejos que lo guardaron en la descripción.
+                    .replaceAll("\\s*·\\s*\\d+% de descuento", "")
+                    .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
+                    .replaceAll("^\\d+% de descuento$", "")
+                    // "N cuotas" es redundante con el nombre de la forma y con el
+                    // detalle "N cuotas de $X" — lo limpiamos de presupuestos viejos.
+                    .replaceAll("\\s*·\\s*\\d+ cuotas", "")
+                    .replaceAll("^\\d+ cuotas\\s*·\\s*", "")
+                    .replaceAll("^\\d+ cuotas$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
@@ -769,48 +776,31 @@ public class PresupuestoComercialPdfGenerator {
     // delega en la card de totales reutilizable.
     // =====================================================
     private void agregarTotalesAgregado(Document doc, GenerarPresupuestoRequestDTO datos) {
-        BigDecimal subtotalBrutoSinIva = BigDecimal.ZERO;
-        BigDecimal subtotalSinIva = BigDecimal.ZERO;
+        java.util.Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
+        BigDecimal subtotalBruto = BigDecimal.ZERO;
+        BigDecimal totalNeto = BigDecimal.ZERO;
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
-            BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
+            BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-
-            BigDecimal totalLineaBrutoSinIva = precio.multiply(cantidad)
-                    .divide(divisor, 4, RoundingMode.HALF_UP);
-            BigDecimal precioConDesc = precio.multiply(
-                    BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-            BigDecimal totalLineaSinIva = precioConDesc.multiply(cantidad)
-                    .divide(divisor, 4, RoundingMode.HALF_UP);
-
-            subtotalBrutoSinIva = subtotalBrutoSinIva.add(totalLineaBrutoSinIva);
-            subtotalSinIva = subtotalSinIva.add(totalLineaSinIva);
+            // Precio EFECTIVO (forma primaria), igual que la tabla de productos.
+            // Fallback presupuestos viejos: precio de lista según rubro
+            // (maquinaria sin IVA, resto con IVA).
+            boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+            BigDecimal precioMostrado = it.precioEfectivo() != null
+                    ? it.precioEfectivo()
+                    : (esMaq
+                        ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
+                        : precioConIva);
+            subtotalBruto = subtotalBruto.add(precioMostrado.multiply(cantidad));
+            totalNeto = totalNeto.add(precioMostrado
+                    .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
+                    .multiply(cantidad));
         }
-        BigDecimal subtotalBruto = subtotalBrutoSinIva.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalSinIva = subtotalSinIva.setScale(2, RoundingMode.HALF_UP);
-
-        agregarCardTotal(doc, subtotalBruto, totalSinIva);
-
-        if (datos.formasPago() == null || datos.formasPago().isEmpty()) return;
-        int maxDesc = porcMaxDescuento(totalSinIva, datos.formasPago());
-        if (maxDesc <= 0) return;
-
-        Paragraph badge = new Paragraph(
-                "¡Podés ahorrar hasta " + maxDesc + "% — mirá las formas de pago!")
-                .simulateBold()
-                .setFontSize(10)
-                .setFontColor(ColorConstants.WHITE)
-                .setBackgroundColor(VERDE_PRECIO)
-                .setBorderRadius(new BorderRadius(20f))
-                .setPaddings(8, 14, 8, 14)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setMarginTop(10)
-                .setMarginBottom(2)
-                .setHorizontalAlignment(HorizontalAlignment.CENTER)
-                .setWidth(UnitValue.createPercentValue(60));
-        doc.add(badge);
+        agregarCardTotal(doc,
+                subtotalBruto.setScale(2, RoundingMode.HALF_UP),
+                totalNeto.setScale(2, RoundingMode.HALF_UP));
     }
 
     // =====================================================
@@ -1035,11 +1025,10 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("CANT."));
-        // "PRECIO" a secas: el régimen (s/IVA para maquinaria, c/IVA para el
-        // resto) depende del rubro de cada ítem y se aclara por celda con una
-        // badge "s/IVA"/"c/IVA". Un único header "PRECIO EFECTIVO" sería
-        // engañoso en presupuestos mixtos (menaje + maquinaria).
-        tabla.addHeaderCell(celdaHeader("PRECIO").setTextAlignment(TextAlignment.RIGHT));
+        // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
+        // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
+        // resto) y se aclara por celda con una badge "s/IVA"/"c/IVA".
+        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -1062,8 +1051,13 @@ public class PresupuestoComercialPdfGenerator {
             // sepa si el monto ya incluye IVA. En presupuestos mixtos cada
             // fila puede llevar régimen distinto.
             boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
+            // Precio mostrado = PRECIO EFECTIVO (forma primaria), ya según rubro.
+            // Si el presupuesto es viejo y no trae `precioEfectivo`, caemos al
+            // precio de lista por rubro (maquinaria s/IVA, resto c/IVA).
             BigDecimal precio;
-            if (esMaquinaria) {
+            if (it.precioEfectivo() != null) {
+                precio = it.precioEfectivo();
+            } else if (esMaquinaria) {
                 BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
                 precio = precioConIva.divide(divisor, 4, RoundingMode.HALF_UP);
             } else {
@@ -1562,7 +1556,7 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal porcEfectivo = ahorro.multiply(BigDecimal.valueOf(100))
                     .divide(subtotalBruto, 2, RoundingMode.HALF_UP);
 
-            card.add(filaDesglose("Subtotal efectivo s/IVA", formatPesos(subtotalBruto), false, false));
+            card.add(filaDesglose("Subtotal efectivo", formatPesos(subtotalBruto), false, false));
             card.add(filaDesglose(
                     "Descuento (" + formatPorcentaje(porcEfectivo) + "%)",
                     "-" + formatPesos(ahorro), false, true));
@@ -1570,11 +1564,11 @@ public class PresupuestoComercialPdfGenerator {
                     .setMarginTop(4).setMarginBottom(4));
         }
 
-        // Total destacado — los textos "efectivo" + "s/IVA" comunican que es
-        // el precio s/IVA de contado, coherente con la columna "PRECIO
-        // EFECTIVO" de la tabla y con la card de formas de pago donde el
-        // cliente ve las alternativas con financiación.
-        card.add(filaDesglose("Total efectivo s/IVA", formatPesos(totalSinIva), true, false));
+        // Total destacado — "efectivo" = precio de contado (sin financiación),
+        // coherente con la columna "PRECIO EFECTIVO" de la tabla. Sin etiqueta
+        // "s/IVA": el monto sigue el régimen de cada producto (maquinaria s/IVA,
+        // resto c/IVA), así que ya no es uniformemente sin IVA.
+        card.add(filaDesglose("Total efectivo", formatPesos(totalSinIva), true, false));
         doc.add(card);
     }
 
@@ -1808,18 +1802,9 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0)
                 .setMarginBottom(2));
 
-        // Indicación de IVA debajo del nombre. El régimen depende del rubro de
-        // los ítems: en un presupuesto mixto (menaje + maquinaria) cuyos
-        // perfiles de la forma difieren en aplicaIva no hay un único valor, así
-        // que {@code badgeIva} viene null y la card NO lleva badge (el
-        // precioFinal ya es correcto; un "c/IVA"/"s/IVA" global sería ambiguo).
-        if (badgeIva != null) {
-            contenido.add(new Paragraph(badgeIva ? "c/IVA" : "s/IVA")
-                    .setFontSize(8)
-                    .setFontColor(GRIS_MEDIO)
-                    .setMargin(0)
-                    .setMarginBottom(2));
-        }
+        // Las cards de formas de pago no muestran badge "c/IVA"/"s/IVA": el
+        // régimen depende del producto, no de la forma de pago (el precioFinal
+        // ya es correcto). El IVA por producto se ve en la tabla de productos.
 
         // Limpiamos "s/IVA" si viene dentro de la descripción (presupuestos
         // viejos lo guardaban como parte del string). Ahora se renderiza
@@ -1830,6 +1815,17 @@ public class PresupuestoComercialPdfGenerator {
             desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
                     .replaceAll("^s/IVA\\s*·\\s*", "")
                     .replaceAll("^s/IVA$", "")
+                    // El "% de descuento" depende del perfil del producto; no se
+                    // muestra a nivel forma. Limpiamos el texto de presupuestos
+                    // viejos que lo guardaron en la descripción.
+                    .replaceAll("\\s*·\\s*\\d+% de descuento", "")
+                    .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
+                    .replaceAll("^\\d+% de descuento$", "")
+                    // "N cuotas" es redundante con el nombre de la forma y con el
+                    // detalle "N cuotas de $X" — lo limpiamos de presupuestos viejos.
+                    .replaceAll("\\s*·\\s*\\d+ cuotas", "")
+                    .replaceAll("^\\d+ cuotas\\s*·\\s*", "")
+                    .replaceAll("^\\d+ cuotas$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
@@ -1900,28 +1896,28 @@ public class PresupuestoComercialPdfGenerator {
     // Helpers
     // =====================================================
 
-    /** Precio unitario SIN IVA con descuento individual aplicado. Coincide
-     *  con el precio "Efectivo s/IVA" de las cards de formas de pago dividido
-     *  por la cantidad — útil para que el cliente pueda calcular fácil cuánto
-     *  le sale agregar o quitar unidades. */
-    private static BigDecimal precioUnitarioSinIva(GenerarPresupuestoRequestDTO.Item item) {
-        BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
-        BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
-        BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
-        BigDecimal precioConDesc = precioConIva.multiply(
-                BigDecimal.ONE.subtract(desc.movePointLeft(2)));
-        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-        return precioConDesc.divide(divisor, 2, RoundingMode.HALF_UP);
-    }
-
-    /** Precio de lista unitario SIN IVA (sin aplicar el descuento individual).
-     *  Se usa para mostrar el precio tachado encima del precio con descuento
-     *  cuando el ítem tiene un descuento — refuerza visualmente el ahorro. */
-    private static BigDecimal precioListaSinIva(GenerarPresupuestoRequestDTO.Item item) {
+    /** Precio EFECTIVO unitario (precio con la forma Efectivo, ya según rubro:
+     *  c/IVA menaje, s/IVA maquinaria), SIN descuento individual. Es el precio
+     *  de lista que se muestra tachado cuando hay descuento. Fallback para
+     *  presupuestos viejos sin `precioEfectivo`: precio de lista sin IVA. */
+    private static BigDecimal precioListaEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+        if (item.precioEfectivo() != null) {
+            return item.precioEfectivo().setScale(2, RoundingMode.HALF_UP);
+        }
         BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
         BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
         BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
         return precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+    }
+
+    /** Precio EFECTIVO unitario con el descuento individual aplicado. Coincide
+     *  con el total de la card "Efectivo" dividido por la cantidad — útil para
+     *  que el cliente vea cuánto sale c/u al mejor precio. */
+    private static BigDecimal precioUnitarioEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+        BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
+        return precioListaEfectivo(item)
+                .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
+                .setScale(2, RoundingMode.HALF_UP);
     }
 
     /** Chip/pill compacto a partir de un String simple — wrapper sobre

@@ -76,7 +76,14 @@ public record GenerarPresupuestoRequestDTO(
              *  el operador carga un producto que no está en catálogo: la
              *  línea va a DUX con el SKU genérico y los comentarios describen
              *  el producto real. Null/blank cuando no aplica. */
-            String comentarios
+            String comentarios,
+            /** Precio unitario con la forma de pago Efectivo (la forma primaria
+             *  de referencia), ya resuelto según el rubro del ítem (c/IVA para
+             *  menaje, s/IVA para maquinaria). Es lo que se muestra como
+             *  "precio del producto" en el PDF/historial y la base de los
+             *  totales efectivos. Null en presupuestos viejos generados antes
+             *  de este campo → el backend cae al precio de lista según rubro. */
+            BigDecimal precioEfectivo
     ) {}
 
     public record FormaPagoSnapshot(

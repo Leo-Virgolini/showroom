@@ -62,9 +62,10 @@ export class MoreMenu {
         routerLink: '/etiquetas' },
     ]},
     { label: 'Consultas', items: [
-      // Pedidos arriba: es el outcome operacional (venta concretada) y lo
-      // que el operador consulta con más frecuencia.
-      { label: 'Pedidos', icon: 'pi pi-receipt',
+      // Historial de pedidos arriba: es el outcome operacional (venta
+      // concretada) y lo que el operador consulta con más frecuencia. Mismo
+      // prefijo "Historial de…" que el resto de las vistas de consulta.
+      { label: 'Historial de pedidos', icon: 'pi pi-receipt',
         iconClass: 'text-sky-700', styleClass: 'kt-menu-item-sky',
         routerLink: '/pedidos' },
       // Los tres "Historial de…" agrupados, mismo prefijo verbal — el ojo los

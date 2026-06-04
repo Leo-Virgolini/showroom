@@ -249,6 +249,19 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ------------------------------------------------------------
   readonly formasPago = signal<FormaPago[]>([]);
 
+  /** Forma de pago PRIMARIA = la primera de las activas que son precio de
+   *  referencia (`precioReferencia === true`), ordenadas por `orden` asc.
+   *  Es la forma "Efectivo" en la tabla típica. El precio mostrado por
+   *  producto y los totales del presupuesto se calculan con esta forma para
+   *  coincidir con el scan/visor del showroom. Null si ninguna forma activa
+   *  es de referencia (entonces se cae al precio de lista según rubro). */
+  readonly formaPrimaria = computed<FormaPago | null>(
+    () =>
+      this.formasPago()
+        .filter((f) => f.precioReferencia)
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null,
+  );
+
   /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se
    *  cargan al iniciar desde el mismo endpoint que el showroom. Default del
    *  backend = MAQUINAS INDUSTRIALES. Mientras llegan se asume lista vacía. */
@@ -338,36 +351,25 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return this.items().length > 0;
   });
 
-  /** Subtotal BRUTO sin IVA (sin ningún descuento) — precios de lista
-   *  multiplicados por cantidad. Es la base para calcular el descuento
-   *  efectivo total. */
-  readonly subtotalBrutoSinIva = computed(() => {
+  /** Subtotal BRUTO EFECTIVO (sin ningún descuento) — precio efectivo unitario
+   *  (forma primaria, según rubro) por cantidad. Es la base para calcular el
+   *  descuento efectivo total. */
+  readonly subtotalBrutoEfectivo = computed(() => {
     this.itemsTick();
     return this.items().reduce((acc, it) => {
-      return acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
+      return acc + this.precioMostrado(it) * it.cantidad;
     }, 0);
   });
 
-  /** Total SIN IVA con los descuentos INDIVIDUALES aplicados — es lo que
-   *  paga el cliente. No hay un "descuento global" adicional encima: el
-   *  campo `descuentoGlobal` es solo un reflejo del % efectivo y, cuando
-   *  el operador lo modifica, propaga ese valor a TODOS los descuentos
-   *  individuales. */
-  readonly totalSinIva = computed(() => {
+  /** Total EFECTIVO con los descuentos INDIVIDUALES aplicados — es lo que
+   *  paga el cliente con la forma Efectivo. No hay un "descuento global"
+   *  adicional encima: el campo `descuentoGlobal` es solo un reflejo del %
+   *  efectivo y, cuando el operador lo modifica, propaga ese valor a TODOS
+   *  los descuentos individuales. */
+  readonly totalEfectivo = computed(() => {
     this.itemsTick();
     return this.items().reduce((acc, it) => {
-      const precio = it.pvpKtGastroSinIva ?? 0;
-      const desc = it.descuentoPorcentaje ?? 0;
-      return acc + precio * (1 - desc / 100) * it.cantidad;
-    }, 0);
-  });
-
-  /** Total CON IVA con descuentos individuales aplicados — base para las
-   *  formas de pago que aplican IVA. */
-  readonly totalConIva = computed(() => {
-    this.itemsTick();
-    return this.items().reduce((acc, it) => {
-      const precio = it.pvpKtGastroConIva ?? 0;
+      const precio = this.precioMostrado(it);
       const desc = it.descuentoPorcentaje ?? 0;
       return acc + precio * (1 - desc / 100) * it.cantidad;
     }, 0);
@@ -375,7 +377,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   /** Suma en pesos de los descuentos individuales (= subtotal bruto - total). */
   readonly descuentoTotalMonto = computed(() =>
-    this.subtotalBrutoSinIva() - this.totalSinIva(),
+    this.subtotalBrutoEfectivo() - this.totalEfectivo(),
   );
 
   /** % EFECTIVO del descuento sobre el subtotal bruto. Cuando todos los
@@ -385,7 +387,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  "Descuento global" y, si el operador lo edita, ese nuevo % se copia a
    *  cada ítem (no se "suma" encima). */
   readonly descuentoGlobal = computed(() => {
-    const bruto = this.subtotalBrutoSinIva();
+    const bruto = this.subtotalBrutoEfectivo();
     if (bruto <= 0) return 0;
     return (this.descuentoTotalMonto() / bruto) * 100;
   });
@@ -998,20 +1000,40 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return this.rubroCotizaSinIva(rubro);
   }
 
-  /** Precio base a mostrar para un producto en la lista/detalle según su rubro:
-   *  los rubros sin IVA muestran el PVP s/IVA; el resto el PVP c/IVA. Mismo
-   *  criterio que el showroom para que ambas pantallas coincidan. */
+  /** Precio EFECTIVO unitario a mostrar para un producto en la lista/detalle:
+   *  el precio con la forma de pago primaria (Efectivo) según el rubro del
+   *  ítem — mismo criterio que el scan/visor del showroom. Para menaje suele
+   *  ser conIva × 0,87 (c/IVA); para maquinaria, sinIva (s/IVA).
+   *
+   *  Si NO hay forma primaria (ninguna forma activa es precioReferencia), cae
+   *  al precio de lista según rubro: maquinaria → s/IVA; resto → c/IVA. */
   precioMostrado(
-    r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
+    r: {
+      pvpKtGastroConIva: number | null;
+      pvpKtGastroSinIva: number | null;
+      porcIva?: number | null;
+      rubro?: string | null;
+    },
   ): number {
-    return this.rubroCotizaSinIva(r.rubro)
-      ? (r.pvpKtGastroSinIva ?? 0)
-      : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
+    const esMaq = this.rubroCotizaSinIva(r.rubro);
+    const forma = this.formaPrimaria();
+    if (!forma) {
+      // Fallback: precio de lista según rubro.
+      return esMaq
+        ? (r.pvpKtGastroSinIva ?? 0)
+        : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
+    }
+    return precioPorForma(r.pvpKtGastroConIva, r.porcIva ?? null, this.perfilForma(forma, esMaq));
   }
 
-  /** Etiqueta "s/IVA" o "c/IVA" que acompaña a {@link precioMostrado}. */
+  /** Etiqueta "s/IVA" o "c/IVA" que acompaña a {@link precioMostrado}, según el
+   *  perfil de la forma primaria para ese rubro (no según rubroCotizaSinIva
+   *  directo). Fallback (sin forma primaria): !rubroCotizaSinIva. */
   etiquetaIvaMostrada(rubro: string | null | undefined): string {
-    return this.rubroCotizaSinIva(rubro) ? 's/IVA' : 'c/IVA';
+    const forma = this.formaPrimaria();
+    if (!forma) return this.rubroCotizaSinIva(rubro) ? 's/IVA' : 'c/IVA';
+    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(rubro));
+    return (perfil.aplicaIva ?? false) ? 'c/IVA' : 's/IVA';
   }
 
   agregarResultado(sku: string): void {
@@ -1241,6 +1263,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       precioConIva: it.pvpKtGastroConIva ?? 0,
       porcIva: it.porcIva ?? 21,
       descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
+      // Precio unitario con la forma Efectivo (forma primaria), ya según rubro
+      // (c/IVA menaje, s/IVA maquinaria). Redondeado para coincidir con el PDF.
+      precioEfectivo: redondearMoneda(this.precioMostrado(it)),
       // Solo viaja para items genéricos — DUX lo pone como `comentarios` de
       // la línea al transformar el presupuesto en pedido.
       comentarios: it.comentarios ?? null,
@@ -1508,18 +1533,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  Sí mantenemos "X% de descuento" cuando aplica — los descuentos suelen
    *  ser chicos y se entienden directamente, y son información valiosa
    *  ("esta forma te da un 5% off"). */
-  private descripcionForma(f: FormaPago): string {
-    const partes: string[] = [];
-    if ((f.recargoPorcentaje ?? 0) < 0) {
-      partes.push(`${Math.abs(f.recargoPorcentaje)}% de descuento`);
-    }
-    if ((f.cantidadCuotas ?? 1) > 1) {
-      partes.push(`${f.cantidadCuotas} cuotas`);
-    }
-    // El indicador de IVA (c/IVA / s/IVA) se renderiza aparte en el PDF y en
-    // las cards del frontend, basado en `aplicaIva` del snapshot. No lo
-    // agregamos a la descripción para evitar duplicación visual.
-    return partes.join(' · ');
+  private descripcionForma(_f: FormaPago): string {
+    // No derivamos descripción para la forma: el nombre ya es descriptivo
+    // ("Efectivo", "2 cuotas"…), el detalle de cuotas se muestra aparte
+    // ("N cuotas de $X") y el "% de descuento" depende del perfil del producto
+    // (sería engañoso a nivel forma). Repetir "N cuotas" como descripción era
+    // redundante con el nombre.
+    return '';
   }
 }
 
