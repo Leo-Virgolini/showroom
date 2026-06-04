@@ -1533,19 +1533,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  Sí mantenemos "X% de descuento" cuando aplica — los descuentos suelen
    *  ser chicos y se entienden directamente, y son información valiosa
    *  ("esta forma te da un 5% off"). */
-  private descripcionForma(f: FormaPago): string {
-    const partes: string[] = [];
-    // El "% de descuento" NO se muestra a nivel forma: depende del perfil
-    // (menaje vs maquinaria) del producto, así que sería engañoso en
-    // presupuestos con maquinaria. El precioFinal ya refleja el descuento
-    // que corresponde a cada ítem.
-    if ((f.cantidadCuotas ?? 1) > 1) {
-      partes.push(`${f.cantidadCuotas} cuotas`);
-    }
-    // El indicador de IVA (c/IVA / s/IVA) se renderiza aparte en el PDF y en
-    // las cards del frontend, basado en `aplicaIva` del snapshot. No lo
-    // agregamos a la descripción para evitar duplicación visual.
-    return partes.join(' · ');
+  private descripcionForma(_f: FormaPago): string {
+    // No derivamos descripción para la forma: el nombre ya es descriptivo
+    // ("Efectivo", "2 cuotas"…), el detalle de cuotas se muestra aparte
+    // ("N cuotas de $X") y el "% de descuento" depende del perfil del producto
+    // (sería engañoso a nivel forma). Repetir "N cuotas" como descripción era
+    // redundante con el nombre.
+    return '';
   }
 }
 

@@ -723,6 +723,11 @@ public class PresupuestoComercialPdfGenerator {
                     .replaceAll("\\s*·\\s*\\d+% de descuento", "")
                     .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
                     .replaceAll("^\\d+% de descuento$", "")
+                    // "N cuotas" es redundante con el nombre de la forma y con el
+                    // detalle "N cuotas de $X" — lo limpiamos de presupuestos viejos.
+                    .replaceAll("\\s*·\\s*\\d+ cuotas", "")
+                    .replaceAll("^\\d+ cuotas\\s*·\\s*", "")
+                    .replaceAll("^\\d+ cuotas$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
@@ -1816,6 +1821,11 @@ public class PresupuestoComercialPdfGenerator {
                     .replaceAll("\\s*·\\s*\\d+% de descuento", "")
                     .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
                     .replaceAll("^\\d+% de descuento$", "")
+                    // "N cuotas" es redundante con el nombre de la forma y con el
+                    // detalle "N cuotas de $X" — lo limpiamos de presupuestos viejos.
+                    .replaceAll("\\s*·\\s*\\d+ cuotas", "")
+                    .replaceAll("^\\d+ cuotas\\s*·\\s*", "")
+                    .replaceAll("^\\d+ cuotas$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
