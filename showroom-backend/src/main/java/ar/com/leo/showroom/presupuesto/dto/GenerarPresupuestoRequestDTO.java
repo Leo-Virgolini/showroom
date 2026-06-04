@@ -101,6 +101,13 @@ public record GenerarPresupuestoRequestDTO(
             /** SKU del ítem al que corresponde este snapshot en modo
              *  {@code cotizacionIndividual}. Null cuando es global (todos los
              *  ítems sumados). */
-            String itemSku
+            String itemSku,
+            /** Recargo del perfil maquinaria de la forma (nullable → 0, no hereda
+             *  del perfil menaje). Necesario para recalcular per-rubro al cambiar
+             *  el modo de cotización. Null en presupuestos anteriores a esta
+             *  versión → se cae al perfil menaje. */
+            BigDecimal recargoPorcentajeMaquinaria,
+            /** aplicaIva del perfil maquinaria (nullable → false). */
+            Boolean aplicaIvaMaquinaria
     ) {}
 }

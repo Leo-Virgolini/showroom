@@ -697,6 +697,11 @@ export interface PresupuestoFormaPagoSnapshot {
   /** SKU del ítem al que corresponde el snapshot en modo cotización individual.
    *  Null cuando la forma es global (sumando todos los ítems). */
   itemSku?: string | null;
+  /** Perfil "maquinaria" de la forma (recargo/IVA propios para rubros sin IVA).
+   *  El backend los usa para recalcular el precio por ítem según el rubro al
+   *  generar el PDF, igual que el carrito mixto del showroom. */
+  recargoPorcentajeMaquinaria?: number | null;
+  aplicaIvaMaquinaria?: boolean | null;
 }
 
 /** Payload del POST /presupuesto-comercial/preview y /enviar (campo `presupuesto`). */
