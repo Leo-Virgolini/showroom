@@ -1136,9 +1136,9 @@
       <p-checkbox [ngModel]="formAplicaIva()" (ngModelChange)="formAplicaIva.set($event)" [binary]="true" inputId="formAplicaIva"
         [disabled]="guardandoForma()" />
       <div class="flex flex-col gap-0.5 flex-1">
-        <span class="text-sm font-medium">Aplica IVA al precio del cliente <span class="text-muted-color">(productos normales)</span></span>
+        <span class="text-sm font-medium">Aplica IVA <span class="text-muted-color">(productos normales)</span></span>
         <span class="text-xs text-muted-color">
-          <strong>Tildado</strong> (caso normal): el cliente paga precio con IVA. <strong>Destildado</strong> (ej: "transferencia sin IVA"): el cliente paga sin IVA — DUX igual factura con IVA y el operador absorbe la diferencia. (El IVA de maquinaria se configura arriba en su perfil.)
+          Tildado: el cliente paga con IVA. Destildado: paga sin IVA (DUX igual factura con IVA). El IVA de maquinaria se configura en su perfil, arriba.
         </span>
       </div>
     </label>
@@ -1149,7 +1149,7 @@
       <div class="flex flex-col gap-0.5 flex-1">
         <span class="text-sm font-medium">Activo</span>
         <span class="text-xs text-muted-color">
-          <strong>Tildado</strong>: aparece en el selector de formas de pago del operador. <strong>Destildado</strong>: queda oculto, pero los pedidos históricos que la usaron la siguen mostrando.
+          Aparece en el selector del operador. Destildado: queda oculto (los pedidos viejos la conservan).
         </span>
       </div>
     </label>
@@ -1160,7 +1160,7 @@
       <div class="flex flex-col gap-0.5 flex-1">
         <span class="text-sm font-medium">Mostrar como precio de referencia</span>
         <span class="text-xs text-muted-color">
-          Se muestra en el panel de scan, el visor y el carrito. Usá un <strong>recargo negativo</strong> (ej. −13) para un descuento sobre el precio lista. El <strong>orden</strong> define cuál aparece primero (la primera es la destacada y la que usa el carrito).
+          Se muestra en scan, visor y carrito. El <strong>orden</strong> define cuál va primero (la destacada).
         </span>
       </div>
     </label>
