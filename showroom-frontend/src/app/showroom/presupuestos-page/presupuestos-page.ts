@@ -483,9 +483,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     const formasBase = this.formasPago();
     return this.items().map((it) => {
       const esMaq = this.rubroCotizaSinIva(it.rubro);
-      const pSI = it.pvpKtGastroSinIva ?? 0;
       const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
-      const totalSinIva = pSI * factor * it.cantidad;
+      const total = this.precioMostrado(it) * factor * it.cantidad;
       const formas: PresupuestoFormaPagoSnapshot[] = formasBase.map((f) => {
         const perfil = this.perfilForma(f, esMaq);
         // precioPorForma da el precio unitario con el recargo del perfil ya
@@ -508,7 +507,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       });
       return {
         item: it,
-        totalSinIva,
+        total,
         formas,
         indiceMejorPrecio: this.calcularIndiceMejorPrecio(formas),
       };
@@ -1214,13 +1213,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   }
 
   // ============================================================
-  // Subtotal por línea — para mostrar en la tabla. Usa el precio SIN IVA
-  // (lo que el operador ve al escanear) con el descuento individual aplicado.
+  // Subtotal por línea — para mostrar en la tabla. Usa el precio EFECTIVO
+  // mostrado (forma primaria, según rubro) con el descuento individual, para
+  // que coincida con la columna "Precio" y con los totales globales.
   // ============================================================
   totalLinea(it: PresupuestoItem): number {
-    const precio = it.pvpKtGastroSinIva ?? 0;
     const desc = it.descuentoPorcentaje ?? 0;
-    return precio * (1 - desc / 100) * it.cantidad;
+    return this.precioMostrado(it) * (1 - desc / 100) * it.cantidad;
   }
 
   // ============================================================
@@ -1549,8 +1548,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
  *  formas planos (cada forma con su `itemSku`) y reagrupa por su cuenta. */
 interface GrupoItem {
   item: PresupuestoItem;
-  /** Total s/IVA del ítem (precio × cantidad × (1 - descuento)). */
-  totalSinIva: number;
+  /** Total efectivo del ítem (precio efectivo × cantidad × (1 - descuento)),
+   *  coherente con el precio mostrado en el resto del armado. */
+  total: number;
   formas: PresupuestoFormaPagoSnapshot[];
   indiceMejorPrecio: number;
 }
