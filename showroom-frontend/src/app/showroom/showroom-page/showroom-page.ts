@@ -354,10 +354,31 @@ export class ShowroomPage implements AfterViewInit {
   );
 
   /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
-  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+  readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
 
-  /** Formas de referencia secundarias (todas menos la primera/destacada). */
-  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+  /** Forma destacada/default para el perfil del producto: de las formas activas
+   *  marcadas como referencia de ese perfil (menaje → `precioReferencia`;
+   *  maquinaria → `precioReferenciaMaquinaria`), la de menor `orden`. Null si
+   *  ninguna marcada (entonces se cae al precio de lista según rubro). Mismo
+   *  criterio que el presupuestador. */
+  formaDestacada(esMaquinaria: boolean): FormaPago | null {
+    return this.formasPagoActivas()
+      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+  }
+
+  /** Forma elegida por el operador en el selector del scan (sticky). Mientras
+   *  sea null, el precio mostrado usa la {@link formaDestacada} del rubro del
+   *  producto escaneado; al elegir una se mantiene entre productos. */
+  readonly formaScanSeleccionada = signal<FormaPago | null>(null);
+
+  /** Forma EFECTIVA del scan = la elegida por el operador, o la destacada del
+   *  perfil del producto escaneado si todavía no eligió ninguna. */
+  readonly formaScanEfectiva = computed<FormaPago | null>(() => {
+    const elegida = this.formaScanSeleccionada();
+    if (elegida) return elegida;
+    return this.formaDestacada(this.rubroCotizaSinIva(this.ultimoScan()?.rubro));
+  });
 
   /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
    *  al iniciar; default del backend = MAQUINAS INDUSTRIALES. */
@@ -1145,6 +1166,29 @@ export class ShowroomPage implements AfterViewInit {
     this.focusInput();
   }
 
+  /** El operador eligió una forma en el selector del scan. Queda sticky y se
+   *  refleja en el visor del cliente. Devuelve el foco al input para seguir
+   *  escaneando. */
+  onCambiarFormaScan(fp: FormaPago | null): void {
+    this.formaScanSeleccionada.set(fp);
+    this.publicarFormaEnVisor();
+    this.focusInput();
+  }
+
+  /** Publica la forma EFECTIVA del scan al visor del operador (SSE
+   *  `visor-forma`). Best-effort: si la request falla, solo lo logueamos — la
+   *  pantalla del operador no depende de esto. No publica si no hay forma
+   *  efectiva (sin formas marcadas) ni id. */
+  private publicarFormaEnVisor(): void {
+    const forma = this.formaScanEfectiva();
+    if (forma?.id == null) return;
+    this.api.publicarFormaVisor(forma.id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        error: (err) => console.warn('[visor-forma] no se pudo publicar:', err),
+      });
+  }
+
   confirmarSincronizar(): void {
     if (this.health()?.syncEnCurso) {
       this.toast.add({
@@ -1293,6 +1337,10 @@ export class ShowroomPage implements AfterViewInit {
           this.cargandoScan.set(false);
           this.ultimoScan.set(r);
           this.cantidadInput.set(1);
+          // Reflejar en el visor el precio con la forma efectiva del producto
+          // recién escaneado (sticky si el operador ya eligió una; sino la
+          // destacada del rubro). El scan ya publicó al visor el producto.
+          this.publicarFormaEnVisor();
           this.focusInput();
           if (r.habilitado === false) {
             this.toast.add({
@@ -1525,6 +1573,7 @@ export class ShowroomPage implements AfterViewInit {
         this.cargandoScan.set(false);
         this.ultimoScan.set(r);
         this.cantidadInput.set(1);
+        this.publicarFormaEnVisor();
         this.focusInput();
       },
       error: (err) => {

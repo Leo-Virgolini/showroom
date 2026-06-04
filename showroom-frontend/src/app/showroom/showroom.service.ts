@@ -72,6 +72,14 @@ export class ShowroomService {
       { sku, cantidad, forzar });
   }
 
+  /** Publica al visor del operador autenticado la forma de pago elegida en el
+   *  scan. El backend resuelve el operador por la sesión/token (igual que el
+   *  scan) y emite SSE `visor-forma` { formaId } en su canal personal, para que
+   *  la pantalla del cliente muestre el precio con esa misma forma. */
+  publicarFormaVisor(formaId: number): Observable<void> {
+    return this.http.post<void>(`${this.base}/visor/forma`, { formaId });
+  }
+
   /** Estado de la sesión activa de un operador específico — endpoint público
    *  que usa el visor para mostrar el nombre del cliente actual. */
   visorObtenerSesionActiva(username: string): Observable<SesionShowroom> {

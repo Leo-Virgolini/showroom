@@ -321,6 +321,13 @@ export interface ScanVisorError {
   codigo: string;
 }
 
+/** Forma de pago elegida por el operador en el scan, reemitida al visor para
+ *  que la pantalla del cliente muestre el precio con esa misma forma. El visor
+ *  mantiene el último `formaId` recibido (sticky). */
+export interface VisorFormaEvent {
+  formaId: number;
+}
+
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
  *  diferenciado cuando un cliente desde /visor agrega algo. */
 export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';

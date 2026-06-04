@@ -11,6 +11,7 @@ import {
   PresupuestoEmailEvent,
   ScanResult,
   ScanVisorError,
+  VisorFormaEvent,
   SesionShowroom,
   SyncEvent,
   WhatsappBusinessEvent,
@@ -68,6 +69,9 @@ export class BackendStatusService {
    *  El visor lo usa para mostrar un mensaje "código no encontrado" en lugar
    *  de seguir mostrando el último producto válido. */
   readonly scanVisorErrorEvents$ = new Subject<ScanVisorError>();
+  /** Forma de pago elegida en el scan, reemitida al visor. El visor recalcula
+   *  el precio mostrado con esa forma y mantiene el último valor (sticky). */
+  readonly visorFormaEvents$ = new Subject<VisorFormaEvent>();
   /** Estado completo del carrito tras cualquier mutación (operador o visor).
    *  Es el único canal de sincronización del carrito entre pantallas. */
   readonly carritoEvents$ = new Subject<CarritoState>();
@@ -394,6 +398,14 @@ export class BackendStatusService {
     src.addEventListener('scan-visor-error', (e: MessageEvent) => {
       try {
         this.scanVisorErrorEvents$.next(JSON.parse(e.data) as ScanVisorError);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('visor-forma', (e: MessageEvent) => {
+      try {
+        this.visorFormaEvents$.next(JSON.parse(e.data) as VisorFormaEvent);
       } catch {
         /* payload malformado, ignoramos */
       }

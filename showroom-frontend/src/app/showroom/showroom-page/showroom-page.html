@@ -325,45 +325,55 @@
           </div>
           }
 
-          <!-- PRECIOS DE REFERENCIA — una línea por forma marcada; la primera
-               destacada grande. Fallback al precio lista si no hay formas. -->
+          <!-- PRECIO POR FORMA DE PAGO — selector de forma + precio del producto
+               con la forma elegida. Sticky entre productos; mientras el operador
+               no elija, se usa la forma destacada del rubro escaneado. Al cambiar
+               se refleja en el visor del cliente vía SSE. -->
           @if (r.pvpKtGastroConIva != null && r.pvpKtGastroConIva > 0) {
-          <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm flex flex-col gap-3">
-            @if (formaReferenciaPrimaria(); as primaria) {
-              <!-- Destacado: icono + nombre + precio grande -->
+          <div class="relative rounded-xl border-2 border-[#FF861C]/50 dark:border-primary-900 bg-surface-0 dark:bg-surface-900 p-5 sm:p-6 shadow-sm flex flex-col gap-4">
+            @if (formasPagoActivas().length > 0) {
+              <!-- Selector de forma de pago -->
+              <p-select [options]="formasPagoActivas()" optionLabel="nombre"
+                [ngModel]="formaScanEfectiva()"
+                (ngModelChange)="onCambiarFormaScan($event)"
+                placeholder="Forma de pago" appendTo="body" class="w-full">
+                <ng-template let-fp #selectedItem>
+                  <span class="inline-flex items-center gap-2">
+                    <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
+                    {{ fp.nombre }}
+                  </span>
+                </ng-template>
+                <ng-template let-fp #item>
+                  <span class="inline-flex items-center gap-2">
+                    <i [class]="iconoForma(fp)" class="text-[#FF861C]"></i>
+                    {{ fp.nombre }}
+                  </span>
+                </ng-template>
+              </p-select>
+            }
+            @if (formaScanEfectiva(); as forma) {
+              <!-- Precio destacado con la forma efectiva -->
               <div class="flex items-center gap-4">
                 <div class="shrink-0 w-14 h-14 rounded-2xl bg-[#FF861C]/10 dark:bg-[#FF861C]/15 flex items-center justify-center">
-                  <i [class]="iconoPrecioReferencia(primaria.nombre)" class="text-2xl text-[#FF861C]"></i>
+                  <i [class]="iconoForma(forma)" class="text-2xl text-[#FF861C]"></i>
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ primaria.nombre }}</span>
+                    <span class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ forma.nombre }}</span>
                   </div>
                   <div class="flex items-baseline gap-1.5">
                     <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none">$</span>
-                    <span class="text-4xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, primaria) | number:'1.0-0' }}</span>
+                    <span class="text-4xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | number:'1.0-0' }}</span>
                   </div>
-                </div>
-              </div>
-              <!-- Secundarias: mini-tarjetas con icono -->
-              @if (formasReferenciaSecundarias().length > 0) {
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  @for (forma of formasReferenciaSecundarias(); track forma.id) {
-                    <div class="rounded-xl border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800/50 p-3 flex items-center gap-3">
-                      <div class="shrink-0 w-9 h-9 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
-                        <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-base text-[#FF861C]"></i>
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <div class="flex items-center gap-1.5">
-                          <span class="text-[0.7rem] font-semibold uppercase tracking-wide text-[#3B1E09]/60 dark:text-muted-color truncate">{{ forma.nombre }}</span>
-                        </div>
-                        <div class="text-lg sm:text-xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-tight">{{ precioReferenciaPorForma(r, forma) | currency:'ARS':'symbol':'1.0-0' }}</div>
-                      </div>
+                  @if (forma.cantidadCuotas && forma.cantidadCuotas > 1) {
+                    <div class="text-sm font-semibold text-[#3B1E09]/70 dark:text-muted-color mt-1">
+                      {{ forma.cantidadCuotas }} × {{ precioReferenciaPorForma(r, forma) / forma.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}
                     </div>
                   }
                 </div>
-              }
+              </div>
             } @else {
+              <!-- Sin formas marcadas: precio de lista según rubro -->
               <div class="flex items-center gap-4">
                 <div class="shrink-0 w-14 h-14 rounded-2xl bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-tag text-2xl text-[#FF861C]"></i>
@@ -436,19 +446,13 @@
                       </span>
                     }
                   </div>
-                  @if (formasReferencia().length > 0) {
-                    <div class="flex flex-col gap-1 mt-0.5">
-                      @for (forma of formasReferencia(); track forma.id) {
-                        <div class="flex items-baseline justify-between gap-2">
-                          <span class="inline-flex items-center gap-1.5 text-[0.7rem] font-medium" [class]="c.textSmall">
-                            <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-[0.7rem]"></i>
-                            {{ forma.nombre }}
-                          </span>
-                          <span class="text-base sm:text-lg font-bold tabular-nums" [class]="c.textBig">
-                            {{ precioConDescuento(precioReferenciaPorForma(r, forma), escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
-                          </span>
-                        </div>
-                      }
+                  @if (formaScanEfectiva(); as forma) {
+                    <div class="flex items-center gap-1.5 text-[0.7rem] font-medium mt-0.5" [class]="c.textSmall">
+                      <i [class]="iconoForma(forma)" class="text-[0.7rem]"></i>
+                      {{ forma.nombre }}
+                    </div>
+                    <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none" [class]="c.textBig">
+                      {{ precioConDescuento(precioReferenciaPorForma(r, forma), escala.porcentaje) | currency:'ARS':'symbol':'1.0-0' }}
                     </div>
                   } @else {
                     <div class="text-2xl sm:text-3xl font-bold tabular-nums leading-none mt-0.5" [class]="c.textBig">

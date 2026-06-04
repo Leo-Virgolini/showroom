@@ -90,21 +90,50 @@ export class VisorPage {
   readonly escalas = signal<EscalaDescuento[]>([]);
 
   /** Todas las formas de pago activas. Se cargan al iniciar vía el endpoint
-   *  público y se filtran a referencia con el computed de abajo. */
+   *  público. La forma destacada por perfil se resuelve con {@link formaDestacada}. */
   readonly formasActivas = signal<FormaPago[]>([]);
 
-  /** Formas marcadas como precio de referencia, por `orden`. */
-  readonly formasReferencia = computed(() =>
-    this.formasActivas()
-      .filter((f) => f.precioReferencia)
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
-  );
+  /** Primera forma de referencia (destacada del perfil menaje), o null. Fallback
+   *  para el precio de lista cuando no hay forma efectiva. */
+  readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
 
-  /** Primera forma de referencia (destacada), o null. */
-  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+  /** Id de la forma elegida por el operador en el scan, recibido vía SSE
+   *  `visor-forma`. Sticky: se mantiene hasta que llegue otro. Null = todavía
+   *  no recibió ninguna → se usa la forma destacada del rubro. */
+  readonly formaVisorId = signal<number | null>(null);
 
-  /** Formas de referencia secundarias (todas menos la destacada). */
-  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+  /** Forma destacada/default para el perfil del producto: de las formas activas
+   *  marcadas como referencia de ese perfil (menaje → `precioReferencia`;
+   *  maquinaria → `precioReferenciaMaquinaria`), la de menor `orden`. Null si
+   *  ninguna marcada. Mismo criterio que el scan/presupuestador. */
+  formaDestacada(esMaquinaria: boolean): FormaPago | null {
+    return this.formasActivas()
+      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+  }
+
+  /** Forma EFECTIVA del visor = la de `formasActivas()` cuyo id == `formaVisorId()`,
+   *  o la destacada del perfil del producto escaneado si no recibió ninguna. */
+  readonly formaVisorEfectiva = computed<FormaPago | null>(() => {
+    const id = this.formaVisorId();
+    if (id != null) {
+      const match = this.formasActivas().find((f) => f.id === id);
+      if (match) return match;
+    }
+    return this.formaDestacada(this.rubroCotizaSinIva(this.ultimoScan()?.rubro));
+  });
+
+  /** True si la forma efectiva del visor es la más barata para el producto
+   *  mostrado — habilita la pill "MEJOR PRECIO". */
+  readonly formaVisorEsMasBarata = computed(() => {
+    const r = this.ultimoScan();
+    const forma = this.formaVisorEfectiva();
+    if (!r || !forma) return false;
+    const formas = this.formasActivas();
+    if (formas.length < 2) return false;
+    const precioForma = this.precioReferenciaPorForma(r, forma);
+    return formas.every((f) => this.precioReferenciaPorForma(r, f) >= precioForma);
+  });
 
   /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
    *  al iniciar vía el endpoint público; default del backend = MAQUINAS INDUSTRIALES. */
@@ -217,6 +246,12 @@ export class VisorPage {
     this.backendStatus.scanVisorErrorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((ev) => this.mostrarError(ev.codigo));
+
+    // Forma de pago elegida por el operador en el scan — el visor recalcula el
+    // precio mostrado con esa forma. Sticky: se guarda hasta que llegue otra.
+    this.backendStatus.visorFormaEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((ev) => this.formaVisorId.set(ev.formaId));
 
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
@@ -457,19 +492,6 @@ export class VisorPage {
       : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
   }
 
-  /** Id de la forma de referencia con el menor precio mostrado, o null si hay
-   *  menos de dos formas. Permite marcar "Mejor precio" en la que más le conviene
-   *  al cliente sin asumir que la destacada (por `orden`) es siempre la más
-   *  barata — el operador podría reordenarlas o cambiar los recargos. */
-  idFormaReferenciaMasBarata(r: ScanResult): number | null {
-    const formas = this.formasReferencia();
-    if (formas.length < 2) return null;
-    let mejor = formas[0];
-    for (const f of formas) {
-      if (this.precioReferenciaPorForma(r, f) < this.precioReferenciaPorForma(r, mejor)) mejor = f;
-    }
-    return mejor.id;
-  }
 
   /** true si hay un escalón con umbral mayor (y por tanto mejor) que ya
    *  aplica al precio. Lo usamos para atenuar las tarjetas de escalones

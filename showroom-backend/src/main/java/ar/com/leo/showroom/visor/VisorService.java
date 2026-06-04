@@ -33,6 +33,7 @@ public class VisorService {
 
     public static final String EVENTO_SCAN = "scan-visor";
     public static final String EVENTO_SCAN_ERROR = "scan-visor-error";
+    public static final String EVENTO_FORMA = "visor-forma";
 
     private final SyncEventService eventService;
 
@@ -56,5 +57,18 @@ public class VisorService {
         if (codigo == null || codigo.isBlank()) return;
         eventService.publishTo(username, EVENTO_SCAN_ERROR,
                 java.util.Map.of("codigo", codigo));
+    }
+
+    /**
+     * Publica al visor del operador la forma de pago elegida en el scan, para
+     * que la pantalla del cliente muestre el precio con esa misma forma. El
+     * payload es {@code {formaId}} y el visor mantiene el último valor recibido
+     * (sticky). Si {@code username} es null/blank no se publica (scan
+     * silencioso / sin auth resuelta).
+     */
+    public void publicarForma(String username, Long formaId) {
+        if (username == null || username.isBlank() || formaId == null) return;
+        eventService.publishTo(username, EVENTO_FORMA,
+                java.util.Map.of("formaId", formaId));
     }
 }
