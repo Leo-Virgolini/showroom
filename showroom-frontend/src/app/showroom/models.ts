@@ -517,9 +517,13 @@ export interface FormaPago {
   aplicaIvaMaquinaria: boolean | null;
   activo: boolean;
   orden: number;
-  /** Si la forma se muestra como precio de referencia en scan/visor/carrito.
-   *  El `orden` define cuál es la primera/destacada. Default false. */
+  /** Si la forma se muestra como precio de referencia (perfil menaje) en
+   *  scan/visor/carrito. El `orden` define cuál es la primera/destacada.
+   *  Default false. */
   precioReferencia: boolean;
+  /** Si la forma se muestra como precio de referencia para el perfil
+   *  maquinaria. Default false. */
+  precioReferenciaMaquinaria: boolean;
   /** ISO timestamp; null al crear desde el form. */
   creadoAt: string | null;
 }
