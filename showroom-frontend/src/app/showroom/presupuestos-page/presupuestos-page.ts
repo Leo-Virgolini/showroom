@@ -1025,16 +1025,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return precioPorForma(r.pvpKtGastroConIva, r.porcIva ?? null, this.perfilForma(forma, esMaq));
   }
 
-  /** Etiqueta "s/IVA" o "c/IVA" que acompaña a {@link precioMostrado}, según el
-   *  perfil de la forma primaria para ese rubro (no según rubroCotizaSinIva
-   *  directo). Fallback (sin forma primaria): !rubroCotizaSinIva. */
-  etiquetaIvaMostrada(rubro: string | null | undefined): string {
-    const forma = this.formaPrimaria();
-    if (!forma) return this.rubroCotizaSinIva(rubro) ? 's/IVA' : 'c/IVA';
-    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(rubro));
-    return (perfil.aplicaIva ?? false) ? 'c/IVA' : 's/IVA';
-  }
-
   agregarResultado(sku: string): void {
     const cant = this.cantidadResultado(sku);
     this.seleccionarResultado(sku, cant);
