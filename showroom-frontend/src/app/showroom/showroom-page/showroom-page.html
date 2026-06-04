@@ -574,10 +574,23 @@
                   <div class="text-sm text-surface-700 dark:text-surface-200 truncate">{{ it.descripcion ?? '—' }}</div>
                 </div>
                 <div class="text-right shrink-0 flex flex-col gap-0.5">
-                  @if (it.pvpKtGastroSinIva != null && it.pvpKtGastroSinIva > 0) {
-                  <div class="text-sm font-semibold tabular-nums">
-                    {{ it.pvpKtGastroSinIva | currency:'ARS':'symbol':'1.0-0' }}
-                  </div>
+                  @if (it.pvpKtGastroConIva != null && it.pvpKtGastroConIva > 0) {
+                    @if (formasReferencia().length > 0) {
+                    <div class="flex flex-col gap-0.5 items-end">
+                      @for (forma of formasReferencia(); track forma.id; let first = $first) {
+                        <div class="flex items-baseline justify-end gap-1.5">
+                          <span class="text-[0.6rem] uppercase tracking-wide text-muted-color">{{ forma.nombre }}</span>
+                          <span class="tabular-nums font-semibold" [class]="first ? 'text-sm text-[#FF861C]' : 'text-xs text-[#3B1E09] dark:text-surface-200'">
+                            {{ precioReferenciaPorForma(it, forma) | currency:'ARS':'symbol':'1.0-0' }}
+                          </span>
+                        </div>
+                      }
+                    </div>
+                    } @else {
+                    <div class="text-sm font-semibold tabular-nums">
+                      {{ it.pvpKtGastroConIva | currency:'ARS':'symbol':'1.0-0' }}
+                    </div>
+                    }
                   } @else {
                   <div class="text-[0.7rem] text-red-600 dark:text-red-400 uppercase font-bold inline-flex items-center justify-end gap-1"
                     pTooltip="Producto sin precio cargado en DUX" tooltipPosition="left">

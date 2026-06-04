@@ -285,6 +285,8 @@ public class ShowroomService {
                 pc.getDescripcion(),
                 pc.getRubro(),
                 sinIva,
+                pc.getPvpKtGastroConIva(),
+                pc.getPorcIva(),
                 pc.getHabilitado(),
                 urlImagenLocal(pc.getSku()),
                 pc.getStockTotal());
