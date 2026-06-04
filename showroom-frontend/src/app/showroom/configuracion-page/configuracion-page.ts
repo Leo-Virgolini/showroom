@@ -1039,7 +1039,7 @@ export class ConfiguracionPage {
       },
       error: (err) => {
         this.cargandoRubrosSinIva.set(false);
-        toastError(this.toast, 'Rubros sin IVA', err, 'No se pudieron cargar los rubros sin IVA');
+        toastError(this.toast, 'Rubros de maquinaria', err, 'No se pudieron cargar los rubros de maquinaria');
       },
     });
   }
@@ -1053,13 +1053,13 @@ export class ConfiguracionPage {
         this.toast.add({
           severity: 'success',
           summary: 'Guardado',
-          detail: 'Rubros que cotizan sin IVA actualizados.',
+          detail: 'Rubros de maquinaria actualizados.',
           life: 3000,
         });
       },
       error: (err) => {
         this.guardandoRubrosSinIva.set(false);
-        toastError(this.toast, 'Rubros sin IVA', err, 'No se pudieron guardar los rubros sin IVA');
+        toastError(this.toast, 'Rubros de maquinaria', err, 'No se pudieron guardar los rubros de maquinaria');
       },
     });
   }

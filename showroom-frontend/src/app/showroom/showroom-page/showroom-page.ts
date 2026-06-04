@@ -44,7 +44,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos, normalizarRubro } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, normalizarRubro } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
@@ -388,11 +388,12 @@ export class ShowroomPage implements AfterViewInit {
     [...this.escalasDescuento()].sort((a, b) => a.umbralMin - b.umbralMin),
   );
 
-  /** True si el ítem pertenece a un rubro excluido de los descuentos por
-   *  escala (MAQUINAS INDUSTRIALES). Esos ítems NO suman al umbral del
-   *  escalón ni reciben el descuento — el cliente los paga al PVP de lista. */
+  /** True si el ítem pertenece a un rubro de maquinaria (lista configurable).
+   *  Esos ítems NO suman al umbral del escalón ni reciben el descuento por
+   *  escala — el cliente los paga al PVP de lista. Mismo grupo que usa el
+   *  perfil "maquinaria" de las formas de pago. */
   private rubroExcluido(it: { rubro?: string | null }): boolean {
-    return rubroExcluyeDescuentos(it.rubro);
+    return this.rubroCotizaSinIva(it.rubro);
   }
 
   /** True si el ítem queda fuera del descuento por escala. Hoy depende solo
@@ -537,7 +538,7 @@ export class ShowroomPage implements AfterViewInit {
    *  los tiles "Comprá más y ahorrás" debajo del scan — esos tiles
    *  sugerirían un precio que comercialmente no aplica al producto. */
   readonly scanExcluyeDescuentos = computed(
-    () => rubroExcluyeDescuentos(this.ultimoScan()?.rubro),
+    () => this.rubroCotizaSinIva(this.ultimoScan()?.rubro),
   );
 
   /** True si el ítem (resultado de búsqueda o ítem de carrito) es de un
@@ -545,7 +546,7 @@ export class ShowroomPage implements AfterViewInit {
    *  INDUSTRIAL" en cada fila — el operador identifica de un vistazo qué
    *  productos no califican para descuentos por escala. */
   esRubroSinDescuento(rubro: string | null | undefined): boolean {
-    return rubroExcluyeDescuentos(rubro);
+    return this.rubroCotizaSinIva(rubro);
   }
 
   /** True si en el carrito hay AL MENOS un ítem de rubro excluido. El UI lo
@@ -554,7 +555,7 @@ export class ShowroomPage implements AfterViewInit {
    *  confundirse al ver que el monto del descuento es menor del que esperaría
    *  multiplicando subtotal × %. */
   readonly carritoTieneRubroExcluido = computed(
-    () => this.carrito().some((it) => rubroExcluyeDescuentos(it.rubro)),
+    () => this.carrito().some((it) => this.rubroCotizaSinIva(it.rubro)),
   );
 
   /** Forma de pago con el menor total — para el badge "MEJOR PRECIO". */
