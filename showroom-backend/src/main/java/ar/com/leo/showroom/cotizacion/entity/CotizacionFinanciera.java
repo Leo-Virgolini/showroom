@@ -65,15 +65,20 @@ public class CotizacionFinanciera {
     @Column(name = "rubro", length = 100)
     private String rubro;
 
-    /** Monto base SIN IVA — el operador lo ingresa así. Para las formas que
-     *  {@code aplicaIva=true} se multiplica por (1 + IVA/100) antes de
-     *  calcular el recargo financiero.
+    /** Monto base CON IVA — el operador lo ingresa así (igual que en
+     *  scan/presupuesto). El cotizador deriva el neto cuando lo necesita:
+     *  {@code monto / (1 + IVA/100)}.
      *
      *  <p>Puede ser null/cero cuando la cotización usa SOLO el segundo monto
-     *  ({@link #montoBaseSinIva2}). El service valida que al menos uno de
-     *  los dos sea > 0. */
+     *  ({@link #montoBaseConIva2}). El service valida que al menos uno de
+     *  los dos sea > 0.
+     *
+     *  <p>NOTA columna histórica: la columna se sigue llamando
+     *  {@code monto_base_sin_iva} para no migrar el schema, pero ahora
+     *  guarda el monto CON IVA. Cotizaciones generadas ANTES de este cambio
+     *  guardaron el neto (sin IVA) — diferencia aceptada. */
     @Column(name = "monto_base_sin_iva", precision = 18, scale = 2)
-    private BigDecimal montoBaseSinIva;
+    private BigDecimal montoBaseConIva;
 
     /** % de IVA usado para el cálculo de las formas que aplican IVA. Por
      *  default 21 (la tasa general en Argentina). Lo guardamos por si en el
@@ -82,15 +87,18 @@ public class CotizacionFinanciera {
     @Column(name = "porc_iva", precision = 5, scale = 2, nullable = false)
     private BigDecimal porcIva;
 
-    /** Segundo monto base SIN IVA, opcional. Permite cotizar simultáneamente
+    /** Segundo monto base CON IVA, opcional. Permite cotizar simultáneamente
      *  dos productos con IVAs distintos (ej. una máquina con 21% y un insumo
      *  con 10.5%); las formas de pago se calculan sobre la suma respetando
      *  el IVA propio de cada monto. Null cuando solo se usa el monto
-     *  principal. */
+     *  principal.
+     *
+     *  <p>NOTA columna histórica: la columna {@code monto_base_sin_iva_2}
+     *  ahora guarda el monto CON IVA (ver {@link #montoBaseConIva}). */
     @Column(name = "monto_base_sin_iva_2", precision = 18, scale = 2)
-    private BigDecimal montoBaseSinIva2;
+    private BigDecimal montoBaseConIva2;
 
-    /** % de IVA para {@link #montoBaseSinIva2}. Default 10.5 (productos
+    /** % de IVA para {@link #montoBaseConIva2}. Default 10.5 (productos
      *  esenciales). Null cuando no se usa el segundo monto. */
     @Column(name = "porc_iva_2", precision = 5, scale = 2)
     private BigDecimal porcIva2;

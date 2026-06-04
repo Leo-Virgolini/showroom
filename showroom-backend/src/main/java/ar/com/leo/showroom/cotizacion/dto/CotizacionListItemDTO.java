@@ -15,7 +15,7 @@ public record CotizacionListItemDTO(
         String clienteTelefono,
         String clienteEmail,
         String rubro,
-        BigDecimal montoBaseSinIva,
+        BigDecimal montoBaseConIva,
         /** Nombre o username del operador que generó la cotización. */
         String creadoPor
 ) {}

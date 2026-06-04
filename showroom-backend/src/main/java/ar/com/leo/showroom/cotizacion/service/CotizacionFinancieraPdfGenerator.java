@@ -255,11 +255,12 @@ public class CotizacionFinancieraPdfGenerator {
     // y debajo se agrega un sub-banner con el total de la cotización.
     // =====================================================
     private void agregarBannerMonto(Document doc, GenerarCotizacionRequestDTO datos) {
-        BigDecimal monto1 = datos.montoBaseSinIva() == null
-                ? BigDecimal.ZERO : datos.montoBaseSinIva();
+        // Los montos vienen CON IVA. El neto se deriva: monto / (1 + IVA/100).
+        BigDecimal monto1 = datos.montoBaseConIva() == null
+                ? BigDecimal.ZERO : datos.montoBaseConIva();
         BigDecimal iva1 = datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva();
-        BigDecimal monto2 = datos.montoBaseSinIva2() == null
-                ? BigDecimal.ZERO : datos.montoBaseSinIva2();
+        BigDecimal monto2 = datos.montoBaseConIva2() == null
+                ? BigDecimal.ZERO : datos.montoBaseConIva2();
         BigDecimal iva2 = datos.porcIva2() == null ? new BigDecimal("10.5") : datos.porcIva2();
         boolean tiene1 = monto1.signum() > 0;
         boolean tiene2 = monto2.signum() > 0;
@@ -292,10 +293,12 @@ public class CotizacionFinancieraPdfGenerator {
             // que el cliente vea de un vistazo el precio neto y el facturado.
             // Sin esto, solo veía "Total sin IVA" y tenía que deducir el con-IVA
             // mirando la card "Transferencia con IVA" en las formas de pago.
-            BigDecimal totalSinIva = monto1.add(monto2);
-            BigDecimal totalConIva = monto1.multiply(
-                    BigDecimal.ONE.add(iva1.movePointLeft(2)))
-                .add(monto2.multiply(BigDecimal.ONE.add(iva2.movePointLeft(2))));
+            // Montos ya CON IVA: el total c/IVA es la suma directa; el neto
+            // se deriva dividiendo cada monto por (1 + su IVA).
+            BigDecimal totalConIva = monto1.add(monto2);
+            BigDecimal totalSinIva = monto1.divide(
+                    BigDecimal.ONE.add(iva1.movePointLeft(2)), 2, RoundingMode.HALF_UP)
+                .add(monto2.divide(BigDecimal.ONE.add(iva2.movePointLeft(2)), 2, RoundingMode.HALF_UP));
             banner.add(new Paragraph()
                     .add(new com.itextpdf.layout.element.Text("Total sin IVA: ").simulateBold())
                     .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalSinIva))
@@ -323,7 +326,7 @@ public class CotizacionFinancieraPdfGenerator {
                     .setMarginTop(2)
                     .setMargin(0));
             banner.add(new Paragraph(
-                    "precio sin IVA · IVA " + iva.stripTrailingZeros().toPlainString() + "%")
+                    "precio con IVA · IVA " + iva.stripTrailingZeros().toPlainString() + "%")
                     .setFontSize(9)
                     .setFontColor(GRIS_MEDIO)
                     .setTextAlignment(TextAlignment.CENTER)
@@ -479,10 +482,9 @@ public class CotizacionFinancieraPdfGenerator {
                 .setMarginLeft(7)
                 .setMarginRight(7);
 
-        boolean aplicaIva = f.aplicaIva() == null || f.aplicaIva();
-        Color ivaColor = aplicaIva ? new DeviceRgb(180, 83, 9) : new DeviceRgb(110, 110, 110);
-
-        // Col 1: nombre arriba + indicador IVA chico debajo.
+        // Col 1: nombre de la forma. El régimen de IVA depende del producto
+        // (su tasa: 21% menaje, 10,5% maquinaria), no de la forma de pago, así
+        // que ya no se muestra "con IVA"/"sin IVA" acá.
         Cell celdaNombre = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setPadding(0)
@@ -492,13 +494,6 @@ public class CotizacionFinancieraPdfGenerator {
                 .setFontSize(9)
                 .setFontColor(KT_MARRON)
                 .setMargin(0));
-        celdaNombre.add(new Paragraph(aplicaIva ? "con IVA" : "sin IVA")
-                .simulateBold()
-                .setFontSize(7)
-                .setCharacterSpacing(0.4f)
-                .setFontColor(ivaColor)
-                .setMargin(0)
-                .setMarginTop(1));
         header.addCell(celdaNombre);
 
         // Col 2: badge MEJOR PRECIO (o placeholder invisible para que todas
@@ -534,32 +529,27 @@ public class CotizacionFinancieraPdfGenerator {
                 .setMarginLeft(6)
                 .setMarginRight(6));
 
-        // Línea de detalle: "N cuotas de $valor" si aplica, o descuento por
-        // contado si la forma trae recargo negativo. Centrado debajo del precio.
+        // Línea de detalle: "N × $valor" para cuotas, o "pago único". El "%
+        // de descuento" NO se muestra: depende del perfil (menaje/maquinaria) de
+        // cada monto según su tasa de IVA, así que a nivel forma sería engañoso.
         Integer cuotas = f.cantidadCuotas();
         boolean hayCuotas = cuotas != null && cuotas > 1;
         String detalleTexto;
-        boolean detalleEsDescuento = false;
         if (hayCuotas) {
             BigDecimal valorCuota = precio.divide(BigDecimal.valueOf(cuotas),
                     2, RoundingMode.HALF_UP);
             detalleTexto = cuotas + " × " + PESO_FMT.format(valorCuota);
-        } else if (f.recargoPorcentaje() != null && f.recargoPorcentaje().signum() < 0) {
-            detalleTexto = f.recargoPorcentaje().abs().stripTrailingZeros().toPlainString()
-                    + "% de descuento";
-            detalleEsDescuento = true;
         } else {
             detalleTexto = "pago único";
         }
         Paragraph detalle = new Paragraph(detalleTexto)
                 .setFontSize(7.5f)
-                .setFontColor(detalleEsDescuento ? KT_VERDE : GRIS_MEDIO)
+                .setFontColor(GRIS_MEDIO)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
                 .setMarginTop(2)
                 .setMarginLeft(6)
                 .setMarginRight(6);
-        if (detalleEsDescuento) detalle.simulateBold();
         card.add(detalle);
 
         return card;

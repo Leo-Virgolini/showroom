@@ -149,9 +149,9 @@ public class CotizacionFinancieraService {
                 c.getClienteEmail(),
                 c.getRubro(),
                 c.getObservaciones(),
-                c.getMontoBaseSinIva(),
+                c.getMontoBaseConIva(),
                 c.getPorcIva(),
-                c.getMontoBaseSinIva2(),
+                c.getMontoBaseConIva2(),
                 c.getPorcIva2(),
                 formas);
     }
@@ -295,8 +295,10 @@ public class CotizacionFinancieraService {
      *  vienen null/cero, lanza IllegalArgumentException (el @Positive del
      *  DTO no aplica acá porque ambos son @PositiveOrZero independientes). */
     private void aplicarDatos(CotizacionFinanciera c, GenerarCotizacionRequestDTO datos) {
-        BigDecimal monto1 = datos.montoBaseSinIva();
-        BigDecimal monto2 = datos.montoBaseSinIva2();
+        // Los montos ya vienen CON IVA — se persisten directo, SIN multiplicar
+        // por (1 + IVA/100). El neto se deriva al calcular/mostrar.
+        BigDecimal monto1 = datos.montoBaseConIva();
+        BigDecimal monto2 = datos.montoBaseConIva2();
         boolean tieneMonto1 = monto1 != null && monto1.signum() > 0;
         boolean tieneMonto2 = monto2 != null && monto2.signum() > 0;
         if (!tieneMonto1 && !tieneMonto2) {
@@ -308,9 +310,9 @@ public class CotizacionFinancieraService {
         c.setClienteEmail(blankToNull(datos.clienteEmail()));
         c.setRubro(blankToNull(datos.rubro()));
         c.setObservaciones(blankToNull(datos.observaciones()));
-        c.setMontoBaseSinIva(tieneMonto1 ? monto1 : BigDecimal.ZERO);
+        c.setMontoBaseConIva(tieneMonto1 ? monto1 : BigDecimal.ZERO);
         c.setPorcIva(datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva());
-        c.setMontoBaseSinIva2(tieneMonto2 ? monto2 : null);
+        c.setMontoBaseConIva2(tieneMonto2 ? monto2 : null);
         c.setPorcIva2(tieneMonto2
                 ? (datos.porcIva2() == null ? new BigDecimal("10.5") : datos.porcIva2())
                 : null);
@@ -327,9 +329,9 @@ public class CotizacionFinancieraService {
                 c.getClienteEmail(),
                 c.getRubro(),
                 c.getObservaciones(),
-                c.getMontoBaseSinIva(),
+                c.getMontoBaseConIva(),
                 c.getPorcIva(),
-                c.getMontoBaseSinIva2(),
+                c.getMontoBaseConIva2(),
                 c.getPorcIva2(),
                 formas == null ? List.of() : formas);
     }
@@ -359,12 +361,12 @@ public class CotizacionFinancieraService {
     }
 
     private CotizacionListItemDTO toListItemDTO(CotizacionFinanciera c, String creadoPor) {
-        // Para el listado mostramos la suma de los dos montos — si la
-        // cotización usa solo uno, el otro suma cero. Así el operador ve
+        // Para el listado mostramos la suma de los dos montos (CON IVA) — si
+        // la cotización usa solo uno, el otro suma cero. Así el operador ve
         // el "tamaño" real de la cotización aunque haya partido el monto
         // por tasas de IVA distintas.
-        BigDecimal m1 = c.getMontoBaseSinIva() == null ? BigDecimal.ZERO : c.getMontoBaseSinIva();
-        BigDecimal m2 = c.getMontoBaseSinIva2() == null ? BigDecimal.ZERO : c.getMontoBaseSinIva2();
+        BigDecimal m1 = c.getMontoBaseConIva() == null ? BigDecimal.ZERO : c.getMontoBaseConIva();
+        BigDecimal m2 = c.getMontoBaseConIva2() == null ? BigDecimal.ZERO : c.getMontoBaseConIva2();
         return new CotizacionListItemDTO(
                 c.getId(),
                 c.getCreadoAt(),

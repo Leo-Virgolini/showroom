@@ -874,7 +874,7 @@ export interface PresupuestoEmailEvent {
 // Cotización financiera (pantalla /cotizador)
 //
 // Variante "rápida" del presupuesto: sin productos, solo un monto base
-// (sin IVA) y la lista de formas de pago calculadas. Para responder
+// (con IVA) y la lista de formas de pago calculadas. Para responder
 // "¿cuánto sale $X en cuotas?".
 // =====================================================
 
@@ -885,16 +885,17 @@ export interface GenerarCotizacionRequest {
   clienteEmail?: string | null;
   rubro?: string | null;
   observaciones?: string | null;
-  /** Monto base SIN IVA principal. Puede ser 0 si la cotización usa SOLO el
-   *  segundo monto — el backend valida que al menos uno de los dos sea > 0. */
-  montoBaseSinIva: number;
+  /** Monto base CON IVA principal (el operador lo carga con IVA, igual que en
+   *  scan/presupuesto). Puede ser 0 si la cotización usa SOLO el segundo
+   *  monto — el backend valida que al menos uno de los dos sea > 0. */
+  montoBaseConIva: number;
   /** % de IVA del monto principal — default 21 si null. */
   porcIva?: number | null;
-  /** Segundo monto base SIN IVA, opcional. Permite cotizar dos productos con
+  /** Segundo monto base CON IVA, opcional. Permite cotizar dos productos con
    *  tasas de IVA distintas (ej. 21% + 10.5%) en una sola cotización. Las
    *  formas de pago se calculan sobre la suma respetando cada IVA. Null o 0
    *  = no se usa el segundo monto. */
-  montoBaseSinIva2?: number | null;
+  montoBaseConIva2?: number | null;
   /** % de IVA del segundo monto — default 10.5 si null y hay monto2 > 0. */
   porcIva2?: number | null;
   formasPago: PresupuestoFormaPagoSnapshot[];
@@ -914,7 +915,7 @@ export interface CotizacionListItem {
   clienteTelefono: string | null;
   clienteEmail: string | null;
   rubro: string | null;
-  montoBaseSinIva: number | null;
+  montoBaseConIva: number | null;
   creadoPor: string | null;
 }
 
@@ -945,9 +946,9 @@ export interface CotizacionDetalle {
   clienteEmail: string | null;
   rubro: string | null;
   observaciones: string | null;
-  montoBaseSinIva: number;
+  montoBaseConIva: number;
   porcIva: number | null;
-  montoBaseSinIva2?: number | null;
+  montoBaseConIva2?: number | null;
   porcIva2?: number | null;
   formasPago: PresupuestoFormaPagoSnapshot[];
 }

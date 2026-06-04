@@ -86,7 +86,7 @@
               <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Operador
             </th>
             <th class="text-right" style="width: 11rem">
-              <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Monto s/IVA
+              <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Monto c/IVA
             </th>
             <th style="width: 11rem"></th>
           </tr>
@@ -137,7 +137,7 @@
               }
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-              {{ (c.montoBaseSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
+              {{ (c.montoBaseConIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td>
               <div class="inline-flex gap-1 items-center">

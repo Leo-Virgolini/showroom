@@ -32,6 +32,7 @@ import {
   PresupuestoFormaPagoSnapshot,
 } from '../models';
 import { ShowroomService } from '../showroom.service';
+import { precioPorForma } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
@@ -43,8 +44,9 @@ const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Pantalla del cotizador de financiación: el operador ingresa un monto base
- * (sin IVA) y opcionalmente datos del cliente, y genera un PDF con todas
- * las formas de pago activas calculadas sobre ese monto.
+ * (con IVA, igual que en scan/presupuesto) y opcionalmente datos del cliente,
+ * y genera un PDF con todas las formas de pago activas calculadas sobre ese
+ * monto. El cotizador deriva el neto cuando lo necesita.
  *
  * <p>Es una variante "rápida" del presupuestador — no tiene items ni
  * descuentos por línea. Una sola hoja de PDF, una sola tabla de formas.
@@ -105,14 +107,18 @@ export class CotizadorPage {
   // distintas (ej. una máquina con 21% + un insumo con 10.5%). Al menos
   // uno de los dos tiene que estar cargado; las formas de pago se calculan
   // sobre la suma respetando el IVA propio de cada monto.
+  //
+  // IMPORTANTE: los montos se cargan CON IVA (igual que en scan/presupuesto).
+  // El neto se deriva cuando hace falta: monto / (1 + IVA/100).
   // -----------------------------
+  /** Monto base 1 CON IVA — el operador lo carga con IVA incluido. */
   readonly montoBase = signal<number>(0);
   /** % de IVA aplicado a las formas que lo incluyen. Default 21 (tasa
    *  general AR) editable porque varía según el producto: 10.5 para
    *  esenciales, 27 para servicios públicos. */
   readonly porcIva = signal<number>(21);
 
-  /** Segundo monto base SIN IVA, opcional — 0 = no se usa. */
+  /** Segundo monto base CON IVA, opcional — 0 = no se usa. */
   readonly montoBase2 = signal<number>(0);
   /** % de IVA del segundo monto. Default 10.5 (productos esenciales). */
   readonly porcIva2 = signal<number>(10.5);
@@ -148,43 +154,69 @@ export class CotizadorPage {
     () => (this.montoBase() ?? 0) > 0 || (this.montoBase2() ?? 0) > 0,
   );
 
-  /** Total CON IVA — suma cada monto con su IVA propio. Para formas que
-   *  aplican IVA: monto1×(1+iva1) + monto2×(1+iva2). */
-  readonly totalConIva = computed(() => {
+  /** Total CON IVA — los montos ya vienen con IVA, así que es la suma
+   *  directa. Es la base de las formas que aplican IVA. */
+  readonly totalConIva = computed(
+    () => (this.montoBase() ?? 0) + (this.montoBase2() ?? 0),
+  );
+
+  /** Total SIN IVA (neto) — derivado de los montos con IVA dividiendo cada
+   *  uno por (1 + su IVA). Es la base de las formas que NO aplican IVA. */
+  readonly totalSinIva = computed(() => {
     const m1 = this.montoBase() ?? 0;
     const iva1 = (this.porcIva() ?? 21) / 100;
     const m2 = this.montoBase2() ?? 0;
     const iva2 = (this.porcIva2() ?? 10.5) / 100;
-    return m1 * (1 + iva1) + m2 * (1 + iva2);
+    return m1 / (1 + iva1) + m2 / (1 + iva2);
   });
 
-  /** Total SIN IVA — suma de los dos montos. Para formas que no aplican IVA. */
-  readonly totalSinIva = computed(
-    () => (this.montoBase() ?? 0) + (this.montoBase2() ?? 0),
-  );
-
-  /** Snapshots de las formas de pago con sus precios finales. Misma fórmula
-   *  que el presupuestador: recargo se interpreta como descuento contado,
-   *  precio = base / (1 - recargo/100). */
+  /** Snapshots de las formas de pago con sus precios finales, calculados
+   *  **por monto** con el perfil que corresponde a su tasa de IVA: 10,5% se
+   *  cotiza como maquinaria (perfil maquinaria de la forma) y 21% como menaje
+   *  (perfil normal). Cada monto usa {@link precioPorForma} con su perfil —
+   *  igual criterio que scan/presupuesto, pero acá el "rubro" se deduce del IVA.
+   *  El total de la forma es la suma de ambos montos. */
   readonly formasPagoCalculadas = computed<PresupuestoFormaPagoSnapshot[]>(() => {
-    const baseConIva = this.totalConIva();
-    const baseSinIva = this.totalSinIva();
+    const m1 = this.montoBase() ?? 0;
+    const iva1 = this.porcIva() ?? 21;
+    const m2 = this.montoBase2() ?? 0;
+    const iva2 = this.porcIva2() ?? 10.5;
+    const esMaq1 = this.esMaquinariaPorIva(iva1);
+    const esMaq2 = this.esMaquinariaPorIva(iva2);
     return this.formasPago().map((f) => {
-      const recargo = (f.recargoPorcentaje ?? 0) / 100;
-      const aplicaIva = f.aplicaIva ?? true;
-      const base = aplicaIva ? baseConIva : baseSinIva;
-      const precioFinal = redondearMoneda(base / (1 - recargo));
+      const p1 = m1 > 0 ? precioPorForma(m1, iva1, this.perfilForma(f, esMaq1)) : 0;
+      const p2 = m2 > 0 ? precioPorForma(m2, iva2, this.perfilForma(f, esMaq2)) : 0;
       return {
         id: f.id,
         nombre: f.nombre,
         recargoPorcentaje: f.recargoPorcentaje ?? 0,
         cantidadCuotas: f.cantidadCuotas,
-        aplicaIva,
-        precioFinal,
+        aplicaIva: f.aplicaIva ?? true,
+        precioFinal: redondearMoneda(p1 + p2),
         descripcion: this.descripcionForma(f),
       };
     });
   });
+
+  /** En el cotizador el perfil se deduce de la TASA DE IVA del monto: 10,5% →
+   *  maquinaria; el resto (21%) → menaje. */
+  private esMaquinariaPorIva(iva: number | null): boolean {
+    return Math.abs((iva ?? 21) - 10.5) < 0.01;
+  }
+
+  /** Recargo + aplicaIva del perfil (menaje/maquinaria) de una forma. Maquinaria:
+   *  recargo null → 0 (no hereda del normal); aplicaIva null → false. */
+  private perfilForma(
+    forma: FormaPago,
+    esMaquinaria: boolean,
+  ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
+    return esMaquinaria
+      ? {
+          recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
+          aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+        }
+      : { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+  }
 
   /** Clase CSS completa de cada card de forma de pago. Computamos la string
    *  en TS porque combinar `[class]="'color-N'"` con `[class.es-mejor-precio]`
@@ -371,9 +403,9 @@ export class CotizadorPage {
     this.api.obtenerDetalleCotizacionFinanciera(id).subscribe({
       next: (det) => {
         this.cotizacionEditandoId.set(det.id);
-        this.montoBase.set(det.montoBaseSinIva ?? 0);
+        this.montoBase.set(det.montoBaseConIva ?? 0);
         this.porcIva.set(det.porcIva ?? 21);
-        this.montoBase2.set(det.montoBaseSinIva2 ?? 0);
+        this.montoBase2.set(det.montoBaseConIva2 ?? 0);
         this.porcIva2.set(det.porcIva2 ?? 10.5);
         this.clienteNombre.set(det.clienteNombre ?? '');
         this.clienteTelefono.set(det.clienteTelefono ?? '');
@@ -408,11 +440,11 @@ export class CotizadorPage {
       clienteEmail: this.clienteEmail().trim() || null,
       rubro: this.rubroFinal(),
       observaciones: this.observaciones().trim() || null,
-      montoBaseSinIva: this.montoBase() ?? 0,
+      montoBaseConIva: this.montoBase() ?? 0,
       porcIva: this.porcIva() ?? 21,
       // Mandamos el segundo monto solo cuando está cargado — el backend lo
       // toma como "no se usa el segundo monto" si viene null/0.
-      montoBaseSinIva2: m2 > 0 ? m2 : null,
+      montoBaseConIva2: m2 > 0 ? m2 : null,
       porcIva2: m2 > 0 ? (this.porcIva2() ?? 10.5) : null,
       formasPago: this.formasPagoCalculadas(),
     };
@@ -453,7 +485,7 @@ export class CotizadorPage {
     const header = editandoId != null ? 'Guardar cambios' : 'Generar cotización';
     const message = editandoId != null
       ? `Se van a guardar los cambios de la cotización #${editandoId} y se abrirá el PDF actualizado.`
-      : `Se va a generar el PDF de la cotización por ${this.formatear(this.totalSinIva())} y quedará registrada en el historial.\n\n¿Continuar?`;
+      : `Se va a generar el PDF de la cotización por ${this.formatear(this.totalConIva())} y quedará registrada en el historial.\n\n¿Continuar?`;
 
     this.confirmationService.confirm({
       header,
@@ -587,15 +619,12 @@ export class CotizadorPage {
     return 'pi pi-tag';
   }
 
-  private descripcionForma(f: FormaPago): string {
-    const partes: string[] = [];
-    if ((f.recargoPorcentaje ?? 0) < 0) {
-      partes.push(`${Math.abs(f.recargoPorcentaje)}% de descuento`);
-    }
-    if ((f.cantidadCuotas ?? 1) > 1) {
-      partes.push(`${f.cantidadCuotas} cuotas`);
-    }
-    return partes.join(' · ');
+  private descripcionForma(_f: FormaPago): string {
+    // No derivamos descripción para la forma: el "% de descuento" depende del
+    // perfil (menaje/maquinaria) de cada monto —según su tasa de IVA—, así que
+    // sería engañoso mostrar uno solo a nivel forma. El detalle de cuotas
+    // ("N × $") se muestra aparte y el nombre ya dice "N cuotas".
+    return '';
   }
 
   private formatear(n: number): string {

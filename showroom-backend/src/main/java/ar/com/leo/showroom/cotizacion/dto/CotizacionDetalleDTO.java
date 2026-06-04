@@ -18,9 +18,9 @@ public record CotizacionDetalleDTO(
         String clienteEmail,
         String rubro,
         String observaciones,
-        BigDecimal montoBaseSinIva,
+        BigDecimal montoBaseConIva,
         BigDecimal porcIva,
-        BigDecimal montoBaseSinIva2,
+        BigDecimal montoBaseConIva2,
         BigDecimal porcIva2,
         List<GenerarCotizacionRequestDTO.FormaPagoSnapshot> formasPago
 ) {}

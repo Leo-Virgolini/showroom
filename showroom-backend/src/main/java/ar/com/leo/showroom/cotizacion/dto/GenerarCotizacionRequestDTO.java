@@ -26,26 +26,27 @@ public record GenerarCotizacionRequestDTO(
         String rubro,
         String observaciones,
 
-        /** Monto base SIN IVA principal. Puede ser null/cero cuando el
-         *  operador cotiza usando solo el segundo monto — se valida en el
-         *  service que al menos uno de los dos sea > 0. */
+        /** Monto base CON IVA principal (el operador lo carga con IVA, igual
+         *  que en scan/presupuesto). Puede ser null/cero cuando el operador
+         *  cotiza usando solo el segundo monto — se valida en el service que
+         *  al menos uno de los dos sea > 0. */
         @PositiveOrZero
-        BigDecimal montoBaseSinIva,
+        BigDecimal montoBaseConIva,
 
-        /** % de IVA del monto principal. Default 21 si viene null. Las
-         *  formas con {@code aplicaIva=true} usan {@code monto × (1 + porcIva/100)}
-         *  como base; las que no, usan el monto directo. */
+        /** % de IVA del monto principal. Default 21 si viene null. El monto ya
+         *  viene con IVA; el cotizador deriva el neto cuando lo necesita
+         *  ({@code monto / (1 + porcIva/100)}). */
         BigDecimal porcIva,
 
-        /** Segundo monto base SIN IVA (opcional). Cotiza junto al
-         *  {@link #montoBaseSinIva} principal — las formas se calculan sobre
+        /** Segundo monto base CON IVA (opcional). Cotiza junto al
+         *  {@link #montoBaseConIva} principal — las formas se calculan sobre
          *  la suma respetando el IVA propio de cada monto. Null o 0 = no se
          *  usa el segundo monto. */
         @PositiveOrZero
-        BigDecimal montoBaseSinIva2,
+        BigDecimal montoBaseConIva2,
 
         /** % de IVA del segundo monto. Default 10.5 (productos esenciales)
-         *  cuando {@link #montoBaseSinIva2} > 0 y este viene null. */
+         *  cuando {@link #montoBaseConIva2} > 0 y este viene null. */
         BigDecimal porcIva2,
 
         @NotEmpty(message = "La cotización debe incluir al menos una forma de pago")
