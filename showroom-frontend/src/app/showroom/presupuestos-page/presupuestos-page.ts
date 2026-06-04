@@ -1535,9 +1535,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  ("esta forma te da un 5% off"). */
   private descripcionForma(f: FormaPago): string {
     const partes: string[] = [];
-    if ((f.recargoPorcentaje ?? 0) < 0) {
-      partes.push(`${Math.abs(f.recargoPorcentaje)}% de descuento`);
-    }
+    // El "% de descuento" NO se muestra a nivel forma: depende del perfil
+    // (menaje vs maquinaria) del producto, así que sería engañoso en
+    // presupuestos con maquinaria. El precioFinal ya refleja el descuento
+    // que corresponde a cada ítem.
     if ((f.cantidadCuotas ?? 1) > 1) {
       partes.push(`${f.cantidadCuotas} cuotas`);
     }

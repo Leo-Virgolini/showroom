@@ -717,6 +717,12 @@ public class PresupuestoComercialPdfGenerator {
             desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
                     .replaceAll("^s/IVA\\s*·\\s*", "")
                     .replaceAll("^s/IVA$", "")
+                    // El "% de descuento" depende del perfil del producto; no se
+                    // muestra a nivel forma. Limpiamos el texto de presupuestos
+                    // viejos que lo guardaron en la descripción.
+                    .replaceAll("\\s*·\\s*\\d+% de descuento", "")
+                    .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
+                    .replaceAll("^\\d+% de descuento$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
@@ -1804,6 +1810,12 @@ public class PresupuestoComercialPdfGenerator {
             desc = desc.replaceAll("\\s*·\\s*s/IVA", "")
                     .replaceAll("^s/IVA\\s*·\\s*", "")
                     .replaceAll("^s/IVA$", "")
+                    // El "% de descuento" depende del perfil del producto; no se
+                    // muestra a nivel forma. Limpiamos el texto de presupuestos
+                    // viejos que lo guardaron en la descripción.
+                    .replaceAll("\\s*·\\s*\\d+% de descuento", "")
+                    .replaceAll("^\\d+% de descuento\\s*·\\s*", "")
+                    .replaceAll("^\\d+% de descuento$", "")
                     .trim();
         }
         if (esTextoValido(desc)) {
