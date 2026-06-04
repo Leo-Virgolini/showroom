@@ -224,6 +224,15 @@ public class ShowroomService {
         return configuracionService.saveVisorBaseUrl(baseUrl);
     }
 
+    /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). */
+    public List<String> getRubrosSinIva() {
+        return configuracionService.getRubrosSinIva();
+    }
+
+    public List<String> saveRubrosSinIva(List<String> rubros) {
+        return configuracionService.saveRubrosSinIva(rubros);
+    }
+
 
     /**
      * Rubros distintos cacheados — popula el dropdown del filtro de la

@@ -44,7 +44,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, rubroExcluyeDescuentos, normalizarRubro } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
@@ -356,32 +356,26 @@ export class ShowroomPage implements AfterViewInit {
       .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
   );
 
-  /** Formas de referencia para productos de rubro MAQUINAS INDUSTRIALES. Para
-   *  esos productos reemplazan a las normales (típicamente una sola: PVP sin IVA). */
-  readonly formasReferenciaMaquinaria = computed(() =>
-    this.formasPagoActivas()
-      .filter((f) => f.precioReferenciaMaquinaria)
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+  /** Primera forma de referencia (menor `orden`), o null si no hay ninguna marcada. */
+  readonly formaReferenciaPrimaria = computed(() => this.formasReferencia()[0] ?? null);
+
+  /** Formas de referencia secundarias (todas menos la primera/destacada). */
+  readonly formasReferenciaSecundarias = computed(() => this.formasReferencia().slice(1));
+
+  /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
+   *  al iniciar; default del backend = MAQUINAS INDUSTRIALES. */
+  readonly rubrosSinIva = signal<string[]>([]);
+
+  /** Set normalizado para comparar rubros sin importar acentos/casing. */
+  private readonly rubrosSinIvaSet = computed(
+    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
   );
 
-  /** Formas de referencia que aplican a un producto según su rubro: las de
-   *  maquinaria si es MAQUINAS INDUSTRIALES, las normales en caso contrario. */
-  formasReferenciaPara(rubro: string | null | undefined): FormaPago[] {
-    return rubroExcluyeDescuentos(rubro)
-      ? this.formasReferenciaMaquinaria()
-      : this.formasReferencia();
+  /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA). */
+  rubroCotizaSinIva(rubro: string | null | undefined): boolean {
+    const n = normalizarRubro(rubro);
+    return n !== '' && this.rubrosSinIvaSet().has(n);
   }
-
-  /** Formas de referencia del producto escaneado (según su rubro). */
-  readonly formasReferenciaScan = computed(() =>
-    this.formasReferenciaPara(this.ultimoScan()?.rubro),
-  );
-
-  /** Primera forma de referencia del scan (destacada), o null si no hay ninguna. */
-  readonly formaReferenciaPrimariaScan = computed(() => this.formasReferenciaScan()[0] ?? null);
-
-  /** Formas de referencia secundarias del scan (todas menos la destacada). */
-  readonly formasReferenciaSecundariasScan = computed(() => this.formasReferenciaScan().slice(1));
 
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
   private readonly escalasDesc = computed(() =>
@@ -656,12 +650,16 @@ export class ShowroomPage implements AfterViewInit {
     return base - this.ahorro(base, descuento);
   }
 
-  /** Precio de referencia de un producto (scan o ítem de carrito) para una
-   *  forma de pago dada. Calculado sobre el PVP gastro con IVA. */
+  /** Precio de referencia de un producto (scan o ítem de carrito) para una forma
+   *  de pago dada. La base depende del rubro: los rubros que cotizan sin IVA usan
+   *  el PVP sin IVA (neto); el resto, el PVP con IVA. */
   precioReferenciaPorForma(
-    r: { pvpKtGastroConIva: number | null; porcIva: number | null },
+    r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; porcIva: number | null; rubro?: string | null },
     forma: FormaPago,
   ): number {
+    if (this.rubroCotizaSinIva(r.rubro)) {
+      return precioPorForma(r.pvpKtGastroSinIva ?? 0, 0, forma);
+    }
     return precioPorForma(r.pvpKtGastroConIva, r.porcIva, forma);
   }
 
@@ -671,12 +669,15 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   /** Precio de la forma de referencia primaria. Si no hay formas marcadas, cae al
-   *  PVP gastro sin IVA (comportamiento previo) para no romper el display. */
+   *  precio base según el rubro (PVP sin IVA para rubros sin IVA, con IVA el resto). */
   precioReferenciaPrimario(
     r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
   ): number {
-    const f = this.formasReferenciaPara(r.rubro)[0] ?? null;
-    return f ? precioPorForma(r.pvpKtGastroConIva, r.porcIva, f) : (r.pvpKtGastroSinIva ?? 0);
+    const f = this.formaReferenciaPrimaria();
+    if (f) return this.precioReferenciaPorForma(r, f);
+    return this.rubroCotizaSinIva(r.rubro)
+      ? (r.pvpKtGastroSinIva ?? 0)
+      : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
   }
 
   /** true si hay un escalón con umbral mayor (mejor descuento) que el precio
@@ -858,6 +859,16 @@ export class ShowroomPage implements AfterViewInit {
         next: (lista) => this.escalasDescuento.set(lista),
         error: (err) =>
           console.warn('[escalas-descuento] no se pudieron cargar:', err),
+      });
+
+    // Rubros que cotizan sin IVA — definen qué productos usan el PVP sin IVA como
+    // precio base. Si falla, queda lista vacía (todos cotizan con IVA).
+    this.api.obtenerRubrosSinIva()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.rubrosSinIva.set(lista),
+        error: (err) =>
+          console.warn('[rubros-sin-iva] no se pudieron cargar:', err),
       });
 
     // Formas de pago activas — para el selector del carrito. La primera de la
