@@ -419,6 +419,23 @@ export class VisorPage {
     return iconoFormaReferencia(nombre);
   }
 
+  /** True si el precio mostrado para esta forma incluye IVA. Los rubros que
+   *  cotizan sin IVA muestran todo sin IVA; el resto depende del flag de la forma. */
+  precioReferenciaTieneIva(
+    r: { rubro?: string | null },
+    forma: { aplicaIva: boolean | null },
+  ): boolean {
+    if (this.rubroCotizaSinIva(r.rubro)) return false;
+    return forma.aplicaIva ?? true;
+  }
+
+  /** Clases del badge c/IVA (verde) o s/IVA (ámbar). */
+  badgeIvaClass(tieneIva: boolean): string {
+    return tieneIva
+      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+  }
+
   /** Precio de la forma primaria; sin formas marcadas cae al precio base según
    *  el rubro (PVP sin IVA para rubros sin IVA, con IVA el resto). */
   precioReferenciaPrimario(

@@ -161,7 +161,10 @@
       <div class="w-16 h-16 rounded-2xl bg-[#FF861C]/10 dark:bg-[#FF861C]/15 flex items-center justify-center">
         <i [class]="iconoPrecioReferencia(primaria.nombre)" class="text-3xl text-[#FF861C]"></i>
       </div>
-      <div class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ primaria.nombre }}</div>
+      <div class="flex items-center gap-2 justify-center flex-wrap">
+        <span class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ primaria.nombre }}</span>
+        <span class="px-1.5 py-0.5 rounded text-[0.65rem] font-bold tracking-wide" [class]="badgeIvaClass(precioReferenciaTieneIva(r, primaria))">{{ precioReferenciaTieneIva(r, primaria) ? 'c/ IVA' : 's/ IVA' }}</span>
+      </div>
       <div class="flex items-baseline gap-2 justify-center">
         <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
         <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, primaria) | number:'1.0-0' }}</span>
@@ -175,7 +178,10 @@
             <div class="w-11 h-11 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
               <i [class]="iconoPrecioReferencia(forma.nombre)" class="text-xl text-[#FF861C]"></i>
             </div>
-            <div class="text-[0.7rem] font-semibold uppercase tracking-wide text-[#3B1E09]/60 dark:text-muted-color leading-tight">{{ forma.nombre }}</div>
+            <div class="flex items-center gap-1.5 justify-center flex-wrap">
+              <span class="text-[0.7rem] font-semibold uppercase tracking-wide text-[#3B1E09]/60 dark:text-muted-color leading-tight">{{ forma.nombre }}</span>
+              <span class="px-1 py-0.5 rounded text-[0.55rem] font-bold" [class]="badgeIvaClass(precioReferenciaTieneIva(r, forma))">{{ precioReferenciaTieneIva(r, forma) ? 'c/ IVA' : 's/ IVA' }}</span>
+            </div>
             <div class="text-xl sm:text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | currency:'ARS':'symbol':'1.0-0' }}</div>
           </div>
         }
@@ -186,7 +192,10 @@
       <div class="w-16 h-16 rounded-2xl bg-[#FF861C]/10 flex items-center justify-center">
         <i class="pi pi-tag text-3xl text-[#FF861C]"></i>
       </div>
-      <div class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">Precio</div>
+      <div class="flex items-center gap-2 justify-center flex-wrap">
+        <span class="text-sm font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">Precio</span>
+        <span class="px-1.5 py-0.5 rounded text-[0.65rem] font-bold tracking-wide" [class]="badgeIvaClass(!rubroCotizaSinIva(r.rubro))">{{ rubroCotizaSinIva(r.rubro) ? 's/ IVA' : 'c/ IVA' }}</span>
+      </div>
       <div class="flex items-baseline gap-2 justify-center">
         <span class="text-3xl sm:text-4xl font-bold text-[#FF861C] leading-none">$</span>
         <span class="text-5xl sm:text-6xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPrimario(r) | number:'1.0-0' }}</span>
