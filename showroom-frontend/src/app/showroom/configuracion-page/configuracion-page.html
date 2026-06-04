@@ -234,7 +234,7 @@
             <td class="text-right tabular-nums">
               <div class="flex flex-col gap-0.5 text-xs">
                 <span class="inline-flex items-center justify-end gap-1">
-                  <span class="text-[0.6rem] text-muted-color uppercase">Nor</span>
+                  <span class="text-[0.6rem] text-muted-color uppercase">Men</span>
                   @if (f.recargoPorcentaje > 0) { +{{ f.recargoPorcentaje }}% }
                   @else if (f.recargoPorcentaje < 0) { <span class="text-[#FF861C]">{{ f.recargoPorcentaje }}%</span> }
                   @else { <span class="text-muted-color">—</span> }
@@ -252,7 +252,7 @@
             <td class="text-center">
               <div class="flex flex-col gap-0.5 text-xs font-medium">
                 <span class="inline-flex items-center justify-center gap-1">
-                  <span class="text-[0.6rem] text-muted-color uppercase">Nor</span>
+                  <span class="text-[0.6rem] text-muted-color uppercase">Men</span>
                   @if (f.aplicaIva) { <span class="text-emerald-700 dark:text-emerald-400">CON IVA</span> }
                   @else { <span class="text-amber-700 dark:text-amber-400">SIN IVA</span> }
                 </span>
@@ -317,7 +317,7 @@
       <div class="flex flex-col gap-2 mb-4">
         <h3 class="text-base font-semibold m-0">Rubros de maquinaria</h3>
         <div class="text-sm text-surface-700 dark:text-surface-200">
-          Los productos de estos rubros usan el <strong>perfil "maquinaria"</strong> de cada forma de pago (su recargo y su IVA propios). El resto de los rubros usa el perfil normal.
+          Los productos de estos rubros usan el <strong>perfil "maquinaria"</strong> de cada forma de pago (su recargo y su IVA propios). El resto de los rubros usa el perfil menaje.
         </div>
       </div>
       <div class="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1085,9 +1085,9 @@
     <!-- Perfil NORMAL: productos que no son de maquinaria -->
     <div class="flex flex-col gap-2 p-2.5 rounded-lg border border-surface-300 dark:border-surface-600">
       <span class="text-xs font-semibold uppercase tracking-wide text-surface-600 dark:text-surface-300 inline-flex items-center gap-1.5">
-        <i class="pi pi-tag text-[0.7rem]"></i> Perfil normal
+        <i class="pi pi-tag text-[0.7rem]"></i> Perfil menaje
       </span>
-      <span class="text-xs text-muted-color">Para los productos que no son de maquinaria.</span>
+      <span class="text-xs text-muted-color">Para los productos de menaje (los que no son de maquinaria).</span>
       <div class="flex flex-col gap-1.5">
         <label for="formRecargo" class="text-sm font-medium text-muted-color">Recargo (%) — usar 0 si no hay</label>
         <p-inputnumber
