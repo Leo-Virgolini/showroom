@@ -22,7 +22,6 @@ import {
   FormaPago,
   ScanResult,
   SesionShowroom,
-  rubroExcluyeDescuentos,
   normalizarRubro,
 } from '../models';
 import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
@@ -152,7 +151,7 @@ export class VisorPage {
    *  "Comprá más y ahorrás" en ese caso — sino sugeriría precios que no
    *  aplican comercialmente para este tipo de producto. */
   readonly scanExcluyeDescuentos = computed(
-    () => rubroExcluyeDescuentos(this.ultimoScan()?.rubro),
+    () => this.rubroCotizaSinIva(this.ultimoScan()?.rubro),
   );
 
   /** Producto vendible: con precio cargado y habilitado. El stock NO lo bloquea
