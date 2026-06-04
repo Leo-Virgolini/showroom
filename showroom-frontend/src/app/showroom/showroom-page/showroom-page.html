@@ -812,7 +812,7 @@
                 {{ subtotal(it) | currency:'ARS':'symbol':'1.0-0' }}
               </div>
               <div class="tabular-nums text-[11px] text-muted-color">
-                {{ precioReferenciaPrimario(it) | currency:'ARS':'symbol':'1.0-0' }} c/u
+                {{ precioItemForma(it) | currency:'ARS':'symbol':'1.0-0' }} c/u
               </div>
             </div>
 
@@ -866,7 +866,7 @@
           <!-- Total único — cuando NO hay recargo de financiación, este renglón
                es también el total a cobrar; sino debajo aparece el desglose
                + el "Total a cobrar" separado. -->
-          @if (recargoAplicado() === 0 && ivaMontoCarrito() === 0) {
+          @if (recargoMontoSinIva() === 0 && ivaMontoCarrito() === 0) {
           <div class="flex items-baseline justify-between mt-1 pt-1.5 border-t border-surface-200 dark:border-surface-700">
             <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
               <i class="pi pi-wallet text-[0.65rem]"></i>
@@ -943,15 +943,15 @@
           </div>
           }
 
-          @if (formaPagoSeleccionada() && (recargoAplicado() > 0 || ivaMontoCarrito() > 0)) {
-          @if (recargoMontoSinIva() > 0) {
+          @if (formaPagoSeleccionada() && (recargoMontoSinIva() !== 0 || ivaMontoCarrito() > 0)) {
+          @if (recargoMontoSinIva() !== 0) {
           <div class="flex items-baseline justify-between text-xs text-muted-color mt-1">
             <span class="font-medium inline-flex items-center gap-1.5">
               <i class="pi pi-credit-card text-[0.65rem]"></i>
-              Recargo financiación
+              @if (recargoMontoSinIva() > 0) { Recargo financiación } @else { Descuento por pago }
             </span>
-            <span class="tabular-nums">
-              +{{ recargoMontoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
+            <span class="tabular-nums" [class.text-emerald-700]="recargoMontoSinIva() < 0" [class.dark:text-emerald-300]="recargoMontoSinIva() < 0">
+              {{ recargoMontoSinIva() > 0 ? '+' : '' }}{{ recargoMontoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
           }

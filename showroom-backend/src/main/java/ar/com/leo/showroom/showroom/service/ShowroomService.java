@@ -1005,6 +1005,25 @@ public class ShowroomService {
      *
      * <p>Sin formaPago → devuelve {@code precioBaseConIva} sin tocar.
      */
+    /**
+     * Aplica el recargo/descuento de la forma sobre el precio sin IVA.
+     * Recargo &gt; 0 = financiación (divide por 1-r/100, encarece). Recargo &lt; 0 =
+     * descuento (multiplica por 1+r/100 = 1-|r|/100, ej. Efectivo -13%), coincidiendo
+     * con el precio mostrado en scan/visor/carrito. Recargo 0 = sin cambio.
+     */
+    private BigDecimal aplicarRecargoSinIva(BigDecimal precioBaseSinIva, BigDecimal recargoPorc) {
+        if (recargoPorc.signum() > 0) {
+            return precioBaseSinIva.divide(
+                    BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
+                    6, RoundingMode.HALF_UP);
+        }
+        if (recargoPorc.signum() < 0) {
+            return precioBaseSinIva.multiply(
+                    BigDecimal.ONE.add(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)));
+        }
+        return precioBaseSinIva;
+    }
+
     private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva, FormaPago formaPago) {
         if (precioBaseConIva == null) return null;
         if (formaPago == null) return precioBaseConIva;
@@ -1013,11 +1032,7 @@ public class ShowroomService {
 
         BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
                 ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
-        BigDecimal precioRecargadoSinIva = recargoPorc.signum() > 0
-                ? precioBaseSinIva.divide(
-                        BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
-                        6, RoundingMode.HALF_UP)
-                : precioBaseSinIva;
+        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
 
         boolean aplicaIva = !Boolean.FALSE.equals(formaPago.getAplicaIva());
         if (aplicaIva && porcIva != null && porcIva.signum() > 0) {
@@ -1041,11 +1056,7 @@ public class ShowroomService {
 
         BigDecimal recargoPorc = formaPago.getRecargoPorcentaje() != null
                 ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
-        BigDecimal precioRecargadoSinIva = recargoPorc.signum() > 0
-                ? precioBaseSinIva.divide(
-                        BigDecimal.ONE.subtract(recargoPorc.divide(CIEN, 6, RoundingMode.HALF_UP)),
-                        6, RoundingMode.HALF_UP)
-                : precioBaseSinIva;
+        BigDecimal precioRecargadoSinIva = aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
 
         if (porcIva != null && porcIva.signum() > 0) {
             BigDecimal ivaFactor = BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP));
