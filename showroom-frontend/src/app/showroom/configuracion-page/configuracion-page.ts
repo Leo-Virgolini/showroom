@@ -1091,7 +1091,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(true);
     this.formActivoPago.set(true);
     this.formPrecioReferencia.set(false);
-    this.formRecargoMaquinaria.set(null);
+    this.formRecargoMaquinaria.set(0);
     this.formAplicaIvaMaquinaria.set(false);
     const maxOrden = this.formasPago().reduce((max, f) => Math.max(max, f.orden ?? 0), -1);
     this.formOrden.set(maxOrden + 1);
@@ -1107,7 +1107,7 @@ export class ConfiguracionPage {
     this.formAplicaIva.set(f.aplicaIva ?? true);
     this.formActivoPago.set(f.activo);
     this.formPrecioReferencia.set(f.precioReferencia ?? false);
-    this.formRecargoMaquinaria.set(f.recargoPorcentajeMaquinaria ?? null);
+    this.formRecargoMaquinaria.set(f.recargoPorcentajeMaquinaria ?? 0);
     this.formAplicaIvaMaquinaria.set(f.aplicaIvaMaquinaria ?? false);
     this.formOrden.set(f.orden);
     this.mostrarDialogForma.set(true);
@@ -1145,7 +1145,7 @@ export class ConfiguracionPage {
       recargoPorcentaje: recargo,
       cantidadCuotas: cuotas,
       aplicaIva: this.formAplicaIva(),
-      recargoPorcentajeMaquinaria: this.formRecargoMaquinaria(),
+      recargoPorcentajeMaquinaria: this.formRecargoMaquinaria() ?? 0,
       aplicaIvaMaquinaria: this.formAplicaIvaMaquinaria(),
       activo,
       orden,

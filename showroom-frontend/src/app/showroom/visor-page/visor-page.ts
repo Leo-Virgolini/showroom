@@ -406,7 +406,7 @@ export class VisorPage {
   perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
     if (esMaquinaria) {
       return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? forma.recargoPorcentaje,
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
         aplicaIva: forma.aplicaIvaMaquinaria ?? false,
       };
     }
