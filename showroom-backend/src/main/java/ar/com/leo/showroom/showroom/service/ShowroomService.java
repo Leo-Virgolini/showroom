@@ -1067,7 +1067,8 @@ public class ShowroomService {
         return set;
     }
 
-    /** Recargo del perfil (maquinaria si el rubro lo es y tiene valor; normal si no). */
+    /** Recargo del perfil del rubro. Maquinaria: su propio recargo (null → 0, NO
+     *  hereda del normal). Normal: recargoPorcentaje (null → 0). */
     private static BigDecimal recargoPerfil(FormaPago fp, boolean esMaquinaria) {
         if (fp == null) return BigDecimal.ZERO;
         if (esMaquinaria) {
