@@ -702,10 +702,11 @@
             </span>
           } @else if (formasPagoFooter().length > 0) {
             @for (f of formasPagoFooter(); track f.id) {
-              <button type="button"
-                [class]="'kt-forma-chip color-' + ((f.indiceOriginal % 10) + 1) + (f.esMejorPrecio ? ' kt-forma-chip-mejor' : '')"
-                (click)="footerExpandido.set(!footerExpandido())"
-                [attr.aria-label]="'Ver detalle de ' + f.nombre">
+              <!-- Solo informativo: el presupuesto muestra TODAS las formas en el
+                   PDF, no se elige una. La más barata se resalta (MEJOR PRECIO).
+                   El detalle se abre con el chevron, no tocando el chip. -->
+              <span
+                [class]="'kt-forma-chip kt-forma-chip-estatico color-' + ((f.indiceOriginal % 10) + 1) + (f.esMejorPrecio ? ' kt-forma-chip-mejor' : '')">
                 @if (f.esMejorPrecio) {
                   <i class="pi pi-check-circle text-[10px]"></i>
                 }
@@ -714,7 +715,7 @@
                 <span class="kt-forma-chip-precio">
                   {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
-              </button>
+              </span>
             }
           } @else {
             <span class="text-xs text-muted-color italic">

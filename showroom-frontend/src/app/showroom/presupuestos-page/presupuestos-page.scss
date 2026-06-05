@@ -606,6 +606,17 @@ $kt-amarillo: #a2ab00;
   }
 }
 
+// Chips de formas en el presupuestador: SOLO informativos (el PDF muestra todas,
+// no se elige una). Sin affordance de botón — no cursor pointer ni "levantar" al
+// pasar el mouse. El detalle se abre con el chevron.
+:host ::ng-deep .kt-forma-chip-estatico {
+  cursor: default;
+
+  &:hover {
+    transform: none;
+  }
+}
+
 // Botón toggle del panel — circular con ícono chevron.
 .kt-footer-toggle {
   display: inline-flex;
