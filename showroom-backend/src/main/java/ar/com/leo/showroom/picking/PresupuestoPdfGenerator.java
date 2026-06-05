@@ -51,7 +51,6 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -120,9 +119,8 @@ public class PresupuestoPdfGenerator {
                 .map(PedidoShowroomItem::getSku)
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
-        List<FormaPago> activas = formaPagoService.listarActivas();
-        FormaPago destacadaMenaje = formaDestacada(activas, false);
-        FormaPago destacadaMaquinaria = formaDestacada(activas, true);
+        FormaPago destacadaMenaje = formaPagoService.formaDestacada(false);
+        FormaPago destacadaMaquinaria = formaPagoService.formaDestacada(true);
         List<ItemView> views = sesion.getItems().stream()
                 .filter(it -> !skusComprados.contains(it.getSku()))
                 .map(it -> fromSesionItem(it, destacadaMenaje, destacadaMaquinaria))
@@ -192,17 +190,6 @@ public class PresupuestoPdfGenerator {
                     PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaquinaria));
         }
         return esMaquinaria ? PrecioPerfilCalculator.calcularSinIva(conIva, porcIva) : conIva;
-    }
-
-    /** Forma de pago destacada ("Precio ref.") del perfil, la de menor orden.
-     *  Null si ninguna activa es referencia de ese perfil. */
-    private static FormaPago formaDestacada(List<FormaPago> activas, boolean esMaquinaria) {
-        return activas.stream()
-                .filter(f -> esMaquinaria
-                        ? Boolean.TRUE.equals(f.getPrecioReferenciaMaquinaria())
-                        : Boolean.TRUE.equals(f.getPrecioReferencia()))
-                .min(Comparator.comparingInt(f -> f.getOrden() == null ? 0 : f.getOrden()))
-                .orElse(null);
     }
 
     public String nombreArchivo(PedidoShowroom pedido) {
