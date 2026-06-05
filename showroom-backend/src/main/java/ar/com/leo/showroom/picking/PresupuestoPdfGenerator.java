@@ -2,6 +2,7 @@ package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
 import ar.com.leo.showroom.sesion.entity.SesionScanItem;
@@ -418,12 +419,9 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    /** Saca el IVA del precio. Si porcIva es null o 0, devuelve el mismo valor. */
+    /** Saca el IVA del precio (delegado a la fórmula única). */
     private static BigDecimal sinIva(BigDecimal precioConIva, BigDecimal porcIva) {
-        if (precioConIva == null) return null;
-        if (porcIva == null || porcIva.signum() == 0) return precioConIva;
-        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-        return precioConIva.divide(divisor, 4, java.math.RoundingMode.HALF_UP);
+        return PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
     }
 
     private static String formatPesos(BigDecimal v) {

@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.cotizacion.service;
 
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
 import ar.com.leo.showroom.cotizacion.entity.CotizacionFinanciera;
 import com.itextpdf.io.image.ImageData;
@@ -296,9 +297,8 @@ public class CotizacionFinancieraPdfGenerator {
             // Montos ya CON IVA: el total c/IVA es la suma directa; el neto
             // se deriva dividiendo cada monto por (1 + su IVA).
             BigDecimal totalConIva = monto1.add(monto2);
-            BigDecimal totalSinIva = monto1.divide(
-                    BigDecimal.ONE.add(iva1.movePointLeft(2)), 2, RoundingMode.HALF_UP)
-                .add(monto2.divide(BigDecimal.ONE.add(iva2.movePointLeft(2)), 2, RoundingMode.HALF_UP));
+            BigDecimal totalSinIva = PrecioPerfilCalculator.calcularSinIva(monto1, iva1)
+                    .add(PrecioPerfilCalculator.calcularSinIva(monto2, iva2));
             banner.add(new Paragraph()
                     .add(new com.itextpdf.layout.element.Text("Total sin IVA: ").simulateBold())
                     .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalSinIva))

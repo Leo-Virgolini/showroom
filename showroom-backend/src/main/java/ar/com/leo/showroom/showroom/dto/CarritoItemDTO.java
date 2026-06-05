@@ -1,5 +1,7 @@
 package ar.com.leo.showroom.showroom.dto;
 
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 
@@ -68,11 +70,7 @@ public record CarritoItemDTO(
     public static CarritoItemDTO generico(String itemKey, String sku, String descripcion,
                                           String rubro, BigDecimal precioConIva,
                                           BigDecimal porcIva, int cantidad) {
-        BigDecimal sinIva = precioConIva == null || porcIva == null
-                ? precioConIva
-                : precioConIva.divide(
-                        java.math.BigDecimal.ONE.add(porcIva.movePointLeft(2)),
-                        4, java.math.RoundingMode.HALF_UP);
+        BigDecimal sinIva = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
         return new CarritoItemDTO(
                 itemKey,
                 sku,

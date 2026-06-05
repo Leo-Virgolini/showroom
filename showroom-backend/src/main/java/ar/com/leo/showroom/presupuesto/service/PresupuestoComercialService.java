@@ -823,9 +823,8 @@ public class PresupuestoComercialService {
             } else {
                 // Fallback presupuestos viejos: total sin IVA.
                 BigDecimal precioConDesc = precio.multiply(factorDesc);
-                BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-                totalLinea = precioConDesc.multiply(cantidad)
-                        .divide(divisor, 4, RoundingMode.HALF_UP);
+                totalLinea = PrecioPerfilCalculator.calcularSinIva(precioConDesc, porcIva)
+                        .multiply(cantidad);
             }
             subtotalSinIva = subtotalSinIva.add(totalLinea);
         }
