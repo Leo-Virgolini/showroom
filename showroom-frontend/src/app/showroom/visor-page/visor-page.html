@@ -91,7 +91,7 @@
     <!-- Imagen grande -->
     @if (r.imagenUrl) {
     <div class="rounded-2xl border border-surface-200/70 dark:border-surface-700 bg-white dark:bg-surface-950 p-2 flex items-center justify-center shadow-sm">
-      <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true" imageClass="w-full max-h-[64vh] object-contain rounded-lg cursor-zoom-in" />
+      <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="false" imageClass="w-full max-h-[38vh] sm:max-h-[50vh] object-contain rounded-lg" />
     </div>
     }
 
