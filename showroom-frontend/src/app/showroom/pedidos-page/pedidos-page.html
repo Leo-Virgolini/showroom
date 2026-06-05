@@ -515,7 +515,7 @@
                           <th class="text-center" style="width: 5rem">Cant.</th>
                           <th class="text-right" style="width: 8rem">Precio s/IVA</th>
                           <th class="text-right" style="width: 8rem">Precio c/IVA</th>
-                          <th class="text-right" style="width: 9rem">Subtotal s/IVA</th>
+                          <th class="text-right" style="width: 9rem">Subtotal</th>
                         </tr>
                       </ng-template>
                       <ng-template #body let-it>
@@ -548,7 +548,7 @@
                             }
                           </td>
                           <td class="text-right tabular-nums font-semibold">
-                            @if (subtotalSinIva(it, (it.aplicaIva ?? det.formaPagoAplicaIva)); as s) {
+                            @if (subtotalCliente(it); as s) {
                               {{ s | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —

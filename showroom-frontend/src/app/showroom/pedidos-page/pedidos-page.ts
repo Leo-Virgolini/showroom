@@ -348,14 +348,16 @@ export class PedidosPage {
     return precioGuardado * (1 + porcIva / 100);
   }
 
-  /** Subtotal s/IVA por línea — lo que cuenta como base para DUX en una factura con IVA. */
-  subtotalSinIva(
-    it: { precioUnitario: number | null; porcIva: number | null; cantidad: number | null },
-    aplicaIva: boolean | null,
+  /** Subtotal de la línea que PAGA el cliente = precio unitario guardado (lo que
+   *  abona el cliente por unidad: c/IVA si la forma aplica IVA, s/IVA si no, ya
+   *  con descuento) × cantidad. La suma de estos subtotales da "Cliente paga"
+   *  ({@code det.total}). Para la base imponible/DUX están las columnas por
+   *  unidad Precio s/IVA y Precio c/IVA. */
+  subtotalCliente(
+    it: { precioUnitario: number | null; cantidad: number | null },
   ): number | null {
-    const p = this.precioSinIva(it.precioUnitario, it.porcIva, aplicaIva);
-    if (p == null || it.cantidad == null) return null;
-    return p * it.cantidad;
+    if (it.precioUnitario == null || it.cantidad == null) return null;
+    return it.precioUnitario * it.cantidad;
   }
 
   /** Total c/IVA que DUX facturó = suma por ítem del precio con IVA. Para ítems
