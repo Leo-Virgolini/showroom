@@ -34,9 +34,12 @@ import {
   ConversionProducto,
   EstadisticaProducto,
   EstadisticasHistorial,
+  FormaPago,
   SesionDetalle,
   SesionListItem,
+  normalizarRubro,
 } from '../models';
+import { precioPorForma } from '../precio-referencia.util';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -92,6 +95,18 @@ export class HistorialPage {
   readonly cargandoDetalle = signal<Set<number>>(new Set());
   /** Filas expandidas. */
   readonly expanded = signal<Record<number, boolean>>({});
+
+  /** Formas de pago activas — para calcular el "precio efectivo" (forma
+   *  destacada) de cada ítem del detalle, igual que en el scan/visor. */
+  readonly formasPagoActivas = signal<FormaPago[]>([]);
+
+  /** Rubros que cotizan sin IVA (perfil maquinaria). */
+  readonly rubrosSinIva = signal<string[]>([]);
+
+  /** Set normalizado para comparar rubros sin importar acentos/casing. */
+  private readonly rubrosSinIvaSet = computed(
+    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
+  );
 
   readonly hayFiltros = computed(
     () =>
@@ -219,6 +234,24 @@ export class HistorialPage {
     });
 
     this.cargarStats();
+
+    // Formas de pago y rubros sin IVA — necesarios para el "precio efectivo"
+    // (precio de la forma destacada por perfil) en el detalle de cada sesión.
+    this.api.listarFormasPagoActivas()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.formasPagoActivas.set(lista),
+        error: (err) =>
+          console.warn('[historial] no se pudieron cargar las formas de pago:', err),
+      });
+
+    this.api.obtenerRubrosSinIva()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.rubrosSinIva.set(lista),
+        error: (err) =>
+          console.warn('[historial] no se pudieron cargar los rubros sin IVA:', err),
+      });
   }
 
   private cargarStats(): void {
@@ -364,6 +397,52 @@ export class HistorialPage {
     if (precioConIva == null) return null;
     if (porcIva == null || porcIva === 0) return precioConIva;
     return precioConIva / (1 + porcIva / 100);
+  }
+
+  /** True si el rubro cotiza sin IVA (perfil maquinaria). */
+  rubroCotizaSinIva(rubro: string | null | undefined): boolean {
+    const n = normalizarRubro(rubro);
+    return n !== '' && this.rubrosSinIvaSet().has(n);
+  }
+
+  /** Perfil (recargo + aplicaIva) de una forma según el rubro del producto:
+   *  maquinaria usa los campos *Maquinaria; menaje los normales. */
+  perfilForma(
+    forma: FormaPago,
+    esMaquinaria: boolean,
+  ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
+    if (esMaquinaria) {
+      return {
+        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
+        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+      };
+    }
+    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+  }
+
+  /** Forma de pago destacada ("Precio ref.") según el perfil del rubro: la
+   *  primera (orden asc) marcada, o null si no hay ninguna. */
+  formaDestacada(esMaquinaria: boolean): FormaPago | null {
+    return this.formasPagoActivas()
+      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
+      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+  }
+
+  /** Precio "efectivo" de un ítem del detalle = precio con la forma destacada
+   *  del perfil (igual que el precio destacado del scan/visor). Si no hay forma
+   *  destacada, cae al precio de lista según rubro. */
+  precioEfectivo(item: {
+    precioConIva: number | null;
+    porcIva: number | null;
+    rubro?: string | null;
+  }): number {
+    const esMaq = this.rubroCotizaSinIva(item.rubro);
+    const forma = this.formaDestacada(esMaq);
+    if (forma) return precioPorForma(item.precioConIva, item.porcIva, this.perfilForma(forma, esMaq));
+    // fallback sin forma destacada: precio de lista según rubro
+    return esMaq
+      ? (this.precioSinIva(item.precioConIva, item.porcIva) ?? 0)
+      : (item.precioConIva ?? 0);
   }
 
   // =====================================================

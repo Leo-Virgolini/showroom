@@ -402,8 +402,7 @@
                     @if (det.pedidoId != null) {
                     <th class="text-center" style="width: 7rem">Comprado</th>
                     }
-                    <th class="text-right" style="width: 9rem">Precio s/IVA</th>
-                    <th class="text-right" style="width: 9rem">Precio c/IVA</th>
+                    <th class="text-right" style="width: 9rem">Precio</th>
                     <th style="width: 10rem">Escaneado</th>
                   </tr>
                 </ng-template>
@@ -432,13 +431,8 @@
                       }
                     </td>
                     }
-                    <td class="text-right tabular-nums text-muted-color">
-                      @if (precioSinIva(it.precioConIva, it.porcIva); as p) {
-                      {{ p | currency:'ARS':'symbol':'1.0-0' }}
-                      } @else { — }
-                    </td>
                     <td class="text-right tabular-nums">
-                      {{ it.precioConIva ? (it.precioConIva | currency:'ARS':'symbol':'1.0-0') : '—' }}
+                      {{ it.precioConIva ? (precioEfectivo(it) | currency:'ARS':'symbol':'1.0-0') : '—' }}
                     </td>
                     <td class="text-xs tabular-nums text-muted-color">
                       {{ it.escaneadoAt | date: 'dd/MM/yy HH:mm' }}
