@@ -5,7 +5,9 @@ import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
+import ar.com.leo.showroom.config.entity.FormaPago;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
+import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
@@ -160,6 +162,7 @@ public class PresupuestoComercialPdfGenerator {
      *  exclusión de descuentos por escala y el precio mostrado por línea sigan
      *  la misma regla que el showroom (scan/visor/carrito). */
     private final PrecioPerfilCalculator precioPerfilCalculator;
+    private final FormaPagoService formaPagoService;
 
     /**
      * Rubros DUX a los que NO se les aplican los descuentos generales por escala
@@ -350,20 +353,33 @@ public class PresupuestoComercialPdfGenerator {
                                            String clienteNombre, Instant fechaSesion) {
         if (scans == null || scans.isEmpty()) return null;
 
+        // Precio "predefinido" por ítem: el de la forma de pago destacada del
+        // perfil del rubro (menaje al precio efectivo c/IVA, maquinaria s/IVA) —
+        // mismo criterio que el scan/visor/presupuestador. Se calcula acá y viaja
+        // como precioEfectivo para que la tabla lo muestre sin recalcular. Sin
+        // forma destacada, cae al precio de lista por rubro.
+        FormaPago destacadaMenaje = formaPagoService.formaDestacada(false);
+        FormaPago destacadaMaquinaria = formaPagoService.formaDestacada(true);
         List<GenerarPresupuestoRequestDTO.Item> items = new ArrayList<>(scans.size());
         for (SesionScanItem s : scans) {
+            BigDecimal conIva = s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva();
+            boolean esMaq = precioPerfilCalculator.esMaquinaria(s.getRubro());
+            FormaPago forma = esMaq ? destacadaMaquinaria : destacadaMenaje;
+            BigDecimal precioEfectivo = forma != null
+                    ? PrecioPerfilCalculator.calcularPrecioFinal(conIva, s.getPorcIva(),
+                            PrecioPerfilCalculator.recargoPerfil(forma, esMaq),
+                            PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaq))
+                    : (esMaq ? PrecioPerfilCalculator.calcularSinIva(conIva, s.getPorcIva()) : conIva);
             items.add(new GenerarPresupuestoRequestDTO.Item(
                     s.getSku(),
                     s.getDescripcion(),
                     s.getRubro(),
                     BigDecimal.ONE,
-                    s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva(),
+                    conIva,
                     s.getPorcIva(),
                     BigDecimal.ZERO,
                     null,
-                    // Ítems de interés: no hay precio efectivo calculado →
-                    // null hace que el PDF caiga al precio de lista por rubro.
-                    null));
+                    precioEfectivo));
         }
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(
@@ -1289,10 +1305,10 @@ public class PresupuestoComercialPdfGenerator {
             Color fondoFila = (idx % 2 == 1) ? ZEBRA_FILA : null;
             idx++;
 
-            BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
-            BigDecimal precioSinIva = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
-            boolean sinPrecio = precioSinIva.signum() <= 0;
+            // Precio efectivo de contado (forma destacada, según rubro): viene ya
+            // calculado en el item (precioEfectivo); fallback al precio de lista.
+            BigDecimal precioEfectivo = precioListaEfectivo(it);
+            boolean sinPrecio = precioEfectivo.signum() <= 0;
             /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
              *  fila muestra el precio efectivo de contado pero las columnas
              *  de descuento por escala van en "—" para que no sugieran un
@@ -1344,7 +1360,7 @@ public class PresupuestoComercialPdfGenerator {
                             .setFontColor(GRIS_OSCURO)
                             .setMargin(0));
 
-            // Precio (s/IVA) o "Consultar" si no tiene precio cargado.
+            // Precio efectivo o "Consultar" si no tiene precio cargado.
             Cell celdaPrecio = new Cell()
                     .setBorder(Border.NO_BORDER)
                     .setPadding(6)
@@ -1357,7 +1373,7 @@ public class PresupuestoComercialPdfGenerator {
                         .setFontColor(KT_NARANJA)
                         .setMargin(0));
             } else {
-                celdaPrecio.add(new Paragraph(formatPesos(precioSinIva))
+                celdaPrecio.add(new Paragraph(formatPesos(precioEfectivo))
                         .simulateBold()
                         .setFontSize(11)
                         .setFontColor(VERDE_PRECIO)
@@ -1365,7 +1381,7 @@ public class PresupuestoComercialPdfGenerator {
             }
 
             // Precio efectivo rebajado por cada escalón. Misma base que la
-            // columna "PRECIO EFECTIVO" (s/IVA), multiplicada por (1 - %/100).
+            // columna "PRECIO EFECTIVO" (forma destacada), multiplicada por (1 - %/100).
             // Si el producto no tiene precio, la celda queda en "—" igual que
             // el resto.
             List<Cell> celdasRebaja = new ArrayList<>(nDesc);
@@ -1383,7 +1399,7 @@ public class PresupuestoComercialPdfGenerator {
                             .setMargin(0));
                 } else {
                     BigDecimal factor = BigDecimal.ONE.subtract(e.getPorcentaje().movePointLeft(2));
-                    BigDecimal precioRebajado = precioSinIva.multiply(factor)
+                    BigDecimal precioRebajado = precioEfectivo.multiply(factor)
                             .setScale(2, RoundingMode.HALF_UP);
                     // Texto plano en el color del escalón — mismo color que la
                     // badge de su encabezado, para vincularlos visualmente.

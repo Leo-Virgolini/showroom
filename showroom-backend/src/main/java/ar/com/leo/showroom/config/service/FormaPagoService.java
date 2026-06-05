@@ -13,6 +13,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +44,19 @@ public class FormaPagoService {
     /** Listado activas — para el selector del operador en el carrito. */
     public List<FormaPago> listarActivas() {
         return repository.findByActivoTrueOrderByOrdenAscIdAsc();
+    }
+
+    /** Forma destacada ("Precio ref.") del perfil indicado (menaje o maquinaria):
+     *  la forma activa de menor orden marcada como referencia de ese perfil, o
+     *  null si ninguna. Fuente única para el precio "predefinido" que muestran el
+     *  scan/visor/presupuestador y los generadores de PDF. */
+    public FormaPago formaDestacada(boolean esMaquinaria) {
+        return listarActivas().stream()
+                .filter(f -> esMaquinaria
+                        ? Boolean.TRUE.equals(f.getPrecioReferenciaMaquinaria())
+                        : Boolean.TRUE.equals(f.getPrecioReferencia()))
+                .min(Comparator.comparingInt(f -> f.getOrden() == null ? 0 : f.getOrden()))
+                .orElse(null);
     }
 
     /** Para el flujo de crearPedido: resolver una forma de pago por id. */
