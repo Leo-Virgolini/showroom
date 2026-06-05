@@ -817,9 +817,9 @@ public class PresupuestoComercialService {
             BigDecimal factorDesc = BigDecimal.ONE.subtract(desc.movePointLeft(2));
 
             BigDecimal totalLinea;
-            if (it.precioEfectivo() != null) {
-                // Total efectivo: precioEfectivo × (1 − desc) × cantidad.
-                totalLinea = it.precioEfectivo().multiply(factorDesc).multiply(cantidad);
+            if (it.precioReferencia() != null) {
+                // Total de referencia: precioReferencia × (1 − desc) × cantidad.
+                totalLinea = it.precioReferencia().multiply(factorDesc).multiply(cantidad);
             } else {
                 // Fallback presupuestos viejos: total sin IVA.
                 BigDecimal precioConDesc = precio.multiply(factorDesc);
