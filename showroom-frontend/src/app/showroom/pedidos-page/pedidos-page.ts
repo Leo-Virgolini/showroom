@@ -36,7 +36,6 @@ import {
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
 import { precioSinIva as quitarIva } from '../precio-referencia.util';
-import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
@@ -98,8 +97,6 @@ export class PedidosPage {
   readonly detalles = signal<Record<number, PedidoDetalle>>({});
   readonly cargandoDetalle = signal<Set<number>>(new Set());
 
-  /** IDs de pedido cuyo PDF se está descargando — para deshabilitar el botón. */
-  readonly descargandoPdf = signal<Set<number>>(new Set());
   readonly enviandoEmail = signal<Set<number>>(new Set());
   readonly enviandoWhatsapp = signal<Set<number>>(new Set());
   readonly generandoPickit = signal<Set<number>>(new Set());
@@ -402,10 +399,6 @@ export class PedidosPage {
 
   trackById = (_: number, it: PedidoListItem) => it.id;
 
-  estaDescargandoPdf(id: number): boolean {
-    return this.descargandoPdf().has(id);
-  }
-
   estaEnviandoEmail(id: number): boolean {
     return this.enviandoEmail().has(id);
   }
@@ -593,55 +586,10 @@ export class PedidosPage {
     });
   }
 
-  descargarPdf(p: PedidoListItem): void {
-    if (this.estaDescargandoPdf(p.id)) return;
-    this.marcarDescarga(this.descargandoPdf, p.id, true);
-    this.api.descargarPdfPedido(p.id).subscribe({
-      next: (resp) => {
-        this.marcarDescarga(this.descargandoPdf, p.id, false);
-        dispararDescargaBlob(resp, `pedido-${p.id}.pdf`);
-      },
-      error: async (err) => {
-        this.marcarDescarga(this.descargandoPdf, p.id, false);
-        // El responseType:'blob' del request hace que el body de error venga
-        // como Blob — toastError no lo puede leer. Parseamos el JSON manual
-        // y, si es un 404 "el cliente compró todo lo que vio", lo mostramos
-        // como info (es un caso esperado, no un error técnico).
-        const mensajeBackend = await leerMensajeBlob(err?.error);
-        if (err?.status === 404 && mensajeBackend) {
-          this.toast.add({
-            severity: 'info',
-            summary: 'No hay PDF para este pedido',
-            detail: mensajeBackend,
-            life: 5000,
-          });
-          return;
-        }
-        const errAdaptado = mensajeBackend ? { error: { message: mensajeBackend } } : err;
-        toastError(this.toast, 'PDF', errAdaptado, 'No se pudo generar el PDF');
-      },
-    });
-  }
-
-  private marcarDescarga(sig: typeof this.descargandoPdf, id: number, on: boolean): void {
+  private marcarDescarga(sig: typeof this.enviandoEmail, id: number, on: boolean): void {
     const next = new Set(sig());
     if (on) next.add(id); else next.delete(id);
     sig.set(next);
   }
 
-}
-
-/** Cuando un request HTTP usa {@code responseType:'blob'}, el body de error
- *  llega como Blob — el handler de errores no lo puede leer directo. Esta
- *  función parsea el blob como JSON y devuelve el {@code message} del
- *  GlobalExceptionHandler del backend, o null si no se puede parsear. */
-async function leerMensajeBlob(blob: unknown): Promise<string | null> {
-  if (!(blob instanceof Blob)) return null;
-  try {
-    const texto = await blob.text();
-    const json = JSON.parse(texto) as { message?: string };
-    return json.message ?? null;
-  } catch {
-    return null;
-  }
 }
