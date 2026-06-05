@@ -70,4 +70,22 @@ export class PrecioPerfilService {
     const esMaq = this.rubroCotizaSinIva(producto.rubro);
     return precioPorForma(producto.pvpKtGastroConIva, producto.porcIva, perfilForma(forma, esMaq));
   }
+
+  /** Precio "efectivo" predefinido de un producto: el de la forma destacada del
+   *  perfil de su rubro (menaje al efectivo c/IVA, maquinaria s/IVA). Si no hay
+   *  forma destacada, cae al precio de lista por rubro. Mismo criterio que el
+   *  scan/visor/presupuestador — el precio único de referencia que ve el cliente. */
+  precioEfectivo(producto: {
+    pvpKtGastroConIva: number | null;
+    pvpKtGastroSinIva?: number | null;
+    porcIva: number | null;
+    rubro?: string | null;
+  }): number {
+    const esMaq = this.rubroCotizaSinIva(producto.rubro);
+    const forma = this.formaDestacada(esMaq);
+    if (forma) return this.precioReferenciaPorForma(producto, forma);
+    return esMaq
+      ? (producto.pvpKtGastroSinIva ?? 0)
+      : (producto.pvpKtGastroConIva ?? producto.pvpKtGastroSinIva ?? 0);
+  }
 }

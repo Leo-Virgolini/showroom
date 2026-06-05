@@ -26,6 +26,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
 import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
@@ -183,6 +184,7 @@ export class EtiquetasPage {
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   readonly busqueda = signal('');
   readonly resultados = signal<CatalogoItem[]>([]);
@@ -340,7 +342,16 @@ export class EtiquetasPage {
     return Math.ceil(total / porHoja);
   });
 
+  /** Precio efectivo (forma destacada por rubro) que se imprime en la etiqueta —
+   *  mismo criterio que el scan/visor/presupuestador. */
+  precioEfectivo(it: CatalogoItem): number {
+    return this.precioPerfil.precioEfectivo(it);
+  }
+
   constructor() {
+    // Formas de pago + rubros sin IVA — para calcular el precio efectivo de cada
+    // etiqueta con la forma destacada del perfil del rubro.
+    this.precioPerfil.cargar();
     // Inyecta un <style> dinámico en el head del documento con el `@page size`
     // del formato seleccionado. CSS `@page` es global a la impresión, no se
     // puede setear via inline style — hay que reescribir el bloque de estilos.
@@ -990,7 +1001,7 @@ export class EtiquetasPage {
           expandidas.push({
             sku: it.sku,
             descripcion: it.descripcion,
-            precio: it.pvpKtGastroSinIva,
+            precio: this.precioPerfil.precioEfectivo(it),
             numeroOrden: it.numeroOrden,
             qrDataUrl: dataUrls[idx],
           });
@@ -1041,7 +1052,7 @@ export class EtiquetasPage {
         Array.from({ length: it.copias }, () => ({
           sku: it.sku,
           descripcion: it.descripcion,
-          precio: it.pvpKtGastroSinIva,
+          precio: this.precioPerfil.precioEfectivo(it),
           numeroOrden: it.numeroOrden,
         })),
       );
@@ -1271,7 +1282,7 @@ export class EtiquetasPage {
           expandidas.push({
             sku: it.sku,
             descripcion: it.descripcion,
-            precio: it.pvpKtGastroSinIva,
+            precio: this.precioPerfil.precioEfectivo(it),
             numeroOrden: it.numeroOrden,
             qrDataUrl: dataUrls[idx],
           });
