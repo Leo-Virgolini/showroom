@@ -1030,7 +1030,7 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CANT."));
         // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
         // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
-        // resto) y se aclara por celda con una badge "s/IVA"/"c/IVA".
+        // resto), pero no se muestra el badge para no recargar la fila.
         tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
@@ -1159,11 +1159,6 @@ public class PresupuestoComercialPdfGenerator {
                 celdaPrecio.add(new Paragraph(formatPesos(precio))
                         .setFontSize(10)
                         .setFontColor(GRIS_OSCURO)
-                        .setMargin(0));
-                // Régimen del precio mostrado (depende del rubro del ítem).
-                celdaPrecio.add(new Paragraph(esMaquinaria ? "s/IVA" : "c/IVA")
-                        .setFontSize(7)
-                        .setFontColor(GRIS_MEDIO)
                         .setMargin(0));
             }
             tabla.addCell(celdaPrecio);
