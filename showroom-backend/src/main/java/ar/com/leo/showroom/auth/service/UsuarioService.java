@@ -10,8 +10,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * CRUD de usuarios + cambio de password. La autenticación en sí (validar
@@ -35,6 +38,23 @@ public class UsuarioService {
     @Transactional(readOnly = true)
     public List<Usuario> listar() {
         return repository.findAllByOrderByUsernameAsc();
+    }
+
+    /**
+     * Devuelve un mapa {@code usuarioId → displayName} para los ids dados, en una
+     * sola query. {@code displayName} prefiere {@code nombre} (más legible) y cae
+     * a {@code username} si está vacío. Usado por los listados (pedidos,
+     * presupuestos, sesiones, cotizaciones) para resolver el operador de cada
+     * fila sin N+1. Si {@code ids} está vacío devuelve un mapa vacío.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, String> nombresPorId(Collection<Long> ids) {
+        if (ids == null || ids.isEmpty()) return Map.of();
+        return repository.findAllById(ids).stream()
+                .collect(Collectors.toMap(
+                        Usuario::getId,
+                        u -> (u.getNombre() != null && !u.getNombre().isBlank())
+                                ? u.getNombre().trim() : u.getUsername()));
     }
 
     @Transactional

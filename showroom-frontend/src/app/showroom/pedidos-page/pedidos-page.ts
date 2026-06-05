@@ -37,6 +37,7 @@ import {
 import { BackendStatusService } from '../backend-status.service';
 import { precioSinIva as quitarIva } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
+import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 
@@ -193,15 +194,9 @@ export class PedidosPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
-    // Cuando el usuario clickea un header, p-table pasa sortField y sortOrder
-    // (1 = asc, -1 = desc). Si no clickea, viene el valor del [sortField] del
-    // template, así que el primer load también respeta el default.
-    if (typeof event.sortField === 'string' && event.sortField) {
-      this.sortField.set(event.sortField);
-    }
-    if (event.sortOrder === 1 || event.sortOrder === -1) {
-      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
-    }
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
     const page = Math.floor(first / size);
     this.cargar(page, size);
   }
@@ -216,7 +211,7 @@ export class PedidosPage {
         q: this.busqueda(),
         estado: this.estado() ?? undefined,
         desde: desde ? desde.toISOString() : undefined,
-        hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+        hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
         page,
         size,
         sortField: this.sortField(),
@@ -238,13 +233,6 @@ export class PedidosPage {
           toastError(this.toast, 'Pedidos', err, 'No se pudo cargar el listado');
         },
       });
-  }
-
-  /** Pasa el rango de fecha al final del día (23:59:59) para incluir todo el día. */
-  private endOfDay(d: Date): Date {
-    const end = new Date(d);
-    end.setHours(23, 59, 59, 999);
-    return end;
   }
 
   limpiarFiltros(): void {
@@ -430,11 +418,11 @@ export class PedidosPage {
     const p = this.pedidoAAnular();
     if (!p) return;
     if (this.estaAnulando(p.id)) return;
-    this.marcarDescarga(this.anulandoPedido, p.id, true);
+    marcarEnSet(this.anulandoPedido, p.id, true);
     const motivo = this.motivoAnulacion().trim() || null;
     this.api.anularPedido(p.id, motivo).subscribe({
       next: (det) => {
-        this.marcarDescarga(this.anulandoPedido, p.id, false);
+        marcarEnSet(this.anulandoPedido, p.id, false);
         // Reflejar el nuevo estado en la lista sin recargar todo el listado.
         this.pedidos.set(
           this.pedidos().map((x) =>
@@ -456,7 +444,7 @@ export class PedidosPage {
         });
       },
       error: (err) => {
-        this.marcarDescarga(this.anulandoPedido, p.id, false);
+        marcarEnSet(this.anulandoPedido, p.id, false);
         toastError(this.toast, 'Anular', err, 'No se pudo anular el pedido');
       },
     });
@@ -485,10 +473,10 @@ export class PedidosPage {
     const p = this.pedidoAReactivar();
     if (!p) return;
     if (this.estaReactivando(p.id)) return;
-    this.marcarDescarga(this.reactivandoPedido, p.id, true);
+    marcarEnSet(this.reactivandoPedido, p.id, true);
     this.api.reactivarPedido(p.id).subscribe({
       next: (det) => {
-        this.marcarDescarga(this.reactivandoPedido, p.id, false);
+        marcarEnSet(this.reactivandoPedido, p.id, false);
         this.pedidos.set(
           this.pedidos().map((x) =>
             x.id === p.id
@@ -506,7 +494,7 @@ export class PedidosPage {
         });
       },
       error: (err) => {
-        this.marcarDescarga(this.reactivandoPedido, p.id, false);
+        marcarEnSet(this.reactivandoPedido, p.id, false);
         toastError(this.toast, 'Reactivar', err, 'No se pudo reactivar el pedido');
       },
     });
@@ -514,10 +502,10 @@ export class PedidosPage {
 
   reenviarEmail(p: PedidoListItem): void {
     if (this.estaEnviandoEmail(p.id)) return;
-    this.marcarDescarga(this.enviandoEmail, p.id, true);
+    marcarEnSet(this.enviandoEmail, p.id, true);
     this.api.reenviarEmailPedido(p.id).subscribe({
       next: () => {
-        this.marcarDescarga(this.enviandoEmail, p.id, false);
+        marcarEnSet(this.enviandoEmail, p.id, false);
         // El toast de éxito real lo dispara el SSE picking-email cuando el async
         // completa (en app.ts). Mostramos solo un info inmediato para confirmar
         // que la acción se aceptó.
@@ -529,7 +517,7 @@ export class PedidosPage {
         });
       },
       error: (err) => {
-        this.marcarDescarga(this.enviandoEmail, p.id, false);
+        marcarEnSet(this.enviandoEmail, p.id, false);
         toastError(this.toast, 'Email', err, 'No se pudo encolar el envío');
       },
     });
@@ -541,10 +529,10 @@ export class PedidosPage {
 
   reenviarWhatsapp(p: PedidoListItem): void {
     if (this.estaEnviandoWhatsapp(p.id)) return;
-    this.marcarDescarga(this.enviandoWhatsapp, p.id, true);
+    marcarEnSet(this.enviandoWhatsapp, p.id, true);
     this.api.reenviarWhatsappPedido(p.id).subscribe({
       next: () => {
-        this.marcarDescarga(this.enviandoWhatsapp, p.id, false);
+        marcarEnSet(this.enviandoWhatsapp, p.id, false);
         // El resultado real (SENT / WINDOW_CLOSED / FAILED) llega vía SSE
         // whatsapp-business y se muestra como toast desde app.ts.
         this.toast.add({
@@ -555,7 +543,7 @@ export class PedidosPage {
         });
       },
       error: (err) => {
-        this.marcarDescarga(this.enviandoWhatsapp, p.id, false);
+        marcarEnSet(this.enviandoWhatsapp, p.id, false);
         toastError(this.toast, 'WhatsApp', err, 'No se pudo encolar el envío');
       },
     });
@@ -567,10 +555,10 @@ export class PedidosPage {
 
   regenerarPickitExterno(p: PedidoListItem): void {
     if (this.estaGenerandoPickit(p.id)) return;
-    this.marcarDescarga(this.generandoPickit, p.id, true);
+    marcarEnSet(this.generandoPickit, p.id, true);
     this.api.regenerarPickitExterno(p.id).subscribe({
       next: () => {
-        this.marcarDescarga(this.generandoPickit, p.id, false);
+        marcarEnSet(this.generandoPickit, p.id, false);
         // El SSE pickit-externo (toast en app.ts) confirma el path generado.
         this.toast.add({
           severity: 'info',
@@ -580,16 +568,10 @@ export class PedidosPage {
         });
       },
       error: (err) => {
-        this.marcarDescarga(this.generandoPickit, p.id, false);
+        marcarEnSet(this.generandoPickit, p.id, false);
         toastError(this.toast, 'Pickit externo', err, 'No se pudo generar el pickit');
       },
     });
-  }
-
-  private marcarDescarga(sig: typeof this.enviandoEmail, id: number, on: boolean): void {
-    const next = new Set(sig());
-    if (on) next.add(id); else next.delete(id);
-    sig.set(next);
   }
 
 }

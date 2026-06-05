@@ -374,13 +374,6 @@ export class ShowroomService {
     return this.http.get<PedidoDetalle>(`${this.base}/pedidos/${id}`);
   }
 
-  descargarPdfPedido(id: number): Observable<HttpResponse<Blob>> {
-    return this.http.get(`${this.base}/pedidos/${id}/pdf`, {
-      observe: 'response',
-      responseType: 'blob',
-    });
-  }
-
   /** Descarga el PDF de "productos vistos pero no comprados" de una sesión —
    *  para el botón del Historial. Sirve tanto para sesiones con pedido (vistos
    *  menos comprados) como abandonadas (todos los vistos). 404 si compró todo. */

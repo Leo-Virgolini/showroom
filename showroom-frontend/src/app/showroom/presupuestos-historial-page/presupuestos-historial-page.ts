@@ -27,6 +27,7 @@ import { PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
+import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 
@@ -161,15 +162,9 @@ export class PresupuestosHistorialPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
-    // Cuando el usuario clickea un header, p-table pasa sortField y sortOrder
-    // (1 = asc, -1 = desc). Si no clickea, viene el valor del [sortField] del
-    // template, así que el primer load también respeta el default.
-    if (typeof event.sortField === 'string' && event.sortField) {
-      this.sortField.set(event.sortField);
-    }
-    if (event.sortOrder === 1 || event.sortOrder === -1) {
-      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
-    }
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
     this.cargar(Math.floor(first / size), size);
   }
 
@@ -182,7 +177,7 @@ export class PresupuestosHistorialPage {
         id: this.idFiltro() ?? undefined,
         q: this.busqueda(),
         desde: desde ? desde.toISOString() : undefined,
-        hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+        hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
         page,
         size,
         sortField: this.sortField(),
@@ -205,14 +200,6 @@ export class PresupuestosHistorialPage {
       });
   }
 
-  /** Convierte una fecha a 23:59:59 del mismo día — usado como cota
-   *  superior del filtro "hasta" para que el rango sea inclusivo. */
-  private endOfDay(d: Date): Date {
-    const e = new Date(d);
-    e.setHours(23, 59, 59, 999);
-    return e;
-  }
-
   /** Descarga el PDF de un presupuesto: lo abre en pestaña nueva y lo
    *  guarda a disco con su filename original.
    *
@@ -227,10 +214,10 @@ export class PresupuestosHistorialPage {
     // auto-descargamos a disco: si el operador quiere bajarlo, lo hace
     // desde el visor del browser.
     const previewTab = window.open('about:blank', '_blank');
-    this.descargandoPdf.update((s) => new Set([...s, p.id]));
+    marcarEnSet(this.descargandoPdf, p.id, true);
     this.api.descargarPdfPresupuestoComercial(p.id, modo).subscribe({
       next: (res) => {
-        this.removerDescargando(p.id);
+        marcarEnSet(this.descargandoPdf, p.id, false);
         const resultado = abrirPdfEnPreview(res, `presupuesto-${p.id}.pdf`, previewTab);
         if (resultado == null) {
           toastError(this.toast, 'Abrir PDF', null, 'El backend no devolvió un PDF.');
@@ -247,7 +234,7 @@ export class PresupuestosHistorialPage {
       },
       error: (err) => {
         if (previewTab) previewTab.close();
-        this.removerDescargando(p.id);
+        marcarEnSet(this.descargandoPdf, p.id, false);
         toastError(this.toast, 'Abrir PDF', err, 'No se pudo abrir el PDF.');
       },
     });
@@ -282,14 +269,6 @@ export class PresupuestosHistorialPage {
     return items;
   }
 
-  private removerDescargando(id: number): void {
-    this.descargandoPdf.update((s) => {
-      const ns = new Set(s);
-      ns.delete(id);
-      return ns;
-    });
-  }
-
   /** Confirma con un dialog modal antes de eliminar — el operador puede
    *  borrar por error y el soft-delete es reversible solo desde la DB, así
    *  que es bueno pedir confirmación explícita con el id + nombre del
@@ -309,14 +288,10 @@ export class PresupuestosHistorialPage {
   }
 
   private ejecutarEliminar(p: PresupuestoListItem): void {
-    this.eliminandoPdf.update((s) => new Set([...s, p.id]));
+    marcarEnSet(this.eliminandoPdf, p.id, true);
     this.api.eliminarPresupuestoComercial(p.id).subscribe({
       next: () => {
-        this.eliminandoPdf.update((s) => {
-          const ns = new Set(s);
-          ns.delete(p.id);
-          return ns;
-        });
+        marcarEnSet(this.eliminandoPdf, p.id, false);
         // Update optimista en memoria — sacamos la fila del listado al
         // toque para que la UI reaccione sin esperar el recargado.
         this.presupuestos.set(this.presupuestos().filter((x) => x.id !== p.id));
@@ -330,11 +305,7 @@ export class PresupuestosHistorialPage {
         });
       },
       error: (err) => {
-        this.eliminandoPdf.update((s) => {
-          const ns = new Set(s);
-          ns.delete(p.id);
-          return ns;
-        });
+        marcarEnSet(this.eliminandoPdf, p.id, false);
         toastError(this.toast, 'Eliminar', err, 'No se pudo eliminar el presupuesto.');
       },
     });

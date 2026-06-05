@@ -91,6 +91,7 @@ public class ShowroomService {
     private final PickitExternoService pickitExternoService;
     private final SesionShowroomService sesionShowroomService;
     private final ar.com.leo.showroom.auth.repository.UsuarioRepository usuarioRepository;
+    private final ar.com.leo.showroom.auth.service.UsuarioService usuarioService;
     private final SyncEventService eventService;
     private final ImagenLocalService imagenLocalService;
     private final ProvinciaRepository provinciaRepository;
@@ -412,11 +413,8 @@ public class ShowroomService {
         int sizeSafe = Math.min(Math.max(size, 1), 200);
         // Resolver el sort: si el campo no está en la whitelist o no se pidió,
         // usar `creadoAt desc` (default histórico de la pantalla).
-        String campo = SORT_PEDIDOS.getOrDefault(sortField, "creadoAt");
-        Sort.Direction direccion = "asc".equalsIgnoreCase(sortOrder)
-                ? Sort.Direction.ASC
-                : Sort.Direction.DESC;
-        Sort sort = Sort.by(direccion, campo);
+        Sort sort = ar.com.leo.showroom.common.util.SortUtils
+                .resolver(SORT_PEDIDOS, sortField, sortOrder, "creadoAt");
         Page<PedidoShowroom> resultado = pedidoRepository.buscar(
                 id,
                 q == null ? null : q.trim(),
@@ -469,18 +467,7 @@ public class ShowroomService {
                 .map(PedidoShowroom::getUsuarioId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        if (ids.isEmpty()) return Map.of();
-        return usuarioRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(
-                        u -> u.getId(),
-                        u -> displayNameOperador(u.getNombre(), u.getUsername())));
-    }
-
-    /** Display name del operador: prefiere {@code nombre}, fallback a username.
-     *  Reutilizado por sesiones/presupuestos para mantener consistencia visual. */
-    private static String displayNameOperador(String nombre, String username) {
-        if (nombre != null && !nombre.isBlank()) return nombre.trim();
-        return username;
+        return usuarioService.nombresPorId(ids);
     }
 
     /**

@@ -41,6 +41,7 @@ import { precioSinIva } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
+import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 
@@ -308,7 +309,7 @@ export class HistorialPage {
     const hasta = this.hasta();
     this.api.obtenerEstadisticasHistorial({
       desde: desde ? desde.toISOString() : undefined,
-      hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+      hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
       topN: 10,
     }).subscribe({
       next: (s) => {
@@ -328,15 +329,9 @@ export class HistorialPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
-    // Cuando el usuario clickea un header, p-table pasa sortField y sortOrder
-    // (1 = asc, -1 = desc). Si no clickea, viene el valor del [sortField] del
-    // template, así que el primer load también respeta el default.
-    if (typeof event.sortField === 'string' && event.sortField) {
-      this.sortField.set(event.sortField);
-    }
-    if (event.sortOrder === 1 || event.sortOrder === -1) {
-      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
-    }
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
     this.cargar(Math.floor(first / size), size);
   }
 
@@ -348,7 +343,7 @@ export class HistorialPage {
       .listarSesiones({
         q: this.busqueda(),
         desde: desde ? desde.toISOString() : undefined,
-        hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+        hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
         page,
         size,
         sortField: this.sortField(),
@@ -367,13 +362,6 @@ export class HistorialPage {
           toastError(this.toast, 'Historial', err, 'No se pudo cargar el historial');
         },
       });
-  }
-
-  /** Pasa el rango de fecha al final del día (23:59:59) para incluir todo el día. */
-  private endOfDay(d: Date): Date {
-    const end = new Date(d);
-    end.setHours(23, 59, 59, 999);
-    return end;
   }
 
   limpiarFiltros(): void {
@@ -571,14 +559,14 @@ export class HistorialPage {
   descargarPdfSesion(s: SesionListItem, event: Event): void {
     event.stopPropagation();
     if (!this.puedeDescargarPdf(s) || this.estaDescargandoPdf(s.id)) return;
-    this.marcarDescarga(s.id, true);
+    marcarEnSet(this.descargandoPdf, s.id, true);
     this.api.descargarPdfSesion(s.id).subscribe({
       next: (resp) => {
-        this.marcarDescarga(s.id, false);
+        marcarEnSet(this.descargandoPdf, s.id, false);
         dispararDescargaBlob(resp, `items-de-interes-sesion-${s.id}.pdf`);
       },
       error: (err) => {
-        this.marcarDescarga(s.id, false);
+        marcarEnSet(this.descargandoPdf, s.id, false);
         // 404 = "compró todo lo que vio" — caso esperado, no error técnico.
         // El body de error viene como Blob (responseType:'blob'), pero el
         // status alcanza para distinguirlo sin parsearlo.
@@ -594,12 +582,6 @@ export class HistorialPage {
         toastError(this.toast, 'PDF', err, 'No se pudo generar el PDF');
       },
     });
-  }
-
-  private marcarDescarga(id: number, on: boolean): void {
-    const next = new Set(this.descargandoPdf());
-    if (on) next.add(id); else next.delete(id);
-    this.descargandoPdf.set(next);
   }
 
   trackById = (_: number, it: SesionListItem) => it.id;
