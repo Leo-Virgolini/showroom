@@ -57,6 +57,8 @@
         [lazy]="true" (onLazyLoad)="onLazyLoad($event)"
         [loading]="cargando()"
         [paginator]="true"
+        [sortField]="sortField()"
+        [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
         [rows]="pageSize()" [totalRecords]="total()" [first]="first()"
         [rowsPerPageOptions]="[25, 50, 100]"
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
@@ -67,26 +69,28 @@
             <th style="width: 5rem" class="text-center">
               <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> #
             </th>
-            <th style="width: 10rem">
-              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha
+            <th style="width: 10rem" pSortableColumn="creadoAt">
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha <p-sortIcon field="creadoAt" />
             </th>
-            <th>
-              <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente
+            <th pSortableColumn="clienteNombre">
+              <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente <p-sortIcon field="clienteNombre" />
             </th>
-            <th>
-              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email
+            <th pSortableColumn="clienteEmail">
+              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email <p-sortIcon field="clienteEmail" />
             </th>
-            <th style="width: 10rem">
-              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono
+            <th style="width: 10rem" pSortableColumn="clienteTelefono">
+              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono <p-sortIcon field="clienteTelefono" />
             </th>
-            <th style="width: 9rem">
-              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
+            <th style="width: 9rem" pSortableColumn="rubro">
+              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro <p-sortIcon field="rubro" />
             </th>
-            <th style="width: 8rem">
-              <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Operador
+            <th style="width: 8rem" pSortableColumn="creadoPor">
+              <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Operador <p-sortIcon field="creadoPor" />
             </th>
-            <th class="text-right" style="width: 11rem">
-              <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Monto c/IVA
+            <!-- La columna muestra solo montoBaseConIva (monto principal); el
+                 sort server-side ordena por ese mismo campo. -->
+            <th class="text-right" style="width: 11rem" pSortableColumn="montoBaseConIva">
+              <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Monto c/IVA <p-sortIcon field="montoBaseConIva" />
             </th>
             <th style="width: 11rem"></th>
           </tr>

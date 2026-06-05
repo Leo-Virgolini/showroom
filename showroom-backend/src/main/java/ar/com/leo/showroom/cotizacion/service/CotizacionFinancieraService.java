@@ -175,13 +175,37 @@ public class CotizacionFinancieraService {
         repository.save(c);
     }
 
+    /**
+     * Whitelist de campos por los que se permite ordenar el listado de
+     * cotizaciones. Mapea el nombre que manda el frontend (id de columna del
+     * p-table) al atributo de la entity. Evita "SQL injection via sort field"
+     * al pasar el parámetro directo al ORDER BY. La columna "Operador" usa
+     * {@code creadoPor} en el DTO pero ordena por el campo directo
+     * {@code usuarioId} de la entity (agrupa por operador).
+     */
+    private static final Map<String, String> SORT_COTIZACIONES = Map.ofEntries(
+            Map.entry("id", "id"),
+            Map.entry("creadoAt", "creadoAt"),
+            Map.entry("clienteNombre", "clienteNombre"),
+            Map.entry("clienteEmail", "clienteEmail"),
+            Map.entry("clienteTelefono", "clienteTelefono"),
+            Map.entry("rubro", "rubro"),
+            Map.entry("creadoPor", "usuarioId"),
+            Map.entry("montoBaseConIva", "montoBaseConIva"));
+
     public CotizacionListPageDTO listar(Long id, String q, Instant desde, Instant hasta,
-                                        int page, int size) {
+                                        int page, int size, String sortField, String sortOrder) {
         String qNormalizada = (q == null || q.isBlank()) ? null : q.trim();
+        // Resolver el sort: si el campo no está en la whitelist o no se pidió,
+        // usar `creadoAt desc` (default histórico de la pantalla).
+        String campo = SORT_COTIZACIONES.getOrDefault(sortField, "creadoAt");
+        org.springframework.data.domain.Sort.Direction direccion =
+                "asc".equalsIgnoreCase(sortOrder)
+                        ? org.springframework.data.domain.Sort.Direction.ASC
+                        : org.springframework.data.domain.Sort.Direction.DESC;
         org.springframework.data.domain.PageRequest pr =
                 org.springframework.data.domain.PageRequest.of(page, size,
-                        org.springframework.data.domain.Sort.by(
-                                org.springframework.data.domain.Sort.Direction.DESC, "creadoAt"));
+                        org.springframework.data.domain.Sort.by(direccion, campo));
         org.springframework.data.domain.Page<CotizacionFinanciera> p =
                 repository.buscar(id, qNormalizada, desde, hasta, pr);
         java.util.Set<Long> usuarioIds = p.getContent().stream()

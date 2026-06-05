@@ -275,6 +275,9 @@ public class PresupuestoComercialService {
             "clienteEmail", "clienteEmail",
             "clienteTelefono", "clienteTelefono",
             "rubro", "rubro",
+            // La columna "Operador" usa `creadoPor` en el DTO; ordena por el
+            // campo directo `usuarioId` de la entity (agrupa por operador).
+            "creadoPor", "usuarioId",
             "totalSinIva", "subtotalSinIva",
             "descuentoGlobalPorcentaje", "descuentoGlobalPorcentaje");
 

@@ -230,6 +230,9 @@ public class SesionShowroomService {
     private static final java.util.Map<String, String> SORT_SESIONES = java.util.Map.of(
             "iniciadaAt", "iniciadaAt",
             "nombre", "nombre",
+            // La columna "Operador" usa `creadoPor` en el DTO; ordena por el
+            // campo directo `usuarioId` de la entity (agrupa por operador).
+            "creadoPor", "usuarioId",
             "pedidoId", "pedidoId");
 
     /** Listado paginado de sesiones (página /historial). Ordenado por inicio desc.
