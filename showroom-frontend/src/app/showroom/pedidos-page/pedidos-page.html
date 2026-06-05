@@ -266,18 +266,6 @@
                   pTooltip="Generar Excel pickit (programa externo)"
                   tooltipPosition="top"
                 />
-                <p-button
-                  icon="pi pi-file-pdf"
-                  severity="danger"
-                  [text]="true"
-                  [rounded]="true"
-                  size="small"
-                  [loading]="estaDescargandoPdf(p.id)"
-                  (onClick)="descargarPdf(p)"
-                  ariaLabel="Descargar PDF de productos vistos pero no comprados"
-                  pTooltip="Descargar PDF de productos vistos pero no comprados"
-                  tooltipPosition="top"
-                />
                 @if (p.email) {
                   <p-button
                     icon="pi pi-envelope"
