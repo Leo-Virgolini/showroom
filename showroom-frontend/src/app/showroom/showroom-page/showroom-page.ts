@@ -360,15 +360,12 @@ export class ShowroomPage implements AfterViewInit {
       .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
   }
 
-  /** Forma elegida por el operador en el selector del scan (sticky). Mientras
-   *  sea null, el precio mostrado usa la {@link formaDestacada} del rubro del
-   *  producto escaneado; al elegir una se mantiene entre productos. */
-  readonly formaScanSeleccionada = signal<FormaPago | null>(null);
-
-  /** Forma EFECTIVA del scan = la elegida por el operador, o la destacada del
-   *  perfil del producto escaneado si todavía no eligió ninguna. */
+  /** Forma EFECTIVA del scan = la forma de pago seleccionada (MISMO estado que
+   *  usa el carrito: el selector "Mostrar precio en" y el del carrito comparten
+   *  `formaPagoSeleccionada`), o la destacada del perfil del producto escaneado
+   *  si todavía no hay ninguna seleccionada. */
   readonly formaScanEfectiva = computed<FormaPago | null>(() => {
-    const elegida = this.formaScanSeleccionada();
+    const elegida = this.formaPagoSeleccionada();
     if (elegida) return elegida;
     return this.formaDestacada(this.rubroCotizaSinIva(this.ultimoScan()?.rubro));
   });
@@ -1252,6 +1249,7 @@ export class ShowroomPage implements AfterViewInit {
    *  operador sigue escaneando sin tener que clickear de nuevo. */
   seleccionarFormaPago(fp: FormaPago | null): void {
     this.formaPagoSeleccionada.set(fp);
+    this.publicarFormaEnVisor();
     this.focusInput();
   }
 
@@ -1259,7 +1257,7 @@ export class ShowroomPage implements AfterViewInit {
    *  refleja en el visor del cliente. Devuelve el foco al input para seguir
    *  escaneando. */
   onCambiarFormaScan(fp: FormaPago | null): void {
-    this.formaScanSeleccionada.set(fp);
+    this.formaPagoSeleccionada.set(fp);
     this.publicarFormaEnVisor();
     this.focusInput();
   }
