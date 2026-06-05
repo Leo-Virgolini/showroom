@@ -535,6 +535,36 @@ export class ShowroomPage implements AfterViewInit {
     () => this.subtotalPreDescuento() - this.descuentoMonto(),
   );
 
+  /** Subtotal del carrito a la FORMA DE PAGO elegida = suma de los subtotales de
+   *  cada fila (precio con la forma × cantidad). Lleva o no IVA por ítem según el
+   *  perfil de su rubro y la forma — coincide con lo que muestra cada línea. Sin
+   *  descuento. */
+  readonly subtotalCarrito = computed(() =>
+    this.carrito().reduce((acc, it) => acc + this.subtotal(it), 0),
+  );
+
+  /** Monto de descuento (en pesos) sobre el subtotal a la forma elegida —
+   *  descuento EFECTIVO por ítem aplicado al precio con la forma. */
+  readonly descuentoMontoForma = computed(() =>
+    this.carrito().reduce(
+      (acc, it) => acc + this.subtotal(it) * (this.descuentoParaItem(it) / 100),
+      0,
+    ),
+  );
+
+  /** % efectivo de descuento sobre el subtotal a la forma elegida. */
+  readonly descuentoEfectivoPctForma = computed(() => {
+    const sub = this.subtotalCarrito();
+    if (sub <= 0) return 0;
+    return (this.descuentoMontoForma() / sub) * 100;
+  });
+
+  /** Total a cobrar = subtotal a la forma − descuento. Es lo que paga el cliente
+   *  (Σ precio con la forma × (1−desc) por ítem); coincide con la suma de filas. */
+  readonly totalACobrar = computed(
+    () => this.subtotalCarrito() - this.descuentoMontoForma(),
+  );
+
   /** % de descuento EFECTIVO sobre el subtotal completo del carrito (mezcla de
    *  manuales por ítem y escala). Es lo que se muestra en el desglose del total
    *  — reemplaza al viejo {@link descuentoAplicado} (puro escala) en el display
