@@ -1,5 +1,7 @@
 package ar.com.leo.showroom.cotizacion.service;
 
+import ar.com.leo.showroom.common.pdf.KtPdfColores;
+import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
 import ar.com.leo.showroom.cotizacion.entity.CotizacionFinanciera;
@@ -36,7 +38,6 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -63,35 +64,22 @@ import java.util.Optional;
 @Component
 public class CotizacionFinancieraPdfGenerator {
 
-    private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
-    private static final Color KT_MARRON = new DeviceRgb(59, 30, 9);
+    // Colores compartidos idénticos viven en KtPdfColores; acá quedan como
+    // alias locales para no tocar el cuerpo del generador.
+    private static final Color KT_NARANJA = KtPdfColores.KT_NARANJA;
+    private static final Color KT_MARRON = KtPdfColores.KT_MARRON;
     private static final Color KT_VERDE = new DeviceRgb(126, 186, 0);
-    private static final Color GRIS_OSCURO = new DeviceRgb(45, 45, 45);
-    private static final Color GRIS_MEDIO = new DeviceRgb(110, 110, 110);
-    private static final Color GRIS_LINEA = new DeviceRgb(225, 225, 230);
+    private static final Color GRIS_OSCURO = KtPdfColores.GRIS_OSCURO;
+    private static final Color GRIS_MEDIO = KtPdfColores.GRIS_MEDIO;
+    private static final Color GRIS_LINEA = KtPdfColores.GRIS_LINEA;
 
     /** Mismos colores que las cards de formas de pago en el presupuesto —
-     *  sincronizado con .color-1..10 en el frontend. */
-    private static final Color[] BORDE_FORMA_PAGO = new Color[]{
-            new DeviceRgb(234, 179, 8),     // amarillo
-            new DeviceRgb(59, 130, 246),    // azul
-            new DeviceRgb(16, 185, 129),    // verde esmeralda
-            new DeviceRgb(249, 115, 22),    // naranja
-            new DeviceRgb(168, 85, 247),    // púrpura
-            new DeviceRgb(236, 72, 153),    // rosa
-            new DeviceRgb(6, 182, 212),     // cian
-            new DeviceRgb(132, 204, 22),    // lima
-            new DeviceRgb(99, 102, 241),    // índigo
-            new DeviceRgb(217, 119, 6),     // ámbar oscuro
-    };
+     *  sincronizado con .color-1..10 en el frontend. Centralizado en
+     *  KtPdfColores (idéntico al presupuesto comercial). */
+    private static final Color[] BORDE_FORMA_PAGO = KtPdfColores.BORDE_FORMA_PAGO;
 
     private static final ZoneId TZ_AR = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter FECHA_HORA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final NumberFormat PESO_FMT = NumberFormat.getCurrencyInstance(Locale.of("es", "AR"));
-    static {
-        PESO_FMT.setMaximumFractionDigits(0);
-        PESO_FMT.setMinimumFractionDigits(0);
-    }
 
     public byte[] generar(CotizacionFinanciera cotizacion, GenerarCotizacionRequestDTO datos) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -259,7 +247,7 @@ public class CotizacionFinancieraPdfGenerator {
         // Los montos vienen CON IVA. El neto se deriva: monto / (1 + IVA/100).
         BigDecimal monto1 = datos.montoBaseConIva() == null
                 ? BigDecimal.ZERO : datos.montoBaseConIva();
-        BigDecimal iva1 = datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva();
+        BigDecimal iva1 = datos.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : datos.porcIva();
         BigDecimal monto2 = datos.montoBaseConIva2() == null
                 ? BigDecimal.ZERO : datos.montoBaseConIva2();
         BigDecimal iva2 = datos.porcIva2() == null ? new BigDecimal("10.5") : datos.porcIva2();
@@ -301,13 +289,13 @@ public class CotizacionFinancieraPdfGenerator {
                     .add(PrecioPerfilCalculator.calcularSinIva(monto2, iva2));
             banner.add(new Paragraph()
                     .add(new com.itextpdf.layout.element.Text("Total sin IVA: ").simulateBold())
-                    .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalSinIva))
+                    .add(new com.itextpdf.layout.element.Text(PdfFormatoUtils.formatPesos(totalSinIva))
                             .simulateBold()
                             .setFontColor(KT_MARRON))
                     .add(new com.itextpdf.layout.element.Text("    ·    ")
                             .setFontColor(GRIS_MEDIO))
                     .add(new com.itextpdf.layout.element.Text("Total con IVA: ").simulateBold())
-                    .add(new com.itextpdf.layout.element.Text(PESO_FMT.format(totalConIva))
+                    .add(new com.itextpdf.layout.element.Text(PdfFormatoUtils.formatPesos(totalConIva))
                             .simulateBold()
                             .setFontColor(KT_NARANJA))
                     .setFontSize(11)
@@ -318,7 +306,7 @@ public class CotizacionFinancieraPdfGenerator {
         } else {
             BigDecimal monto = tiene1 ? monto1 : monto2;
             BigDecimal iva = tiene1 ? iva1 : iva2;
-            banner.add(new Paragraph(PESO_FMT.format(monto))
+            banner.add(new Paragraph(PdfFormatoUtils.formatPesos(monto))
                     .simulateBold()
                     .setFontSize(26)
                     .setFontColor(KT_NARANJA)
@@ -342,7 +330,7 @@ public class CotizacionFinancieraPdfGenerator {
                 .setBorder(Border.NO_BORDER)
                 .setPadding(4)
                 .setTextAlignment(TextAlignment.CENTER);
-        c.add(new Paragraph(PESO_FMT.format(monto))
+        c.add(new Paragraph(PdfFormatoUtils.formatPesos(monto))
                 .simulateBold()
                 .setFontSize(20)
                 .setFontColor(KT_NARANJA)
@@ -519,7 +507,7 @@ public class CotizacionFinancieraPdfGenerator {
                 ? f.monedaSimbolo() + " "
                 : "";
         BigDecimal precio = f.precioFinal() == null ? BigDecimal.ZERO : f.precioFinal();
-        card.add(new Paragraph(simboloMoneda + PESO_FMT.format(precio))
+        card.add(new Paragraph(simboloMoneda + PdfFormatoUtils.formatPesos(precio))
                 .simulateBold()
                 .setFontSize(18)
                 .setFontColor(esMejor ? KT_VERDE : KT_MARRON)
@@ -538,7 +526,7 @@ public class CotizacionFinancieraPdfGenerator {
         if (hayCuotas) {
             BigDecimal valorCuota = precio.divide(BigDecimal.valueOf(cuotas),
                     2, RoundingMode.HALF_UP);
-            detalleTexto = cuotas + " × " + PESO_FMT.format(valorCuota);
+            detalleTexto = cuotas + " × " + PdfFormatoUtils.formatPesos(valorCuota);
         } else {
             detalleTexto = "pago único";
         }
@@ -678,7 +666,7 @@ public class CotizacionFinancieraPdfGenerator {
     }
 
     private static String safe(String s, String fallback) {
-        return s == null || s.isBlank() ? fallback : s;
+        return PdfFormatoUtils.safe(s, fallback);
     }
 
     /** Sanitiza un string para usarlo como parte del filename. */

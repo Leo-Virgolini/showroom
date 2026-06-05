@@ -42,7 +42,11 @@ import {
   PresupuestoItem,
   ScanResult,
 } from '../models';
-import { precioPorForma } from '../precio-referencia.util';
+import {
+  calcularIndiceMejorPrecio,
+  precioPorForma,
+  redondearMoneda,
+} from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
@@ -56,12 +60,6 @@ import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 import { HasUnsavedChanges } from './unsaved-changes.guard';
-
-/** Redondeo HALF_UP a 2 decimales para que el preview en pantalla coincida
- *  con el `BigDecimal.setScale(2, HALF_UP)` que aplica el backend al generar
- *  el PDF. Evita discrepancias de centavos en formas de pago con muchos
- *  decimales (ej. 99.99 × 1.15 = 114.9885). */
-const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Pantalla para armar presupuestos comerciales: el operador escanea/busca
@@ -419,7 +417,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  final, ignorando las que están en moneda extranjera. -1 si no hay
    *  ganadora clara (lista vacía, una sola, o empate). El backend hace el
    *  mismo cálculo al generar el PDF para mantener consistencia. */
-  readonly indiceMejorPrecio = computed(() => this.calcularIndiceMejorPrecio(
+  readonly indiceMejorPrecio = computed(() => calcularIndiceMejorPrecio(
     this.formasPagoCalculadas()));
 
   /** Clase CSS completa de cada card de forma de pago en el panel expandido.
@@ -494,25 +492,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         item: it,
         total,
         formas,
-        indiceMejorPrecio: this.calcularIndiceMejorPrecio(formas),
+        indiceMejorPrecio: calcularIndiceMejorPrecio(formas),
       };
     });
   });
-
-  private calcularIndiceMejorPrecio(formas: PresupuestoFormaPagoSnapshot[]): number {
-    if (formas.length <= 1) return -1;
-    let idx = -1;
-    let min: number | null = null;
-    formas.forEach((f, i) => {
-      if (f.precioFinal == null || f.precioFinal <= 0) return;
-      if (f.monedaSimbolo) return;
-      if (min == null || f.precioFinal < min) { min = f.precioFinal; idx = i; }
-    });
-    if (idx === -1 || min == null) return -1;
-    const empates = formas.filter((f) =>
-      f.precioFinal === min && !f.monedaSimbolo).length;
-    return empates > 1 ? -1 : idx;
-  }
 
   ngAfterViewInit(): void {
     this.focusInput();

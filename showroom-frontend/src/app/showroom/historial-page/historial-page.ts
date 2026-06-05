@@ -38,7 +38,7 @@ import {
   SesionDetalle,
   SesionListItem,
 } from '../models';
-import { precioPorForma } from '../precio-referencia.util';
+import { precioPorForma, precioSinIva } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -371,12 +371,9 @@ export class HistorialPage {
     return { label: 'ABANDONADA', severity: 'secondary' };
   }
 
-  /** Saca el IVA del precio para mostrarlo s/IVA, igual que en el detalle de pedidos. */
-  precioSinIva(precioConIva: number | null, porcIva: number | null): number | null {
-    if (precioConIva == null) return null;
-    if (porcIva == null || porcIva === 0) return precioConIva;
-    return precioConIva / (1 + porcIva / 100);
-  }
+  /** Saca el IVA del precio para mostrarlo s/IVA, igual que en el detalle de
+   *  pedidos. Alias de la función pura compartida del util. */
+  protected readonly precioSinIva = precioSinIva;
 
   /** True si el rubro cotiza sin IVA (perfil maquinaria). */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {

@@ -27,6 +27,11 @@ public class PrecioPerfilCalculator {
 
     private static final BigDecimal CIEN = new BigDecimal("100");
 
+    /** IVA general de Argentina (21%). Fallback que se usa cuando un ítem no
+     *  trae {@code porcIva} cargado — fuente única para todos los generadores
+     *  de PDF y servicios del showroom. */
+    public static final BigDecimal IVA_DEFAULT = BigDecimal.valueOf(21);
+
     private final ConfiguracionService configuracionService;
 
     public PrecioPerfilCalculator(ConfiguracionService configuracionService) {

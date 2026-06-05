@@ -32,16 +32,17 @@ import {
   PresupuestoFormaPagoSnapshot,
 } from '../models';
 import { ShowroomService } from '../showroom.service';
-import { precioPorForma } from '../precio-referencia.util';
+import {
+  calcularIndiceMejorPrecio,
+  precioPorForma,
+  redondearMoneda,
+} from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
-
-/** Redondeo HALF_UP a 2 decimales — alinea preview con el backend (BigDecimal). */
-const redondearMoneda = (n: number): number => Math.round(n * 100) / 100;
 
 /**
  * Pantalla del cotizador de financiación: el operador ingresa un monto base
@@ -331,25 +332,9 @@ export class CotizadorPage {
     this.pagoParcialMonto.set(0);
   }
 
-  readonly indiceMejorPrecio = computed(() => {
-    const formas = this.formasPagoCalculadas();
-    if (formas.length <= 1) return -1;
-    let idx = -1;
-    let min: number | null = null;
-    formas.forEach((f, i) => {
-      if (f.precioFinal == null || f.precioFinal <= 0) return;
-      if (f.monedaSimbolo) return;
-      if (min == null || f.precioFinal < min) {
-        min = f.precioFinal;
-        idx = i;
-      }
-    });
-    if (idx === -1 || min == null) return -1;
-    const empates = formas.filter(
-      (f) => f.precioFinal === min && !f.monedaSimbolo,
-    ).length;
-    return empates > 1 ? -1 : idx;
-  });
+  readonly indiceMejorPrecio = computed(() =>
+    calcularIndiceMejorPrecio(this.formasPagoCalculadas()),
+  );
 
   constructor() {
     // Formas de pago activas (también carga rubros sin IVA — el cotizador no

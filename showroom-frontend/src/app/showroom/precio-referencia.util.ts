@@ -69,6 +69,80 @@ export function precioPorForma(
 }
 
 /**
+ * Redondeo a 2 decimales (HALF_UP-ish) para montos. Alinea el preview en
+ * pantalla con el `BigDecimal.setScale(2, HALF_UP)` que aplica el backend al
+ * generar PDFs, evitando discrepancias de centavos.
+ */
+export function redondearMoneda(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Quita el IVA de un precio con IVA. Si `precioConIva` es null → null; si
+ * `porcIva` es null o 0 → el precio tal cual; en otro caso
+ * `precioConIva / (1 + porcIva/100)`.
+ */
+export function precioSinIva(
+  precioConIva: number | null,
+  porcIva: number | null,
+): number | null {
+  if (precioConIva == null) return null;
+  if (porcIva == null || porcIva === 0) return precioConIva;
+  return precioConIva / (1 + porcIva / 100);
+}
+
+/**
+ * Índice de la forma de pago más barata de una lista, o -1 si no hay una
+ * ganadora clara. Ignora las formas en moneda extranjera (`monedaSimbolo`
+ * presente) y las que no tienen un `precioFinal` positivo. Devuelve -1 si la
+ * lista tiene 0/1 elementos, si no hay candidata válida, o si hay empate en el
+ * precio mínimo.
+ */
+export function calcularIndiceMejorPrecio(
+  formas: ReadonlyArray<{ precioFinal: number | null; monedaSimbolo?: string | null }>,
+): number {
+  if (formas.length <= 1) return -1;
+  let idx = -1;
+  let min: number | null = null;
+  formas.forEach((f, i) => {
+    if (f.precioFinal == null || f.precioFinal <= 0) return;
+    if (f.monedaSimbolo) return;
+    if (min == null || f.precioFinal < min) {
+      min = f.precioFinal;
+      idx = i;
+    }
+  });
+  if (idx === -1 || min == null) return -1;
+  const empates = formas.filter(
+    (f) => f.precioFinal === min && !f.monedaSimbolo,
+  ).length;
+  return empates > 1 ? -1 : idx;
+}
+
+/**
+ * Escalas de descuento ordenadas asc por `umbralMin` (copia — no muta el array
+ * recibido). Orden natural para mostrar "comprá más y ahorrás".
+ */
+export function ordenarEscalasPorUmbral<T extends { umbralMin: number }>(
+  escalas: readonly T[],
+): T[] {
+  return [...escalas].sort((a, b) => a.umbralMin - b.umbralMin);
+}
+
+/**
+ * True si existe un escalón con umbral mayor que `escala` que el `precio` ya
+ * alcanza (hay un descuento mejor disponible). Usado para atenuar tiles de
+ * escalones inferiores cuando otro mejor ya aplica.
+ */
+export function hayEscalonSuperior(
+  precio: number,
+  escala: { umbralMin: number },
+  escalas: ReadonlyArray<{ umbralMin: number }>,
+): boolean {
+  return escalas.some((e) => e.umbralMin > escala.umbralMin && precio >= e.umbralMin);
+}
+
+/**
  * Ícono PrimeNG sugerido para una forma de pago, inferido de su nombre.
  * Heurística simple para acompañar los precios de referencia en scan/visor.
  * Cae a `pi-tag` para nombres no reconocidos.

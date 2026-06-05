@@ -1,6 +1,8 @@
 package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.pdf.KtPdfColores;
+import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.service.EscalaDescuentoService;
@@ -52,14 +54,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.NumberFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -86,15 +86,17 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class PresupuestoComercialPdfGenerator {
 
-    // Tema KT (mismos colores que PresupuestoPdfGenerator de pedidos).
-    private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
-    private static final Color KT_MARRON = new DeviceRgb(59, 30, 9);
-    private static final Color KT_AZUL_CODIGO_TEXTO = new DeviceRgb(72, 65, 151);
-    private static final Color VERDE_PRECIO = new DeviceRgb(16, 122, 87);
-    private static final Color GRIS_OSCURO = new DeviceRgb(45, 45, 45);
-    private static final Color GRIS_MEDIO = new DeviceRgb(110, 110, 110);
+    // Tema KT (mismos colores que PresupuestoPdfGenerator de pedidos). Los
+    // colores compartidos idénticos viven en KtPdfColores; acá quedan como
+    // alias locales para no tocar el cuerpo del generador.
+    private static final Color KT_NARANJA = KtPdfColores.KT_NARANJA;
+    private static final Color KT_MARRON = KtPdfColores.KT_MARRON;
+    private static final Color KT_AZUL_CODIGO_TEXTO = KtPdfColores.KT_AZUL_CODIGO_TEXTO;
+    private static final Color VERDE_PRECIO = KtPdfColores.VERDE_PRECIO;
+    private static final Color GRIS_OSCURO = KtPdfColores.GRIS_OSCURO;
+    private static final Color GRIS_MEDIO = KtPdfColores.GRIS_MEDIO;
     private static final Color GRIS_CLARO = new DeviceRgb(243, 244, 246);
-    private static final Color GRIS_LINEA = new DeviceRgb(225, 225, 230);
+    private static final Color GRIS_LINEA = KtPdfColores.GRIS_LINEA;
     /** Fondo de las filas pares en la tabla de ítems de interés (zebra). Gris
      *  perceptible sobre el blanco; el pill del código (GRIS_CLARO, más claro)
      *  queda como un rectángulo apenas más claro y el texto azul se sigue
@@ -117,19 +119,9 @@ public class PresupuestoComercialPdfGenerator {
 
     /** Colores únicos para los borde-top de las cards de formas de pago.
      *  10 colores bien diferenciados — si hay más formas que esto, ciclan.
-     *  Sincronizado con .color-1..10 en presupuestos-page.scss. */
-    private static final Color[] BORDE_FORMA_PAGO = new Color[]{
-            new DeviceRgb(234, 179, 8),     // amarillo
-            new DeviceRgb(59, 130, 246),    // azul
-            new DeviceRgb(16, 185, 129),    // verde esmeralda
-            new DeviceRgb(249, 115, 22),    // naranja
-            new DeviceRgb(168, 85, 247),    // púrpura
-            new DeviceRgb(236, 72, 153),    // rosa
-            new DeviceRgb(6, 182, 212),     // cian
-            new DeviceRgb(132, 204, 22),    // lima
-            new DeviceRgb(99, 102, 241),    // índigo
-            new DeviceRgb(217, 119, 6),     // ámbar oscuro
-    };
+     *  Sincronizado con .color-1..10 en presupuestos-page.scss. Centralizado
+     *  en KtPdfColores (idéntico en cotización financiera). */
+    private static final Color[] BORDE_FORMA_PAGO = KtPdfColores.BORDE_FORMA_PAGO;
 
     /** Paleta para las columnas de descuento del PDF de ítems de interés: un
      *  par (texto fuerte, fondo suave) por escalón. El encabezado y la badge
@@ -155,11 +147,6 @@ public class PresupuestoComercialPdfGenerator {
 
     private static final ZoneId TZ_AR = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter FECHA_HORA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final NumberFormat PESO_FMT = NumberFormat.getCurrencyInstance(Locale.of("es", "AR"));
-    static {
-        PESO_FMT.setMaximumFractionDigits(0);
-        PESO_FMT.setMinimumFractionDigits(0);
-    }
 
     /** Split-characters que nunca permite cortar el texto: se aplica al pill del
      *  código para que un SKU largo no se parta en dos líneas dentro de la celda
@@ -782,7 +769,7 @@ public class PresupuestoComercialPdfGenerator {
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
             // Precio EFECTIVO (forma primaria), igual que la tabla de productos.
             // Fallback presupuestos viejos: precio de lista según rubro
@@ -1043,7 +1030,7 @@ public class PresupuestoComercialPdfGenerator {
             idx++;
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
             // Precio mostrado por línea SEGÚN EL RUBRO (misma lógica que el
             // showroom): maquinaria se cotiza SIN IVA; el resto (menaje) CON
@@ -1303,7 +1290,7 @@ public class PresupuestoComercialPdfGenerator {
             idx++;
 
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
             BigDecimal precioSinIva = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
             boolean sinPrecio = precioSinIva.signum() <= 0;
             /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
@@ -1903,7 +1890,7 @@ public class PresupuestoComercialPdfGenerator {
             return item.precioEfectivo().setScale(2, RoundingMode.HALF_UP);
         }
         BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
-        BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
+        BigDecimal porcIva = item.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : item.porcIva();
         return PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
     }
 
@@ -2041,7 +2028,7 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     private static String safe(String s, String fallback) {
-        return s == null || s.isBlank() ? fallback : s;
+        return PdfFormatoUtils.safe(s, fallback);
     }
 
     private static boolean esTextoValido(String s) {
@@ -2049,8 +2036,7 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     private static String formatPesos(BigDecimal v) {
-        if (v == null) return PESO_FMT.format(0);
-        return PESO_FMT.format(v.doubleValue());
+        return PdfFormatoUtils.formatPesos(v);
     }
 
     private static String formatNumero(BigDecimal v) {

@@ -35,6 +35,7 @@ import {
   PedidoListItem,
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
+import { precioSinIva as quitarIva } from '../precio-referencia.util';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -334,10 +335,8 @@ export class PedidosPage {
    *  ya tiene IVA y se divide; si {@code aplicaIva===false} el precio guardado
    *  ya es sin IVA (el cliente paga sin IVA y DUX absorbe). */
   precioSinIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
-    if (precioGuardado == null) return null;
     if (aplicaIva === false) return precioGuardado;
-    if (porcIva == null || porcIva === 0) return precioGuardado;
-    return precioGuardado / (1 + porcIva / 100);
+    return quitarIva(precioGuardado, porcIva);
   }
 
   /** Precio con IVA por unidad. Default: el {@code precioUnitario} ya tiene IVA.
