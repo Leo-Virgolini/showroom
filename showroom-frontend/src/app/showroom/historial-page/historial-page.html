@@ -432,7 +432,7 @@
                     </td>
                     }
                     <td class="text-right tabular-nums">
-                      {{ it.precioConIva ? (precioEfectivo(it) | currency:'ARS':'symbol':'1.0-0') : '—' }}
+                      {{ it.precioConIva ? (precioReferencia(it) | currency:'ARS':'symbol':'1.0-0') : '—' }}
                     </td>
                     <td class="text-xs tabular-nums text-muted-color">
                       {{ it.escaneadoAt | date: 'dd/MM/yy HH:mm' }}

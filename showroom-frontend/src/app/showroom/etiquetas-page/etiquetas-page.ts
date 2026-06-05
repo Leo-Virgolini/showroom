@@ -342,10 +342,10 @@ export class EtiquetasPage {
     return Math.ceil(total / porHoja);
   });
 
-  /** Precio efectivo (forma destacada por rubro) que se imprime en la etiqueta —
-   *  mismo criterio que el scan/visor/presupuestador. */
-  precioEfectivo(it: CatalogoItem): number {
-    return this.precioPerfil.precioEfectivo(it);
+  /** Precio de referencia (forma destacada por rubro) que se imprime en la
+   *  etiqueta — mismo criterio que el scan/visor/presupuestador. */
+  precioReferencia(it: CatalogoItem): number {
+    return this.precioPerfil.precioReferencia(it);
   }
 
   constructor() {
@@ -1001,7 +1001,7 @@ export class EtiquetasPage {
           expandidas.push({
             sku: it.sku,
             descripcion: it.descripcion,
-            precio: this.precioPerfil.precioEfectivo(it),
+            precio: this.precioPerfil.precioReferencia(it),
             numeroOrden: it.numeroOrden,
             qrDataUrl: dataUrls[idx],
           });
@@ -1052,7 +1052,7 @@ export class EtiquetasPage {
         Array.from({ length: it.copias }, () => ({
           sku: it.sku,
           descripcion: it.descripcion,
-          precio: this.precioPerfil.precioEfectivo(it),
+          precio: this.precioPerfil.precioReferencia(it),
           numeroOrden: it.numeroOrden,
         })),
       );
@@ -1282,7 +1282,7 @@ export class EtiquetasPage {
           expandidas.push({
             sku: it.sku,
             descripcion: it.descripcion,
-            precio: this.precioPerfil.precioEfectivo(it),
+            precio: this.precioPerfil.precioReferencia(it),
             numeroOrden: it.numeroOrden,
             qrDataUrl: dataUrls[idx],
           });
