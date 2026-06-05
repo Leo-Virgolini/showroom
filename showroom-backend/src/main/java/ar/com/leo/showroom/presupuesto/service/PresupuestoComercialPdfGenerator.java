@@ -356,7 +356,7 @@ public class PresupuestoComercialPdfGenerator {
         // Precio "predefinido" por ítem: el de la forma de pago destacada del
         // perfil del rubro (menaje al precio efectivo c/IVA, maquinaria s/IVA) —
         // mismo criterio que el scan/visor/presupuestador. Se calcula acá y viaja
-        // como precioEfectivo para que la tabla lo muestre sin recalcular. Sin
+        // como precioReferencia para que la tabla lo muestre sin recalcular. Sin
         // forma destacada, cae al precio de lista por rubro.
         FormaPago destacadaMenaje = formaPagoService.formaDestacada(false);
         FormaPago destacadaMaquinaria = formaPagoService.formaDestacada(true);
@@ -365,7 +365,7 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal conIva = s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva();
             boolean esMaq = precioPerfilCalculator.esMaquinaria(s.getRubro());
             FormaPago forma = esMaq ? destacadaMaquinaria : destacadaMenaje;
-            BigDecimal precioEfectivo = forma != null
+            BigDecimal precioReferencia = forma != null
                     ? PrecioPerfilCalculator.calcularPrecioFinal(conIva, s.getPorcIva(),
                             PrecioPerfilCalculator.recargoPerfil(forma, esMaq),
                             PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaq))
@@ -379,7 +379,7 @@ public class PresupuestoComercialPdfGenerator {
                     s.getPorcIva(),
                     BigDecimal.ZERO,
                     null,
-                    precioEfectivo));
+                    precioReferencia));
         }
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(
@@ -791,8 +791,8 @@ public class PresupuestoComercialPdfGenerator {
             // Fallback presupuestos viejos: precio de lista según rubro
             // (maquinaria sin IVA, resto con IVA).
             boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
-            BigDecimal precioMostrado = it.precioEfectivo() != null
-                    ? it.precioEfectivo()
+            BigDecimal precioMostrado = it.precioReferencia() != null
+                    ? it.precioReferencia()
                     : (esMaq
                         ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
                         : precioConIva);
@@ -1055,11 +1055,11 @@ public class PresupuestoComercialPdfGenerator {
             // fila puede llevar régimen distinto.
             boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
             // Precio mostrado = PRECIO EFECTIVO (forma primaria), ya según rubro.
-            // Si el presupuesto es viejo y no trae `precioEfectivo`, caemos al
+            // Si el presupuesto es viejo y no trae `precioReferencia`, caemos al
             // precio de lista por rubro (maquinaria s/IVA, resto c/IVA).
             BigDecimal precio;
-            if (it.precioEfectivo() != null) {
-                precio = it.precioEfectivo();
+            if (it.precioReferencia() != null) {
+                precio = it.precioReferencia();
             } else if (esMaquinaria) {
                 precio = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
             } else {
@@ -1306,9 +1306,9 @@ public class PresupuestoComercialPdfGenerator {
             idx++;
 
             // Precio efectivo de contado (forma destacada, según rubro): viene ya
-            // calculado en el item (precioEfectivo); fallback al precio de lista.
-            BigDecimal precioEfectivo = precioListaEfectivo(it);
-            boolean sinPrecio = precioEfectivo.signum() <= 0;
+            // calculado en el item (precioReferencia); fallback al precio de lista.
+            BigDecimal precioReferencia = precioListaEfectivo(it);
+            boolean sinPrecio = precioReferencia.signum() <= 0;
             /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
              *  fila muestra el precio efectivo de contado pero las columnas
              *  de descuento por escala van en "—" para que no sugieran un
@@ -1373,7 +1373,7 @@ public class PresupuestoComercialPdfGenerator {
                         .setFontColor(KT_NARANJA)
                         .setMargin(0));
             } else {
-                celdaPrecio.add(new Paragraph(formatPesos(precioEfectivo))
+                celdaPrecio.add(new Paragraph(formatPesos(precioReferencia))
                         .simulateBold()
                         .setFontSize(11)
                         .setFontColor(VERDE_PRECIO)
@@ -1399,7 +1399,7 @@ public class PresupuestoComercialPdfGenerator {
                             .setMargin(0));
                 } else {
                     BigDecimal factor = BigDecimal.ONE.subtract(e.getPorcentaje().movePointLeft(2));
-                    BigDecimal precioRebajado = precioEfectivo.multiply(factor)
+                    BigDecimal precioRebajado = precioReferencia.multiply(factor)
                             .setScale(2, RoundingMode.HALF_UP);
                     // Texto plano en el color del escalón — mismo color que la
                     // badge de su encabezado, para vincularlos visualmente.
@@ -1897,13 +1897,13 @@ public class PresupuestoComercialPdfGenerator {
     // Helpers
     // =====================================================
 
-    /** Precio EFECTIVO unitario (precio con la forma Efectivo, ya según rubro:
-     *  c/IVA menaje, s/IVA maquinaria), SIN descuento individual. Es el precio
-     *  de lista que se muestra tachado cuando hay descuento. Fallback para
-     *  presupuestos viejos sin `precioEfectivo`: precio de lista sin IVA. */
+    /** Precio de REFERENCIA unitario (precio con la forma destacada, ya según
+     *  rubro: c/IVA menaje, s/IVA maquinaria), SIN descuento individual. Es el
+     *  precio de lista que se muestra tachado cuando hay descuento. Fallback para
+     *  presupuestos viejos sin `precioReferencia`: precio de lista sin IVA. */
     private static BigDecimal precioListaEfectivo(GenerarPresupuestoRequestDTO.Item item) {
-        if (item.precioEfectivo() != null) {
-            return item.precioEfectivo().setScale(2, RoundingMode.HALF_UP);
+        if (item.precioReferencia() != null) {
+            return item.precioReferencia().setScale(2, RoundingMode.HALF_UP);
         }
         BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
         BigDecimal porcIva = item.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : item.porcIva();

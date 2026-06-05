@@ -1197,9 +1197,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       precioConIva: it.pvpKtGastroConIva ?? 0,
       porcIva: it.porcIva ?? 21,
       descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
-      // Precio unitario con la forma Efectivo (forma primaria), ya según rubro
+      // Precio unitario con la forma de pago de referencia, ya según rubro
       // (c/IVA menaje, s/IVA maquinaria). Redondeado para coincidir con el PDF.
-      precioEfectivo: redondearMoneda(this.precioMostrado(it)),
+      precioReferencia: redondearMoneda(this.precioMostrado(it)),
       // Solo viaja para items genéricos — DUX lo pone como `comentarios` de
       // la línea al transformar el presupuesto en pedido.
       comentarios: it.comentarios ?? null,

@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.presupuesto.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -77,13 +78,16 @@ public record GenerarPresupuestoRequestDTO(
              *  línea va a DUX con el SKU genérico y los comentarios describen
              *  el producto real. Null/blank cuando no aplica. */
             String comentarios,
-            /** Precio unitario con la forma de pago Efectivo (la forma primaria
-             *  de referencia), ya resuelto según el rubro del ítem (c/IVA para
-             *  menaje, s/IVA para maquinaria). Es lo que se muestra como
-             *  "precio del producto" en el PDF/historial y la base de los
-             *  totales efectivos. Null en presupuestos viejos generados antes
-             *  de este campo → el backend cae al precio de lista según rubro. */
-            BigDecimal precioEfectivo
+            /** Precio unitario con la forma de pago de REFERENCIA (la marcada
+             *  "Precio ref.", por defecto Efectivo), ya resuelto según el rubro
+             *  del ítem (c/IVA para menaje, s/IVA para maquinaria). Es lo que se
+             *  muestra como "precio del producto" en el PDF/historial y la base
+             *  de los totales. Null en presupuestos viejos → el backend cae al
+             *  precio de lista según rubro. {@code @JsonAlias} mantiene la
+             *  lectura de los JSON persistidos con el nombre viejo
+             *  ({@code precioEfectivo}). */
+            @JsonAlias("precioEfectivo")
+            BigDecimal precioReferencia
     ) {}
 
     public record FormaPagoSnapshot(
