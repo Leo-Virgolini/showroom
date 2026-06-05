@@ -80,6 +80,9 @@ export class PresupuestosHistorialPage {
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
   readonly hasta = signal<Date | null>(null);
+  /** Cuando la ruta trae {@code ?id=X} (deep-link desde /pedidos → columna
+   *  "Origen"), filtramos la lista a ese presupuesto. Null = listado normal. */
+  readonly idFiltro = signal<number | null>(null);
 
   readonly cargando = signal(false);
   readonly presupuestos = signal<PresupuestoListItem[]>([]);
@@ -100,6 +103,7 @@ export class PresupuestosHistorialPage {
 
   readonly hayFiltros = computed(
     () =>
+      this.idFiltro() !== null ||
       this.busqueda().trim().length > 0 ||
       this.desde() !== null ||
       this.hasta() !== null,
@@ -122,6 +126,16 @@ export class PresupuestosHistorialPage {
       this.busqueda.set(qParam);
     }
 
+    // Deep-link desde /pedidos (columna "Origen"): ?id=123 → filtrar la lista
+    // a ese presupuesto. queryParamMap se evalúa una sola vez al montar.
+    const idParam = this.route.snapshot.queryParamMap.get('id');
+    if (idParam) {
+      const n = Number(idParam);
+      if (Number.isFinite(n) && n > 0) {
+        this.idFiltro.set(n);
+      }
+    }
+
     this.filtroTrigger$
       .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -130,6 +144,7 @@ export class PresupuestosHistorialPage {
       });
 
     effect(() => {
+      this.idFiltro();
       this.busqueda();
       this.desde();
       this.hasta();
@@ -164,6 +179,7 @@ export class PresupuestosHistorialPage {
     const hasta = this.hasta();
     this.api
       .listarPresupuestosComerciales({
+        id: this.idFiltro() ?? undefined,
         q: this.busqueda(),
         desde: desde ? desde.toISOString() : undefined,
         hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
@@ -325,9 +341,24 @@ export class PresupuestosHistorialPage {
   }
 
   limpiarFiltros(): void {
+    this.limpiarIdFiltro();
     this.busqueda.set('');
     this.desde.set(null);
     this.hasta.set(null);
+  }
+
+  /** Limpia solo el filtro por id del deep-link (pill "Mostrando presupuesto
+   *  #N · Ver todos") y saca el {@code ?id=} de la URL para que un refresh no
+   *  vuelva a aplicarlo. La recarga la dispara el effect de filtros. */
+  limpiarIdFiltro(): void {
+    if (this.idFiltro() === null) return;
+    this.idFiltro.set(null);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { id: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   // ============================================================
