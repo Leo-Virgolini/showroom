@@ -98,10 +98,6 @@ export class VisorPage {
    *  público. La forma destacada por perfil se resuelve con {@link formaDestacada}. */
   readonly formasActivas = this.precioPerfil.formasPago;
 
-  /** Primera forma de referencia (destacada del perfil menaje), o null. Fallback
-   *  para el precio de lista cuando no hay forma efectiva. */
-  readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
-
   /** Id de la forma elegida por el operador en el scan, recibido vía SSE
    *  `visor-forma`. Sticky: se mantiene hasta que llegue otro. Null = todavía
    *  no recibió ninguna → se usa la forma destacada del rubro. */
@@ -462,16 +458,13 @@ export class VisorPage {
       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
   }
 
-  /** Precio de la forma primaria; sin formas marcadas cae al precio base según
-   *  el rubro (PVP sin IVA para rubros sin IVA, con IVA el resto). */
+  /** Precio de REFERENCIA del producto según el rubro (forma destacada de su
+   *  perfil; sin forma marcada, precio de lista por rubro). Delega en el servicio
+   *  compartido — base de los escalones cuando no hay forma elegida. */
   precioReferenciaPrimario(
     r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
   ): number {
-    const f = this.formaReferenciaPrimaria();
-    if (f) return this.precioReferenciaPorForma(r, f);
-    return this.rubroCotizaSinIva(r.rubro)
-      ? (r.pvpKtGastroSinIva ?? 0)
-      : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
+    return this.precioPerfil.precioReferencia(r);
   }
 
 
