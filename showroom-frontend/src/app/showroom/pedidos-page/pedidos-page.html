@@ -516,21 +516,21 @@
                           <td>{{ it.descripcion ?? '—' }}</td>
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
                           <td class="text-right tabular-nums text-muted-color">
-                            @if (precioSinIva(it.precioUnitario, it.porcIva, det.formaPagoAplicaIva); as p) {
+                            @if (precioSinIva(it.precioUnitario, it.porcIva, (it.aplicaIva ?? det.formaPagoAplicaIva)); as p) {
                               {{ p | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —
                             }
                           </td>
                           <td class="text-right tabular-nums">
-                            @if (precioConIva(it.precioUnitario, it.porcIva, det.formaPagoAplicaIva); as p) {
+                            @if (precioConIva(it.precioUnitario, it.porcIva, (it.aplicaIva ?? det.formaPagoAplicaIva)); as p) {
                               {{ p | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —
                             }
                           </td>
                           <td class="text-right tabular-nums font-semibold">
-                            @if (subtotalSinIva(it, det.formaPagoAplicaIva); as s) {
+                            @if (subtotalSinIva(it, (it.aplicaIva ?? det.formaPagoAplicaIva)); as s) {
                               {{ s | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —
