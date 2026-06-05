@@ -91,18 +91,17 @@ export class HistorialPage {
   readonly pageSize = signal(50);
   readonly first = signal(0);
 
-  /** Detalle de sesión mostrado en el diálogo de deep-link
-   *  (`/historial?sesion=N`). null = cerrado. Independiente de la tabla: la
-   *  sesión puede no estar en la página actual, por eso se carga por id. */
-  readonly sesionDialogo = signal<SesionDetalle | null>(null);
-  /** True mientras se carga la sesión del deep-link (spinner del diálogo). */
-  readonly cargandoSesionDialogo = signal(false);
-
   /** Cache de detalles ya obtenidos: id → SesionDetalle. */
   readonly detalles = signal<Record<number, SesionDetalle>>({});
   readonly cargandoDetalle = signal<Set<number>>(new Set());
   /** Filas expandidas. */
   readonly expanded = signal<Record<number, boolean>>({});
+
+  /** Id de la sesión a destacar/resaltar en la tabla por deep-link
+   *  (`/historial?sesion=N`). null = ninguna destacada. La fila se antepone a
+   *  la lista visible si no está en la página actual, se expande y se le hace
+   *  scroll. */
+  readonly sesionDestacadaId = signal<number | null>(null);
 
   /** Formas de pago activas — para calcular el "precio efectivo" (forma
    *  destacada) de cada ítem del detalle, igual que en el scan/visor. */
@@ -239,41 +238,65 @@ export class HistorialPage {
     // (precio de la forma destacada por perfil) en el detalle de cada sesión.
     this.precioPerfil.cargar();
 
-    // Deep-link: /historial?sesion=N abre el detalle de esa sesión en un
-    // diálogo. Nos suscribimos a queryParams (no solo snapshot) para que el
-    // diálogo se reabra/actualice si se navega entre distintos ids sin recargar.
+    // Deep-link: /historial?sesion=N muestra esa sesión en la propia tabla,
+    // expandida y destacada (no en un modal). Nos suscribimos a queryParams (no
+    // solo snapshot) para que reaccione si se navega entre distintos ids sin
+    // recargar.
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((params) => {
         const raw = params.get('sesion');
         const id = raw != null ? Number(raw) : NaN;
         if (Number.isInteger(id) && id > 0) {
-          this.abrirSesionDialogo(id);
+          this.destacarSesion(id);
         } else {
-          this.sesionDialogo.set(null);
+          this.sesionDestacadaId.set(null);
         }
       });
   }
 
-  /** Carga una sesión por id y la muestra en el diálogo de deep-link. */
-  private abrirSesionDialogo(id: number): void {
-    this.cargandoSesionDialogo.set(true);
+  /** Carga la sesión por id, la asegura visible en la tabla (anteponiéndola si
+   *  no está en la página actual), la expande y la resalta + scrollea. La
+   *  sesión puede no estar en la página lazy actual, por eso se carga por id. */
+  private destacarSesion(id: number): void {
     this.api.obtenerSesion(id).subscribe({
       next: (det) => {
-        this.cargandoSesionDialogo.set(false);
-        this.sesionDialogo.set(det);
+        // Cachear el detalle igual que cargarDetalle, para el row-expansion.
+        this.detalles.set({ ...this.detalles(), [id]: det });
+
+        // Asegurar que la sesión esté en la lista visible. Si no, anteponer un
+        // item de listado construido desde el detalle. estadoPedido y creadoPor
+        // no vienen en el detalle → defaults; cantidadEscaneados = #items.
+        if (!this.sesiones().some((s) => s.id === id)) {
+          const item: SesionListItem = {
+            id: det.id,
+            nombre: det.nombre,
+            iniciadaAt: det.iniciadaAt,
+            finalizadaAt: det.finalizadaAt,
+            pedidoId: det.pedidoId,
+            estadoPedido: null,
+            cantidadEscaneados: det.items.length,
+            creadoPor: null,
+          };
+          this.sesiones.set([item, ...this.sesiones()]);
+        }
+
+        // Expandir la fila (mismo mecanismo que toggleRow / estaExpandido).
+        this.expanded.set({ ...this.expanded(), [id]: true });
+
+        // Resaltar + scrollear una vez que el DOM esté pintado.
+        this.sesionDestacadaId.set(id);
+        setTimeout(() => {
+          document
+            .getElementById(`sesion-row-${id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
       },
       error: (err) => {
-        this.cargandoSesionDialogo.set(false);
-        this.sesionDialogo.set(null);
+        this.sesionDestacadaId.set(null);
         toastError(this.toast, 'Sesión', err, 'No se pudo cargar la sesión');
       },
     });
-  }
-
-  /** Cierra el diálogo de deep-link. Limpia el signal. */
-  cerrarSesionDialogo(): void {
-    this.sesionDialogo.set(null);
   }
 
   private cargarStats(): void {
