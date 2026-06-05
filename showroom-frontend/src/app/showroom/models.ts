@@ -571,6 +571,12 @@ export interface PedidoListItem {
   /** Nombre o username del operador que creó el pedido. Null para pedidos
    *  legacy anteriores al multi-usuario. */
   creadoPor: string | null;
+  /** Id del presupuesto que originó este pedido (presupuesto convertido).
+   *  Null si el pedido nació en el showroom. */
+  presupuestoId?: number | null;
+  /** Id de la sesión de showroom que originó este pedido. Null si el pedido
+   *  vino de un presupuesto. */
+  sesionId?: number | null;
 }
 
 export interface PedidoListPage {

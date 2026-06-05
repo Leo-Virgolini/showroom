@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
@@ -79,6 +79,7 @@ export class HistorialPage {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly precioPerfil = inject(PrecioPerfilService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
@@ -89,6 +90,13 @@ export class HistorialPage {
   readonly total = signal(0);
   readonly pageSize = signal(50);
   readonly first = signal(0);
+
+  /** Detalle de sesión mostrado en el diálogo de deep-link
+   *  (`/historial?sesion=N`). null = cerrado. Independiente de la tabla: la
+   *  sesión puede no estar en la página actual, por eso se carga por id. */
+  readonly sesionDialogo = signal<SesionDetalle | null>(null);
+  /** True mientras se carga la sesión del deep-link (spinner del diálogo). */
+  readonly cargandoSesionDialogo = signal(false);
 
   /** Cache de detalles ya obtenidos: id → SesionDetalle. */
   readonly detalles = signal<Record<number, SesionDetalle>>({});
@@ -230,6 +238,42 @@ export class HistorialPage {
     // Formas de pago y rubros sin IVA — necesarios para el "precio efectivo"
     // (precio de la forma destacada por perfil) en el detalle de cada sesión.
     this.precioPerfil.cargar();
+
+    // Deep-link: /historial?sesion=N abre el detalle de esa sesión en un
+    // diálogo. Nos suscribimos a queryParams (no solo snapshot) para que el
+    // diálogo se reabra/actualice si se navega entre distintos ids sin recargar.
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((params) => {
+        const raw = params.get('sesion');
+        const id = raw != null ? Number(raw) : NaN;
+        if (Number.isInteger(id) && id > 0) {
+          this.abrirSesionDialogo(id);
+        } else {
+          this.sesionDialogo.set(null);
+        }
+      });
+  }
+
+  /** Carga una sesión por id y la muestra en el diálogo de deep-link. */
+  private abrirSesionDialogo(id: number): void {
+    this.cargandoSesionDialogo.set(true);
+    this.api.obtenerSesion(id).subscribe({
+      next: (det) => {
+        this.cargandoSesionDialogo.set(false);
+        this.sesionDialogo.set(det);
+      },
+      error: (err) => {
+        this.cargandoSesionDialogo.set(false);
+        this.sesionDialogo.set(null);
+        toastError(this.toast, 'Sesión', err, 'No se pudo cargar la sesión');
+      },
+    });
+  }
+
+  /** Cierra el diálogo de deep-link. Limpia el signal. */
+  cerrarSesionDialogo(): void {
+    this.sesionDialogo.set(null);
   }
 
   private cargarStats(): void {

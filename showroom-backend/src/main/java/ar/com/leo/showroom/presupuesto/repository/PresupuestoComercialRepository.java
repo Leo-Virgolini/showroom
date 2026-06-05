@@ -8,9 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 public interface PresupuestoComercialRepository extends JpaRepository<PresupuestoComercial, Long> {
+
+    /** Bulk lookup {@code convertidoEnPedidoId → presupuestoId} para la columna
+     *  "Origen" del listado de pedidos. Devuelve [pedidoId, presupuestoId] por
+     *  fila; se arma el mapa en memoria en el caller. */
+    @Query("SELECT p.convertidoEnPedidoId, p.id FROM PresupuestoComercial p WHERE p.convertidoEnPedidoId IN :pedidoIds")
+    List<Object[]> findPresupuestoIdsByPedidoIds(@Param("pedidoIds") Collection<Long> pedidoIds);
 
     /** Todos los presupuestos activos ordenados por fecha descendente — usado
      *  para construir la vista agrupada por cliente en /clientes (junto con

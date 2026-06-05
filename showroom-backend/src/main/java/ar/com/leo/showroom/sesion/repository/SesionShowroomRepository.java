@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -146,4 +147,10 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
     long contarConPedido(
             @Param("desde") Instant desde,
             @Param("hasta") Instant hasta);
+
+    /** Bulk lookup {@code pedidoId → sesionId} para la columna "Origen" del
+     *  listado de pedidos. Devuelve [pedidoId, sesionId] por fila; se arma el
+     *  mapa en memoria en el caller. */
+    @Query("SELECT s.pedidoId, s.id FROM SesionShowroom s WHERE s.pedidoId IN :pedidoIds")
+    List<Object[]> findSesionIdsByPedidoIds(@Param("pedidoIds") Collection<Long> pedidoIds);
 }

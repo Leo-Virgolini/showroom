@@ -144,6 +144,7 @@
               CUIT <p-sortIcon field="nroDoc" />
             </th>
             <th style="width: 8rem">Operador</th>
+            <th style="width: 9rem">Origen</th>
             <th class="text-center" style="width: 6rem">Items</th>
             <th class="text-center" style="width: 6rem" pSortableColumn="descuentoPorcentaje">
               Desc <p-sortIcon field="descuentoPorcentaje" />
@@ -192,6 +193,23 @@
                 </span>
               } @else {
                 <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-sm">
+              @if (p.presupuestoId) {
+                <a [routerLink]="['/presupuestos/editar', p.presupuestoId]"
+                   class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                   pTooltip="Ver presupuesto de origen" tooltipPosition="top">
+                  <i class="pi pi-file-edit text-[0.7rem]"></i> Presupuesto #{{ p.presupuestoId }}
+                </a>
+              } @else if (p.sesionId) {
+                <a [routerLink]="['/historial']" [queryParams]="{ sesion: p.sesionId }"
+                   class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:underline"
+                   pTooltip="Ver la atención en el historial" tooltipPosition="top">
+                  <i class="pi pi-desktop text-[0.7rem]"></i> Showroom
+                </a>
+              } @else {
+                <span class="text-xs text-muted-color">—</span>
               }
             </td>
             <td class="text-center tabular-nums">{{ p.cantidadItems }}</td>
@@ -317,7 +335,7 @@
 
           @if (estaExpandido(p.id)) {
             <tr class="bg-surface-50 dark:bg-surface-900">
-              <td colspan="11" class="p-4">
+              <td colspan="12" class="p-4">
                 @if (estaCargandoDetalle(p.id)) {
                   <!-- Skeleton placeholder con el shape aproximado del detalle
                        (dos columnas Cliente/Pedido + lista de items). Mejor
@@ -557,7 +575,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="11" class="text-center py-12 text-muted-color">
+            <td colspan="12" class="text-center py-12 text-muted-color">
               <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
                 Ningún pedido coincide con los filtros.

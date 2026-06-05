@@ -533,3 +533,80 @@
       [disabled]="!destinatarioInput().trim()" />
   </ng-template>
 </p-dialog>
+
+<!-- Dialog de deep-link: /historial?sesion=N abre el detalle de esa sesión.
+     La sesión se carga por id (puede no estar en la página actual de la tabla).
+     sesionDialogo() = null cierra el diálogo. -->
+<p-dialog
+  [visible]="sesionDialogo() != null || cargandoSesionDialogo()"
+  (visibleChange)="!$event && cerrarSesionDialogo()"
+  [modal]="true"
+  [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '46rem' }"
+  [breakpoints]="{ '640px': '95vw' }"
+  header="Atención del showroom">
+  @if (cargandoSesionDialogo()) {
+    <div class="flex flex-col gap-2">
+      <p-skeleton width="50%" height="1rem" />
+      <p-skeleton width="100%" height="2.5rem" class="!mt-2" />
+      <p-skeleton width="100%" height="2.5rem" />
+      <p-skeleton width="100%" height="2.5rem" />
+    </div>
+  } @else if (sesionDialogo(); as det) {
+    <div class="flex flex-col gap-3">
+      <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt class="text-muted-color">Cliente</dt>
+        <dd class="font-medium">{{ det.nombre }}</dd>
+        <dt class="text-muted-color">Inicio</dt>
+        <dd class="tabular-nums">{{ det.iniciadaAt | date: 'dd/MM/yy HH:mm' }}</dd>
+        @if (det.finalizadaAt) {
+          <dt class="text-muted-color">Finalizada</dt>
+          <dd class="tabular-nums">{{ det.finalizadaAt | date: 'dd/MM/yy HH:mm' }}</dd>
+        }
+      </dl>
+
+      <div>
+        <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">
+          Productos escaneados ({{ det.items.length }})
+        </h4>
+        @if (det.items.length === 0) {
+          <div class="text-center py-6 text-muted-color">
+            <i class="pi pi-search text-2xl opacity-50 block mb-1"></i>
+            No se escaneó ningún producto en esta sesión.
+          </div>
+        } @else {
+          <p-table [value]="det.items" class="p-datatable-sm">
+            <ng-template #header>
+              <tr>
+                <th style="width: 4rem"></th>
+                <th>Descripción</th>
+                <th class="text-right" style="width: 9rem">Precio</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-it>
+              <tr [class.opacity-60]="det.pedidoId != null && !it.compradoEnPedido">
+                <td>
+                  @if (it.imagenUrl) {
+                    <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="true"
+                      imageClass="w-10 h-10 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in" />
+                  } @else {
+                    <div class="w-10 h-10 rounded border border-dashed border-surface-300 dark:border-surface-700 bg-surface-100 dark:bg-surface-900 flex items-center justify-center">
+                      <i class="pi pi-image text-sm text-muted-color opacity-50"></i>
+                    </div>
+                  }
+                </td>
+                <td>
+                  <div class="font-mono text-xs text-muted-color">{{ it.sku }}</div>
+                  <div>{{ it.descripcion ?? '—' }}</div>
+                </td>
+                <td class="text-right tabular-nums">
+                  {{ it.precioConIva ? (precioReferencia(it) | currency:'ARS':'symbol':'1.0-0') : '—' }}
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        }
+      </div>
+    </div>
+  }
+</p-dialog>
