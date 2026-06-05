@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -44,9 +45,10 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom, normalizarRubro } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
+import { iconoFormaReferencia } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { toastError } from '../toast.utils';
@@ -184,6 +186,7 @@ export class ShowroomPage implements AfterViewInit {
   private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly backendStatus = inject(BackendStatusService);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
@@ -339,7 +342,7 @@ export class ShowroomPage implements AfterViewInit {
 
   /** Formas de pago activas (cargadas al iniciar). El operador elige una en
    *  el dropdown del carrito; el recargo % se aplica al total. */
-  readonly formasPagoActivas = signal<FormaPago[]>([]);
+  readonly formasPagoActivas = this.precioPerfil.formasPago;
 
   /** Forma de pago seleccionada por el operador. Null = sin financiación
    *  (precio base, equivalente a "Efectivo 1 cuota / 0%"). */
@@ -355,9 +358,7 @@ export class ShowroomPage implements AfterViewInit {
    *  ninguna marcada (entonces se cae al precio de lista según rubro). Mismo
    *  criterio que el presupuestador. */
   formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.formasPagoActivas()
-      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+    return this.precioPerfil.formaDestacada(esMaquinaria);
   }
 
   /** Forma EFECTIVA del scan = la forma de pago seleccionada (MISMO estado que
@@ -370,19 +371,9 @@ export class ShowroomPage implements AfterViewInit {
     return this.formaDestacada(this.rubroCotizaSinIva(this.ultimoScan()?.rubro));
   });
 
-  /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
-   *  al iniciar; default del backend = MAQUINAS INDUSTRIALES. */
-  readonly rubrosSinIva = signal<string[]>([]);
-
-  /** Set normalizado para comparar rubros sin importar acentos/casing. */
-  private readonly rubrosSinIvaSet = computed(
-    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
-  );
-
   /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA). */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
-    const n = normalizarRubro(rubro);
-    return n !== '' && this.rubrosSinIvaSet().has(n);
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
   }
 
   /** Escalones ordenados de mayor a menor umbral — útil para resolver el escalón vigente. */
@@ -698,13 +689,7 @@ export class ShowroomPage implements AfterViewInit {
   /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
    *  rubro. Maquinaria: recargo null → 0 (no hereda del normal); aplicaIva null → false. */
   perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    if (esMaquinaria) {
-      return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
-        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
-      };
-    }
-    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+    return this.precioPerfil.perfilForma(forma, esMaquinaria);
   }
 
   /** Precio de referencia de un producto (scan o ítem de carrito) para una forma
@@ -714,8 +699,7 @@ export class ShowroomPage implements AfterViewInit {
     r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; porcIva: number | null; rubro?: string | null },
     forma: FormaPago,
   ): number {
-    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro));
-    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, perfil);
+    return this.precioPerfil.precioReferenciaPorForma(r, forma);
   }
 
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
@@ -957,31 +941,21 @@ export class ShowroomPage implements AfterViewInit {
           console.warn('[escalas-descuento] no se pudieron cargar:', err),
       });
 
-    // Rubros que cotizan sin IVA — definen qué productos usan el PVP sin IVA como
-    // precio base. Si falla, queda lista vacía (todos cotizan con IVA).
-    this.api.obtenerRubrosSinIva()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => this.rubrosSinIva.set(lista),
-        error: (err) =>
-          console.warn('[rubros-sin-iva] no se pudieron cargar:', err),
-      });
+    // Formas de pago activas + rubros que cotizan sin IVA. Los rubros definen
+    // qué productos usan el PVP sin IVA como precio base (si falla, todos
+    // cotizan con IVA). Las formas alimentan el selector del carrito.
+    this.precioPerfil.cargar();
 
-    // Formas de pago activas — para el selector del carrito. La primera de la
-    // lista (orden asc) queda seleccionada por default — el operador la
-    // configuró como "default" desde /configuracion (p.ej. Efectivo).
-    this.api.listarFormasPagoActivas()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => {
-          this.formasPagoActivas.set(lista);
-          if (lista.length > 0 && this.formaPagoSeleccionada() == null) {
-            this.formaPagoSeleccionada.set(lista[0]);
-          }
-        },
-        error: (err) =>
-          console.warn('[formas-pago] no se pudieron cargar:', err),
-      });
+    // La primera forma de la lista (orden asc) queda seleccionada por default —
+    // el operador la configuró como "default" desde /configuracion (p.ej.
+    // Efectivo). Lo hacemos en un effect que reacciona a la carga async de
+    // formas, preservando la guarda "solo si todavía no hay una elegida".
+    effect(() => {
+      const lista = this.precioPerfil.formasPago();
+      if (lista.length > 0 && untracked(() => this.formaPagoSeleccionada()) == null) {
+        this.formaPagoSeleccionada.set(lista[0]);
+      }
+    });
 
     // Hidratación inicial del carrito server-side. Si la pestaña recarga o se
     // abre una segunda PC, el estado se levanta del backend (sin localStorage).

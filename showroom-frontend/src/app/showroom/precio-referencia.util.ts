@@ -9,6 +9,34 @@ export interface FormaPagoCalc {
 }
 
 /**
+ * Los dos perfiles (menaje + maquinaria) de una forma de pago. Subconjunto de
+ * `FormaPago` con lo que necesita {@link perfilForma} para elegir el perfil.
+ */
+export interface FormaPagoPerfiles {
+  recargoPorcentaje: number | null;
+  aplicaIva: boolean | null;
+  recargoPorcentajeMaquinaria: number | null;
+  aplicaIvaMaquinaria: boolean | null;
+}
+
+/**
+ * Recargo + aplicaIva del perfil (menaje o maquinaria) de una forma, según el
+ * rubro del producto. Maquinaria usa sus propios campos: recargo null → 0 (NO
+ * hereda del menaje); aplicaIva null → false. Menaje: recargoPorcentaje /
+ * aplicaIva tal cual. Es la fórmula única reusada por scan/visor/carrito,
+ * presupuestos, cotizador e historial.
+ */
+export function perfilForma(forma: FormaPagoPerfiles, esMaquinaria: boolean): FormaPagoCalc {
+  if (esMaquinaria) {
+    return {
+      recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
+      aplicaIva: forma.aplicaIvaMaquinaria ?? false,
+    };
+  }
+  return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+}
+
+/**
  * Precio unitario que paga el cliente con una forma de pago dada, calculado
  * sobre el PVP gastro CON IVA del producto.
  *

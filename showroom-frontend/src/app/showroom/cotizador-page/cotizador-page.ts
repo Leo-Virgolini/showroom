@@ -33,6 +33,7 @@ import {
 } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { precioPorForma } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
@@ -89,6 +90,7 @@ export class CotizadorPage {
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   readonly screenLg = signal(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
@@ -143,7 +145,7 @@ export class CotizadorPage {
     { label: 'Otros…', value: 'otros' },
   ];
 
-  readonly formasPago = signal<FormaPago[]>([]);
+  readonly formasPago = this.precioPerfil.formasPago;
 
   readonly generandoPreview = signal(false);
   readonly enviandoEmail = signal(false);
@@ -210,12 +212,7 @@ export class CotizadorPage {
     forma: FormaPago,
     esMaquinaria: boolean,
   ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    return esMaquinaria
-      ? {
-          recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
-          aplicaIva: forma.aplicaIvaMaquinaria ?? false,
-        }
-      : { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+    return this.precioPerfil.perfilForma(forma, esMaquinaria);
   }
 
   /** Clase CSS completa de cada card de forma de pago. Computamos la string
@@ -355,10 +352,9 @@ export class CotizadorPage {
   });
 
   constructor() {
-    this.api.listarFormasPagoActivas().subscribe({
-      next: (formas) => this.formasPago.set(formas),
-      error: () => this.formasPago.set([]),
-    });
+    // Formas de pago activas (también carga rubros sin IVA — el cotizador no
+    // los usa pero el servicio carga ambos endpoints; no molesta).
+    this.precioPerfil.cargar();
 
     // Toast del resultado del envío async.
     this.backendStatus.cotizacionEmailEvents$

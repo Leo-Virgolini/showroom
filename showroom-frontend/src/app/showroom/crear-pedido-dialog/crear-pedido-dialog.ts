@@ -9,6 +9,7 @@ import {
   model,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -29,6 +30,7 @@ import {
   Localidad,
   Provincia,
 } from '../models';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
@@ -91,6 +93,7 @@ export class CrearPedidoDialog {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   // ----------- Inputs / Outputs -----------
   /** Control bidireccional del dialog. Cuando pasa de false→true con un
@@ -137,7 +140,7 @@ export class CrearPedidoDialog {
   readonly provinciasPedido = signal<Provincia[]>([]);
   readonly localidadesPedido = signal<Localidad[]>([]);
   readonly cargandoLocalidadesPedido = signal(false);
-  readonly formasPagoActivas = signal<FormaPago[]>([]);
+  readonly formasPagoActivas = this.precioPerfil.formasPago;
   private localidadesSub: Subscription | null = null;
 
   readonly opcionesRubroPedido: { label: string; value: string }[] = [
@@ -192,6 +195,17 @@ export class CrearPedidoDialog {
 
   // ----------- Lifecycle: cargar detalle al abrir -----------
   constructor() {
+    // Formas de pago activas — fuente compartida. Se cargan una vez; el default
+    // (primera forma) se setea cuando llegan, respetando la guarda de "solo si
+    // no hay una elegida todavía".
+    this.precioPerfil.cargar();
+    effect(() => {
+      const lista = this.precioPerfil.formasPago();
+      if (lista.length > 0 && untracked(() => this.pedidoFormaPagoId()) == null) {
+        this.pedidoFormaPagoId.set(lista[0].id);
+      }
+    });
+
     // Cuando `visible` pasa a true con un `presupuestoId` válido, carga el
     // detalle del presupuesto y pre-llena el form. Effect garantiza que se
     // re-ejecute si el id cambia (caso teórico: el padre quiere reusar el
@@ -263,23 +277,15 @@ export class CrearPedidoDialog {
     });
   }
 
+  /** Setea la forma de pago por defecto (primera de las activas) si todavía no
+   *  hay ninguna elegida. Las formas las provee el servicio compartido (ya
+   *  cargadas en el constructor); este método cubre el caso de re-apertura del
+   *  dialog tras un reset de {@code pedidoFormaPagoId}. */
   private cargarFormasPagoSiHaceFalta(): void {
-    if (this.formasPagoActivas().length > 0) {
-      if (this.pedidoFormaPagoId() == null) {
-        this.pedidoFormaPagoId.set(this.formasPagoActivas()[0].id);
-      }
-      return;
+    const lista = this.formasPagoActivas();
+    if (lista.length > 0 && this.pedidoFormaPagoId() == null) {
+      this.pedidoFormaPagoId.set(lista[0].id);
     }
-    this.api.listarFormasPagoActivas().subscribe({
-      next: (lista) => {
-        this.formasPagoActivas.set(lista);
-        if (lista.length > 0 && this.pedidoFormaPagoId() == null) {
-          this.pedidoFormaPagoId.set(lista[0].id);
-        }
-      },
-      error: (err) =>
-        console.warn('[formas-pago] no se pudieron cargar:', err),
-    });
   }
 
   cambiarProvinciaPedido(codigo: string | null): void {
