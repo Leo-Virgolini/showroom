@@ -197,9 +197,9 @@
             </td>
             <td class="text-sm">
               @if (p.presupuestoId) {
-                <a [routerLink]="['/presupuestos/editar', p.presupuestoId]"
+                <a [routerLink]="['/presupuestos/historial']" [queryParams]="{ id: p.presupuestoId }"
                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                   pTooltip="Ver presupuesto de origen" tooltipPosition="top">
+                   pTooltip="Ver en historial de presupuestos" tooltipPosition="top">
                   <i class="pi pi-file-edit text-[0.7rem]"></i> Presupuesto #{{ p.presupuestoId }}
                 </a>
               } @else if (p.sesionId) {

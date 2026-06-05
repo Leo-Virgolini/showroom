@@ -54,6 +54,24 @@
         }
       </div>
 
+      <!-- Pill de deep-link por id (desde /pedidos → columna "Origen"). Muestra
+           que la lista está filtrada a un solo presupuesto y permite volver al
+           listado completo limpiando el filtro + el ?id= de la URL. -->
+      @if (idFiltro() !== null) {
+        <div class="mb-3">
+          <button type="button"
+            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#FF861C]/10 text-[#3B1E09] dark:text-surface-0 text-xs font-semibold border border-[#FF861C]/30 hover:bg-[#FF861C]/20 transition-colors cursor-pointer"
+            (click)="limpiarIdFiltro()"
+            pTooltip="Quitar el filtro y ver todos los presupuestos" tooltipPosition="top">
+            <i class="pi pi-filter text-[10px] text-[#FF861C]"></i>
+            Mostrando presupuesto #{{ idFiltro() }}
+            <span class="text-muted-color">·</span>
+            <span class="text-primary">Ver todos</span>
+            <i class="pi pi-times text-[10px]"></i>
+          </button>
+        </div>
+      }
+
       <!-- Tabla -->
       <p-table [value]="presupuestos()" dataKey="id"
         [lazy]="true" (onLazyLoad)="onLazyLoad($event)"
