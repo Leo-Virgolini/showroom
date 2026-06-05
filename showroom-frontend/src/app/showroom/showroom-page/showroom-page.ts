@@ -414,16 +414,6 @@ export class ShowroomPage implements AfterViewInit {
     return this.rubroExcluido(it);
   }
 
-  /** Suma del PVP s/IVA por cantidad, sin aplicar descuento. Es el "subtotal"
-   *  visible en el carrito (incluye TODOS los ítems, también los excluidos
-   *  de descuento). */
-  readonly subtotalPreDescuento = computed(() =>
-    this.carrito().reduce(
-      (acc, it) => acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad,
-      0,
-    ),
-  );
-
   /** Subtotal contando SOLO los ítems elegibles para el descuento por escala,
    *  valuados con la FORMA DE REFERENCIA (la marcada "Precio ref." — Efectivo,
    *  `formaDestacada(false)`). Es la base sobre la que se COMPARA el umbral.
@@ -482,7 +472,7 @@ export class ShowroomPage implements AfterViewInit {
   /**
    * Descuento global manual % (atajo) — al cambiarlo, COPIA el mismo % a TODOS
    * los ítems del carrito (reflejo, no aditivo; igual que el presupuestador). El
-   * input lo muestra como reflejo del % EFECTIVO ({@link descuentoEfectivoPct}):
+   * input lo muestra como reflejo del % EFECTIVO ({@link descuentoEfectivoPctForma}):
    * cuando todos los ítems llevan el mismo descuento coincide con ese %; con una
    * mezcla muestra el promedio efectivo. No es un descuento que se suma encima
    * de los individuales.
@@ -522,19 +512,6 @@ export class ShowroomPage implements AfterViewInit {
     return this.descuentoManual(it.itemKey) > 0;
   }
 
-  /** Monto total de descuento (en pesos) — suma del descuento EFECTIVO por ítem
-   *  (manual o escala) sobre toda la lista. */
-  readonly descuentoMonto = computed(() =>
-    this.carrito().reduce((acc, it) => {
-      const base = (it.pvpKtGastroSinIva ?? 0) * it.cantidad;
-      return acc + (base * this.descuentoParaItem(it)) / 100;
-    }, 0),
-  );
-
-  readonly totalCarrito = computed(
-    () => this.subtotalPreDescuento() - this.descuentoMonto(),
-  );
-
   /** Subtotal del carrito a la FORMA DE PAGO elegida = suma de los subtotales de
    *  cada fila (precio con la forma × cantidad). Lleva o no IVA por ítem según el
    *  perfil de su rubro y la forma — coincide con lo que muestra cada línea. Sin
@@ -565,26 +542,10 @@ export class ShowroomPage implements AfterViewInit {
     () => this.subtotalCarrito() - this.descuentoMontoForma(),
   );
 
-  /** % de descuento EFECTIVO sobre el subtotal completo del carrito (mezcla de
-   *  manuales por ítem y escala). Es lo que se muestra en el desglose del total
-   *  — reemplaza al viejo {@link descuentoAplicado} (puro escala) en el display
-   *  ahora que cada línea puede tener su propio %. 0 si no hay ningún descuento. */
-  readonly descuentoEfectivoPct = computed(() => {
-    const bruto = this.subtotalPreDescuento();
-    if (bruto <= 0) return 0;
-    return (this.descuentoMonto() / bruto) * 100;
-  });
-
   /** True si en el carrito hay AL MENOS un ítem con descuento manual cargado. */
   readonly hayDescuentoManual = computed(() =>
     this.carrito().some((it) => this.descuentoManual(it.itemKey) > 0),
   );
-
-  /** Recargo % vigente según la forma de pago elegida (0 si ninguna o si tiene 0%). */
-  readonly recargoAplicado = computed(() => {
-    const fp = this.formaPagoSeleccionada();
-    return fp ? (fp.recargoPorcentaje ?? 0) : 0;
-  });
 
   /** Si la forma de pago elegida agrega IVA al precio que ve el cliente.
    *  - Forma con {@code aplicaIva=true} (caso normal): cliente paga con IVA.
@@ -596,47 +557,6 @@ export class ShowroomPage implements AfterViewInit {
     const fp = this.formaPagoSeleccionada();
     return fp ? (fp.aplicaIva ?? true) : false;
   });
-
-  /** Ajuste de la forma de pago sobre el subtotal sin IVA: positivo = recargo de
-   *  financiación, negativo = descuento (ej. Efectivo -13%). Per-ítem, con el
-   *  descuento por escala aplicado. */
-  readonly recargoMontoSinIva = computed(() => {
-    const fp = this.formaPagoSeleccionada();
-    if (!fp) return 0;
-    return this.carrito().reduce((acc, it) => {
-      const recargo = this.perfilForma(fp, this.rubroCotizaSinIva(it.rubro)).recargoPorcentaje ?? 0;
-      if (recargo === 0) return acc;
-      const factorExtra = this.factorForma(recargo) - 1;
-      const descuento = this.descuentoParaItem(it);
-      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
-      return acc + baseSinIva * factorExtra * it.cantidad;
-    }, 0);
-  });
-
-  /** IVA contenido en el total. Per-ítem: solo los ítems cuyo perfil (según rubro
-   *  y forma elegida) lleva IVA. Se calcula sobre el neto con el recargo del
-   *  perfil aplicado. */
-  readonly ivaMontoCarrito = computed(() => {
-    const fp = this.formaPagoSeleccionada();
-    return this.carrito().reduce((acc, it) => {
-      if (!this.itemCarritoTieneIva(it)) return acc;
-      const porcIva = it.porcIva ?? 0;
-      if (porcIva <= 0) return acc;
-      const recargo = fp ? (this.perfilForma(fp, this.rubroCotizaSinIva(it.rubro)).recargoPorcentaje ?? 0) : 0;
-      const factor = this.factorForma(recargo);
-      const descuento = this.descuentoParaItem(it);
-      const baseSinIva = (it.pvpKtGastroSinIva ?? 0) * (1 - descuento / 100);
-      const netoConForma = baseSinIva * factor;
-      return acc + netoConForma * (porcIva / 100) * it.cantidad;
-    }, 0);
-  });
-
-  /** Total final que el cliente paga: subtotal + recargo (sin IVA) + IVA (si la
-   *  forma aplica). Equivale a {@code base × (aplicaIva ? (1+iva/100) : 1) / (1 - recargo/100)}
-   *  per-item. */
-  readonly totalConRecargo = computed(
-    () => this.totalCarrito() + this.recargoMontoSinIva() + this.ivaMontoCarrito(),
-  );
 
   /** Total final del carrito para una forma de pago dada — usado en el dialog
    *  "comparativa de formas de pago" que el operador le muestra al cliente.
@@ -718,13 +638,6 @@ export class ShowroomPage implements AfterViewInit {
   readonly cantidadTotal = computed(() =>
     this.carrito().reduce((acc, it) => acc + it.cantidad, 0),
   );
-
-  /** Precio unitario efectivo aplicando el descuento global vigente. Los
-   *  ítems de rubros excluidos (MAQUINAS INDUSTRIALES) mantienen el PVP. */
-  precioEfectivo(it: CarritoItem): number {
-    const base = it.pvpKtGastroSinIva ?? 0;
-    return base * (1 - this.descuentoParaItem(it) / 100);
-  }
 
   /** Subtotal de la línea SIN descuento por escala, al precio de la forma de pago
    *  elegida (mismo precio que se muestra como c/u). El descuento por escala se
@@ -808,14 +721,6 @@ export class ShowroomPage implements AfterViewInit {
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
   iconoPrecioReferencia(nombre: string): string {
     return iconoFormaReferencia(nombre);
-  }
-
-  /** Factor del recargo/descuento de la forma sobre el neto. >0 financiación
-   *  (1/(1-r/100)); <0 descuento (1+r/100 = 1-|r|/100); 0 sin cambio. */
-  private factorForma(recargo: number): number {
-    if (recargo > 0) return 1 / (1 - recargo / 100);
-    if (recargo < 0) return 1 + recargo / 100;
-    return 1;
   }
 
   /** Precio unitario de un ítem del carrito según la forma elegida (o la primaria
