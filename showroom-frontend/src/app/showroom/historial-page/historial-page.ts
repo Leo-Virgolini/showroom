@@ -37,9 +37,9 @@ import {
   FormaPago,
   SesionDetalle,
   SesionListItem,
-  normalizarRubro,
 } from '../models';
 import { precioPorForma } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -79,6 +79,7 @@ export class HistorialPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
@@ -98,15 +99,7 @@ export class HistorialPage {
 
   /** Formas de pago activas — para calcular el "precio efectivo" (forma
    *  destacada) de cada ítem del detalle, igual que en el scan/visor. */
-  readonly formasPagoActivas = signal<FormaPago[]>([]);
-
-  /** Rubros que cotizan sin IVA (perfil maquinaria). */
-  readonly rubrosSinIva = signal<string[]>([]);
-
-  /** Set normalizado para comparar rubros sin importar acentos/casing. */
-  private readonly rubrosSinIvaSet = computed(
-    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
-  );
+  readonly formasPagoActivas = this.precioPerfil.formasPago;
 
   readonly hayFiltros = computed(
     () =>
@@ -237,21 +230,7 @@ export class HistorialPage {
 
     // Formas de pago y rubros sin IVA — necesarios para el "precio efectivo"
     // (precio de la forma destacada por perfil) en el detalle de cada sesión.
-    this.api.listarFormasPagoActivas()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => this.formasPagoActivas.set(lista),
-        error: (err) =>
-          console.warn('[historial] no se pudieron cargar las formas de pago:', err),
-      });
-
-    this.api.obtenerRubrosSinIva()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => this.rubrosSinIva.set(lista),
-        error: (err) =>
-          console.warn('[historial] no se pudieron cargar los rubros sin IVA:', err),
-      });
+    this.precioPerfil.cargar();
   }
 
   private cargarStats(): void {
@@ -401,8 +380,7 @@ export class HistorialPage {
 
   /** True si el rubro cotiza sin IVA (perfil maquinaria). */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
-    const n = normalizarRubro(rubro);
-    return n !== '' && this.rubrosSinIvaSet().has(n);
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
   }
 
   /** Perfil (recargo + aplicaIva) de una forma según el rubro del producto:
@@ -411,21 +389,13 @@ export class HistorialPage {
     forma: FormaPago,
     esMaquinaria: boolean,
   ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    if (esMaquinaria) {
-      return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
-        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
-      };
-    }
-    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+    return this.precioPerfil.perfilForma(forma, esMaquinaria);
   }
 
   /** Forma de pago destacada ("Precio ref.") según el perfil del rubro: la
    *  primera (orden asc) marcada, o null si no hay ninguna. */
   formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.formasPagoActivas()
-      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+    return this.precioPerfil.formaDestacada(esMaquinaria);
   }
 
   /** Precio "efectivo" de un ítem del detalle = precio con la forma destacada

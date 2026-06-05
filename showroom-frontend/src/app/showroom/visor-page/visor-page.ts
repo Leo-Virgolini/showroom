@@ -22,9 +22,9 @@ import {
   FormaPago,
   ScanResult,
   SesionShowroom,
-  normalizarRubro,
 } from '../models';
-import { precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
+import { iconoFormaReferencia } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -54,6 +54,7 @@ export class VisorPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(MessageService);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   /** Username del operador al que está ligado este visor — viene del path
    *  {@code /visor/:username}. Determina a qué canal SSE nos conectamos y a
@@ -91,7 +92,7 @@ export class VisorPage {
 
   /** Todas las formas de pago activas. Se cargan al iniciar vía el endpoint
    *  público. La forma destacada por perfil se resuelve con {@link formaDestacada}. */
-  readonly formasActivas = signal<FormaPago[]>([]);
+  readonly formasActivas = this.precioPerfil.formasPago;
 
   /** Primera forma de referencia (destacada del perfil menaje), o null. Fallback
    *  para el precio de lista cuando no hay forma efectiva. */
@@ -107,9 +108,7 @@ export class VisorPage {
    *  maquinaria → `precioReferenciaMaquinaria`), la de menor `orden`. Null si
    *  ninguna marcada. Mismo criterio que el scan/presupuestador. */
   formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.formasActivas()
-      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+    return this.precioPerfil.formaDestacada(esMaquinaria);
   }
 
   /** Forma EFECTIVA del visor = la de `formasActivas()` cuyo id == `formaVisorId()`,
@@ -135,19 +134,9 @@ export class VisorPage {
     return formas.every((f) => this.precioReferenciaPorForma(r, f) >= precioForma);
   });
 
-  /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se cargan
-   *  al iniciar vía el endpoint público; default del backend = MAQUINAS INDUSTRIALES. */
-  readonly rubrosSinIva = signal<string[]>([]);
-
-  /** Set normalizado para comparar rubros sin importar acentos/casing. */
-  private readonly rubrosSinIvaSet = computed(
-    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
-  );
-
   /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA). */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
-    const n = normalizarRubro(rubro);
-    return n !== '' && this.rubrosSinIvaSet().has(n);
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
   }
 
   /** Cantidad seleccionada con el stepper antes de "Agregar al carrito". Se
@@ -225,19 +214,9 @@ export class VisorPage {
       },
     });
 
-    this.api.listarFormasPagoActivas().subscribe({
-      next: (lista) => this.formasActivas.set(lista),
-      error: () => {
-        /* sin formas, el visor cae al precio lista en el display */
-      },
-    });
-
-    this.api.obtenerRubrosSinIva().subscribe({
-      next: (lista) => this.rubrosSinIva.set(lista),
-      error: () => {
-        /* sin lista, todos los rubros cotizan con IVA */
-      },
-    });
+    // Formas de pago activas + rubros sin IVA — sin formas el visor cae al
+    // precio lista; sin rubros, todos cotizan con IVA.
+    this.precioPerfil.cargar();
 
     this.backendStatus.scanVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -445,13 +424,7 @@ export class VisorPage {
   /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
    *  rubro. Maquinaria: recargo null → cae al normal; aplicaIva null → false. */
   perfilForma(forma: FormaPago, esMaquinaria: boolean): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    if (esMaquinaria) {
-      return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
-        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
-      };
-    }
-    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+    return this.precioPerfil.perfilForma(forma, esMaquinaria);
   }
 
   /** Precio de referencia de un producto para una forma de pago dada. Siempre
@@ -461,8 +434,7 @@ export class VisorPage {
     r: { pvpKtGastroConIva: number | null; pvpKtGastroSinIva: number | null; porcIva: number | null; rubro?: string | null },
     forma: FormaPago,
   ): number {
-    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro));
-    return precioPorForma(r.pvpKtGastroConIva, r.porcIva, perfil);
+    return this.precioPerfil.precioReferenciaPorForma(r, forma);
   }
 
   /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */

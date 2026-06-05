@@ -41,9 +41,9 @@ import {
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
   ScanResult,
-  normalizarRubro,
 } from '../models';
 import { precioPorForma } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
@@ -116,6 +116,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
    *  pantalla pasa a modo edición: el botón principal dice "Guardar cambios",
@@ -247,7 +248,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
   // ------------------------------------------------------------
-  readonly formasPago = signal<FormaPago[]>([]);
+  readonly formasPago = this.precioPerfil.formasPago;
 
   /** Forma de pago PRIMARIA = la primera de las activas que son precio de
    *  referencia (`precioReferencia === true`), ordenadas por `orden` asc.
@@ -260,26 +261,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  `precioReferenciaMaquinaria`), la de menor `orden`. Null si ninguna marcada
    *  (entonces se cae al precio de lista según rubro). */
   formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.formasPago()
-      .filter((f) => (esMaquinaria ? f.precioReferenciaMaquinaria : f.precioReferencia))
-      .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))[0] ?? null;
+    return this.precioPerfil.formaDestacada(esMaquinaria);
   }
-
-  /** Rubros cuyos productos cotizan sin IVA (precio base = PVP sin IVA). Se
-   *  cargan al iniciar desde el mismo endpoint que el showroom. Default del
-   *  backend = MAQUINAS INDUSTRIALES. Mientras llegan se asume lista vacía. */
-  readonly rubrosSinIva = signal<string[]>([]);
-
-  /** Set normalizado para comparar rubros sin importar acentos/casing. */
-  private readonly rubrosSinIvaSet = computed(
-    () => new Set(this.rubrosSinIva().map(normalizarRubro)),
-  );
 
   /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA y queda
    *  fuera del descuento por escala). Copiado de showroom-page. */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
-    const n = normalizarRubro(rubro);
-    return n !== '' && this.rubrosSinIvaSet().has(n);
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
   }
 
   /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
@@ -289,13 +277,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     forma: FormaPago,
     esMaquinaria: boolean,
   ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    if (esMaquinaria) {
-      return {
-        recargoPorcentaje: forma.recargoPorcentajeMaquinaria ?? 0,
-        aplicaIva: forma.aplicaIvaMaquinaria ?? false,
-      };
-    }
-    return { recargoPorcentaje: forma.recargoPorcentaje, aplicaIva: forma.aplicaIva };
+    return this.precioPerfil.perfilForma(forma, esMaquinaria);
   }
 
   // ------------------------------------------------------------
@@ -537,24 +519,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   }
 
   constructor() {
-    this.api.listarFormasPagoActivas().subscribe({
-      next: (formas) => this.formasPago.set(formas),
-      error: () => {
-        // Si falla, los snapshots quedan vacíos — el PDF se genera igual sin sección de formas.
-        this.formasPago.set([]);
-      },
-    });
-
-    // Rubros que cotizan sin IVA — mismo endpoint que el showroom. Definen qué
-    // productos usan el PVP sin IVA como base y quedan fuera del descuento por
-    // escala. Si falla, queda lista vacía (todos cotizan con IVA).
-    this.api.obtenerRubrosSinIva()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => this.rubrosSinIva.set(lista),
-        error: (err) =>
-          console.warn('[rubros-sin-iva] no se pudieron cargar:', err),
-      });
+    // Formas de pago activas + rubros que cotizan sin IVA — mismo endpoint que
+    // el showroom. Si fallan, las señales quedan vacías (el PDF se genera igual
+    // sin sección de formas; todos los rubros cotizan con IVA).
+    this.precioPerfil.cargar();
 
     // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
     // edición: cargamos el detalle del presupuesto y poblamos el form.
