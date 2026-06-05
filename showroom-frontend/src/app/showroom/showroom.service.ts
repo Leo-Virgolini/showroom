@@ -641,6 +641,8 @@ export class ShowroomService {
     if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
     if (opts.desde) params = params.set('desde', opts.desde);
     if (opts.hasta) params = params.set('hasta', opts.hasta);
+    if (opts.sortField) params = params.set('sortField', opts.sortField);
+    if (opts.sortOrder) params = params.set('sortOrder', opts.sortOrder);
     return this.http.get<CotizacionListPage>(`${this.base}/cotizacion-financiera`, { params });
   }
 

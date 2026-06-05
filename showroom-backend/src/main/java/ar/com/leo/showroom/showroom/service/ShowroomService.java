@@ -376,17 +376,21 @@ public class ShowroomService {
      * nombre del atributo en la entity. Evita ataques tipo "SQL injection
      * via sort field" al pasar el parámetro directo al ORDER BY.
      */
-    private static final Map<String, String> SORT_PEDIDOS = Map.of(
-            "creadoAt", "creadoAt",
-            "estado", "estado",
-            "nroDoc", "nroDoc",
+    private static final Map<String, String> SORT_PEDIDOS = Map.ofEntries(
+            Map.entry("creadoAt", "creadoAt"),
+            Map.entry("estado", "estado"),
+            Map.entry("nroDoc", "nroDoc"),
             // El header "Cliente" del listado ordena por `nombre` (el dato real
             // del cliente). Antes era `apellidoRazonSocial`, pero ahora ese campo
             // es el placeholder fijo "PEDIDO SHOWROOM" → ordenar por él no aportaba.
-            "nombre", "nombre",
-            "descuentoPorcentaje", "descuentoPorcentaje",
-            "totalSinIva", "totalSinIva",
-            "total", "total"
+            Map.entry("nombre", "nombre"),
+            // La columna "Operador" usa `creadoPor` en el DTO; ordena por el
+            // campo directo `usuarioId` de la entity (agrupa por operador).
+            Map.entry("creadoPor", "usuarioId"),
+            Map.entry("formaPagoNombre", "formaPagoNombre"),
+            Map.entry("descuentoPorcentaje", "descuentoPorcentaje"),
+            Map.entry("totalSinIva", "totalSinIva"),
+            Map.entry("total", "total")
     );
 
     /**

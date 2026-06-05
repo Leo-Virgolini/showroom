@@ -956,6 +956,8 @@ export interface ListarCotizacionesParams {
   hasta?: string;
   page?: number;
   size?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 /** Snapshot completo de una cotización persistida. Para pre-llenar la
