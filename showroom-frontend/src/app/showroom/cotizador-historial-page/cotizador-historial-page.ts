@@ -26,6 +26,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { CotizacionListItem } from '../models';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
+import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 
@@ -124,15 +125,9 @@ export class CotizadorHistorialPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
-    // Cuando el usuario clickea un header, p-table pasa sortField y sortOrder
-    // (1 = asc, -1 = desc). Si no clickea, viene el valor del [sortField] del
-    // template, así que el primer load también respeta el default.
-    if (typeof event.sortField === 'string' && event.sortField) {
-      this.sortField.set(event.sortField);
-    }
-    if (event.sortOrder === 1 || event.sortOrder === -1) {
-      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
-    }
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
     this.cargar(Math.floor(first / size), size);
   }
 
@@ -144,7 +139,7 @@ export class CotizadorHistorialPage {
       .listarCotizacionesFinancieras({
         q: this.busqueda(),
         desde: desde ? desde.toISOString() : undefined,
-        hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
+        hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
         page,
         size,
         sortField: this.sortField(),
@@ -164,22 +159,16 @@ export class CotizadorHistorialPage {
       });
   }
 
-  private endOfDay(d: Date): Date {
-    const e = new Date(d);
-    e.setHours(23, 59, 59, 999);
-    return e;
-  }
-
   descargar(c: CotizacionListItem): void {
     if (this.descargandoPdf().has(c.id)) return;
     // Pestaña preview abierta sincrónica con el click — anti popup-blocker.
     // El PDF se renderiza ahí cuando llega; NO se auto-descarga, si el
     // operador quiere bajarlo a disco lo hace desde el visor del browser.
     const previewTab = window.open('about:blank', '_blank');
-    this.descargandoPdf.update((s) => new Set([...s, c.id]));
+    marcarEnSet(this.descargandoPdf, c.id, true);
     this.api.descargarPdfCotizacionFinanciera(c.id).subscribe({
       next: (res) => {
-        this.removerDescargando(c.id);
+        marcarEnSet(this.descargandoPdf, c.id, false);
         const resultado = abrirPdfEnPreview(res, `cotizacion-${c.id}.pdf`, previewTab);
         if (resultado == null) {
           toastError(this.toast, 'Abrir PDF', null, 'El backend no devolvió un PDF.');
@@ -196,17 +185,9 @@ export class CotizadorHistorialPage {
       },
       error: (err) => {
         if (previewTab) previewTab.close();
-        this.removerDescargando(c.id);
+        marcarEnSet(this.descargandoPdf, c.id, false);
         toastError(this.toast, 'Abrir PDF', err, 'No se pudo abrir el PDF.');
       },
-    });
-  }
-
-  private removerDescargando(id: number): void {
-    this.descargandoPdf.update((s) => {
-      const ns = new Set(s);
-      ns.delete(id);
-      return ns;
     });
   }
 
@@ -225,14 +206,10 @@ export class CotizadorHistorialPage {
   }
 
   private ejecutarEliminar(c: CotizacionListItem): void {
-    this.eliminandoPdf.update((s) => new Set([...s, c.id]));
+    marcarEnSet(this.eliminandoPdf, c.id, true);
     this.api.eliminarCotizacionFinanciera(c.id).subscribe({
       next: () => {
-        this.eliminandoPdf.update((s) => {
-          const ns = new Set(s);
-          ns.delete(c.id);
-          return ns;
-        });
+        marcarEnSet(this.eliminandoPdf, c.id, false);
         this.cotizaciones.set(this.cotizaciones().filter((x) => x.id !== c.id));
         this.total.update((t) => Math.max(0, t - 1));
         this.toast.add({
@@ -243,11 +220,7 @@ export class CotizadorHistorialPage {
         });
       },
       error: (err) => {
-        this.eliminandoPdf.update((s) => {
-          const ns = new Set(s);
-          ns.delete(c.id);
-          return ns;
-        });
+        marcarEnSet(this.eliminandoPdf, c.id, false);
         toastError(this.toast, 'Eliminar', err, 'No se pudo eliminar la cotización.');
       },
     });

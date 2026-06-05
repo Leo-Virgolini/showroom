@@ -3,6 +3,7 @@ package ar.com.leo.showroom.cotizacion.service;
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
+import ar.com.leo.showroom.common.util.TextUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionDetalleDTO;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionListItemDTO;
@@ -52,6 +53,9 @@ public class CotizacionFinancieraService {
     private final SyncEventService eventService;
     private final ObjectMapper mapper;
     private final UsuarioRepository usuarioRepository;
+    /** Lookup bulk de operadores (usuarioId → displayName) compartido por todos
+     *  los listados. */
+    private final ar.com.leo.showroom.auth.service.UsuarioService usuarioService;
 
     /** Self-injection para que {@link #enviarPorEmailAsync} pase por el proxy
      *  de Spring y {@code @Async} efectivamente arme un thread separado.
@@ -75,13 +79,15 @@ public class CotizacionFinancieraService {
             ObjectProvider<JavaMailSender> mailSender,
             SyncEventService eventService,
             ObjectMapper mapper,
-            UsuarioRepository usuarioRepository) {
+            UsuarioRepository usuarioRepository,
+            ar.com.leo.showroom.auth.service.UsuarioService usuarioService) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
         this.eventService = eventService;
         this.mapper = mapper;
         this.usuarioRepository = usuarioRepository;
+        this.usuarioService = usuarioService;
     }
 
     private Long usuarioIdDe(String username) {
@@ -198,26 +204,17 @@ public class CotizacionFinancieraService {
         String qNormalizada = (q == null || q.isBlank()) ? null : q.trim();
         // Resolver el sort: si el campo no está en la whitelist o no se pidió,
         // usar `creadoAt desc` (default histórico de la pantalla).
-        String campo = SORT_COTIZACIONES.getOrDefault(sortField, "creadoAt");
-        org.springframework.data.domain.Sort.Direction direccion =
-                "asc".equalsIgnoreCase(sortOrder)
-                        ? org.springframework.data.domain.Sort.Direction.ASC
-                        : org.springframework.data.domain.Sort.Direction.DESC;
+        org.springframework.data.domain.Sort sort = ar.com.leo.showroom.common.util.SortUtils
+                .resolver(SORT_COTIZACIONES, sortField, sortOrder, "creadoAt");
         org.springframework.data.domain.PageRequest pr =
-                org.springframework.data.domain.PageRequest.of(page, size,
-                        org.springframework.data.domain.Sort.by(direccion, campo));
+                org.springframework.data.domain.PageRequest.of(page, size, sort);
         org.springframework.data.domain.Page<CotizacionFinanciera> p =
                 repository.buscar(id, qNormalizada, desde, hasta, pr);
         java.util.Set<Long> usuarioIds = p.getContent().stream()
                 .map(CotizacionFinanciera::getUsuarioId)
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
-        Map<Long, String> operadores = usuarioIds.isEmpty() ? Map.of()
-                : usuarioRepository.findAllById(usuarioIds).stream()
-                        .collect(java.util.stream.Collectors.toMap(
-                                u -> u.getId(),
-                                u -> (u.getNombre() != null && !u.getNombre().isBlank())
-                                        ? u.getNombre().trim() : u.getUsername()));
+        Map<Long, String> operadores = usuarioService.nombresPorId(usuarioIds);
         List<CotizacionListItemDTO> items = p.getContent().stream()
                 .map(c -> toListItemDTO(c,
                         c.getUsuarioId() == null ? null : operadores.get(c.getUsuarioId())))
@@ -330,11 +327,11 @@ public class CotizacionFinancieraService {
             throw new IllegalArgumentException(
                     "Tenés que ingresar al menos uno de los dos montos para cotizar");
         }
-        c.setClienteNombre(blankToNull(datos.clienteNombre()));
-        c.setClienteTelefono(blankToNull(datos.clienteTelefono()));
-        c.setClienteEmail(blankToNull(datos.clienteEmail()));
-        c.setRubro(blankToNull(datos.rubro()));
-        c.setObservaciones(blankToNull(datos.observaciones()));
+        c.setClienteNombre(TextUtils.blankToNull(datos.clienteNombre()));
+        c.setClienteTelefono(TextUtils.blankToNull(datos.clienteTelefono()));
+        c.setClienteEmail(TextUtils.blankToNull(datos.clienteEmail()));
+        c.setRubro(TextUtils.blankToNull(datos.rubro()));
+        c.setObservaciones(TextUtils.blankToNull(datos.observaciones()));
         c.setMontoBaseConIva(tieneMonto1 ? monto1 : BigDecimal.ZERO);
         c.setPorcIva(datos.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : datos.porcIva());
         c.setMontoBaseConIva2(tieneMonto2 ? monto2 : null);
@@ -379,10 +376,6 @@ public class CotizacionFinancieraService {
             log.warn("No se pudo serializar a JSON: {}", e.getMessage());
             return "[]";
         }
-    }
-
-    private static String blankToNull(String s) {
-        return s == null || s.isBlank() ? null : s.trim();
     }
 
     private CotizacionListItemDTO toListItemDTO(CotizacionFinanciera c, String creadoPor) {

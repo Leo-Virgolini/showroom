@@ -29,6 +29,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ProductoListItem, rubroExcluyeDescuentos } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
+import { marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
 
@@ -144,12 +145,9 @@ export class ProductosPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
-    if (typeof event.sortField === 'string' && event.sortField) {
-      this.sortField.set(event.sortField);
-    }
-    if (event.sortOrder === 1 || event.sortOrder === -1) {
-      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
-    }
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
     const page = Math.floor(first / size);
     this.cargar(page, size);
   }
@@ -188,13 +186,11 @@ export class ProductosPage {
   }
 
   refrescarFila(sku: string): void {
-    const set = new Set(this.refrescando());
-    set.add(sku);
-    this.refrescando.set(set);
+    marcarEnSet(this.refrescando, sku, true);
 
     this.api.refreshStock([sku]).subscribe({
       next: (resultados) => {
-        this.quitarRefrescando(sku);
+        marcarEnSet(this.refrescando, sku, false);
         const r = resultados[0];
         if (!r) return;
         this.productos.set(
@@ -220,16 +216,10 @@ export class ProductosPage {
         });
       },
       error: (err) => {
-        this.quitarRefrescando(sku);
+        marcarEnSet(this.refrescando, sku, false);
         toastError(this.toast, 'Refrescar', err, 'No se pudo refrescar');
       },
     });
-  }
-
-  private quitarRefrescando(sku: string): void {
-    const set = new Set(this.refrescando());
-    set.delete(sku);
-    this.refrescando.set(set);
   }
 
   estaRefrescando(sku: string): boolean {

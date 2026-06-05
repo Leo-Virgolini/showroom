@@ -67,6 +67,9 @@ public class SesionShowroomService {
     private final ImagenLocalService imagenLocalService;
     private final PedidoShowroomRepository pedidoRepository;
     private final UsuarioRepository usuarioRepository;
+    /** Lookup bulk de operadores (usuarioId → displayName) compartido por todos
+     *  los listados. */
+    private final ar.com.leo.showroom.auth.service.UsuarioService usuarioService;
     /** Para publicar {@link SesionCerradaEvent} cuando se abandona/cancela una
      *  sesión. {@code CarritoService} lo escucha y vacía el carrito — así
      *  evitamos el acoplamiento directo y el ciclo de dependencias. */
@@ -252,15 +255,13 @@ public class SesionShowroomService {
         int sizeSafe = Math.min(Math.max(size, 1), 200);
         // Resolver el sort: si el campo no está en la whitelist o no se pidió,
         // usar `iniciadaAt desc` (default histórico de la pantalla).
-        String campo = SORT_SESIONES.getOrDefault(sortField, "iniciadaAt");
-        Sort.Direction direccion = "asc".equalsIgnoreCase(sortOrder)
-                ? Sort.Direction.ASC
-                : Sort.Direction.DESC;
+        Sort sort = ar.com.leo.showroom.common.util.SortUtils
+                .resolver(SORT_SESIONES, sortField, sortOrder, "iniciadaAt");
         Page<SesionShowroom> resultado = repository.buscar(
                 StringUtils.hasText(q) ? q.trim() : null,
                 desde,
                 hasta,
-                PageRequest.of(pageSafe, sizeSafe, Sort.by(direccion, campo))
+                PageRequest.of(pageSafe, sizeSafe, sort)
         );
 
         // Estados de los pedidos de la página en una sola query.
@@ -281,12 +282,7 @@ public class SesionShowroomService {
                 .map(SesionShowroom::getUsuarioId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Map<Long, String> operadores = usuarioIds.isEmpty() ? Map.of()
-                : usuarioRepository.findAllById(usuarioIds).stream()
-                        .collect(Collectors.toMap(
-                                u -> u.getId(),
-                                u -> (u.getNombre() != null && !u.getNombre().isBlank())
-                                        ? u.getNombre().trim() : u.getUsername()));
+        Map<Long, String> operadores = usuarioService.nombresPorId(usuarioIds);
 
         List<SesionListItemDTO> items = resultado.getContent().stream()
                 .map(s -> toListItemDTO(s, estadosByPedidoId.get(s.getPedidoId()),
