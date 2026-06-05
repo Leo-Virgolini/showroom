@@ -68,6 +68,7 @@ public class FormaPagoService {
                 .creadoAt(Instant.now())
                 .build();
         FormaPago saved = repository.save(entity);
+        asegurarRefUnica(saved);
         log.info("Forma de pago creada: id={} nombre='{}' recargo={}% cuotas={} aplicaIva={}",
                 saved.getId(), saved.getNombre(), saved.getRecargoPorcentaje(),
                 saved.getCantidadCuotas(), saved.getAplicaIva());
@@ -91,6 +92,7 @@ public class FormaPagoService {
         if (dto.precioReferencia() != null) entity.setPrecioReferencia(dto.precioReferencia());
         if (dto.precioReferenciaMaquinaria() != null) entity.setPrecioReferenciaMaquinaria(dto.precioReferenciaMaquinaria());
         FormaPago saved = repository.save(entity);
+        asegurarRefUnica(saved);
         log.info("Forma de pago actualizada: id={} nombre='{}' recargo={}% aplicaIva={} activo={} precioReferencia={}",
                 saved.getId(), saved.getNombre(), saved.getRecargoPorcentaje(),
                 saved.getAplicaIva(), saved.getActivo(), saved.getPrecioReferencia());
@@ -121,6 +123,28 @@ public class FormaPagoService {
         repository.delete(entity);
         log.info("Forma de pago ELIMINADA definitivamente: id={} nombre='{}'",
                 entity.getId(), entity.getNombre());
+    }
+
+    /** Garantiza que haya UNA sola forma marcada como "Precio ref." por perfil:
+     *  si la forma recién guardada quedó como referencia menaje y/o maquinaria,
+     *  desmarca ese flag en todas las demás. El último que se marca gana. */
+    private void asegurarRefUnica(FormaPago saved) {
+        boolean refMenaje = Boolean.TRUE.equals(saved.getPrecioReferencia());
+        boolean refMaquinaria = Boolean.TRUE.equals(saved.getPrecioReferenciaMaquinaria());
+        if (!refMenaje && !refMaquinaria) return;
+        for (FormaPago otra : repository.findAll()) {
+            if (otra.getId().equals(saved.getId())) continue;
+            boolean cambio = false;
+            if (refMenaje && Boolean.TRUE.equals(otra.getPrecioReferencia())) {
+                otra.setPrecioReferencia(false);
+                cambio = true;
+            }
+            if (refMaquinaria && Boolean.TRUE.equals(otra.getPrecioReferenciaMaquinaria())) {
+                otra.setPrecioReferenciaMaquinaria(false);
+                cambio = true;
+            }
+            if (cambio) repository.save(otra);
+        }
     }
 
     private void validar(FormaPagoDTO dto) {
