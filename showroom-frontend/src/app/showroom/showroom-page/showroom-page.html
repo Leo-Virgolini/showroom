@@ -829,8 +829,11 @@
               </div>
             </div>
 
-            <p-inputNumber class="shrink-0" [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.itemKey, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
-              [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-20 text-center text-sm" />
+            <div class="shrink-0 flex flex-col items-center leading-none">
+              <label class="text-[8px] uppercase tracking-wider text-muted-color font-semibold mb-0.5" [attr.for]="'cantItem-' + it.itemKey">Cant.</label>
+              <p-inputNumber [inputId]="'cantItem-' + it.itemKey" [ngModel]="it.cantidad" (ngModelChange)="actualizarCantidad(it.itemKey, $event)" [showButtons]="true" buttonLayout="horizontal" [min]="1"
+                [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-20 text-center text-sm" />
+            </div>
 
             <!-- Descuento manual % por ítem. Si > 0, reemplaza al descuento por
                  escala para esta línea (y va a DUX como porc_desc). 0 = vuelve a
