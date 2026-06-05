@@ -842,7 +842,7 @@
               <label class="text-[8px] uppercase tracking-wider text-muted-color font-semibold mb-0.5" [attr.for]="'descItem-' + it.itemKey">% Desc.</label>
               <p-inputNumber [inputId]="'descItem-' + it.itemKey" [ngModel]="descuentoManual(it.itemKey)"
                 (ngModelChange)="setDescuentoManual(it.itemKey, $event)" [min]="0" [max]="100" [step]="1"
-                suffix="%" inputStyleClass="w-14 text-center text-sm" [allowEmpty]="false"
+                [maxFractionDigits]="1" suffix="%" inputStyleClass="w-20 text-center text-sm" [allowEmpty]="false"
                 pTooltip="Descuento manual de esta línea (reemplaza el descuento por monto)" tooltipPosition="top" />
             </div>
 
@@ -894,7 +894,7 @@
             </label>
             <p-inputNumber inputId="descGlobalCarrito" [ngModel]="descuentoEfectivoPct()"
               (ngModelChange)="aplicarDescuentoGlobal($event)" [min]="0" [max]="100" [step]="1"
-              suffix="%" inputStyleClass="w-16 text-center text-sm" [allowEmpty]="false"
+              [maxFractionDigits]="1" suffix="%" inputStyleClass="w-24 text-center text-sm" [allowEmpty]="false"
               [disabled]="carrito().length === 0"
               pTooltip="Aplica el mismo % a todos los ítems (reemplaza el descuento por monto)" tooltipPosition="left" />
           </div>
