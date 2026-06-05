@@ -562,7 +562,7 @@ public class PresupuestoComercialService {
     private static BigDecimal precioFormaPerfil(
             GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq,
             GenerarPresupuestoRequestDTO.Item it) {
-        BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+        BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
         BigDecimal recargo = esMaq
                 ? (f.recargoPorcentajeMaquinaria() != null ? f.recargoPorcentajeMaquinaria() : BigDecimal.ZERO)
                 : (f.recargoPorcentaje() != null ? f.recargoPorcentaje() : BigDecimal.ZERO);
@@ -812,7 +812,7 @@ public class PresupuestoComercialService {
         for (GenerarPresupuestoRequestDTO.Item it : datos.items()) {
             BigDecimal cantidad = it.cantidad() == null ? BigDecimal.ZERO : it.cantidad();
             BigDecimal precio = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
-            BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
+            BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
             BigDecimal factorDesc = BigDecimal.ONE.subtract(desc.movePointLeft(2));
 

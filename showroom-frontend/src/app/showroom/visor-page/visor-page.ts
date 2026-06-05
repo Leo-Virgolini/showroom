@@ -23,7 +23,11 @@ import {
   ScanResult,
   SesionShowroom,
 } from '../models';
-import { iconoFormaReferencia } from '../precio-referencia.util';
+import {
+  hayEscalonSuperior,
+  iconoFormaReferencia,
+  ordenarEscalasPorUmbral,
+} from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 
@@ -161,7 +165,7 @@ export class VisorPage {
   /** Escalas ordenadas asc por umbralMin — orden natural para mostrarlas
    *  como "comprá más para llegar al próximo descuento". */
   readonly escalasOrdenadas = computed(() =>
-    [...this.escalas()].sort((a, b) => a.umbralMin - b.umbralMin),
+    ordenarEscalasPorUmbral(this.escalas()),
   );
 
   /** True si el producto recién scaneado pertenece a un rubro excluido de los
@@ -475,9 +479,7 @@ export class VisorPage {
    *  aplica al precio. Lo usamos para atenuar las tarjetas de escalones
    *  "menores" cuando un cliente ya califica para uno mejor. */
   haySuperior(precio: number, escala: EscalaDescuento): boolean {
-    return this.escalasOrdenadas().some(
-      (e) => e.umbralMin > escala.umbralMin && precio >= e.umbralMin,
-    );
+    return hayEscalonSuperior(precio, escala, this.escalasOrdenadas());
   }
 
   /**

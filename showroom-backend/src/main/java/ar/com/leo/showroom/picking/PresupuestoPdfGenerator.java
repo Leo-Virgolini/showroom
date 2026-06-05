@@ -1,6 +1,8 @@
 package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.pdf.KtPdfColores;
+import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
@@ -66,18 +68,22 @@ public class PresupuestoPdfGenerator {
     private static final int PRODUCTOS_POR_PAGINA = 4;
 
     // Tema KT (colores extraídos de KitchenToolsTheme del catalog generator).
-    private static final Color KT_NARANJA = new DeviceRgb(255, 134, 28);
-    private static final Color KT_MARRON = new DeviceRgb(59, 30, 9);
+    // Los colores compartidos idénticos viven en KtPdfColores; acá quedan como
+    // alias locales para no tocar el cuerpo del generador.
+    private static final Color KT_NARANJA = KtPdfColores.KT_NARANJA;
+    private static final Color KT_MARRON = KtPdfColores.KT_MARRON;
     private static final Color KT_NARANJA_CODIGO = new DeviceRgb(255, 135, 12);
-    private static final Color KT_AZUL_CODIGO_TEXTO = new DeviceRgb(72, 65, 151);
-    private static final Color GRIS_OSCURO = new DeviceRgb(45, 45, 45);
+    private static final Color KT_AZUL_CODIGO_TEXTO = KtPdfColores.KT_AZUL_CODIGO_TEXTO;
+    private static final Color GRIS_OSCURO = KtPdfColores.GRIS_OSCURO;
     private static final Color GRIS_CLARO = new DeviceRgb(235, 235, 235);
     /** Gris medio para las líneas separadoras dentro de la card gris (la card
-     *  es 235,235,235 — una línea del mismo gris no se vería). */
+     *  es 235,235,235 — una línea del mismo gris no se vería). Valor propio
+     *  de este PDF (200,200,200), distinto del GRIS_LINEA de los otros
+     *  generadores — se mantiene local a propósito. */
     private static final Color GRIS_LINEA = new DeviceRgb(200, 200, 200);
     /** Verde profundo para el precio — combina con el verde del logo KT (la
      *  olla alrededor de la K) y contrasta con el naranja del pill SKU. */
-    private static final Color VERDE_PRECIO = new DeviceRgb(16, 122, 87);
+    private static final Color VERDE_PRECIO = KtPdfColores.VERDE_PRECIO;
 
     private static final DateTimeFormatter FECHA_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     /** TZ del showroom: la fecha del pedido se computa según AR aunque la JVM
@@ -430,7 +436,7 @@ public class PresupuestoPdfGenerator {
     }
 
     private static String safe(String s, String fallback) {
-        return s == null || s.isBlank() ? fallback : s;
+        return PdfFormatoUtils.safe(s, fallback);
     }
 
     /**

@@ -810,7 +810,7 @@ public class ShowroomService {
             // para genéricos), asumimos 21. Items normales toman el porcIva
             // del cache — la fuente de verdad para el producto real.
             BigDecimal porcIva = esGenerico
-                    ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
+                    ? (it.porcIva() != null ? it.porcIva() : PrecioPerfilCalculator.IVA_DEFAULT)
                     : (pc != null ? pc.getPorcIva() : null);
 
             // Perfil (Normal/Maquinaria) según el rubro del ítem: el del item si
@@ -1150,7 +1150,7 @@ public class ShowroomService {
             // sobre con-IVA, así que el porcIva solo importa cuando la forma
             // pasa a/desde s/IVA — para genéricos asumimos 21 si no vino.
             BigDecimal porcIva = esGenerico
-                    ? (it.porcIva() != null ? it.porcIva() : new BigDecimal("21"))
+                    ? (it.porcIva() != null ? it.porcIva() : PrecioPerfilCalculator.IVA_DEFAULT)
                     : (pc != null ? pc.getPorcIva() : null);
             // Perfil del ítem según rubro: define el recargo. A DUX siempre va
             // con IVA (se ignora el aplicaIva del perfil).

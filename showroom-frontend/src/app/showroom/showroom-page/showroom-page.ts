@@ -47,7 +47,11 @@ import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { iconoFormaReferencia } from '../precio-referencia.util';
+import {
+  hayEscalonSuperior,
+  iconoFormaReferencia,
+  ordenarEscalasPorUmbral,
+} from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
@@ -384,7 +388,7 @@ export class ShowroomPage implements AfterViewInit {
   /** Escalones ordenados de menor a mayor umbral — orden natural para mostrar
    *  los tiles "comprá más" (el más cercano primero, los mejores al final). */
   readonly escalasOrdenadas = computed(() =>
-    [...this.escalasDescuento()].sort((a, b) => a.umbralMin - b.umbralMin),
+    ordenarEscalasPorUmbral(this.escalasDescuento()),
   );
 
   /** True si el ítem pertenece a un rubro de maquinaria (lista configurable).
@@ -754,9 +758,7 @@ export class ShowroomPage implements AfterViewInit {
   /** true si hay un escalón con umbral mayor (mejor descuento) que el precio
    *  ya alcanza. Usado para atenuar tiles "menores" cuando otro mejor aplica. */
   haySuperior(precio: number, escala: EscalaDescuento): boolean {
-    return this.escalasOrdenadas().some(
-      (e) => e.umbralMin > escala.umbralMin && precio >= e.umbralMin,
-    );
+    return hayEscalonSuperior(precio, escala, this.escalasOrdenadas());
   }
 
   /**

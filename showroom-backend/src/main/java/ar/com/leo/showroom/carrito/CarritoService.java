@@ -4,6 +4,7 @@ import ar.com.leo.showroom.catalogo.entity.ProductoCache;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.dux.config.DuxProperties;
 import ar.com.leo.showroom.events.SesionCerradaEvent;
 import ar.com.leo.showroom.events.SyncCatalogoCompletadoEvent;
@@ -198,7 +199,7 @@ public class CarritoService {
         if (cantidad <= 0) {
             throw new ConflictException("La cantidad debe ser mayor a 0");
         }
-        BigDecimal iva = porcIva != null ? porcIva : new BigDecimal("21");
+        BigDecimal iva = porcIva != null ? porcIva : PrecioPerfilCalculator.IVA_DEFAULT;
         String skuGenerico = duxProperties.skuProductoGenerico();
         // Si el operador marcó "maquinaria", asignamos rubro MAQUINAS
         // INDUSTRIALES para que la lógica existente de rubroExcluyeDescuentos

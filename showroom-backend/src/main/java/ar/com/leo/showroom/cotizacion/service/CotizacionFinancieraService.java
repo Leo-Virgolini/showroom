@@ -3,6 +3,7 @@ package ar.com.leo.showroom.cotizacion.service;
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
+import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionDetalleDTO;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionListItemDTO;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionListPageDTO;
@@ -311,7 +312,7 @@ public class CotizacionFinancieraService {
         c.setRubro(blankToNull(datos.rubro()));
         c.setObservaciones(blankToNull(datos.observaciones()));
         c.setMontoBaseConIva(tieneMonto1 ? monto1 : BigDecimal.ZERO);
-        c.setPorcIva(datos.porcIva() == null ? BigDecimal.valueOf(21) : datos.porcIva());
+        c.setPorcIva(datos.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : datos.porcIva());
         c.setMontoBaseConIva2(tieneMonto2 ? monto2 : null);
         c.setPorcIva2(tieneMonto2
                 ? (datos.porcIva2() == null ? new BigDecimal("10.5") : datos.porcIva2())
