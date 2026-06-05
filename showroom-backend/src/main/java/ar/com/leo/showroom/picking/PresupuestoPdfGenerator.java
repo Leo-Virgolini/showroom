@@ -4,6 +4,8 @@ import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
+import ar.com.leo.showroom.config.entity.FormaPago;
+import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
@@ -49,6 +51,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
@@ -57,7 +60,7 @@ import java.util.Locale;
  * Estilo portado del java-pdf-catalog-generator existente: mismos colores,
  * backgrounds y footer (logo KT + "Página X" al pie de cada página, omitiendo
  * la portada). Layout: carátula con razón social + fecha + CUIT, y páginas de
- * 4 productos cada una con CÓDIGO | NOMBRE | PRECIO s/IVA | FOTO (sin
+ * 4 productos cada una con CÓDIGO | NOMBRE | PRECIO | FOTO (sin
  * valorización total — pedido del cliente).
  */
 @Slf4j
@@ -96,6 +99,8 @@ public class PresupuestoPdfGenerator {
     }
 
     private final ImagenLocalService imagenLocalService;
+    private final FormaPagoService formaPagoService;
+    private final PrecioPerfilCalculator precioPerfilCalculator;
 
     /**
      * PDF del historial de scans para un pedido: lo que el cliente VIO durante
@@ -115,9 +120,12 @@ public class PresupuestoPdfGenerator {
                 .map(PedidoShowroomItem::getSku)
                 .filter(java.util.Objects::nonNull)
                 .collect(java.util.stream.Collectors.toSet());
+        List<FormaPago> activas = formaPagoService.listarActivas();
+        FormaPago destacadaMenaje = formaDestacada(activas, false);
+        FormaPago destacadaMaquinaria = formaDestacada(activas, true);
         List<ItemView> views = sesion.getItems().stream()
                 .filter(it -> !skusComprados.contains(it.getSku()))
-                .map(PresupuestoPdfGenerator::fromSesionItem)
+                .map(it -> fromSesionItem(it, destacadaMenaje, destacadaMaquinaria))
                 .toList();
         if (views.isEmpty()) {
             return null;
@@ -159,10 +167,42 @@ public class PresupuestoPdfGenerator {
     }
 
     /** Vista de un item para renderizar — solo los campos que necesita el block. */
-    private record ItemView(String sku, String descripcion, java.math.BigDecimal precioConIva, java.math.BigDecimal porcIva) {}
+    private record ItemView(String sku, String descripcion, BigDecimal precioMostrado) {}
 
-    private static ItemView fromSesionItem(SesionScanItem it) {
-        return new ItemView(it.getSku(), it.getDescripcion(), it.getPrecioConIva(), it.getPorcIva());
+    /** Mapea un scan a la vista del PDF calculando el precio con la forma de pago
+     *  predefinida (destacada) del perfil del rubro — mismo criterio que el
+     *  scan/visor/presupuestador: menaje al precio efectivo (ej. Efectivo c/IVA),
+     *  maquinaria s/IVA. Sin forma destacada cae al precio de lista por rubro. */
+    private ItemView fromSesionItem(SesionScanItem it, FormaPago destacadaMenaje,
+                                    FormaPago destacadaMaquinaria) {
+        boolean esMaq = precioPerfilCalculator.esMaquinaria(it.getRubro());
+        FormaPago forma = esMaq ? destacadaMaquinaria : destacadaMenaje;
+        return new ItemView(it.getSku(), it.getDescripcion(),
+                precioMostrado(it.getPrecioConIva(), it.getPorcIva(), forma, esMaq));
+    }
+
+    /** Precio a mostrar para un ítem: con la forma destacada y el perfil del rubro
+     *  si hay una marcada; si no, precio de lista (maquinaria s/IVA, resto c/IVA). */
+    private static BigDecimal precioMostrado(BigDecimal conIva, BigDecimal porcIva,
+                                             FormaPago forma, boolean esMaquinaria) {
+        if (conIva == null) return null;
+        if (forma != null) {
+            return PrecioPerfilCalculator.calcularPrecioFinal(conIva, porcIva,
+                    PrecioPerfilCalculator.recargoPerfil(forma, esMaquinaria),
+                    PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaquinaria));
+        }
+        return esMaquinaria ? PrecioPerfilCalculator.calcularSinIva(conIva, porcIva) : conIva;
+    }
+
+    /** Forma de pago destacada ("Precio ref.") del perfil, la de menor orden.
+     *  Null si ninguna activa es referencia de ese perfil. */
+    private static FormaPago formaDestacada(List<FormaPago> activas, boolean esMaquinaria) {
+        return activas.stream()
+                .filter(f -> esMaquinaria
+                        ? Boolean.TRUE.equals(f.getPrecioReferenciaMaquinaria())
+                        : Boolean.TRUE.equals(f.getPrecioReferencia()))
+                .min(Comparator.comparingInt(f -> f.getOrden() == null ? 0 : f.getOrden()))
+                .orElse(null);
     }
 
     public String nombreArchivo(PedidoShowroom pedido) {
@@ -359,11 +399,11 @@ public class PresupuestoPdfGenerator {
         card.add(nombre);
         card.add(buildLineaSeparadora());
 
-        // Precio sin IVA del producto — el mismo que se muestra al escanear,
-        // sin afectaciones por descuentos de escala ni recargos financieros.
-        // Etiqueta sutil en gris para que no compita con el valor; valor en
-        // naranja KT para que destaque y combine con el resto del tema.
-        BigDecimal precioSinIvaFinal = sinIva(it.precioConIva(), it.porcIva());
+        // Precio con la forma de pago predefinida (destacada) del perfil del
+        // rubro — el mismo que ve el cliente al escanear (menaje al precio
+        // efectivo, maquinaria s/IVA), sin descuentos de escala. Etiqueta sutil
+        // en gris para que no compita con el valor; valor en verde KT.
+        BigDecimal precioFinal = it.precioMostrado();
         Paragraph precioEtiqueta = new Paragraph("PRECIO")
                 .setFontSize(8)
                 .setFontColor(GRIS_OSCURO)
@@ -371,7 +411,7 @@ public class PresupuestoPdfGenerator {
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
                 .setMarginTop(6);
-        Paragraph precioValor = new Paragraph(formatPesos(precioSinIvaFinal))
+        Paragraph precioValor = new Paragraph(formatPesos(precioFinal))
                 .simulateBold()
                 .setFontSize(16)
                 .setFontColor(VERDE_PRECIO)
@@ -423,11 +463,6 @@ public class PresupuestoPdfGenerator {
             log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
             return null;
         }
-    }
-
-    /** Saca el IVA del precio (delegado a la fórmula única). */
-    private static BigDecimal sinIva(BigDecimal precioConIva, BigDecimal porcIva) {
-        return PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
     }
 
     private static String formatPesos(BigDecimal v) {

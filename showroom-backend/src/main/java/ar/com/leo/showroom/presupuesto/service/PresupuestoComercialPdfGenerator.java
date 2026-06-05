@@ -1428,7 +1428,7 @@ public class PresupuestoComercialPdfGenerator {
      */
     private void agregarNotaPreciosEfectivo(Document doc, boolean hayDescuentos,
                                             boolean hayItemExcluido) {
-        doc.add(new Paragraph("Precios en efectivo — no incluyen IVA")
+        doc.add(new Paragraph("Precios en efectivo")
                 .setFontSize(9)
                 .setCharacterSpacing(0.3f)
                 .setFontColor(GRIS_MEDIO)
