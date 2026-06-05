@@ -46,6 +46,12 @@ public record PedidoListItemDTO(
         /** Nombre o username del operador que creó el pedido. Null en pedidos
          *  legacy creados antes del multi-usuario. Se muestra como columna
          *  "Operador" en el listado. */
-        String creadoPor
+        String creadoPor,
+        /** Id del presupuesto que originó este pedido (si vino de un
+         *  presupuesto convertido). Null si el pedido nació en el showroom. */
+        Long presupuestoId,
+        /** Id de la sesión de showroom que originó este pedido (si vino de una
+         *  atención en el showroom). Null si el pedido vino de un presupuesto. */
+        Long sesionId
 ) {
 }

@@ -100,6 +100,10 @@ public class ShowroomService {
     private final HorarioSyncSchedulerService horarioSyncService;
     private final ConfiguracionService configuracionService;
     private final PrecioPerfilCalculator precioPerfilCalculator;
+    /** Repositories (no services) para resolver el origen del pedido en el
+     *  listado — usar el service de presupuestos generaría dependencia circular
+     *  (PresupuestoComercialService ya depende de ShowroomService). */
+    private final ar.com.leo.showroom.presupuesto.repository.PresupuestoComercialRepository presupuestoComercialRepository;
 
     /**
      * Lookup en cache local por SKU o código de barras:
@@ -431,8 +435,24 @@ public class ShowroomService {
         // distintos de la página. Evita N+1 contra usuario_repository al
         // mapear cada pedido a su DTO.
         Map<Long, String> operadores = resolverOperadoresDePedidos(resultado.getContent());
+        // Bulk lookup del origen del pedido (presupuesto o sesión de showroom)
+        // para la columna "Origen" del listado. Dos queries IN, mapas en memoria.
+        List<Long> pedidoIds = resultado.getContent().stream().map(PedidoShowroom::getId).toList();
+        Map<Long, Long> presupuestoPorPedido = new HashMap<>();
+        if (!pedidoIds.isEmpty()) {
+            for (Object[] row : presupuestoComercialRepository.findPresupuestoIdsByPedidoIds(pedidoIds)) {
+                if (row[0] != null) presupuestoPorPedido.put((Long) row[0], (Long) row[1]);
+            }
+        }
+        Map<Long, Long> sesionPorPedido = new HashMap<>();
+        if (!pedidoIds.isEmpty()) {
+            for (Object[] row : sesionRepository.findSesionIdsByPedidoIds(pedidoIds)) {
+                if (row[0] != null) sesionPorPedido.put((Long) row[0], (Long) row[1]);
+            }
+        }
         List<PedidoListItemDTO> items = resultado.getContent().stream()
-                .map(p -> toPedidoListItem(p, cantidadItems.getOrDefault(p.getId(), 0), operadores))
+                .map(p -> toPedidoListItem(p, cantidadItems.getOrDefault(p.getId(), 0), operadores,
+                        presupuestoPorPedido.get(p.getId()), sesionPorPedido.get(p.getId())))
                 .toList();
         return new PedidoListPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
     }
@@ -673,7 +693,8 @@ public class ShowroomService {
     }
 
     private PedidoListItemDTO toPedidoListItem(PedidoShowroom p, int cantidadItems,
-                                               Map<Long, String> usernamesByUsuarioId) {
+                                               Map<Long, String> usernamesByUsuarioId,
+                                               Long presupuestoId, Long sesionId) {
         // creadoPor: nombre del operador (o username como fallback) si está
         // en el cache pre-calculado. Null para pedidos legacy sin usuarioId.
         String creadoPor = p.getUsuarioId() == null ? null
@@ -696,7 +717,9 @@ public class ShowroomService {
                 p.getFormaPagoAplicaIva(),
                 p.getCantidadCuotas(),
                 cantidadItems,
-                creadoPor
+                creadoPor,
+                presupuestoId,
+                sesionId
         );
     }
 
