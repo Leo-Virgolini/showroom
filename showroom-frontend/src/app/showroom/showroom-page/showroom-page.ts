@@ -424,15 +424,22 @@ export class ShowroomPage implements AfterViewInit {
     ),
   );
 
-  /** Subtotal s/IVA contando SOLO los ítems elegibles para el descuento por
-   *  escala. Es la base sobre la que se compara el umbral y sobre la que se
-   *  aplica el %. Los ítems excluidos (ej. MAQUINAS INDUSTRIALES) no
-   *  empujan el escalón ni reciben el descuento. */
-  readonly subtotalElegibleDescuento = computed(() =>
-    this.carrito()
+  /** Subtotal contando SOLO los ítems elegibles para el descuento por escala,
+   *  valuados con la FORMA DE REFERENCIA (la marcada "Precio ref." — Efectivo,
+   *  `formaDestacada(false)`). Es la base sobre la que se COMPARA el umbral.
+   *  Los ítems excluidos (ej. MAQUINAS INDUSTRIALES) no empujan el escalón ni
+   *  reciben el descuento. Fallback al PVP s/IVA si no hay forma ref. marcada. */
+  readonly subtotalElegibleDescuento = computed(() => {
+    const formaRef = this.formaDestacada(false);
+    return this.carrito()
       .filter((it) => !this.excluidoDescuentoEscala(it))
-      .reduce((acc, it) => acc + (it.pvpKtGastroSinIva ?? 0) * it.cantidad, 0),
-  );
+      .reduce((acc, it) => {
+        const precio = formaRef
+          ? this.precioReferenciaPorForma(it, formaRef)
+          : (it.pvpKtGastroSinIva ?? 0);
+        return acc + precio * it.cantidad;
+      }, 0);
+  });
 
   /** Descuento % vigente según el subtotal elegible y los escalones configurados. */
   readonly descuentoAplicado = computed(() => {
