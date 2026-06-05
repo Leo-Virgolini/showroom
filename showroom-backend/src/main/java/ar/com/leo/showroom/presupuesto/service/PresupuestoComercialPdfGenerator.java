@@ -1058,8 +1058,7 @@ public class PresupuestoComercialPdfGenerator {
             if (it.precioEfectivo() != null) {
                 precio = it.precioEfectivo();
             } else if (esMaquinaria) {
-                BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-                precio = precioConIva.divide(divisor, 4, RoundingMode.HALF_UP);
+                precio = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
             } else {
                 precio = precioConIva;
             }
@@ -1305,8 +1304,7 @@ public class PresupuestoComercialPdfGenerator {
 
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? BigDecimal.valueOf(21) : it.porcIva();
-            BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-            BigDecimal precioSinIva = precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+            BigDecimal precioSinIva = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
             boolean sinPrecio = precioSinIva.signum() <= 0;
             /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
              *  fila muestra el precio efectivo de contado pero las columnas
@@ -1906,8 +1904,7 @@ public class PresupuestoComercialPdfGenerator {
         }
         BigDecimal precioConIva = item.precioConIva() == null ? BigDecimal.ZERO : item.precioConIva();
         BigDecimal porcIva = item.porcIva() == null ? BigDecimal.valueOf(21) : item.porcIva();
-        BigDecimal divisor = BigDecimal.ONE.add(porcIva.movePointLeft(2));
-        return precioConIva.divide(divisor, 2, RoundingMode.HALF_UP);
+        return PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
     }
 
     /** Precio EFECTIVO unitario con el descuento individual aplicado. Coincide
