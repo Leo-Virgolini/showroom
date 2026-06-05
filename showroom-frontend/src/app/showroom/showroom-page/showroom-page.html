@@ -879,10 +879,10 @@
               Subtotal
             </span>
             <span class="inline-flex items-baseline gap-2 tabular-nums">
-              <span>{{ subtotalPreDescuento() | currency:'ARS':'symbol':'1.0-0' }}</span>
-              @if (descuentoMonto() > 0) {
+              <span>{{ subtotalCarrito() | currency:'ARS':'symbol':'1.0-0' }}</span>
+              @if (descuentoMontoForma() > 0) {
                 <span class="text-emerald-700 dark:text-emerald-300 font-medium">
-                  −{{ descuentoMonto() | currency:'ARS':'symbol':'1.0-0' }} ({{ descuentoEfectivoPct() | number:'1.0-1' }}%)
+                  −{{ descuentoMontoForma() | currency:'ARS':'symbol':'1.0-0' }} ({{ descuentoEfectivoPctForma() | number:'1.0-1' }}%)
                 </span>
               }
             </span>
@@ -896,7 +896,7 @@
               <i class="pi pi-percentage text-[0.65rem]"></i>
               Descuento global
             </label>
-            <p-inputNumber inputId="descGlobalCarrito" [ngModel]="descuentoEfectivoPct()"
+            <p-inputNumber inputId="descGlobalCarrito" [ngModel]="descuentoEfectivoPctForma()"
               (ngModelChange)="aplicarDescuentoGlobal($event)" [min]="0" [max]="100" [step]="1"
               [maxFractionDigits]="1" suffix="%" inputStyleClass="w-24 text-center text-sm" [allowEmpty]="false"
               [disabled]="carrito().length === 0"
@@ -927,33 +927,9 @@
           </div>
           }
 
-          <!-- Total único — cuando NO hay recargo de financiación, este renglón
-               es también el total a cobrar; sino debajo aparece el desglose
-               + el "Total a cobrar" separado. -->
-          @if (recargoMontoSinIva() === 0 && ivaMontoCarrito() === 0) {
-          <div class="flex items-baseline justify-between mt-1 pt-1.5 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
-              <i class="pi pi-wallet text-[0.65rem]"></i>
-              Total
-              @if (!aplicaIvaCliente()) {
-                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-              }
-            </span>
-            <span class="tabular-nums font-bold text-lg text-emerald-700 dark:text-emerald-400">
-              {{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
-          </div>
-          } @else {
-          <div class="flex items-baseline justify-between mt-1 pt-1.5 border-t border-surface-200 dark:border-surface-700">
-            <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
-              <i class="pi pi-wallet text-[0.65rem]"></i>
-              Subtotal
-            </span>
-            <span class="tabular-nums font-bold text-sm text-surface-700 dark:text-surface-200">
-              {{ totalCarrito() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
-          </div>
-          }
+          <!-- El subtotal (arriba) ya está a la forma elegida (con/sin IVA por
+               ítem); el total a cobrar va al final, después del selector. -->
+
 
           <!-- Forma de pago + recargo financiero. El selector aparece siempre
                (incluso si la lista de formas está vacía, queda como hint para
@@ -997,42 +973,17 @@
           </div>
           }
 
-          @if (formaPagoSeleccionada() && (recargoMontoSinIva() !== 0 || ivaMontoCarrito() > 0)) {
-          @if (recargoMontoSinIva() !== 0) {
-          <div class="flex items-baseline justify-between text-xs text-muted-color mt-1">
-            <span class="font-medium inline-flex items-center gap-1.5">
-              <i class="pi pi-credit-card text-[0.65rem]"></i>
-              @if (recargoMontoSinIva() > 0) { Recargo financiación } @else { Descuento por pago }
-            </span>
-            <span class="tabular-nums" [class.text-emerald-700]="recargoMontoSinIva() < 0" [class.dark:text-emerald-300]="recargoMontoSinIva() < 0">
-              {{ recargoMontoSinIva() > 0 ? '+' : '' }}{{ recargoMontoSinIva() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
-          </div>
-          }
-          @if (ivaMontoCarrito() > 0) {
-          <div class="flex items-baseline justify-between text-xs text-muted-color mt-1">
-            <span class="font-medium inline-flex items-center gap-1.5">
-              <i class="pi pi-percentage text-[0.65rem]"></i>
-              IVA
-            </span>
-            <span class="tabular-nums">
-              +{{ ivaMontoCarrito() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
-          </div>
-          }
+          <!-- Total a cobrar = subtotal a la forma − descuento. Es lo que paga
+               el cliente (suma de las filas con su descuento por ítem). -->
           <div class="flex items-baseline justify-between mt-1.5 pt-1.5 border-t border-surface-200 dark:border-surface-700">
             <span class="text-xs uppercase tracking-wider text-muted-color font-semibold inline-flex items-center gap-1.5">
               <i class="pi pi-wallet text-[0.65rem]"></i>
               Total a cobrar
-              @if (!aplicaIvaCliente()) {
-                <span class="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">SIN IVA</span>
-              }
             </span>
             <span class="tabular-nums font-bold text-lg text-emerald-700 dark:text-emerald-400">
-              {{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}
+              {{ totalACobrar() | currency:'ARS':'symbol':'1.0-0' }}
             </span>
           </div>
-          }
         </div>
 
         <div class="flex items-center justify-end gap-3 mt-2 flex-wrap">
