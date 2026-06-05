@@ -337,7 +337,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Subtotal BRUTO EFECTIVO (sin ningún descuento) — precio efectivo unitario
    *  (forma primaria, según rubro) por cantidad. Es la base para calcular el
    *  descuento efectivo total. */
-  readonly subtotalBrutoEfectivo = computed(() => {
+  readonly subtotalReferencia = computed(() => {
     this.itemsTick();
     return this.items().reduce((acc, it) => {
       return acc + this.precioMostrado(it) * it.cantidad;
@@ -349,7 +349,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  adicional encima: el campo `descuentoGlobal` es solo un reflejo del %
    *  efectivo y, cuando el operador lo modifica, propaga ese valor a TODOS
    *  los descuentos individuales. */
-  readonly totalEfectivo = computed(() => {
+  readonly totalReferencia = computed(() => {
     this.itemsTick();
     return this.items().reduce((acc, it) => {
       const precio = this.precioMostrado(it);
@@ -360,7 +360,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   /** Suma en pesos de los descuentos individuales (= subtotal bruto - total). */
   readonly descuentoTotalMonto = computed(() =>
-    this.subtotalBrutoEfectivo() - this.totalEfectivo(),
+    this.subtotalReferencia() - this.totalReferencia(),
   );
 
   /** % EFECTIVO del descuento sobre el subtotal bruto. Cuando todos los
@@ -370,7 +370,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  "Descuento global" y, si el operador lo edita, ese nuevo % se copia a
    *  cada ítem (no se "suma" encima). */
   readonly descuentoGlobal = computed(() => {
-    const bruto = this.subtotalBrutoEfectivo();
+    const bruto = this.subtotalReferencia();
     if (bruto <= 0) return 0;
     return (this.descuentoTotalMonto() / bruto) * 100;
   });
@@ -952,13 +952,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return this.rubroCotizaSinIva(rubro);
   }
 
-  /** Precio EFECTIVO unitario a mostrar para un producto en la lista/detalle:
-   *  el precio con la forma de pago primaria (Efectivo) según el rubro del
-   *  ítem — mismo criterio que el scan/visor del showroom. Para menaje suele
-   *  ser conIva × 0,87 (c/IVA); para maquinaria, sinIva (s/IVA).
-   *
-   *  Si NO hay forma primaria (ninguna forma activa es precioReferencia), cae
-   *  al precio de lista según rubro: maquinaria → s/IVA; resto → c/IVA. */
+  /** Precio de REFERENCIA unitario a mostrar para un producto en la lista/detalle:
+   *  el precio con la forma de pago destacada según el rubro del ítem — mismo
+   *  criterio que el scan/visor del showroom. Delega en el servicio compartido. */
   precioMostrado(
     r: {
       pvpKtGastroConIva: number | null;
@@ -967,15 +963,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       rubro?: string | null;
     },
   ): number {
-    const esMaq = this.rubroCotizaSinIva(r.rubro);
-    const forma = this.formaDestacada(esMaq);
-    if (!forma) {
-      // Fallback: precio de lista según rubro.
-      return esMaq
-        ? (r.pvpKtGastroSinIva ?? 0)
-        : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
-    }
-    return precioPorForma(r.pvpKtGastroConIva, r.porcIva ?? null, this.perfilForma(forma, esMaq));
+    return this.precioPerfil.precioReferencia({
+      pvpKtGastroConIva: r.pvpKtGastroConIva,
+      pvpKtGastroSinIva: r.pvpKtGastroSinIva,
+      porcIva: r.porcIva ?? null,
+      rubro: r.rubro,
+    });
   }
 
   agregarResultado(sku: string): void {

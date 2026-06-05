@@ -71,11 +71,13 @@ export class PrecioPerfilService {
     return precioPorForma(producto.pvpKtGastroConIva, producto.porcIva, perfilForma(forma, esMaq));
   }
 
-  /** Precio "efectivo" predefinido de un producto: el de la forma destacada del
-   *  perfil de su rubro (menaje al efectivo c/IVA, maquinaria s/IVA). Si no hay
-   *  forma destacada, cae al precio de lista por rubro. Mismo criterio que el
-   *  scan/visor/presupuestador — el precio único de referencia que ve el cliente. */
-  precioEfectivo(producto: {
+  /** Precio de REFERENCIA de un producto: el de la forma de pago marcada como
+   *  "Precio ref." (destacada) del perfil de su rubro. Por defecto esa forma es
+   *  Efectivo (menaje c/IVA, maquinaria s/IVA), pero el nombre es "referencia"
+   *  porque sigue a la forma destacada, no a "efectivo" literal. Si no hay forma
+   *  destacada, cae al precio de lista por rubro. Es el precio único de
+   *  referencia que se muestra en scan/visor/presupuestador/etiquetas. */
+  precioReferencia(producto: {
     pvpKtGastroConIva: number | null;
     pvpKtGastroSinIva?: number | null;
     porcIva: number | null;

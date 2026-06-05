@@ -352,9 +352,6 @@ export class ShowroomPage implements AfterViewInit {
    *  (precio base, equivalente a "Efectivo 1 cuota / 0%"). */
   readonly formaPagoSeleccionada = signal<FormaPago | null>(null);
 
-  /** Forma destacada menaje por defecto (menor `orden`), o null. Fallback para
-   *  el precio cuando no hay forma efectiva resuelta. */
-  readonly formaReferenciaPrimaria = computed(() => this.formaDestacada(false));
 
   /** Forma destacada/default para el perfil del producto: de las formas activas
    *  marcadas como referencia de ese perfil (menaje → `precioReferencia`;
@@ -743,16 +740,14 @@ export class ShowroomPage implements AfterViewInit {
       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
   }
 
-  /** Precio de la forma de referencia primaria. Si no hay formas marcadas, cae al
-   *  precio base según el rubro (PVP sin IVA para rubros sin IVA, con IVA el resto). */
+  /** Precio de REFERENCIA de un producto (scan o ítem) según el rubro: el de la
+   *  forma destacada de su perfil; si no hay marcada, precio de lista por rubro.
+   *  Delega en el servicio compartido. Usado como base de los escalones cuando
+   *  todavía no hay una forma elegida en el carrito. */
   precioReferenciaPrimario(
     r: { pvpKtGastroConIva: number | null; porcIva: number | null; pvpKtGastroSinIva: number | null; rubro?: string | null },
   ): number {
-    const f = this.formaReferenciaPrimaria();
-    if (f) return this.precioReferenciaPorForma(r, f);
-    return this.rubroCotizaSinIva(r.rubro)
-      ? (r.pvpKtGastroSinIva ?? 0)
-      : (r.pvpKtGastroConIva ?? r.pvpKtGastroSinIva ?? 0);
+    return this.precioPerfil.precioReferencia(r);
   }
 
   /** true si hay un escalón con umbral mayor (mejor descuento) que el precio

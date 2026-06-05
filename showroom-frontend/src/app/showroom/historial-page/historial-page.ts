@@ -34,11 +34,10 @@ import {
   ConversionProducto,
   EstadisticaProducto,
   EstadisticasHistorial,
-  FormaPago,
   SesionDetalle,
   SesionListItem,
 } from '../models';
-import { precioPorForma, precioSinIva } from '../precio-referencia.util';
+import { precioSinIva } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -375,41 +374,21 @@ export class HistorialPage {
    *  pedidos. Alias de la función pura compartida del util. */
   protected readonly precioSinIva = precioSinIva;
 
-  /** True si el rubro cotiza sin IVA (perfil maquinaria). */
-  rubroCotizaSinIva(rubro: string | null | undefined): boolean {
-    return this.precioPerfil.rubroCotizaSinIva(rubro);
-  }
-
-  /** Perfil (recargo + aplicaIva) de una forma según el rubro del producto:
-   *  maquinaria usa los campos *Maquinaria; menaje los normales. */
-  perfilForma(
-    forma: FormaPago,
-    esMaquinaria: boolean,
-  ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
-    return this.precioPerfil.perfilForma(forma, esMaquinaria);
-  }
-
-  /** Forma de pago destacada ("Precio ref.") según el perfil del rubro: la
-   *  primera (orden asc) marcada, o null si no hay ninguna. */
-  formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.precioPerfil.formaDestacada(esMaquinaria);
-  }
-
-  /** Precio "efectivo" de un ítem del detalle = precio con la forma destacada
-   *  del perfil (igual que el precio destacado del scan/visor). Si no hay forma
-   *  destacada, cae al precio de lista según rubro. */
-  precioEfectivo(item: {
+  /** Precio de REFERENCIA de un ítem del detalle = precio con la forma destacada
+   *  del perfil (igual que el scan/visor). Delega en el servicio compartido; el
+   *  ítem guarda el precio como `precioConIva`, así que se mapea al shape del
+   *  servicio (con el sin-IVA derivado para el fallback de maquinaria). */
+  precioReferencia(item: {
     precioConIva: number | null;
     porcIva: number | null;
     rubro?: string | null;
   }): number {
-    const esMaq = this.rubroCotizaSinIva(item.rubro);
-    const forma = this.formaDestacada(esMaq);
-    if (forma) return precioPorForma(item.precioConIva, item.porcIva, this.perfilForma(forma, esMaq));
-    // fallback sin forma destacada: precio de lista según rubro
-    return esMaq
-      ? (this.precioSinIva(item.precioConIva, item.porcIva) ?? 0)
-      : (item.precioConIva ?? 0);
+    return this.precioPerfil.precioReferencia({
+      pvpKtGastroConIva: item.precioConIva,
+      pvpKtGastroSinIva: this.precioSinIva(item.precioConIva, item.porcIva),
+      porcIva: item.porcIva,
+      rubro: item.rubro,
+    });
   }
 
   // =====================================================
