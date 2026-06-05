@@ -1017,7 +1017,7 @@
         <div>
           <strong>{{ cantidadTotal() }}</strong> items
           ({{ carrito().length }} SKUs únicos) ·
-          <strong class="text-primary">{{ totalConRecargo() | currency:'ARS':'symbol':'1.0-0' }}</strong>
+          <strong class="text-primary">{{ totalACobrar() | currency:'ARS':'symbol':'1.0-0' }}</strong>
           @if (formaPagoSeleccionada(); as fp) {
             <span class="text-xs text-amber-700 dark:text-amber-300">
               ({{ fp.nombre }}@if (!aplicaIvaCliente()) {, sin IVA})
