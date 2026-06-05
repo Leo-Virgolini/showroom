@@ -60,38 +60,39 @@
         [loading]="cargando()"
         [paginator]="true"
         [rows]="pageSize()" [totalRecords]="total()" [first]="first()"
+        [sortField]="sortField()" [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
         [rowsPerPageOptions]="[25, 50, 100]"
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
         [showCurrentPageReport]="true"
         stripedRows>
         <ng-template #header>
           <tr>
-            <th style="width: 5rem" class="text-center">
-              <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> #
+            <th style="width: 5rem" class="text-center" pSortableColumn="id">
+              <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> # <p-sortIcon field="id" />
             </th>
-            <th style="width: 10rem">
-              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha
+            <th style="width: 10rem" pSortableColumn="creadoAt">
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Fecha <p-sortIcon field="creadoAt" />
             </th>
-            <th>
-              <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente
+            <th pSortableColumn="clienteNombre">
+              <i class="pi pi-user text-[#FF861C] mr-1"></i> Cliente <p-sortIcon field="clienteNombre" />
             </th>
-            <th>
-              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email
+            <th pSortableColumn="clienteEmail">
+              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email <p-sortIcon field="clienteEmail" />
             </th>
-            <th style="width: 10rem">
-              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono
+            <th style="width: 10rem" pSortableColumn="clienteTelefono">
+              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono <p-sortIcon field="clienteTelefono" />
             </th>
-            <th style="width: 9rem">
-              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
+            <th style="width: 9rem" pSortableColumn="rubro">
+              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro <p-sortIcon field="rubro" />
             </th>
             <th style="width: 8rem">
               <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Operador
             </th>
-            <th class="text-right" style="width: 10rem">
-              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total
+            <th class="text-right" style="width: 10rem" pSortableColumn="totalSinIva">
+              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total <p-sortIcon field="totalSinIva" />
             </th>
-            <th style="width: 7rem" class="text-center">
-              <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
+            <th style="width: 7rem" class="text-center" pSortableColumn="descuentoGlobalPorcentaje">
+              <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc. <p-sortIcon field="descuentoGlobalPorcentaje" />
             </th>
             <th style="width: 15rem"></th>
           </tr>

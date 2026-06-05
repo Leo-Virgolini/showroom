@@ -261,17 +261,41 @@ public class PresupuestoComercialService {
     }
 
     /**
+     * Whitelist de campos por los que se permite ordenar el listado de
+     * presupuestos. Mapea el nombre que manda el frontend (id de columna del
+     * p-table) al nombre del atributo en la entity. Evita "SQL injection via
+     * sort field" al pasar el parámetro directo al ORDER BY. La columna "Total"
+     * del listado se llama {@code totalSinIva} en el DTO pero corresponde al
+     * atributo {@code subtotalSinIva} de la entity.
+     */
+    private static final Map<String, String> SORT_PRESUPUESTOS = Map.of(
+            "id", "id",
+            "creadoAt", "creadoAt",
+            "clienteNombre", "clienteNombre",
+            "clienteEmail", "clienteEmail",
+            "clienteTelefono", "clienteTelefono",
+            "rubro", "rubro",
+            "totalSinIva", "subtotalSinIva",
+            "descuentoGlobalPorcentaje", "descuentoGlobalPorcentaje");
+
+    /**
      * Lista paginada para la pantalla de historial. Soporta filtros por
      * texto libre (nombre/email/teléfono), rango de fechas e id puntual
      * (deep-link). Orden default: más recientes primero.
      */
     public PresupuestoListPageDTO listar(Long id, String q, Instant desde, Instant hasta,
-                                         int page, int size) {
+                                         int page, int size, String sortField, String sortOrder) {
         String qNormalizada = (q == null || q.isBlank()) ? null : q.trim();
+        // Resolver el sort: si el campo no está en la whitelist o no se pidió,
+        // usar `creadoAt desc` (default histórico de la pantalla).
+        String campo = SORT_PRESUPUESTOS.getOrDefault(sortField, "creadoAt");
+        org.springframework.data.domain.Sort.Direction direccion =
+                "asc".equalsIgnoreCase(sortOrder)
+                        ? org.springframework.data.domain.Sort.Direction.ASC
+                        : org.springframework.data.domain.Sort.Direction.DESC;
         org.springframework.data.domain.PageRequest pr =
                 org.springframework.data.domain.PageRequest.of(page, size,
-                        org.springframework.data.domain.Sort.by(
-                                org.springframework.data.domain.Sort.Direction.DESC, "creadoAt"));
+                        org.springframework.data.domain.Sort.by(direccion, campo));
         org.springframework.data.domain.Page<PresupuestoComercial> p =
                 repository.buscar(id, qNormalizada, desde, hasta, pr);
         // Bulk lookup de operadores para la página — una sola query a usuario.

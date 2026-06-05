@@ -219,6 +219,19 @@ public class SesionShowroomService {
         return Optional.of(s);
     }
 
+    /**
+     * Whitelist de campos por los que se permite ordenar el listado de sesiones.
+     * Mapea el nombre que manda el frontend (id de columna del p-table) al
+     * atributo de la entity. Solo columnas que son campos directos de
+     * SesionShowroom: "Operador" (usuarioId derivado), "Estado" (derivado del
+     * pedido) y "Escaneados" (count de items) NO son ordenables. Evita "SQL
+     * injection via sort field" al pasar el parámetro directo al ORDER BY.
+     */
+    private static final java.util.Map<String, String> SORT_SESIONES = java.util.Map.of(
+            "iniciadaAt", "iniciadaAt",
+            "nombre", "nombre",
+            "pedidoId", "pedidoId");
+
     /** Listado paginado de sesiones (página /historial). Ordenado por inicio desc.
      *  Sin filtrar por usuario — el historial muestra todas las sesiones del
      *  showroom independientemente del operador (los listados gerenciales
@@ -230,14 +243,21 @@ public class SesionShowroomService {
      *  sesión completada quedó luego anulada. Una sola query extra a
      *  pedido_showroom, sin N+1. */
     @Transactional
-    public SesionListPageDTO listar(String q, Instant desde, Instant hasta, int page, int size) {
+    public SesionListPageDTO listar(String q, Instant desde, Instant hasta, int page, int size,
+                                    String sortField, String sortOrder) {
         int pageSafe = Math.max(0, page);
         int sizeSafe = Math.min(Math.max(size, 1), 200);
+        // Resolver el sort: si el campo no está en la whitelist o no se pidió,
+        // usar `iniciadaAt desc` (default histórico de la pantalla).
+        String campo = SORT_SESIONES.getOrDefault(sortField, "iniciadaAt");
+        Sort.Direction direccion = "asc".equalsIgnoreCase(sortOrder)
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
         Page<SesionShowroom> resultado = repository.buscar(
                 StringUtils.hasText(q) ? q.trim() : null,
                 desde,
                 hasta,
-                PageRequest.of(pageSafe, sizeSafe, Sort.by(Sort.Direction.DESC, "iniciadaAt"))
+                PageRequest.of(pageSafe, sizeSafe, Sort.by(direccion, campo))
         );
 
         // Estados de los pedidos de la página en una sola query.

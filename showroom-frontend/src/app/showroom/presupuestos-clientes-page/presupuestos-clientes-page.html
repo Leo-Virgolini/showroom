@@ -69,29 +69,29 @@
         stripedRows>
         <ng-template #header>
           <tr>
-            <th>
-              <i class="pi pi-user text-[#FF861C] mr-1"></i> Nombre
+            <th pSortableColumn="nombre">
+              <i class="pi pi-user text-[#FF861C] mr-1"></i> Nombre <p-sortIcon field="nombre" />
             </th>
-            <th>
-              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email
+            <th pSortableColumn="email">
+              <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email <p-sortIcon field="email" />
             </th>
-            <th style="width: 11rem">
-              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono
+            <th style="width: 11rem" pSortableColumn="telefono">
+              <i class="pi pi-phone text-[#FF861C] mr-1"></i> Teléfono <p-sortIcon field="telefono" />
             </th>
-            <th style="width: 9rem">
-              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro
+            <th style="width: 9rem" pSortableColumn="rubro">
+              <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro <p-sortIcon field="rubro" />
             </th>
-            <th class="text-center" style="width: 8rem">
-              <i class="pi pi-file-edit text-[#FF861C] mr-1"></i> Presupuestos
+            <th class="text-center" style="width: 8rem" pSortableColumn="cantidadPresupuestos">
+              <i class="pi pi-file-edit text-[#FF861C] mr-1"></i> Presupuestos <p-sortIcon field="cantidadPresupuestos" />
             </th>
-            <th class="text-center" style="width: 7rem">
-              <i class="pi pi-receipt text-[#FF861C] mr-1"></i> Pedidos
+            <th class="text-center" style="width: 7rem" pSortableColumn="cantidadPedidos">
+              <i class="pi pi-receipt text-[#FF861C] mr-1"></i> Pedidos <p-sortIcon field="cantidadPedidos" />
             </th>
-            <th style="width: 11rem">
-              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Último mov.
+            <th style="width: 11rem" pSortableColumn="ultimoMovimientoAt">
+              <i class="pi pi-calendar text-[#FF861C] mr-1"></i> Último mov. <p-sortIcon field="ultimoMovimientoAt" />
             </th>
-            <th class="text-right" style="width: 10rem">
-              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total último
+            <th class="text-right" style="width: 10rem" pSortableColumn="ultimoTotalSinIva">
+              <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total último <p-sortIcon field="ultimoTotalSinIva" />
             </th>
             <th style="width: 10rem"></th>
           </tr>

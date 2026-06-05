@@ -86,6 +86,9 @@ export class PresupuestosHistorialPage {
   readonly total = signal(0);
   readonly pageSize = signal(50);
   readonly first = signal(0);
+  /** Campo de orden actual — coincide con los keys de `SORT_PRESUPUESTOS` del backend. */
+  readonly sortField = signal<string>('creadoAt');
+  readonly sortOrder = signal<'asc' | 'desc'>('desc');
 
   /** IDs de presupuestos cuyo PDF se está descargando — para deshabilitar
    *  el botón mientras espera el response del backend. */
@@ -143,6 +146,15 @@ export class PresupuestosHistorialPage {
     const first = event.first ?? 0;
     this.pageSize.set(size);
     this.first.set(first);
+    // Cuando el usuario clickea un header, p-table pasa sortField y sortOrder
+    // (1 = asc, -1 = desc). Si no clickea, viene el valor del [sortField] del
+    // template, así que el primer load también respeta el default.
+    if (typeof event.sortField === 'string' && event.sortField) {
+      this.sortField.set(event.sortField);
+    }
+    if (event.sortOrder === 1 || event.sortOrder === -1) {
+      this.sortOrder.set(event.sortOrder === 1 ? 'asc' : 'desc');
+    }
     this.cargar(Math.floor(first / size), size);
   }
 
@@ -157,6 +169,8 @@ export class PresupuestosHistorialPage {
         hasta: hasta ? this.endOfDay(hasta).toISOString() : undefined,
         page,
         size,
+        sortField: this.sortField(),
+        sortOrder: this.sortOrder(),
       })
       .subscribe({
         next: (res) => {

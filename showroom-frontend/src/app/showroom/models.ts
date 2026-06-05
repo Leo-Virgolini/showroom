@@ -248,6 +248,8 @@ export interface ListarSesionesParams {
   hasta?: string;
   page?: number;
   size?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 /** {@code AMBIGUO}: Gmail aceptó el adjunto pero el {@code 250 OK} no llegó
@@ -841,6 +843,8 @@ export interface ListarPresupuestosParams {
   hasta?: string;
   page?: number;
   size?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 /** Resumen de cliente agrupado (pantalla /clientes). Construido en el

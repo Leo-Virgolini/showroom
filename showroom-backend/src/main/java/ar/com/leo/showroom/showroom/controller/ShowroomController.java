@@ -279,8 +279,10 @@ public class ShowroomController {
             @RequestParam(value = "desde", required = false) Instant desde,
             @RequestParam(value = "hasta", required = false) Instant hasta,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "50") int size) {
-        return sesionShowroomService.listar(q, desde, hasta, page, size);
+            @RequestParam(value = "size", defaultValue = "50") int size,
+            @RequestParam(value = "sortField", required = false) String sortField,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder) {
+        return sesionShowroomService.listar(q, desde, hasta, page, size, sortField, sortOrder);
     }
 
     /** Detalle expandido con los items escaneados. */
@@ -805,8 +807,10 @@ public class ShowroomController {
             @RequestParam(value = "desde", required = false) Instant desde,
             @RequestParam(value = "hasta", required = false) Instant hasta,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "50") int size) {
-        return presupuestoComercialService.listar(id, q, desde, hasta, page, size);
+            @RequestParam(value = "size", defaultValue = "50") int size,
+            @RequestParam(value = "sortField", required = false) String sortField,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder) {
+        return presupuestoComercialService.listar(id, q, desde, hasta, page, size, sortField, sortOrder);
     }
 
     /** Vista agrupada por cliente — un row por persona con email/teléfono/

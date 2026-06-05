@@ -286,18 +286,19 @@
     <p-card>
       <p-table [value]="sesiones()" [lazy]="true" [paginator]="true" [totalRecords]="total()" [rows]="pageSize()"
         [first]="first()" [rowsPerPageOptions]="[25, 50, 100]" [loading]="cargando()" [rowTrackBy]="trackById"
+        [sortField]="sortField()" [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
         (onLazyLoad)="onLazyLoad($event)"
         currentPageReportTemplate="Mostrando {first} - {last} de {totalRecords}" [showCurrentPageReport]="true"
         class="p-datatable-sm">
         <ng-template #header>
           <tr>
             <th style="width: 3rem"></th>
-            <th style="width: 11rem">Inicio</th>
-            <th>Cliente</th>
+            <th style="width: 11rem" pSortableColumn="iniciadaAt">Inicio <p-sortIcon field="iniciadaAt" /></th>
+            <th pSortableColumn="nombre">Cliente <p-sortIcon field="nombre" /></th>
             <th style="width: 9rem">Operador</th>
             <th class="text-center" style="width: 12rem">Estado</th>
             <th class="text-center" style="width: 8rem">Escaneados</th>
-            <th class="text-center" style="width: 8rem">Pedido</th>
+            <th class="text-center" style="width: 8rem" pSortableColumn="pedidoId">Pedido <p-sortIcon field="pedidoId" /></th>
             <th class="text-center" style="width: 8rem"></th>
           </tr>
         </ng-template>
