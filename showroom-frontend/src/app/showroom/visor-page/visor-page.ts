@@ -369,12 +369,16 @@ export class VisorPage {
             life: 6000,
           });
         } else if (forzar) {
+          // Mensaje pensado para el cliente: confirmamos que se agregó (tono
+          // positivo) y avisamos con naturalidad que parte va por encargo, sin
+          // mostrar el SKU crudo ni la palabra "sin stock" en tono de alerta.
+          const nombre = r.descripcion ?? 'El producto';
           this.toast.add({
             key: 'visor',
-            severity: 'warn',
-            summary: 'Agregado sin stock',
-            detail: `${r.sku} x${res.cantidadAgregada} — queda como pendiente de reposición.`,
-            life: 4000,
+            severity: 'info',
+            summary: 'Agregado a tu pedido',
+            detail: `${nombre} (x${res.cantidadAgregada}). Coordinamos la entrega de las unidades por encargo.`,
+            life: 5000,
           });
         } else if (res.recortado) {
           this.toast.add({
