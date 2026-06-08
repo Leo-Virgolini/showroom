@@ -34,6 +34,7 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
+import { perfilForma, precioPorForma } from '../precio-referencia.util';
 
 /** Placeholder fijo que DUX recibe como apellido/razón social cuando el
  *  pedido se crea a partir de un presupuesto. Distinto del placeholder del
@@ -110,6 +111,17 @@ export class CrearPedidoDialog {
   readonly cargandoDetallePresupuesto = signal(false);
   readonly enviandoPedido = signal(false);
 
+  /** Ítems cuyo precio de lista actual (cache) difiere del snapshot guardado en
+   *  el presupuesto. Solo informativo — el pedido sigue usando el precio
+   *  cotizado; el aviso deja que el operador decida crear igual o rehacerlo. */
+  readonly cambiosPrecio = signal<{
+    sku: string;
+    descripcion: string;
+    precioViejo: number;
+    precioNuevo: number;
+    deltaPct: number;
+  }[]>([]);
+
   /** Items del detalle cargado — base para armar el payload + para calcular
    *  totales por forma de pago en el select. {@code comentarios} se preserva
    *  para forwardear al payload DUX (relevante en items genéricos). */
@@ -119,6 +131,9 @@ export class CrearPedidoDialog {
     precioConIva: number;
     porcIva: number | null;
     descuentoPorcentaje: number | null;
+    /** Rubro del ítem — define el perfil (menaje/maquinaria) con que se calcula
+     *  el precio por forma de pago, igual que en scan/visor/presupuestador. */
+    rubro: string | null;
     comentarios: string | null;
   }[]>([]);
 
@@ -158,26 +173,22 @@ export class CrearPedidoDialog {
   readonly categoriaFiscalFija = 'CONSUMIDOR_FINAL';
 
   // ----------- Totales por forma de pago -----------
-  readonly subtotalConIvaPedido = computed(() =>
-    this.itemsDelPresupuesto().reduce((acc, it) => {
-      const factor = 1 - ((it.descuentoPorcentaje ?? 0) / 100);
-      return acc + it.precioConIva * it.cantidad * factor;
-    }, 0),
-  );
-
-  readonly subtotalSinIvaPedido = computed(() =>
-    this.itemsDelPresupuesto().reduce((acc, it) => {
-      const factor = 1 - ((it.descuentoPorcentaje ?? 0) / 100);
-      const divisor = 1 + ((it.porcIva ?? 21) / 100);
-      return acc + (it.precioConIva / divisor) * it.cantidad * factor;
-    }, 0),
-  );
-
+  /** Total que paga el cliente con una forma — calculado POR ÍTEM con el perfil
+   *  (menaje/maquinaria) de su rubro, usando la fórmula canónica `precioPorForma`
+   *  (la misma de scan/visor/presupuestador y del backend al crear el pedido).
+   *
+   *  Antes esto usaba un subtotal global + `base / (1 − recargo)`, que (a) para
+   *  recargos negativos no coincide con `× (1 − |r|)` y (b) aplicaba el recargo e
+   *  IVA de menaje a TODOS los ítems, ignorando los de maquinaria (otro recargo,
+   *  sin IVA). Eso hacía que el preview no coincidiera con el total real del
+   *  pedido ni con el del presupuesto. */
   totalParaFormaPago(forma: FormaPago): number {
-    const recargo = (forma.recargoPorcentaje ?? 0) / 100;
-    const aplicaIva = forma.aplicaIva ?? true;
-    const base = aplicaIva ? this.subtotalConIvaPedido() : this.subtotalSinIvaPedido();
-    return base / (1 - recargo);
+    return this.itemsDelPresupuesto().reduce((acc, it) => {
+      const esMaq = this.precioPerfil.rubroCotizaSinIva(it.rubro);
+      const precioU = precioPorForma(it.precioConIva, it.porcIva, perfilForma(forma, esMaq));
+      const factorDesc = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+      return acc + precioU * it.cantidad * factorDesc;
+    }, 0);
   }
 
   // ----------- Validación -----------
@@ -220,6 +231,7 @@ export class CrearPedidoDialog {
 
   private cargarDetalle(id: number): void {
     this.cargandoDetallePresupuesto.set(true);
+    this.cambiosPrecio.set([]);
     this.api.obtenerDetallePresupuestoComercial(id).subscribe({
       next: (det) => {
         this.cargandoDetallePresupuesto.set(false);
@@ -252,11 +264,13 @@ export class CrearPedidoDialog {
           precioConIva: it.precioConIva,
           porcIva: it.porcIva,
           descuentoPorcentaje: it.descuentoPorcentaje,
+          rubro: it.rubro ?? null,
           comentarios: it.comentarios ?? null,
         })));
 
         this.cargarProvinciasSiHaceFalta();
         this.cargarFormasPagoSiHaceFalta();
+        this.verificarCambiosPrecio();
       },
       error: (err) => {
         this.cargandoDetallePresupuesto.set(false);
@@ -265,6 +279,41 @@ export class CrearPedidoDialog {
         // No podemos seguir sin el detalle — cerramos el dialog.
         this.visible.set(false);
       },
+    });
+  }
+
+  /** Compara el precio snapshot de cada ítem contra el precio de lista ACTUAL
+   *  del cache (lookup bulk, sin DUX → instantáneo) y publica las diferencias en
+   *  {@link cambiosPrecio}. Excluye genéricos (tienen {@code comentarios} y un
+   *  SKU comodín cuyo precio no representa al producto). Best-effort: si el
+   *  lookup falla, no muestra nada (no bloquea la creación del pedido). */
+  private verificarCambiosPrecio(): void {
+    const items = this.itemsDelPresupuesto();
+    const skus = items.filter((it) => !it.comentarios).map((it) => it.sku);
+    if (skus.length === 0) return;
+    this.api.lookupBulk(skus).subscribe({
+      next: (catalogo) => {
+        const porSku = new Map(catalogo.map((c) => [c.sku, c]));
+        const cambios = items.flatMap((it) => {
+          if (it.comentarios) return [];
+          const actual = porSku.get(it.sku);
+          const nuevo = actual?.pvpKtGastroConIva;
+          if (nuevo == null || it.precioConIva == null || nuevo === it.precioConIva) {
+            return [];
+          }
+          return [{
+            sku: it.sku,
+            descripcion: actual?.descripcion ?? it.sku,
+            precioViejo: it.precioConIva,
+            precioNuevo: nuevo,
+            deltaPct: it.precioConIva > 0
+              ? ((nuevo - it.precioConIva) / it.precioConIva) * 100
+              : 0,
+          }];
+        });
+        this.cambiosPrecio.set(cambios);
+      },
+      error: () => this.cambiosPrecio.set([]),
     });
   }
 
