@@ -35,6 +35,7 @@ import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { perfilForma, precioPorForma } from '../precio-referencia.util';
+import { BackendStatusService } from '../backend-status.service';
 
 /** Placeholder fijo que DUX recibe como apellido/razón social cuando el
  *  pedido se crea a partir de un presupuesto. Distinto del placeholder del
@@ -95,6 +96,7 @@ export class CrearPedidoDialog {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly precioPerfil = inject(PrecioPerfilService);
+  private readonly backendStatus = inject(BackendStatusService);
 
   // ----------- Inputs / Outputs -----------
   /** Control bidireccional del dialog. Cuando pasa de false→true con un
@@ -284,18 +286,20 @@ export class CrearPedidoDialog {
 
   /** Compara el precio snapshot de cada ítem contra el precio de lista ACTUAL
    *  del cache (lookup bulk, sin DUX → instantáneo) y publica las diferencias en
-   *  {@link cambiosPrecio}. Excluye genéricos (tienen {@code comentarios} y un
-   *  SKU comodín cuyo precio no representa al producto). Best-effort: si el
-   *  lookup falla, no muestra nada (no bloquea la creación del pedido). */
+   *  {@link cambiosPrecio}. Excluye los ítems genéricos (su SKU es el comodín
+   *  {@code dux.sku-producto-generico}, cuyo precio de catálogo no representa al
+   *  producto real cargado a mano). Best-effort: si el lookup falla, no muestra
+   *  nada (no bloquea la creación del pedido). */
   private verificarCambiosPrecio(): void {
+    const skuGen = this.backendStatus.skuProductoGenerico();
     const items = this.itemsDelPresupuesto();
-    const skus = items.filter((it) => !it.comentarios).map((it) => it.sku);
+    const skus = items.filter((it) => it.sku !== skuGen).map((it) => it.sku);
     if (skus.length === 0) return;
     this.api.lookupBulk(skus).subscribe({
       next: (catalogo) => {
         const porSku = new Map(catalogo.map((c) => [c.sku, c]));
         const cambios = items.flatMap((it) => {
-          if (it.comentarios) return [];
+          if (it.sku === skuGen) return [];
           const actual = porSku.get(it.sku);
           const nuevo = actual?.pvpKtGastroConIva;
           if (nuevo == null || it.precioConIva == null || nuevo === it.precioConIva) {
