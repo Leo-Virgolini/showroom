@@ -333,23 +333,25 @@ export class PedidosPage {
     return precioGuardado * (1 + porcIva / 100);
   }
 
-  /** Subtotal de la línea que PAGA el cliente = precio unitario guardado (lo que
-   *  abona el cliente por unidad: c/IVA si la forma aplica IVA, s/IVA si no, ya
-   *  con descuento) × cantidad. La suma de estos subtotales da "Cliente paga"
-   *  ({@code det.total}). Para la base imponible/DUX están las columnas por
-   *  unidad Precio s/IVA y Precio c/IVA. */
+  /** Subtotal NETO de la línea que PAGA el cliente = precio unitario BRUTO (c/IVA
+   *  si la forma aplica IVA, s/IVA si no) × cantidad × (1 − descuento/100). La
+   *  suma de estos subtotales da "Cliente paga" ({@code det.total}). Para la base
+   *  imponible/DUX están las columnas por unidad Precio s/IVA y Precio c/IVA. */
   subtotalCliente(
-    it: { precioUnitario: number | null; cantidad: number | null },
+    it: { precioUnitario: number | null; cantidad: number | null; descuentoPorcentaje?: number | null },
   ): number | null {
     if (it.precioUnitario == null || it.cantidad == null) return null;
-    return it.precioUnitario * it.cantidad;
+    const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+    return it.precioUnitario * it.cantidad * factor;
   }
 
-  /** Total c/IVA que DUX facturó = suma por ítem del precio con IVA. Para ítems
+  /** Total c/IVA que DUX facturó = suma por ítem del precio con IVA, con el
+   *  descuento de la línea aplicado (DUX lo recibe como porc_desc). Para ítems
    *  que el cliente pagó sin IVA, DUX igual facturó con IVA (el operador absorbe
    *  la diferencia). Usa el {@code aplicaIva} por ítem — un pedido mixto tiene
    *  ítems con IVA (menaje) y sin IVA (maquinaria); cae al flag global del
-   *  pedido en pedidos anteriores a esa columna. */
+   *  pedido en pedidos anteriores a esa columna. El {@code precioUnitario} es
+   *  BRUTO, así que hay que descontar acá igual que en {@link subtotalCliente}. */
   totalDux(det: PedidoDetalle): number | null {
     if (det.total == null) return null;
     if (!det.items?.length) return det.total;
@@ -358,7 +360,8 @@ export class PedidosPage {
       const ai = it.aplicaIva ?? det.formaPagoAplicaIva;
       const p = this.precioConIva(it.precioUnitario, it.porcIva, ai);
       if (p == null) return det.total;
-      suma += p * (it.cantidad ?? 0);
+      const factor = 1 - (it.descuentoPorcentaje ?? 0) / 100;
+      suma += p * (it.cantidad ?? 0) * factor;
     }
     return suma;
   }

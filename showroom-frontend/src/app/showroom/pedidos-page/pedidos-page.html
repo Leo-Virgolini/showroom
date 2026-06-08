@@ -510,6 +510,7 @@
                           <th class="text-center" style="width: 5rem">Cant.</th>
                           <th class="text-right" style="width: 8rem">Precio s/IVA</th>
                           <th class="text-right" style="width: 8rem">Precio c/IVA</th>
+                          <th class="text-center" style="width: 5rem">Desc.</th>
                           <th class="text-right" style="width: 9rem">Subtotal</th>
                         </tr>
                       </ng-template>
@@ -540,6 +541,15 @@
                               {{ p | currency:'ARS':'symbol':'1.0-0' }}
                             } @else {
                               —
+                            }
+                          </td>
+                          <td class="text-center tabular-nums">
+                            @if (it.descuentoPorcentaje && it.descuentoPorcentaje > 0) {
+                              <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                −{{ it.descuentoPorcentaje | number:'1.0-1' }}%
+                              </span>
+                            } @else {
+                              <span class="text-muted-color">—</span>
                             }
                           </td>
                           <td class="text-right tabular-nums font-semibold">

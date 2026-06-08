@@ -545,6 +545,7 @@ public class ShowroomService {
                         it.getPrecioUnitario(),
                         it.getPorcIva(),
                         it.getAplicaIva(),
+                        it.getDescuentoPorcentaje(),
                         urlImagenLocal(it.getSku()),
                         it.getComentarios()))
                 .toList();
@@ -744,14 +745,10 @@ public class ShowroomService {
 
     @Transactional
     public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId, String username) {
-        // Si todos los items vienen con el mismo descuento (típico — el frontend manda
-        // el descuento global), lo guardamos a nivel pedido también para que la pantalla
-        // de listado lo muestre sin tener que iterar items.
-        BigDecimal descuentoGlobal = request.items().stream()
-                .map(CrearPedidoRequestDTO.Item::descuentoPorcentaje)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        // El descuento a nivel pedido se calcula como el % EFECTIVO sobre el
+        // subtotal (monto descontado / subtotal bruto), recién después de iterar
+        // los ítems — coincide con descuentos individuales mixtos, no solo con el
+        // descuento global uniforme. Se setea más abajo (ver `descuentoEfectivo`).
 
         // Resolver forma de pago. Si formaPagoId viene, lo buscamos.
         // 400 si la forma_pago no existe — el frontend no debería mandar ids
@@ -787,7 +784,6 @@ public class ShowroomService {
                 .domicilio(request.domicilio())
                 .codigoProvincia(request.codigoProvincia())
                 .idLocalidad(request.idLocalidad())
-                .descuentoPorcentaje(descuentoGlobal)
                 .formaPagoId(formaPago != null ? formaPago.getId() : null)
                 .formaPagoNombre(formaPago != null ? formaPago.getNombre() : null)
                 .recargoPorcentaje(formaPago != null ? recargoPorc : null)
@@ -798,6 +794,9 @@ public class ShowroomService {
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal totalSinIva = BigDecimal.ZERO;
         BigDecimal totalSinRecargo = BigDecimal.ZERO;
+        // Subtotal bruto (con recargo, SIN descuento) — base para el % de
+        // descuento efectivo del pedido que se calcula tras el loop.
+        BigDecimal subtotalBruto = BigDecimal.ZERO;
         Map<String, ProductoCache> caches = catalogoSync.obtenerPorSkus(
                 request.items().stream().map(CrearPedidoRequestDTO.Item::sku).toList()
         );
@@ -835,7 +834,16 @@ public class ShowroomService {
             boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
 
             // Precio que paga el cliente: recargo/descuento del perfil + IVA del perfil.
+            // BRUTO: NO incluye el descuento de la línea — ese se aplica aparte (es
+            // el `precio` que va a DUX, que aplica el `porc_desc` por su cuenta).
             BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
+
+            // Descuento de la línea: el % que también viaja a DUX como porc_desc.
+            // factorDesc = 1 − desc/100. El precioUnitario se persiste BRUTO; el
+            // descuento se guarda aparte y se aplica a los totales.
+            BigDecimal descItem = it.descuentoPorcentaje() != null
+                    ? it.descuentoPorcentaje() : BigDecimal.ZERO;
+            BigDecimal factorDesc = BigDecimal.ONE.subtract(descItem.movePointLeft(2));
 
             PedidoShowroomItem item = PedidoShowroomItem.builder()
                     .pedido(pedido)
@@ -845,20 +853,27 @@ public class ShowroomService {
                     .precioUnitario(precioFinal)
                     .porcIva(porcIva)
                     .aplicaIva(aplicaIvaItem)
+                    .descuentoPorcentaje(descItem.signum() > 0 ? descItem : null)
                     .comentarios(StringUtils.hasText(it.comentarios()) ? it.comentarios().trim() : null)
                     .build();
             pedido.getItems().add(item);
 
             if (precioFinal != null && precioBaseConIva != null) {
                 BigDecimal cant = BigDecimal.valueOf(it.cantidad());
-                total = total.add(precioFinal.multiply(cant));
-                totalSinRecargo = totalSinRecargo.add(precioBaseConIva.multiply(cant));
+                // Precio NETO de la línea = bruto × (1 − desc). Es lo que el
+                // cliente realmente paga y lo que DUX factura (precio + porc_desc).
+                BigDecimal precioFinalNeto = precioFinal.multiply(factorDesc);
+                subtotalBruto = subtotalBruto.add(precioFinal.multiply(cant));
+                total = total.add(precioFinalNeto.multiply(cant));
+                // El descuento es del producto, no de la financiación → aplica
+                // también al "sin recargo" (precio contado).
+                totalSinRecargo = totalSinRecargo.add(precioBaseConIva.multiply(factorDesc).multiply(cant));
                 // totalSinIva del comprobante DUX: si la forma aplica IVA, el
                 // precio_final ya tiene IVA → dividimos. Si no aplica IVA, el
                 // precio_final ya es sin IVA → es directo.
                 BigDecimal precioSinIvaItem = aplicaIvaItem
-                        ? calcularSinIva(precioFinal, porcIva)
-                        : precioFinal;
+                        ? calcularSinIva(precioFinalNeto, porcIva)
+                        : precioFinalNeto;
                 if (precioSinIvaItem != null) {
                     totalSinIva = totalSinIva.add(precioSinIvaItem.multiply(cant));
                 }
@@ -866,6 +881,16 @@ public class ShowroomService {
         }
         pedido.setTotal(total.setScale(2, RoundingMode.HALF_UP));
         pedido.setTotalSinIva(totalSinIva.setScale(2, RoundingMode.HALF_UP));
+        // Descuento EFECTIVO del pedido = (bruto − neto) / bruto × 100. Coincide
+        // con el % que muestran el carrito y el presupuesto, también con mezclas
+        // de descuentos individuales. Null si no hubo descuento.
+        if (subtotalBruto.signum() > 0 && subtotalBruto.compareTo(total) > 0) {
+            BigDecimal descEfectivo = subtotalBruto.subtract(total)
+                    .divide(subtotalBruto, 6, RoundingMode.HALF_UP)
+                    .movePointRight(2)
+                    .setScale(2, RoundingMode.HALF_UP);
+            pedido.setDescuentoPorcentaje(descEfectivo);
+        }
         // Solo persistir totalSinRecargo si efectivamente hubo recargo — sino
         // es ruido (el total ya es el sin-recargo).
         if (formaPago != null && recargoPorc.signum() > 0) {

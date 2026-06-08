@@ -46,6 +46,14 @@ public class PedidoShowroomItem {
     @Column(name = "porc_iva", precision = 6, scale = 2)
     private BigDecimal porcIva;
 
+    /** % de descuento de la línea — lo que se mandó a DUX como {@code porc_desc}.
+     *  El {@code precioUnitario} se persiste BRUTO (sin descuento, = el `precio`
+     *  que va a DUX); el subtotal neto de la línea se deriva aplicando este %.
+     *  Null = sin descuento (incluye pedidos anteriores a esta columna, que
+     *  quedan con su total histórico sin recalcular). */
+    @Column(name = "descuento_porcentaje", precision = 6, scale = 2)
+    private BigDecimal descuentoPorcentaje;
+
     /** Si el {@code precioUnitario} de este ítem lleva IVA. Lo define el perfil
      *  (menaje/maquinaria) del rubro del ítem al crear el pedido — un pedido
      *  mixto puede tener ítems con IVA (menaje) y sin IVA (maquinaria) bajo la

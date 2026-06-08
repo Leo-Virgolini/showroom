@@ -14,6 +14,10 @@ public record PedidoItemDTO(
          *  del ítem). Null para pedidos anteriores a esta columna → el frontend
          *  cae al flag global {@code formaPagoAplicaIva}. */
         Boolean aplicaIva,
+        /** % de descuento de la línea (lo que se mandó a DUX como porc_desc). El
+         *  {@code precioUnitario} es BRUTO; el frontend deriva el subtotal neto
+         *  aplicando este %. Null = sin descuento (incluye pedidos viejos). */
+        BigDecimal descuentoPorcentaje,
         /** URL del endpoint local que sirve la imagen del producto, o null si no
          *  hay archivo. Se calcula al leer el pedido (no se persiste con el item). */
         String imagenUrl,

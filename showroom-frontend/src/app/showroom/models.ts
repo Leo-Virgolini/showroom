@@ -606,6 +606,9 @@ export interface PedidoItemDetalle {
    *  (menaje/maquinaria) del rubro. Null en pedidos anteriores a esta columna
    *  → se cae al flag global {@code formaPagoAplicaIva} del pedido. */
   aplicaIva: boolean | null;
+  /** % de descuento de la línea. El {@code precioUnitario} es BRUTO; el subtotal
+   *  neto se deriva como precio × cant × (1 − desc/100). Null/0 = sin descuento. */
+  descuentoPorcentaje: number | null;
   /** URL del endpoint local de imagen del producto, o null si no existe el archivo. */
   imagenUrl: string | null;
   /** Comentarios libres de la línea (se envió a DUX como {@code comentarios}).
