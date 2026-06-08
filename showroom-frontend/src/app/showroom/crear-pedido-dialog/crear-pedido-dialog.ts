@@ -367,6 +367,9 @@ export class CrearPedidoDialog {
       idLocalidad: this.pedidoIdLocalidad() ?? undefined,
       observaciones: this.pedidoObservaciones().trim() || undefined,
       formaPagoId: this.pedidoFormaPagoId() ?? undefined,
+      // Este dialog SIEMPRE transforma un presupuesto → marcamos el origen para
+      // que el backend no consuma la sesión de atención activa del operador.
+      origenPresupuesto: true,
       items: this.itemsDelPresupuesto().map((it) => ({
         sku: it.sku,
         cantidad: it.cantidad,

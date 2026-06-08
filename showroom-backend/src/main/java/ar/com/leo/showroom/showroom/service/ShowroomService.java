@@ -905,41 +905,49 @@ public class ShowroomService {
                 pedido.getItems().size();
                 pedido.getApellidoRazonSocial();
 
-                // Finalizar la sesión de atención asociada (si la hay) y
-                // asociarla al pedido recién creado. Esto deja la sesión
-                // marcada como "completada" y permite al email service
-                // resolverla vía pedidoId al armar el PDF de follow-up.
-                sesionShowroomService.finalizarConPedido(username, pedido.getId());
+                // Asociación sesión→pedido + PDF de follow-up: SOLO para el
+                // flujo de showroom normal. Un pedido creado desde un presupuesto
+                // (origenPresupuesto=true) no tiene sesión de atención: el
+                // presupuestador no abre sesión, y consumir la sesión activa del
+                // operador la cerraría mal (atención fantasma con 0 escaneados, o
+                // robándole una sesión en curso de otro cliente). Además el PDF de
+                // follow-up ("productos vistos no comprados") sale justamente de
+                // los items escaneados en una sesión, que acá no existen.
+                // El pickit externo SÍ se genera siempre — es un pedido real en DUX.
+                if (!request.origenPresupuesto()) {
+                    // Finalizar la sesión de atención asociada (si la hay) y
+                    // asociarla al pedido recién creado. Esto deja la sesión
+                    // marcada como "completada" y permite al email service
+                    // resolverla vía pedidoId al armar el PDF de follow-up.
+                    sesionShowroomService.finalizarConPedido(username, pedido.getId());
 
-                // Mandar el PDF de follow-up al cliente + generar el pickit
-                // externo en PARALELO — dos @Async independientes que corren en
-                // threads distintos del pool. El pickit (jar local, ~3-5s) suele
-                // terminar bastante antes que SMTP/WhatsApp, así que el operador
-                // ve el toast + auto-descarga del .xlsx primero. Si alguno falla
-                // solo se loguea — el pedido ya está en DUX, no se revierte.
-                //
-                // PDF al cliente: WhatsApp primero (si tiene teléfono), email
-                // como fallback si WhatsApp no llegó (ventana 24hs cerrada,
-                // error, etc.) o no hay teléfono. Lógica en el orquestador.
-                //
-                // OJO: el orquestador resuelve la sesión por pedidoId
-                // (findByPedidoIdWithItems), pero `finalizarConPedido` recién la
-                // asoció en ESTA transacción aún sin commitear. Si lo disparamos
-                // ya, su @Async corre en otra conexión que todavía ve
-                // pedido_id=NULL → cree que "el cliente compró todo lo que vio"
-                // y no manda nada. Lo diferimos al afterCommit para que la
-                // asociación sesión→pedido ya sea visible.
-                final PedidoShowroom pedidoFollowup = pedido;
-                if (TransactionSynchronizationManager.isSynchronizationActive()) {
-                    TransactionSynchronizationManager.registerSynchronization(
-                            new TransactionSynchronization() {
-                                @Override
-                                public void afterCommit() {
-                                    pdfFollowupOrchestrator.enviarTrasPedido(pedidoFollowup);
-                                }
-                            });
-                } else {
-                    pdfFollowupOrchestrator.enviarTrasPedido(pedido);
+                    // Mandar el PDF de follow-up al cliente — @Async que corre en
+                    // un thread distinto del pool. Si falla solo se loguea: el
+                    // pedido ya está en DUX, no se revierte.
+                    //
+                    // PDF al cliente: WhatsApp primero (si tiene teléfono), email
+                    // como fallback si WhatsApp no llegó (ventana 24hs cerrada,
+                    // error, etc.) o no hay teléfono. Lógica en el orquestador.
+                    //
+                    // OJO: el orquestador resuelve la sesión por pedidoId
+                    // (findByPedidoIdWithItems), pero `finalizarConPedido` recién la
+                    // asoció en ESTA transacción aún sin commitear. Si lo disparamos
+                    // ya, su @Async corre en otra conexión que todavía ve
+                    // pedido_id=NULL → cree que "el cliente compró todo lo que vio"
+                    // y no manda nada. Lo diferimos al afterCommit para que la
+                    // asociación sesión→pedido ya sea visible.
+                    final PedidoShowroom pedidoFollowup = pedido;
+                    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                        TransactionSynchronizationManager.registerSynchronization(
+                                new TransactionSynchronization() {
+                                    @Override
+                                    public void afterCommit() {
+                                        pdfFollowupOrchestrator.enviarTrasPedido(pedidoFollowup);
+                                    }
+                                });
+                    } else {
+                        pdfFollowupOrchestrator.enviarTrasPedido(pedido);
+                    }
                 }
                 pickitExternoService.generarAsync(pedido, clientId);
 

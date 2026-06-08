@@ -68,6 +68,15 @@ public record CrearPedidoRequestDTO(
          *  pedido. Si null, el pedido va sin recargo (precios base). */
         Long formaPagoId,
 
+        /** True cuando el pedido se crea transformando un presupuesto comercial
+         *  (dialog de {@code /presupuestos}), no desde el flujo de scan/carrito
+         *  del showroom. En ese caso el pedido NO debe asociarse a la sesión de
+         *  atención activa del operador: el presupuestador es un flujo paralelo
+         *  que no abre sesión, y consumir la sesión activa la cerraría mal (con
+         *  0 escaneados o robándole una atención en curso de otro cliente).
+         *  Ausente en el payload ⇒ false (flujo showroom normal). */
+        boolean origenPresupuesto,
+
         @NotEmpty(message = "items no puede estar vacío")
         @Valid List<Item> items
 ) {

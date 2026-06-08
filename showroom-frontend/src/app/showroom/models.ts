@@ -110,6 +110,12 @@ export interface CrearPedidoRequest {
   /** Forma de pago elegida en el carrito. Si está, el backend aplica el
    *  recargo % de esa forma a cada precioUnitario antes de mandar a DUX. */
   formaPagoId?: number | null;
+  /** True cuando el pedido se crea transformando un presupuesto comercial
+   *  (dialog de /presupuestos), no desde el carrito del showroom. El backend
+   *  usa este flag para NO asociar el pedido a la sesión de atención activa
+   *  del operador (el presupuestador no abre sesión). Ausente/false en el
+   *  flujo normal de showroom. */
+  origenPresupuesto?: boolean;
   items: {
     sku: string;
     cantidad: number;

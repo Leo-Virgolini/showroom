@@ -154,10 +154,10 @@
             <th style="width: 9rem" pSortableColumn="formaPagoNombre">
               Forma de pago <p-sortIcon field="formaPagoNombre" />
             </th>
-            <th class="text-right" style="width: 11rem" pSortableColumn="totalSinIva">
-              Total <p-sortIcon field="totalSinIva" />
+            <th class="text-right" style="width: 11rem" pSortableColumn="total">
+              Total <p-sortIcon field="total" />
               <div class="text-[0.65rem] font-normal text-muted-color leading-none">
-                cliente / DUX
+                c/IVA · s/IVA
               </div>
             </th>
             <th class="text-center" style="width: 8rem">Acciones</th>
@@ -232,11 +232,11 @@
                   <span class="font-medium truncate" [pTooltip]="p.formaPagoNombre" tooltipPosition="top">
                     {{ p.formaPagoNombre }}
                   </span>
-                  <div class="flex items-center gap-1 flex-wrap">
-                    @if (p.cantidadCuotas && p.cantidadCuotas > 1) {
+                  @if (p.cantidadCuotas && p.cantidadCuotas > 1 && !nombreIncluyeCuotas(p.formaPagoNombre, p.cantidadCuotas)) {
+                    <div class="flex items-center gap-1 flex-wrap">
                       <span class="text-[0.65rem] text-muted-color tabular-nums">{{ p.cantidadCuotas }} cuotas</span>
-                    }
-                  </div>
+                    </div>
+                  }
                 </div>
               } @else {
                 <span class="text-muted-color">—</span>
@@ -244,11 +244,11 @@
             </td>
             <td class="text-right tabular-nums">
               <div class="font-semibold text-base">
-                {{ (p.totalSinIva ?? p.total) | currency:'ARS':'symbol':'1.0-0' }}
+                {{ (p.total ?? p.totalSinIva) | currency:'ARS':'symbol':'1.0-0' }}
               </div>
               @if (p.totalSinIva != null && p.total != null && p.totalSinIva !== p.total) {
                 <div class="text-[0.7rem] text-muted-color leading-tight">
-                  c/IVA: {{ p.total | currency:'ARS':'symbol':'1.0-0' }}
+                  s/IVA: {{ p.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
                 </div>
               }
             </td>
@@ -396,13 +396,16 @@
                           <dt class="text-muted-color">Forma de pago</dt>
                           <dd>
                             <span class="font-medium">{{ det.formaPagoNombre }}</span>
-                            @if (det.cantidadCuotas && det.cantidadCuotas > 1) {
+                            @if (det.cantidadCuotas && det.cantidadCuotas > 1 && !nombreIncluyeCuotas(det.formaPagoNombre, det.cantidadCuotas)) {
                               <span class="text-muted-color"> · {{ det.cantidadCuotas }} cuotas</span>
                             }
                             @if (det.recargoPorcentaje && det.recargoPorcentaje > 0) {
                               <span class="text-amber-700 dark:text-amber-300 font-semibold ml-1">
                                 +{{ det.recargoPorcentaje }}%
                               </span>
+                              @if (montoRecargo(det); as mr) {
+                                <span class="text-xs text-muted-color ml-1">(+{{ mr | currency:'ARS':'symbol':'1.0-0' }})</span>
+                              }
                             }
                           </dd>
                         }

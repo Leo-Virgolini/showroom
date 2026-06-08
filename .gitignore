@@ -43,6 +43,9 @@ tmp/
 *.backup
 *.orig
 
+# ---- Dumps de la BD generados por el sidecar mysql-backup ----
+backups/
+
 # ---- Archivo suelto que quedó en la raíz por error de algún npm install ----
 # (pertenece a uno de los subproyectos, no acá)
 /package-lock.json

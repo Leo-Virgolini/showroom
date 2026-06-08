@@ -46,6 +46,62 @@ services:
     ports:
       - "3307:3306"
 
+  # Backup diario de la BD. Sidecar que reutiliza la imagen mysql:8.4 (así
+  # `mysqldump` coincide exacto con la versión del server) y corre un loop bash
+  # que duerme hasta las 02:00, dumpea, comprime y rota.
+  #
+  # - Los dumps van a ./backups del host (gzip). Restore:
+  #     gunzip < backups/showroom-XXXX.sql.gz | \
+  #       docker compose exec -T mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" showroom
+  # - Retención: conserva los 7 dumps más recientes (los anteriores se borran).
+  # - Solo corre mientras el stack está levantado: si la PC está apagada a las
+  #   02:00, ese día se saltea (no hay catch-up).
+  # - Backup on-demand: docker compose exec mysql-backup \
+  #     bash -c 'mysqldump -h mysql -uroot --single-transaction --routines \
+  #       --triggers --events --no-tablespaces showroom | gzip > /backups/manual-$(date +%Y%m%d-%H%M%S).sql.gz'
+  #
+  # OJO con el escaping: dentro de `command`, Compose interpola `$`, así que los
+  # `$` de bash van duplicados como `$$` (Compose los colapsa a `$` al pasarlos).
+  mysql-backup:
+    image: mysql:8.4
+    container_name: showroom-mysql-backup
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # mysqldump lee el password de MYSQL_PWD — evita exponerlo en la cmdline.
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-showroom}
+      TZ: America/Argentina/Buenos_Aires
+    volumes:
+      - ./backups:/backups
+    networks:
+      - showroom-net
+    command:
+      - bash
+      - -c
+      - |
+        set -eo pipefail
+        echo "[backup] sidecar iniciado - dump diario 02:00, retencion 7"
+        while true; do
+          now=$$(date +%s)
+          next=$$(date -d "today 02:00" +%s)
+          [ "$$next" -le "$$now" ] && next=$$(date -d "tomorrow 02:00" +%s)
+          echo "[backup] durmiendo $$((next-now))s hasta la proxima corrida"
+          sleep $$((next-now))
+          file=/backups/showroom-$$(date +%Y%m%d-%H%M%S).sql.gz
+          echo "[backup] generando $$file"
+          if mysqldump -h mysql -u root --single-transaction --routines \
+               --triggers --events --no-tablespaces showroom | gzip > "$$file" \
+               && [ -s "$$file" ]; then
+            echo "[backup] OK ($$(du -h "$$file" | cut -f1))"
+            ls -1t /backups/showroom-*.sql.gz | tail -n +8 | xargs -r rm -f
+          else
+            echo "[backup] ERROR: dump fallido o vacio - conservo los anteriores"
+            rm -f "$$file"
+          fi
+        done
+
   backend:
     build:
       context: ./showroom-backend

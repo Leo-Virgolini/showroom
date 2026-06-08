@@ -385,6 +385,29 @@ export class PedidosPage {
     return det.total - det.totalSinIva;
   }
 
+  /** Monto del recargo por financiación = lo que paga el cliente menos el
+   *  precio sin financiación (al contado). Null si no hubo recargo. Hace
+   *  verificable la diferencia contado↔financiado: el `recargoPorcentaje` es el
+   *  parámetro de la fórmula (descuento por contado, base/(1−r)), NO el % real
+   *  de aumento — así que mostrar el monto evita la cuenta engañosa de `×(1+r)`. */
+  montoRecargo(det: PedidoDetalle): number | null {
+    if (det.total == null || det.totalSinRecargo == null) return null;
+    const m = det.total - det.totalSinRecargo;
+    return m > 0.5 ? m : null;
+  }
+
+  /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas
+   *  (ej. "6 Cuotas"), para no repetir "· N cuotas" al lado. Busca el número
+   *  como token aislado (delimitado por no-dígitos) para no matchear, p. ej.,
+   *  el "6" embebido en "16". */
+  nombreIncluyeCuotas(
+    nombre: string | null | undefined,
+    cuotas: number | null | undefined,
+  ): boolean {
+    if (!nombre || cuotas == null) return false;
+    return new RegExp(`(^|\\D)${cuotas}(\\D|$)`).test(nombre);
+  }
+
   trackById = (_: number, it: PedidoListItem) => it.id;
 
   estaEnviandoEmail(id: number): boolean {
