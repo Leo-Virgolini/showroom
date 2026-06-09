@@ -74,12 +74,22 @@ public record CrearPedidoRequestDTO(
          *  atención activa del operador: el presupuestador es un flujo paralelo
          *  que no abre sesión, y consumir la sesión activa la cerraría mal (con
          *  0 escaneados o robándole una atención en curso de otro cliente).
-         *  Ausente en el payload ⇒ false (flujo showroom normal). */
-        boolean origenPresupuesto,
+         *
+         *  <p>Es {@code Boolean} (no primitivo) a propósito: el flujo showroom
+         *  normal no manda el campo, y Jackson 3 falla al mapear un primitivo
+         *  ausente/null ({@code FAIL_ON_NULL_FOR_PRIMITIVES} es true por
+         *  default, a diferencia de Jackson 2). El constructor compacto lo
+         *  normaliza a {@code false} → "ausente en el payload ⇒ false". */
+        Boolean origenPresupuesto,
 
         @NotEmpty(message = "items no puede estar vacío")
         @Valid List<Item> items
 ) {
+    /** Normaliza origenPresupuesto ausente/null a false (flujo showroom normal). */
+    public CrearPedidoRequestDTO {
+        origenPresupuesto = origenPresupuesto != null && origenPresupuesto;
+    }
+
     public record Item(
             @NotNull String sku,
             @NotNull @Positive Integer cantidad,
