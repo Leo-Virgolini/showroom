@@ -201,6 +201,14 @@ public class CatalogoSyncService {
             log.error("Sync falló: {}", ex.getMessage(), ex);
             eventService.publish("sync", SyncEvent.failed(inicio, ex.getMessage()));
             throw ex;
+        } catch (Error err) {
+            // Un Error (p.ej. OutOfMemoryError al cargar miles de items en
+            // memoria) limpiaría el flag en el finally pero, sin esto, nunca
+            // emitiría el evento terminal: el banner del cliente quedaría pegado.
+            // Emitimos failed best-effort y re-lanzamos para no tragar el Error.
+            log.error("Sync abortado por Error: {}", err.toString(), err);
+            eventService.publish("sync", SyncEvent.failed(inicio, err.toString()));
+            throw err;
         } finally {
             syncEnCurso.set(false);
             cancelarSolicitado.set(false);

@@ -74,6 +74,7 @@ public class PriorityRateLimiter {
     }
 
     private boolean acquireHigh(long deadlineNanos) throws InterruptedException {
+        boolean bounded = deadlineNanos != Long.MAX_VALUE;
         lock.lock();
         try {
             highWaiters++;
@@ -85,9 +86,13 @@ public class PriorityRateLimiter {
                         nextPermitAtNanos = now + intervalNanos;
                         return true;
                     }
-                    long remaining = deadlineNanos - now;
-                    if (remaining <= 0) return false;
-                    highCondition.awaitNanos(Math.min(wait, remaining));
+                    if (bounded) {
+                        long remaining = deadlineNanos - now;
+                        if (remaining <= 0) return false;
+                        highCondition.awaitNanos(Math.min(wait, remaining));
+                    } else {
+                        highCondition.awaitNanos(wait);
+                    }
                 }
             } finally {
                 highWaiters--;
@@ -103,12 +108,14 @@ public class PriorityRateLimiter {
     }
 
     private boolean acquireLow(long deadlineNanos) throws InterruptedException {
+        boolean bounded = deadlineNanos != Long.MAX_VALUE;
         lock.lock();
         try {
             while (true) {
                 long now = System.nanoTime();
-                long remaining = deadlineNanos - now;
-                if (remaining <= 0) return false;
+                // remaining sólo es significativo cuando hay deadline finito.
+                long remaining = bounded ? deadlineNanos - now : Long.MAX_VALUE;
+                if (bounded && remaining <= 0) return false;
 
                 // Mientras haya HIGH esperando, el LOW cede el turno entero.
                 if (highWaiters > 0) {

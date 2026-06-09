@@ -175,6 +175,14 @@ export class PedidosPage {
       this.filtroTrigger$.next();
     });
 
+    // Deep-link desde /clientes: ?q=<frag tel> → pre-llena la búsqueda para
+    // listar solo los pedidos de ese cliente. Mismo patrón que el historial de
+    // presupuestos. Se evalúa una sola vez al montar.
+    const qParam = this.route.snapshot.queryParamMap.get('q');
+    if (qParam) {
+      this.busqueda.set(qParam);
+    }
+
     // Deep-link desde /historial: ?id=123 → filtrar a ese pedido y auto-expandir.
     // queryParamMap se evalúa una sola vez al montar (suficiente — la pantalla
     // no se re-navega a sí misma con distinto id en el mismo ciclo de vida).

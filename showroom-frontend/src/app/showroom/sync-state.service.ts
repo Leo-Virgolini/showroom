@@ -81,6 +81,20 @@ export class SyncStateService {
         window.removeEventListener('online', onOnline),
       );
     }
+
+    // Red de seguridad por tiempo. Todos los mecanismos de arriba son reactivos
+    // a un evento del entorno (reconexión, visibilidad, red); ninguno cubre el
+    // caso "cliente visible y conectado que perdió el evento terminal del SSE"
+    // —o el backend salió por un Error y nunca emitió COMPLETED/FAILED—. Mientras
+    // el backend reporte un sync en curso, reconciliamos contra /health cada
+    // 15s: si ya terminó, syncEnCurso() pasa a false y este effect limpia el
+    // interval solo. /health es fuente de verdad (el flag se limpia siempre en
+    // el finally del orquestador), así que esto nunca deja el banner pegado.
+    effect((onCleanup) => {
+      if (!this.syncEnCurso()) return;
+      const id = setInterval(() => this.cargarHealthInicial(), 15_000);
+      onCleanup(() => clearInterval(id));
+    });
   }
 
   private cargarHealthInicial(): void {

@@ -80,6 +80,29 @@ public class ShowroomService {
     /** DUX espera la fecha en horario Argentina, no en UTC del servidor. */
     private static final ZoneId ZONA_AR = ZoneId.of("America/Argentina/Buenos_Aires");
 
+    /**
+     * Orden del "top por conversión": mayor % de conversión primero; ante igual
+     * % (muy común, porque hay muchos productos en 0%), desempata por sesiones
+     * con compra y luego por sesiones escaneadas — todo descendente.
+     *
+     * <p>El desempate final por {@code sesionesEscaneadas} es clave: ante igual
+     * % (en especial 0%), prioriza los productos MÁS mirados. Un producto muy
+     * escaneado y nunca comprado es justo la señal "vidriera" que la tabla
+     * busca destacar; sin este criterio el top quedaba ordenado por el SKU del
+     * GROUP BY (alfabético) y se llenaba de productos con apenas 2 sesiones,
+     * ocultando los relevantes.
+     *
+     * <p>Construido en ascendente y revertido UNA sola vez al final: encadenar
+     * {@code .reversed()} después de cada criterio invierte el comparator
+     * compuesto entero en cada llamada, lo que terminaba ordenando por % al
+     * revés (mostraba los de PEOR conversión primero).
+     */
+    static final Comparator<ConversionProductoDTO> ORDEN_CONVERSION =
+            Comparator.comparingDouble(ConversionProductoDTO::porcentaje)
+                    .thenComparingLong(ConversionProductoDTO::sesionesConCompra)
+                    .thenComparingLong(ConversionProductoDTO::sesionesEscaneadas)
+                    .reversed();
+
     private final CatalogoSyncService catalogoSync;
     private final DuxClient duxClient;
     private final PedidoShowroomRepository pedidoRepository;
@@ -497,8 +520,8 @@ public class ShowroomService {
         //
         // Filtramos productos con muy pocos scans (<2) para evitar ruido — un
         // SKU escaneado 1 vez y comprado 1 vez daría 100% pero no es
-        // estadísticamente relevante. Ordenamos por % desc; desempate por
-        // sesiones con compra (el producto que convirtió a más clientes primero).
+        // estadísticamente relevante. Orden: ver ORDEN_CONVERSION (% desc, con
+        // desempate por sesiones con compra y por sesiones escaneadas).
         Map<String, Long> sesionesConCompraPorSku = sesionRepository
                 .contarSesionesConvertidasPorSku(desde, hasta).stream()
                 .collect(Collectors.toMap(
@@ -517,9 +540,7 @@ public class ShowroomService {
                     return new ConversionProductoDTO(
                             esc.sku(), esc.descripcion(), esc.total(), convertidas, pct);
                 })
-                .sorted(java.util.Comparator
-                        .comparingDouble(ConversionProductoDTO::porcentaje).reversed()
-                        .thenComparingLong(ConversionProductoDTO::sesionesConCompra).reversed())
+                .sorted(ORDEN_CONVERSION)
                 .limit(limitSafe)
                 .toList();
 

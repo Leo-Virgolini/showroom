@@ -25,10 +25,10 @@
           (onClick)="exportarCsv()"
           pTooltip="Descargar CSV compatible con Marketing Nube (Tiendanube)"
           tooltipPosition="bottom" />
-        <app-top-actions />
         <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
           [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
           pTooltip="Volver al showroom" tooltipPosition="bottom" />
+        <app-top-actions />
       </div>
     </ng-template>
   </p-toolbar>
@@ -93,7 +93,7 @@
             <th class="text-right" style="width: 10rem" pSortableColumn="ultimoTotalSinIva">
               <i class="pi pi-wallet text-[#FF861C] mr-1"></i> Total último <p-sortIcon field="ultimoTotalSinIva" />
             </th>
-            <th style="width: 10rem"></th>
+            <th style="width: 6rem"></th>
           </tr>
         </ng-template>
 
@@ -117,18 +117,26 @@
             </td>
             <td class="text-center">
               @if (c.cantidadPresupuestos > 0) {
-                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF861C]/15 text-[#FF861C]">
+                <button type="button"
+                  class="text-xs font-semibold px-2 py-0.5 rounded-full bg-[#FF861C]/15 text-[#FF861C] cursor-pointer transition-transform hover:scale-110 hover:bg-[#FF861C]/25 active:scale-95"
+                  (click)="verPresupuestos(c)"
+                  pTooltip="Ver presupuestos de este cliente" tooltipPosition="top"
+                  [attr.aria-label]="'Ver ' + c.cantidadPresupuestos + ' presupuesto(s) de ' + (c.nombre || 'este cliente')">
                   {{ c.cantidadPresupuestos }}
-                </span>
+                </button>
               } @else {
                 <span class="text-xs text-muted-color">—</span>
               }
             </td>
             <td class="text-center">
               @if (c.cantidadPedidos > 0) {
-                <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <button type="button"
+                  class="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 cursor-pointer transition-transform hover:scale-110 hover:bg-emerald-200 dark:hover:bg-emerald-900/60 active:scale-95"
+                  (click)="verPedidos(c)"
+                  pTooltip="Ver pedidos de este cliente" tooltipPosition="top"
+                  [attr.aria-label]="'Ver ' + c.cantidadPedidos + ' pedido(s) de ' + (c.nombre || 'este cliente')">
                   {{ c.cantidadPedidos }}
-                </span>
+                </button>
               } @else {
                 <span class="text-xs text-muted-color">—</span>
               }
@@ -140,12 +148,9 @@
               {{ (c.ultimoTotalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
             </td>
             <td>
-              <!-- Dos botones chicos lado a lado en vez de p-splitButton: el
-                   SplitButton de PrimeNG 21 tiene problemas con OnPush +
-                   appendTo="body" (los callbacks `command` y los `routerLink`
-                   en los items del dropdown no se disparan). Además, mostrar
-                   ambas opciones expuestas con sus contadores es más
-                   directo que un menú colapsado. -->
+              <!-- Navegar a presupuestos/pedidos del cliente se hace ahora
+                   clickeando los badges de sus columnas; acá quedan solo las
+                   acciones de mantenimiento del cliente. -->
               <div class="inline-flex gap-1 items-center">
                 <p-button icon="pi pi-pencil" size="small" severity="secondary"
                   [outlined]="true" [rounded]="true"
@@ -153,18 +158,6 @@
                   (onClick)="abrirDialogEditar(c)"
                   pTooltip="Editar datos del cliente" tooltipPosition="top"
                   ariaLabel="Editar cliente" />
-                <p-button [label]="'Presup. (' + c.cantidadPresupuestos + ')'"
-                  icon="pi pi-file-edit" size="small" [outlined]="true"
-                  class="btn-kt-naranja-oscuro"
-                  [disabled]="c.cantidadPresupuestos === 0"
-                  (onClick)="verPresupuestos(c)"
-                  pTooltip="Ver presupuestos de este cliente" tooltipPosition="top" />
-                <p-button [label]="'Pedidos (' + c.cantidadPedidos + ')'"
-                  icon="pi pi-receipt" size="small" [outlined]="true"
-                  class="btn-kt-teal"
-                  [disabled]="c.cantidadPedidos === 0"
-                  (onClick)="verPedidos(c)"
-                  pTooltip="Ver pedidos de este cliente" tooltipPosition="top" />
                 <p-button icon="pi pi-trash" size="small" severity="danger"
                   [outlined]="true" [rounded]="true"
                   [disabled]="!c.telefono"

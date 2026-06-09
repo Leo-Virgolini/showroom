@@ -173,10 +173,13 @@ export class HistorialPage {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          title: (items: { dataIndex: number }[]) => {
-            const idx = items[0]?.dataIndex ?? -1;
-            const top = this.chartContextActual?.[idx];
-            return top ? `${top.sku} — ${top.descripcion ?? '—'}` : '';
+          // El array de productos viaja dentro del propio dataset (ver
+          // buildChartData), así cada chart resuelve su tooltip contra SUS
+          // datos — sin buffer compartido entre escaneados y comprados.
+          title: (items: { dataIndex: number; dataset: { productos?: EstadisticaProducto[] } }[]) => {
+            const item = items[0];
+            const p = item ? item.dataset.productos?.[item.dataIndex] : undefined;
+            return p ? `${p.sku} — ${p.descripcion ?? '—'}` : '';
           },
         },
       },
@@ -186,25 +189,20 @@ export class HistorialPage {
     },
   };
 
-  /** Buffer del último array consumido por el tooltip — Chart.js no expone
-   *  el item original en el callback, así que lo mantenemos a mano. Se
-   *  actualiza en {@code buildChartData}. */
-  private chartContextActual: EstadisticaProducto[] | null = null;
-
   private buildChartData(
     top: EstadisticaProducto[],
     label: string,
     bg: string,
     border: string,
   ) {
-    // Guardamos el contexto para el tooltip — last write wins, ambos charts
-    // se renderizan en el mismo tick y cada uno setea su propio contexto.
-    this.chartContextActual = top;
     return {
       labels: top.map(p => p.sku),
       datasets: [{
         label,
         data: top.map(p => p.total),
+        // Adjuntamos los productos al dataset para que el tooltip los lea desde
+        // su propio contexto — sin estado compartido entre los dos charts.
+        productos: top,
         backgroundColor: bg,
         borderColor: border,
         borderWidth: 1,
