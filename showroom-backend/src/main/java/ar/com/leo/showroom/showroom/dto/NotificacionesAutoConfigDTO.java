@@ -9,7 +9,15 @@ package ar.com.leo.showroom.showroom.dto;
  * quiere los envíos auto activos (comportamiento histórico).
  */
 public record NotificacionesAutoConfigDTO(
-        boolean emailAutoPedido,
-        boolean whatsappAutoPedido
+        Boolean emailAutoPedido,
+        Boolean whatsappAutoPedido
 ) {
+    /** Ausente/null ⇒ true (default histórico: envíos auto activos). Son
+     *  {@code Boolean} (no primitivos) porque Jackson 3 falla al mapear un
+     *  primitivo ausente/null ({@code FAIL_ON_NULL_FOR_PRIMITIVES} true por
+     *  default); con primitivos, un PUT que omitiera un toggle rompía el endpoint. */
+    public NotificacionesAutoConfigDTO {
+        emailAutoPedido = emailAutoPedido == null || emailAutoPedido;
+        whatsappAutoPedido = whatsappAutoPedido == null || whatsappAutoPedido;
+    }
 }

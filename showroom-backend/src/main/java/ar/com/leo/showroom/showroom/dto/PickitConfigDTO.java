@@ -17,11 +17,17 @@ package ar.com.leo.showroom.showroom.dto;
  * el PUT se ignora.
  */
 public record PickitConfigDTO(
-        boolean enabled,
+        Boolean enabled,
         String jarPath,
         String stockFile,
         String combosFile,
         String outputDir,
         String hostPath
 ) {
+    /** {@code enabled} ausente/null ⇒ false. Es {@code Boolean} (no primitivo)
+     *  porque Jackson 3 falla al mapear un primitivo ausente/null
+     *  ({@code FAIL_ON_NULL_FOR_PRIMITIVES} true por default). */
+    public PickitConfigDTO {
+        enabled = enabled != null && enabled;
+    }
 }
