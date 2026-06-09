@@ -13,6 +13,13 @@
             Catálogo cacheado · solo lectura
           </span>
         </div>
+        <p-button
+          icon="pi pi-arrow-left"
+          ariaLabel="Volver al showroom"
+          label="Volver"
+          class="btn-volver"
+          routerLink="/"
+        />
       </div>
     </ng-template>
     <ng-template #end>
@@ -26,13 +33,6 @@
             tooltipPosition="bottom"
             class="hidden md:inline-flex" />
         }
-        <p-button
-          icon="pi pi-arrow-left"
-          ariaLabel="Volver al showroom"
-          label="Volver"
-          class="btn-volver"
-          routerLink="/"
-        />
         <app-top-actions />
       </div>
     </ng-template>

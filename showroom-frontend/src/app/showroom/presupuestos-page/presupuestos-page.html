@@ -27,6 +27,9 @@
             }
           </span>
         </div>
+        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
+          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
+          pTooltip="Volver al showroom" tooltipPosition="bottom" />
       </div>
     </ng-template>
 
@@ -96,9 +99,6 @@
           routerLink="/presupuestos/historial"
           pTooltip="Ver presupuestos generados anteriormente" tooltipPosition="bottom" />
 
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
-          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
-          pTooltip="Volver al showroom" tooltipPosition="bottom" />
         <app-top-actions />
       </div>
     </ng-template>
