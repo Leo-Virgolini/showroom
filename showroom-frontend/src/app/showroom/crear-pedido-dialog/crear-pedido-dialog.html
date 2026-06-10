@@ -190,6 +190,7 @@
       <div>
         <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
           <i class="pi pi-credit-card text-[#FF861C] text-[10px]"></i> Forma de pago
+          <span class="text-red-500">*</span>
           <span class="text-[10px] font-normal text-muted-color normal-case tracking-normal">
             (cada opción muestra el total que paga el cliente)
           </span>
@@ -197,8 +198,8 @@
         <p-select [options]="formasPagoActivas()"
           optionLabel="nombre" optionValue="id"
           [ngModel]="pedidoFormaPagoId()" (ngModelChange)="pedidoFormaPagoId.set($event)"
-          placeholder="Sin financiación" class="w-full"
-          [showClear]="true" appendTo="body">
+          placeholder="Elegí una forma de pago" class="w-full"
+          appendTo="body">
           <ng-template let-f #selectedItem>
             @if (f) {
               <div class="flex items-center justify-between gap-2 w-full">

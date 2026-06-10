@@ -411,7 +411,7 @@ export class CrearPedidoDialog {
       this.toast.add({
         severity: 'warn',
         summary: 'Faltan datos',
-        detail: 'CUIT 11 dígitos, nombre, teléfono, email y rubro son obligatorios.',
+        detail: 'CUIT 11 dígitos, nombre, teléfono, email, rubro y forma de pago son obligatorios.',
         life: 4000,
       });
       return;
