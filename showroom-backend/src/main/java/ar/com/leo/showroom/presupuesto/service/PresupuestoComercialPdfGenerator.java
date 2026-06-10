@@ -365,10 +365,13 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal conIva = s.getPrecioConIva() == null ? BigDecimal.ZERO : s.getPrecioConIva();
             boolean esMaq = precioPerfilCalculator.esMaquinaria(s.getRubro());
             FormaPago forma = esMaq ? destacadaMaquinaria : destacadaMenaje;
+            boolean conIvaRef = forma != null
+                    ? PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaq)
+                    : !esMaq;
             BigDecimal precioReferencia = forma != null
                     ? PrecioPerfilCalculator.calcularPrecioFinal(conIva, s.getPorcIva(),
                             PrecioPerfilCalculator.recargoPerfil(forma, esMaq),
-                            PrecioPerfilCalculator.aplicaIvaPerfil(forma, esMaq))
+                            conIvaRef)
                     : (esMaq ? PrecioPerfilCalculator.calcularSinIva(conIva, s.getPorcIva()) : conIva);
             items.add(new GenerarPresupuestoRequestDTO.Item(
                     s.getSku(),
@@ -379,7 +382,8 @@ public class PresupuestoComercialPdfGenerator {
                     s.getPorcIva(),
                     BigDecimal.ZERO,
                     null,
-                    precioReferencia));
+                    precioReferencia,
+                    conIvaRef));
         }
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(

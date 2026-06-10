@@ -341,6 +341,27 @@ export class PedidosPage {
     return precioGuardado * (1 + porcIva / 100);
   }
 
+  /** Precio unitario que CORRESPONDE a la forma de pago, por ítem según su
+   *  perfil (menaje/maquinaria): c/IVA si el perfil aplica IVA, s/IVA si no.
+   *  La tabla del pedido muestra solo este precio (no ambos) para no confundir.
+   *  El {@code aplicaIva} por ítem cae al flag global del pedido en pedidos
+   *  anteriores a esa columna. */
+  precioForma(
+    it: { precioUnitario: number | null; porcIva: number | null; aplicaIva: boolean | null },
+    det: PedidoDetalle,
+  ): number | null {
+    const ai = it.aplicaIva ?? det.formaPagoAplicaIva;
+    return ai === false
+      ? this.precioSinIva(it.precioUnitario, it.porcIva, ai)
+      : this.precioConIva(it.precioUnitario, it.porcIva, ai);
+  }
+
+  /** True si el ítem se cotiza con IVA bajo la forma — define el sufijo
+   *  "c/IVA" vs "s/IVA" del precio en la tabla. */
+  ivaForma(it: { aplicaIva: boolean | null }, det: PedidoDetalle): boolean {
+    return (it.aplicaIva ?? det.formaPagoAplicaIva) !== false;
+  }
+
   /** Subtotal NETO de la línea que PAGA el cliente = precio unitario BRUTO (c/IVA
    *  si la forma aplica IVA, s/IVA si no) × cantidad × (1 − descuento/100). La
    *  suma de estos subtotales da "Cliente paga" ({@code det.total}). Para la base

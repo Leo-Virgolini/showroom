@@ -136,6 +136,14 @@ export class CrearPedidoDialog {
     /** Rubro del ítem — define el perfil (menaje/maquinaria) con que se calcula
      *  el precio por forma de pago, igual que en scan/visor/presupuestador. */
     rubro: string | null;
+    /** Precio efectivo cotizado en el presupuesto. Se manda al backend para que
+     *  el pedido respete lo cotizado sin recalcular. Null en presupuestos viejos
+     *  guardados antes del campo (el backend cae al recálculo). */
+    precioReferencia: number | null;
+    /** Perfil de IVA congelado del presupuesto (true = c/IVA menaje, false =
+     *  s/IVA maquinaria). El backend lo usa para facturar a DUX igual que la
+     *  cotización. Null en presupuestos viejos → el backend re-deduce. */
+    precioReferenciaConIva: boolean | null;
     comentarios: string | null;
   }[]>([]);
 
@@ -202,7 +210,11 @@ export class CrearPedidoDialog {
     const telOk = this.pedidoTelefono().trim().length > 0;
     const rubro = this.pedidoRubro();
     const rubroOk = !!rubro && (rubro !== 'otros' || this.pedidoRubroOtros().trim().length > 0);
-    return cuitOk && emailOk && nombreOk && telOk && rubroOk
+    // Forma de pago obligatoria: el perfil de IVA por ítem (menaje c/IVA,
+    // maquinaria s/IVA) depende de la forma, y sin ella el backend no puede
+    // facturar a DUX con el criterio correcto.
+    const formaOk = this.pedidoFormaPagoId() != null;
+    return cuitOk && emailOk && nombreOk && telOk && rubroOk && formaOk
       && this.itemsDelPresupuesto().length > 0;
   });
 
@@ -267,6 +279,8 @@ export class CrearPedidoDialog {
           porcIva: it.porcIva,
           descuentoPorcentaje: it.descuentoPorcentaje,
           rubro: it.rubro ?? null,
+          precioReferencia: it.precioReferencia ?? null,
+          precioReferenciaConIva: it.precioReferenciaConIva ?? null,
           comentarios: it.comentarios ?? null,
         })));
 
@@ -427,6 +441,15 @@ export class CrearPedidoDialog {
         sku: it.sku,
         cantidad: it.cantidad,
         precioUnitario: it.precioConIva,
+        // Rubro del presupuesto: el backend lo usa (sin caer al cache) para
+        // reproducir el perfil con que se cotizó cada ítem.
+        rubro: it.rubro ?? undefined,
+        // Precio efectivo cotizado: el backend lo respeta para que el pedido
+        // coincida exacto con el presupuesto.
+        precioReferencia: it.precioReferencia ?? undefined,
+        // Perfil de IVA congelado: el backend factura a DUX con este criterio
+        // sin re-deducir el rubro.
+        precioReferenciaConIva: it.precioReferenciaConIva ?? undefined,
         descuentoPorcentaje: it.descuentoPorcentaje ?? undefined,
         // porcIva: relevante solo para items genéricos (el backend usa el
         // del cache para items normales). Lo forwardeamos siempre cuando

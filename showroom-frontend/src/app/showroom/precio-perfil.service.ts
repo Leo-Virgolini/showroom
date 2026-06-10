@@ -90,4 +90,19 @@ export class PrecioPerfilService {
       ? (producto.pvpKtGastroSinIva ?? 0)
       : (producto.pvpKtGastroConIva ?? producto.pvpKtGastroSinIva ?? 0);
   }
+
+  /** True si el {@link precioReferencia} de un producto es un valor CON IVA
+   *  (perfil menaje bajo la forma destacada), false si es SIN IVA (maquinaria).
+   *  Se congela en el presupuesto para que, al transformarlo en pedido, el
+   *  comprobante DUX facture con el MISMO perfil con que se cotizó — sin
+   *  re-deducirlo (que cambiaría si después se modifica la lista de rubros sin
+   *  IVA o la config de la forma de pago). */
+  precioReferenciaConIva(producto: { porcIva?: number | null; rubro?: string | null }): boolean {
+    const esMaq = this.rubroCotizaSinIva(producto.rubro);
+    const forma = this.formaDestacada(esMaq);
+    if (forma) return perfilForma(forma, esMaq).aplicaIva ?? !esMaq;
+    // Sin forma destacada: el precio de referencia es el de lista por rubro
+    // (menaje c/IVA, maquinaria s/IVA).
+    return !esMaq;
+  }
 }

@@ -87,7 +87,15 @@ public record GenerarPresupuestoRequestDTO(
              *  lectura de los JSON persistidos con el nombre viejo
              *  ({@code precioEfectivo}). */
             @JsonAlias("precioEfectivo")
-            BigDecimal precioReferencia
+            BigDecimal precioReferencia,
+            /** True si {@link #precioReferencia} es un valor CON IVA (perfil
+             *  menaje), false si es SIN IVA (maquinaria). Congela el perfil de
+             *  IVA con que se cotizó el ítem para que, al transformar el
+             *  presupuesto en pedido, el comprobante DUX facture con el mismo
+             *  criterio — sin re-deducirlo (que cambiaría si después se modifica
+             *  la lista de rubros sin IVA). Null en presupuestos viejos → el
+             *  pedido cae a re-deducir el perfil por el rubro. */
+            Boolean precioReferenciaConIva
     ) {}
 
     public record FormaPagoSnapshot(

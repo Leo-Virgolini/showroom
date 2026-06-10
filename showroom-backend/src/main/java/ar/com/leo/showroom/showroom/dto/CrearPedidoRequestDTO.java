@@ -94,6 +94,21 @@ public record CrearPedidoRequestDTO(
             @NotNull String sku,
             @NotNull @Positive Integer cantidad,
             BigDecimal precioUnitario,
+            /** Precio EFECTIVO unitario cotizado en el presupuesto (forma de
+             *  referencia + IVA según el perfil del rubro; BRUTO, sin el
+             *  descuento de la línea). Solo viaja cuando el pedido viene de un
+             *  presupuesto ({@code origenPresupuesto=true}): en ese caso el
+             *  backend lo usa como precio que paga el cliente EN LUGAR de
+             *  recalcularlo, para que el pedido respete exactamente lo cotizado
+             *  aunque después hayan cambiado los recargos/IVA de la forma o el
+             *  precio de lista. Null en el flujo showroom normal. */
+            BigDecimal precioReferencia,
+            /** True si {@code precioReferencia} es un valor CON IVA (perfil
+             *  menaje), false si es SIN IVA (maquinaria). Congelado en el
+             *  presupuesto. Cuando viene (pedido de presupuesto), el backend lo
+             *  usa para resolver cómo factura DUX en lugar de re-deducir el
+             *  perfil por el rubro. Null → se cae al re-cálculo por rubro. */
+            Boolean precioReferenciaConIva,
             BigDecimal descuentoPorcentaje,
             /** Rubro DUX del producto. Lo manda el frontend para que el backend
              *  resuelva el perfil (Normal/Maquinaria) de la forma de pago — sobre

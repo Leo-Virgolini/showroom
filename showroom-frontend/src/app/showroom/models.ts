@@ -123,6 +123,15 @@ export interface CrearPedidoRequest {
      *  (Normal/Maquinaria) de la forma de pago. */
     rubro?: string | null;
     precioUnitario: number | null;
+    /** Precio efectivo cotizado en el presupuesto. Solo se manda cuando el
+     *  pedido viene de un presupuesto (origenPresupuesto): el backend lo usa
+     *  como precio que paga el cliente, sin recalcular, para respetar la
+     *  cotización exacta. */
+    precioReferencia?: number | null;
+    /** True si `precioReferencia` es CON IVA (menaje), false si SIN IVA
+     *  (maquinaria) — perfil congelado del presupuesto. El backend lo usa para
+     *  facturar a DUX sin re-deducir el perfil por el rubro. */
+    precioReferenciaConIva?: boolean | null;
     descuentoPorcentaje?: number | null;
     /** % de IVA del producto. Solo se considera para ítems genéricos (SKU
      *  comodín de DUX): el cache del SKU 9999990 no tiene un IVA
@@ -800,6 +809,10 @@ export interface GenerarPresupuestoRequest {
      *  los totales. Null en presupuestos viejos. El backend acepta el nombre
      *  viejo `precioEfectivo` vía alias al leer los JSON persistidos. */
     precioReferencia?: number | null;
+    /** True si `precioReferencia` es un valor CON IVA (menaje), false si es
+     *  SIN IVA (maquinaria). Congela el perfil de IVA con que se cotizó el
+     *  ítem para que el pedido lo facture igual sin re-deducirlo. */
+    precioReferenciaConIva?: boolean;
     /** Texto libre que viaja como {@code comentarios} a DUX cuando el
      *  presupuesto se transforma en pedido. Usado para productos genéricos. */
     comentarios?: string | null;
@@ -866,6 +879,10 @@ export interface PresupuestoDetalle {
      *  Null en presupuestos viejos persistidos antes de este campo — al editar,
      *  el frontend lo recalcula y no rompe si viene ausente. */
     precioReferencia?: number | null;
+    /** True si `precioReferencia` es CON IVA (menaje), false si SIN IVA
+     *  (maquinaria). Congela el perfil con que se cotizó; el pedido lo usa
+     *  para facturar a DUX sin re-deducir. Null en presupuestos viejos. */
+    precioReferenciaConIva?: boolean;
     /** Comentarios libres persistidos junto al item — para items genéricos
      *  trae la descripción tipeada por el operador. Null en items normales. */
     comentarios?: string | null;

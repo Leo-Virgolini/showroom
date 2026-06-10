@@ -847,17 +847,32 @@ public class ShowroomService {
                     ? (it.porcIva() != null ? it.porcIva() : PrecioPerfilCalculator.IVA_DEFAULT)
                     : (pc != null ? pc.getPorcIva() : null);
 
-            // Perfil (Normal/Maquinaria) según el rubro del ítem: el del item si
-            // viene (genéricos) o el del cache. Define el recargo y si aplica IVA.
-            String rubroItem = it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null);
+            // Perfil (Normal/Maquinaria) según el rubro del ítem. Para pedidos de
+            // presupuesto NO caemos al rubro del cache: usamos el rubro tal como
+            // lo guardó el presupuesto (null → menaje), para reproducir el perfil
+            // con que se cotizó cada ítem. En el flujo showroom normal sí caemos
+            // al cache cuando el item no trae rubro (genéricos).
+            String rubroItem = request.origenPresupuesto()
+                    ? it.rubro()
+                    : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
             boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
             BigDecimal recargoItem = recargoPerfil(formaPago, esMaq);
-            boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
+            // Si el pedido viene de un presupuesto y trae el perfil de IVA
+            // congelado (precioReferenciaConIva), lo respetamos — así DUX factura
+            // con el mismo criterio con que se cotizó, sin re-deducirlo por el
+            // rubro/forma (que podría cambiar). Sino, lo deducimos como siempre.
+            boolean aplicaIvaItem = (request.origenPresupuesto() && it.precioReferenciaConIva() != null)
+                    ? it.precioReferenciaConIva()
+                    : aplicaIvaPerfil(formaPago, esMaq);
 
-            // Precio que paga el cliente: recargo/descuento del perfil + IVA del perfil.
-            // BRUTO: NO incluye el descuento de la línea — ese se aplica aparte (es
-            // el `precio` que va a DUX, que aplica el `porc_desc` por su cuenta).
-            BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
+            // Precio que paga el cliente (BRUTO, sin el descuento de la línea).
+            // Si el pedido viene de un presupuesto y trae el precio efectivo
+            // cotizado (precioReferencia), lo RESPETAMOS tal cual — así el pedido
+            // coincide exacto con lo cotizado aunque cambien los recargos/IVA de la
+            // forma o el precio de lista. Sino, lo calculamos con la forma elegida.
+            BigDecimal precioFinal = (request.origenPresupuesto() && it.precioReferencia() != null)
+                    ? it.precioReferencia()
+                    : calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
 
             // Descuento de la línea: el % que también viaja a DUX como porc_desc.
             // factorDesc = 1 − desc/100. El precioUnitario se persiste BRUTO; el
@@ -1221,12 +1236,35 @@ public class ShowroomService {
                     ? (it.porcIva() != null ? it.porcIva() : PrecioPerfilCalculator.IVA_DEFAULT)
                     : (pc != null ? pc.getPorcIva() : null);
             // Perfil del ítem según rubro: define el recargo. A DUX siempre va
-            // con IVA (se ignora el aplicaIva del perfil).
-            String rubroItem = it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null);
+            // con IVA (se ignora el aplicaIva del perfil). Mismo criterio que
+            // crearPedido: para pedidos de presupuesto NO caemos al rubro del
+            // cache, usamos el del presupuesto.
+            String rubroItem = request.origenPresupuesto()
+                    ? it.rubro()
+                    : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
             boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
-            BigDecimal precioDux = formaPago != null
-                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
-                    : precioBaseConIva;
+            BigDecimal precioDux;
+            if (request.origenPresupuesto() && it.precioReferencia() != null) {
+                // Respetamos lo cotizado. DUX factura siempre c/IVA: si el ítem
+                // se cotizó CON IVA (menaje), el precioReferencia ya es c/IVA; si
+                // fue SIN IVA (maquinaria), le sumamos el IVA (el cliente paga sin
+                // y el operador absorbe la diferencia, igual que el flujo normal).
+                // El perfil de IVA lo tomamos del flag congelado del presupuesto
+                // (mismo criterio que crearPedido); si no vino, lo deducimos.
+                boolean conIva = it.precioReferenciaConIva() != null
+                        ? it.precioReferenciaConIva()
+                        : aplicaIvaPerfil(formaPago, esMaq);
+                BigDecimal ivaPorc = porcIva != null ? porcIva : PrecioPerfilCalculator.IVA_DEFAULT;
+                precioDux = conIva
+                        ? it.precioReferencia()
+                        : it.precioReferencia().multiply(BigDecimal.ONE.add(
+                                ivaPorc.divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP)))
+                          .setScale(4, RoundingMode.HALF_UP);
+            } else {
+                precioDux = formaPago != null
+                        ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
+                        : precioBaseConIva;
+            }
             d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);
             if (StringUtils.hasText(it.comentarios())) {

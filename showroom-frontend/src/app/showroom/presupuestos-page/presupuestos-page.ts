@@ -38,6 +38,7 @@ import {
   EnviarPresupuestoRequest,
   FormaPago,
   GenerarPresupuestoRequest,
+  normalizarRubro,
   PresupuestoDetalle,
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
@@ -854,7 +855,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
                 const cambioPrecio = redondearMoneda(f.pvpKtGastroConIva ?? 0)
                   !== redondearMoneda(it.pvpKtGastroConIva ?? 0);
                 const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
-                if (!cambioPrecio && !cambioIva) continue;
+                // Un cambio de rubro (menaje↔maquinaria) cambia el precio de
+                // referencia aunque la lista no cambie — también lo flagueamos.
+                const cambioRubro = normalizarRubro(f.rubro) !== normalizarRubro(it.rubro);
+                if (!cambioPrecio && !cambioIva && !cambioRubro) continue;
                 cambios.set(it.uid, {
                   precioGuardado: this.precioMostrado(it),
                   precioActual: this.precioMostrado({
@@ -977,7 +981,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
               redondearMoneda(f.pvpKtGastroConIva ?? 0) !==
               redondearMoneda(it.pvpKtGastroConIva ?? 0);
             const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
-            if (!cambioPrecio && !cambioIva) {
+            // El rubro también cuenta: si cambió menaje↔maquinaria, cambia el
+            // precio de referencia (y el perfil que va al pedido) aunque la
+            // lista sea igual.
+            const cambioRubro = normalizarRubro(f.rubro) !== normalizarRubro(it.rubro);
+            if (!cambioPrecio && !cambioIva && !cambioRubro) {
               sinCambios++;
               return it;
             }
@@ -1637,6 +1645,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       // Precio unitario con la forma de pago de referencia, ya según rubro
       // (c/IVA menaje, s/IVA maquinaria). Redondeado para coincidir con el PDF.
       precioReferencia: redondearMoneda(this.precioMostrado(it)),
+      // Congela el perfil de IVA con que se cotizó (menaje c/IVA, maquinaria
+      // s/IVA) para que el pedido facture igual sin re-deducirlo.
+      precioReferenciaConIva: this.precioPerfil.precioReferenciaConIva(it),
       // Solo viaja para items genéricos — DUX lo pone como `comentarios` de
       // la línea al transformar el presupuesto en pedido.
       comentarios: it.comentarios ?? null,

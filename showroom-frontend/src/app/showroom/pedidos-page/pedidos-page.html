@@ -512,8 +512,7 @@
                           <th style="width: 9rem">SKU</th>
                           <th>Producto</th>
                           <th class="text-center" style="width: 5rem">Cant.</th>
-                          <th class="text-right" style="width: 8rem">Precio s/IVA</th>
-                          <th class="text-right" style="width: 8rem">Precio c/IVA</th>
+                          <th class="text-right" style="width: 9rem">Precio</th>
                           <th class="text-center" style="width: 5rem">Desc.</th>
                           <th class="text-right" style="width: 9rem">Subtotal</th>
                         </tr>
@@ -533,16 +532,10 @@
                           <td class="font-mono text-sm">{{ it.sku }}</td>
                           <td>{{ it.descripcion ?? '—' }}</td>
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
-                          <td class="text-right tabular-nums text-muted-color">
-                            @if (precioSinIva(it.precioUnitario, it.porcIva, (it.aplicaIva ?? det.formaPagoAplicaIva)); as p) {
-                              {{ p | currency:'ARS':'symbol':'1.0-0' }}
-                            } @else {
-                              —
-                            }
-                          </td>
                           <td class="text-right tabular-nums">
-                            @if (precioConIva(it.precioUnitario, it.porcIva, (it.aplicaIva ?? det.formaPagoAplicaIva)); as p) {
+                            @if (precioForma(it, det); as p) {
                               {{ p | currency:'ARS':'symbol':'1.0-0' }}
+                              <span class="ml-1 text-[0.65rem] text-muted-color">{{ ivaForma(it, det) ? 'c/IVA' : 's/IVA' }}</span>
                             } @else {
                               —
                             }
