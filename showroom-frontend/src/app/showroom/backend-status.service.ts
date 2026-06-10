@@ -9,6 +9,7 @@ import {
   PickitExternoEvent,
   CotizacionEmailEvent,
   PresupuestoEmailEvent,
+  PresupuestoVisor,
   ScanResult,
   ScanVisorError,
   VisorFormaEvent,
@@ -72,6 +73,10 @@ export class BackendStatusService {
   /** Forma de pago elegida en el scan, reemitida al visor. El visor recalcula
    *  el precio mostrado con esa forma y mantiene el último valor (sticky). */
   readonly visorFormaEvents$ = new Subject<VisorFormaEvent>();
+  /** Snapshot del armado del presupuesto, para el visor read-only de
+   *  presupuestos (pantalla `/visor-presupuesto/:username`). El backend lo
+   *  emite ante cada cambio publicado por `presupuestos-page`. */
+  readonly presupuestoVisorEvents$ = new Subject<PresupuestoVisor>();
   /** Estado completo del carrito tras cualquier mutación (operador o visor).
    *  Es el único canal de sincronización del carrito entre pantallas. */
   readonly carritoEvents$ = new Subject<CarritoState>();
@@ -273,6 +278,18 @@ export class BackendStatusService {
         error: () => { /* silencioso, el interceptor maneja 401 */ },
       });
     }
+
+    // 4. Snapshot del visor de presupuesto. Solo en modo visor (público) — el
+    //    visor de presupuesto es read-only y, tras una reconexión, necesita el
+    //    último armado para no quedar con datos viejos. La VisorPage del
+    //    showroom ignora este Subject, así que el fetch extra es inocuo.
+    if (this.visorUsername) {
+      this.http.get<PresupuestoVisor>(
+        `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/presupuesto`).subscribe({
+        next: (p) => this.presupuestoVisorEvents$.next(p),
+        error: () => { /* silencioso (404 si el username no es operador válido) */ },
+      });
+    }
   }
 
   /**
@@ -406,6 +423,14 @@ export class BackendStatusService {
     src.addEventListener('visor-forma', (e: MessageEvent) => {
       try {
         this.visorFormaEvents$.next(JSON.parse(e.data) as VisorFormaEvent);
+      } catch {
+        /* payload malformado, ignoramos */
+      }
+    });
+
+    src.addEventListener('presupuesto-visor', (e: MessageEvent) => {
+      try {
+        this.presupuestoVisorEvents$.next(JSON.parse(e.data) as PresupuestoVisor);
       } catch {
         /* payload malformado, ignoramos */
       }

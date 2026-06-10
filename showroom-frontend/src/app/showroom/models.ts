@@ -336,6 +336,41 @@ export interface VisorFormaEvent {
   formaId: number;
 }
 
+/** Una línea del presupuesto tal como la ve el cliente en el visor read-only. */
+export interface PresupuestoVisorItem {
+  sku: string;
+  descripcion: string | null;
+  imagenUrl: string | null;
+  cantidad: number;
+  /** Precio de referencia unitario (forma destacada según el rubro del ítem). */
+  precioUnitario: number;
+  /** `precioUnitario * (1 - descuento) * cantidad`. */
+  subtotalLinea: number;
+}
+
+/** Una forma de pago con su precio final calculado, para el visor de presupuesto. */
+export interface PresupuestoVisorFormaPago {
+  id: number | null;
+  nombre: string;
+  precioFinal: number;
+  /** Cuotas de la forma (para el desglose "N cuotas de $X"); 1/null = contado. */
+  cantidadCuotas: number | null;
+  /** True para la forma más barata (resaltada en el visor). */
+  esMejorPrecio: boolean;
+}
+
+/** Snapshot del armado de un presupuesto para el visor read-only del celular
+ *  (pantalla `/visor-presupuesto/{username}`). Lo arma `presupuestos-page` ante
+ *  cada cambio y lo publica vía `POST /visor/presupuesto`; el backend lo guarda
+ *  en memoria y lo reemite por SSE (`presupuesto-visor`). `clienteNombre`
+ *  null/vacío ⇒ el visor muestra el encabezado genérico "Presupuesto". */
+export interface PresupuestoVisor {
+  clienteNombre: string | null;
+  items: PresupuestoVisorItem[];
+  total: number;
+  formasPago: PresupuestoVisorFormaPago[];
+}
+
 /** Origen del cambio en el carrito — el frontend usa esto para mostrar toast
  *  diferenciado cuando un cliente desde /visor agrega algo. */
 export type CarritoOrigen = 'OPERADOR' | 'VISOR' | 'SISTEMA';

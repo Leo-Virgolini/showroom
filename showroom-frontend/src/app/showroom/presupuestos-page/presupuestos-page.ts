@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, debounceTime, firstValueFrom } from 'rxjs';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
@@ -40,7 +41,9 @@ import {
   PresupuestoDetalle,
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
+  PresupuestoVisor,
   ScanResult,
+  SesionShowroom,
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
@@ -50,6 +53,7 @@ import {
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
+import { AuthService } from '../../auth/auth.service';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import {
   ProductoGenericoData,
@@ -116,6 +120,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
+  private readonly auth = inject(AuthService);
 
   /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
    *  pantalla pasa a modo edición: el botón principal dice "Guardar cambios",
@@ -148,6 +153,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   readonly screenLg = signal(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
+
+  /** Dispositivo táctil (pointer grueso, ej. tablet con la pistola QR). En
+   *  ese caso evitamos el auto-refoco al scan input tras cada click/cierre de
+   *  dialog: robar el foco abriría el teclado virtual con cada toque. El flujo
+   *  de scan/búsqueda sí refoca igual (la pistola debe alimentar el input). */
+  private readonly esTactil =
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
   // ------------------------------------------------------------
   // Inputs y estado del scan
@@ -331,6 +343,41 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  detallada y desglose por cuotas. En modo individual el panel expandido
    *  muestra el preview por producto en lugar de la lista global. */
   readonly footerExpandido = signal(false);
+
+  // ------------------------------------------------------------
+  // Sesión de cliente COMPARTIDA con el showroom (misma SesionShowroom por
+  // operador). La badge permite asociar/finalizar un cliente desde acá; es
+  // opcional (el presupuesto se arma y se muestra en el visor con o sin
+  // sesión y con o sin cliente). El nombre del presupuesto sale del campo
+  // propio `clienteNombre`, que se prellena del de la sesión cuando está vacío.
+  // ------------------------------------------------------------
+  readonly sesionActiva = signal<SesionShowroom>({
+    id: null, nombre: null, iniciadaAt: null, finalizadaAt: null,
+    pedidoId: null, cantidadEscaneados: 0,
+  });
+  readonly haySesionActiva = computed(() => this.sesionActiva().id != null);
+  readonly mostrarDialogoNuevoCliente = signal(false);
+  readonly nombreNuevoCliente = signal('');
+  readonly iniciandoSesion = signal(false);
+
+  // ------------------------------------------------------------
+  // Visor de presupuesto (espejo read-only en el celular del cliente) — QR +
+  // publicación en vivo del armado. Reusa el mismo VisorConfig.baseUrl que el
+  // visor del showroom para el caso IP-vs-DNS.
+  // ------------------------------------------------------------
+  readonly mostrarDialogVisor = signal(false);
+  readonly qrVisorDataUrl = signal<string | null>(null);
+  readonly qrVisorGenerando = signal(false);
+  readonly visorBaseConfig = signal('');
+  /** URL del visor de presupuesto del operador logueado para el QR/fallback. */
+  readonly visorUrl = computed(() => {
+    const username = this.auth.currentUser()?.username;
+    if (!username || typeof window === 'undefined') return '';
+    const base = this.visorBaseConfig() || window.location.origin;
+    return `${base}/visor-presupuesto/${encodeURIComponent(username)}`;
+  });
+  /** Coalesce los cambios del armado antes de publicarlos al visor (debounce). */
+  private readonly visorPublish$ = new Subject<void>();
 
   /** Todos los ítems entran al PDF — ya no hay checkbox por fila para
    *  excluir ítems individuales. Si el operador no quiere un ítem, lo borra. */
@@ -577,47 +624,64 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         }
       });
 
-    // Refocus al scan input cuando el operador descarta un toast (click en
-    // la X). Mismo patrón que showroom-page: sin esto, el foco queda en el
-    // botón del toast y la pistola QR no escanea hasta clickear el input.
-    // Solo en desktop (pointer fino) — en tablets el auto-refocus abriría
-    // el teclado virtual con cada toque.
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia('(pointer: coarse)').matches) return;
-    const refocusToast = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest('.p-toast')) {
-        this.focusInput();
+    // Refoco "casi-siempre" al scan input: cualquier click que no caiga sobre
+    // un campo editable (ni con un dialog abierto) devuelve el foco al input
+    // para que la pistola QR siga escaneando sin tener que clickearlo. Cubre
+    // eliminar ítems, botones del toolbar, el toggle de modo, el footer,
+    // descartar toasts y clicks en zonas vacías. Solo en desktop (pointer
+    // fino): en tablets robar el foco abriría el teclado virtual con cada
+    // toque, así que ni siquiera registramos el listener.
+    if (typeof window !== 'undefined') {
+      if (!this.esTactil) {
+        const refocusOnClick = () => {
+          // Diferimos un tick para leer el estado YA asentado: el foco del
+          // elemento clickeado y cualquier overlay que el click haya abierto.
+          // El mask de un p-dialog / del p-confirmDialog global se renderiza
+          // en el change detection que dispara el click (microtask), antes de
+          // este setTimeout (macrotask), así que acá ya está en el DOM.
+          setTimeout(() => {
+            // Hay un overlay modal abierto (dialog propio, de un componente
+            // hijo, o el confirmDialog global de app.html): no le robamos el
+            // foco al control que vive dentro del overlay.
+            if (document.querySelector('.p-dialog-mask')) return;
+            // El operador está editando un campo (cantidad, descuento,
+            // observaciones): respetamos su foco.
+            if (this.esCampoEditable(document.activeElement)) return;
+            this.scanInput()?.nativeElement.focus();
+          }, 0);
+        };
+        document.addEventListener('click', refocusOnClick);
+        this.destroyRef.onDestroy(() => document.removeEventListener('click', refocusOnClick));
       }
-    };
-    document.addEventListener('click', refocusToast);
-    this.destroyRef.onDestroy(() => document.removeEventListener('click', refocusToast));
 
-    // Si el operador intenta cerrar la pestaña o refrescar con cambios sin
-    // guardar en modo edición, dispara el confirm nativo del navegador. El
-    // CanDeactivate guard se encarga de la navegación dentro de la SPA;
-    // este listener cubre el caso de salir del browser.
-    const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (!this.hasUnsavedChanges()) return;
-      e.preventDefault();
-      // Chrome ignora el texto y muestra su propio mensaje, pero el
-      // returnValue sigue siendo necesario para que se dispare el prompt.
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', beforeUnload);
-    this.destroyRef.onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
+      // Si el operador intenta cerrar la pestaña o refrescar con cambios sin
+      // guardar en modo edición, dispara el confirm nativo del navegador. El
+      // CanDeactivate guard se encarga de la navegación dentro de la SPA;
+      // este listener cubre el caso de salir del browser.
+      const beforeUnload = (e: BeforeUnloadEvent) => {
+        if (!this.hasUnsavedChanges()) return;
+        e.preventDefault();
+        // Chrome ignora el texto y muestra su propio mensaje, pero el
+        // returnValue sigue siendo necesario para que se dispare el prompt.
+        e.returnValue = '';
+      };
+      window.addEventListener('beforeunload', beforeUnload);
+      this.destroyRef.onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
+    }
 
-    // Refocus al scan input cuando el dialog de "+ Producto genérico" se
-    // CIERRA (cualquier camino: confirmar, cancelar, ESC). Sin esto, el foco
-    // queda en el botón que disparó el cierre y la pistola QR / teclado no
-    // alimentan el input hasta que el operador hace click.
-    let dialogGenericoAbierto = false;
+    // Refoco al scan input cuando se CIERRA cualquiera de los dialogs propios
+    // (+ Producto genérico, Datos del cliente, Crear pedido, Ver producto),
+    // por cualquier camino: confirmar, cancelar o ESC. Sin esto el foco queda
+    // en el botón que disparó el cierre y la pistola QR / teclado no alimentan
+    // el input hasta clickearlo. Un solo effect sobre el OR de los dialogs:
+    // al pasar de abierto a cerrado refoca, respetando el guard táctil.
+    let habiaDialogAbierto = false;
     effect(() => {
-      const abierto = this.mostrarDialogGenerico();
-      if (dialogGenericoAbierto && !abierto) {
-        this.focusInput();
+      const hayDialog = this.algunDialogAbierto();
+      if (habiaDialogAbierto && !hayDialog) {
+        this.focusInputAuto();
       }
-      dialogGenericoAbierto = abierto;
+      habiaDialogAbierto = hayDialog;
     });
 
     // Observa el alto del footer sticky y lo refleja en `footerHeight()`.
@@ -632,6 +696,46 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       obs.observe(el);
       update();
       onCleanup(() => obs.disconnect());
+    });
+
+    // --- Sesión de cliente compartida con el showroom ---
+    // Hidratación inicial + SSE: la badge y el prellenado del nombre reflejan
+    // la MISMA SesionShowroom que usa el showroom (misma por operador).
+    this.api.obtenerSesionActiva().subscribe({
+      next: (s) => this.aplicarSesion(s),
+      error: () => { /* sin sesión: la badge queda en "Cliente" (asociar) */ },
+    });
+    this.backendStatus.sesionEvents$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((s) => this.aplicarSesion(s));
+
+    // --- Publicación en vivo al visor de presupuesto ---
+    // Cualquier cambio del armado o del nombre del cliente arma un snapshot y
+    // lo publica con debounce (para no inundar de requests al teclear). Leer
+    // los computed de abajo establece las dependencias del effect: totales y
+    // formas dependen de `itemsTick`/`formasPago`, así que cubren las
+    // mutaciones in-place de cantidad/descuento.
+    effect(() => {
+      this.itemsTick();
+      this.clienteNombre();
+      this.formasPagoFooter();
+      this.totalReferencia();
+      this.visorPublish$.next();
+    });
+    this.visorPublish$
+      .pipe(debounceTime(400), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.api.publicarPresupuestoVisor(this.armarSnapshotVisor())
+          .subscribe({ error: () => { /* el visor reintenta en el próximo cambio */ } });
+      });
+
+    // Al salir de la pantalla, limpiamos el visor para que el celular no quede
+    // mostrando un presupuesto viejo. (No usamos focusInputAuto/takeUntil acá:
+    // el destroy ya está en curso; es un fire-and-forget.)
+    this.destroyRef.onDestroy(() => {
+      this.api.publicarPresupuestoVisor(
+        { clienteNombre: null, items: [], total: 0, formasPago: [] },
+      ).subscribe({ error: () => { /* no-op */ } });
     });
   }
 
@@ -844,6 +948,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       acceptButtonProps: { label: 'Actualizar', icon: 'pi pi-refresh' },
       rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
       accept: () => this.ejecutarActualizarPrecios(skus),
+      // Al cancelar, el listener global no refoca (el mask del confirmDialog
+      // sigue presente durante su animación de salida), así que lo hacemos acá.
+      reject: () => this.focusInputAuto(),
     });
   }
 
@@ -945,6 +1052,38 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ============================================================
   focusInput(): void {
     setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
+  }
+
+  /** Refoco automático "best-effort": como {@link focusInput} pero respeta el
+   *  guard táctil ({@link esTactil}). Lo usan el listener global de clicks y el
+   *  cierre de dialogs. El flujo de scan/búsqueda usa {@link focusInput}
+   *  directo porque la pistola debe alimentar el input también en tablets. */
+  private focusInputAuto(): void {
+    if (this.esTactil) return;
+    this.focusInput();
+  }
+
+  /** True si hay algún dialog/overlay propio abierto. En ese caso no robamos
+   *  el foco hacia el scan que está detrás del overlay (el operador está
+   *  trabajando dentro del dialog). */
+  private algunDialogAbierto(): boolean {
+    return (
+      this.mostrarDialogCliente() ||
+      this.mostrarDialogCrearPedido() ||
+      this.mostrarDialogGenerico() ||
+      this.productoPreview() != null
+    );
+  }
+
+  /** True si el elemento es un campo donde el operador podría estar tipeando
+   *  (input/textarea/select/contenteditable) y por lo tanto NO debemos
+   *  robarle el foco. El propio scan input es un input — devolverlo acá como
+   *  "editable" es inocuo: ya tiene el foco, no hay nada que refocar. */
+  private esCampoEditable(el: Element | null): boolean {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    return (el as HTMLElement).isContentEditable === true;
   }
 
   onScanEnter(): void {
@@ -1244,7 +1383,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.mostrarDialogGenerico.set(false);
     this.notificarMutacion('success', 'Producto genérico agregado',
       `${this.etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
-    this.focusInput();
+    // El refoco al cerrar el dialog lo dispara el effect unificado del
+    // constructor (respetando el guard táctil), no hace falta llamarlo acá.
   }
 
   // ============================================================
@@ -1309,6 +1449,139 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       this.notificarMutacion('warn', 'Detalle vaciado',
         `Se quitaron ${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}.`);
     }
+    // El visor se limpia solo: vaciar items dispara el effect de publicación
+    // con un snapshot sin ítems.
+  }
+
+  // ============================================================
+  // Sesión de cliente compartida (badge "Atendiendo a X")
+  // ============================================================
+  /** Aplica el estado de la sesión a la badge y prellena el nombre del cliente
+   *  del presupuesto SOLO si está vacío — así el operador puede sobreescribirlo
+   *  para un cliente ausente distinto del que se atiende, o borrarlo. */
+  private aplicarSesion(s: SesionShowroom): void {
+    this.sesionActiva.set(s);
+    if (s.id != null && s.nombre && !this.clienteNombre().trim()) {
+      this.clienteNombre.set(s.nombre);
+    }
+  }
+
+  abrirDialogoNuevoCliente(): void {
+    this.nombreNuevoCliente.set('');
+    this.mostrarDialogoNuevoCliente.set(true);
+  }
+
+  /** Inicia una sesión nueva con el nombre tipeado. Comparte el mecanismo del
+   *  showroom: cierra la sesión anterior del operador (y vacía el carrito del
+   *  showroom vía `SesionCerradaEvent`). */
+  confirmarNuevoCliente(): void {
+    const nombre = this.nombreNuevoCliente().trim();
+    if (!nombre) {
+      this.warn('Cargá el nombre del cliente.');
+      return;
+    }
+    this.iniciandoSesion.set(true);
+    this.api.iniciarSesion(nombre).subscribe({
+      next: (s) => {
+        this.iniciandoSesion.set(false);
+        this.mostrarDialogoNuevoCliente.set(false);
+        this.aplicarSesion(s);
+        // El operador eligió el cliente explícitamente → forzamos el nombre del
+        // presupuesto al de la sesión (atajo), aunque ya hubiera uno cargado.
+        this.clienteNombre.set(nombre);
+      },
+      error: (err) => {
+        this.iniciandoSesion.set(false);
+        toastError(this.toast, 'Nuevo cliente', err, 'No se pudo iniciar la sesión.');
+      },
+    });
+  }
+
+  /** Finaliza la atención actual. Igual que en el showroom: cierra la sesión y
+   *  vacía el carrito del showroom. NO borra el armado del presupuesto. */
+  finalizarSesion(): void {
+    if (!this.haySesionActiva()) return;
+    this.confirmationService.confirm({
+      header: '¿Finalizar atención?',
+      message: 'Se cierra la sesión del cliente actual (también vacía el carrito '
+        + 'del showroom). El armado del presupuesto NO se borra. ¿Continuás?',
+      icon: 'pi pi-sign-out',
+      acceptButtonProps: { label: 'Finalizar', icon: 'pi pi-check' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => {
+        this.api.cancelarSesion().subscribe({
+          next: (s) => this.aplicarSesion(s),
+          error: (err) => toastError(this.toast, 'Finalizar atención', err,
+            'No se pudo finalizar la sesión.'),
+        });
+      },
+      reject: () => this.focusInputAuto(),
+    });
+  }
+
+  // ============================================================
+  // Visor de presupuesto — QR + snapshot en vivo
+  // ============================================================
+  /** Abre el dialog del QR y genera el código que apunta al visor de
+   *  presupuesto del operador logueado. Reusa `VisorConfig.baseUrl` (config del
+   *  showroom) para resolver el host accesible desde el celular. */
+  async abrirDialogVisor(): Promise<void> {
+    this.mostrarDialogVisor.set(true);
+    const username = this.auth.currentUser()?.username;
+    if (!username || typeof window === 'undefined') {
+      this.qrVisorDataUrl.set(null);
+      return;
+    }
+    this.qrVisorGenerando.set(true);
+    try {
+      const cfg = await firstValueFrom(this.api.obtenerVisorConfig());
+      this.visorBaseConfig.set(cfg.baseUrl ?? '');
+    } catch {
+      this.visorBaseConfig.set('');
+    }
+    const url = this.visorUrl();
+    try {
+      const mod = await import('qrcode');
+      const QRCode = (mod as { default?: typeof import('qrcode') }).default ?? mod;
+      const dataUrl = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        width: 512,
+      });
+      this.qrVisorDataUrl.set(dataUrl);
+    } catch (err) {
+      console.error('No se pudo generar el QR del visor de presupuesto', err);
+      this.qrVisorDataUrl.set(null);
+    } finally {
+      this.qrVisorGenerando.set(false);
+    }
+  }
+
+  /** Arma el snapshot del armado para el visor read-only. Vista AGREGADA
+   *  siempre (ítems + total + formas globales), aunque el modo de cotización
+   *  esté en individual. */
+  private armarSnapshotVisor(): PresupuestoVisor {
+    const items = this.items().map((it) => ({
+      sku: it.sku,
+      descripcion: it.descripcion ?? null,
+      imagenUrl: it.imagenUrl ?? null,
+      cantidad: it.cantidad,
+      precioUnitario: redondearMoneda(this.precioMostrado(it)),
+      subtotalLinea: redondearMoneda(this.totalLinea(it)),
+    }));
+    const formasPago = this.formasPagoFooter().map((f) => ({
+      id: f.id,
+      nombre: f.nombre,
+      precioFinal: f.precioFinal ?? 0,
+      cantidadCuotas: f.cantidadCuotas ?? null,
+      esMejorPrecio: f.esMejorPrecio,
+    }));
+    return {
+      clienteNombre: this.clienteNombre().trim() || null,
+      items,
+      total: redondearMoneda(this.totalReferencia()),
+      formasPago,
+    };
   }
 
   // ============================================================

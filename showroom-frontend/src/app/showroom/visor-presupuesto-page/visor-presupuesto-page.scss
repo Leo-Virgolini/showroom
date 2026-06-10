@@ -1,0 +1,6 @@
+// El layout del visor de presupuesto se resuelve con utilities de Tailwind en
+// el template. No hay estilos propios por ahora; el archivo existe para
+// mantener la convención de `styleUrl` de los componentes del showroom.
+:host {
+  display: block;
+}

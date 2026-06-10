@@ -14,6 +14,15 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./showroom/visor-page/visor-page').then((m) => m.VisorPage),
   },
+  {
+    // Visor read-only del armado de presupuestos (espejo en el celular del
+    // cliente). Distinto del visor del showroom: muestra el carrito completo
+    // del presupuesto, no producto-a-producto. Público, sin login.
+    path: 'visor-presupuesto/:username',
+    loadComponent: () =>
+      import('./showroom/visor-presupuesto-page/visor-presupuesto-page')
+        .then((m) => m.VisorPresupuestoPage),
+  },
 
   // Rutas protegidas — requieren sesión activa.
   {

@@ -21,6 +21,7 @@ import ar.com.leo.showroom.pickit_externo.PickitExternoService;
 import ar.com.leo.showroom.presupuesto.dto.EnviarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoDetalleDTO;
+import ar.com.leo.showroom.presupuesto.dto.PresupuestoVisorDTO;
 import ar.com.leo.showroom.presupuesto.service.PresupuestoComercialService;
 import ar.com.leo.showroom.cotizacion.dto.CotizacionDetalleDTO;
 import ar.com.leo.showroom.cotizacion.dto.EnviarCotizacionRequestDTO;
@@ -63,6 +64,7 @@ import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
 import ar.com.leo.showroom.showroom.dto.VisorConfigDTO;
 import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
+import ar.com.leo.showroom.visor.PresupuestoVisorService;
 import ar.com.leo.showroom.visor.VisorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -105,6 +107,7 @@ public class ShowroomController {
     private final PickitExternoService pickitExternoService;
     private final ImagenLocalService imagenLocalService;
     private final VisorService visorService;
+    private final PresupuestoVisorService presupuestoVisorService;
     private final SesionShowroomService sesionShowroomService;
     private final SesionShowroomRepository sesionRepository;
     private final PresupuestoComercialService presupuestoComercialService;
@@ -211,6 +214,30 @@ public class ShowroomController {
     public SesionShowroomDTO visorSesionActiva(@PathVariable String username) {
         validarOperadorVisor(username);
         return sesionShowroomService.obtenerActiva(username);
+    }
+
+    /**
+     * Publica al visor de presupuesto del operador el snapshot actual del
+     * armado (ítems + total + formas de pago). Lo dispara {@code presupuestos-page}
+     * ante cada cambio (con debounce). El operador se resuelve por la
+     * autenticación, igual que {@code /visor/forma}: el evento SSE
+     * {@code presupuesto-visor} solo le llega a los visores de ese operador.
+     */
+    @PostMapping("/visor/presupuesto")
+    public void publicarPresupuestoVisor(
+            @RequestBody PresupuestoVisorDTO body,
+            Authentication auth) {
+        if (auth == null) return;
+        presupuestoVisorService.publicar(auth.getName(), body);
+    }
+
+    /** Snapshot actual del armado del presupuesto del operador — público (sin
+     *  auth) para la hidratación inicial del visor cuando el celular abre el QR.
+     *  Devuelve un snapshot vacío si el operador todavía no publicó nada. */
+    @GetMapping("/visor/{username}/presupuesto")
+    public PresupuestoVisorDTO visorPresupuesto(@PathVariable String username) {
+        validarOperadorVisor(username);
+        return presupuestoVisorService.obtener(username);
     }
 
     /**

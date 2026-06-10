@@ -35,6 +35,7 @@ import {
   ListarCotizacionesParams,
   PresupuestoDetalle,
   PresupuestoListPage,
+  PresupuestoVisor,
   ProductoListPage,
   Provincia,
   RefreshStockRequest,
@@ -85,6 +86,22 @@ export class ShowroomService {
   visorObtenerSesionActiva(username: string): Observable<SesionShowroom> {
     return this.http.get<SesionShowroom>(
       `${this.base}/visor/${encodeURIComponent(username)}/sesion/activa`);
+  }
+
+  /** Publica al visor de presupuesto del operador autenticado el snapshot
+   *  actual del armado (ítems + total + formas de pago). El backend lo guarda
+   *  en memoria y emite SSE `presupuesto-visor` en su canal personal. Lo
+   *  dispara `presupuestos-page` ante cada cambio (con debounce). */
+  publicarPresupuestoVisor(snapshot: PresupuestoVisor): Observable<void> {
+    return this.http.post<void>(`${this.base}/visor/presupuesto`, snapshot);
+  }
+
+  /** Snapshot actual del armado del presupuesto de un operador — endpoint
+   *  público para la hidratación inicial del visor cuando el celular abre el
+   *  QR. Devuelve un snapshot vacío si el operador todavía no publicó nada. */
+  visorObtenerPresupuesto(username: string): Observable<PresupuestoVisor> {
+    return this.http.get<PresupuestoVisor>(
+      `${this.base}/visor/${encodeURIComponent(username)}/presupuesto`);
   }
 
   // =====================================================

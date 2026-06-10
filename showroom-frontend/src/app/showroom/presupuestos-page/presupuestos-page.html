@@ -94,6 +94,33 @@
           }
         }
 
+        <!-- Cliente en atención — sesión COMPARTIDA con el showroom. Opcional:
+             el presupuesto se arma igual sin cliente asociado. -->
+        @if (haySesionActiva()) {
+          <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
+            [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
+            tooltipPosition="bottom" role="status" aria-live="polite">
+            <i class="pi pi-user"></i>
+            <span class="hidden sm:inline truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
+            <button type="button" aria-label="Finalizar atención"
+              class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
+              (click)="finalizarSesion()">
+              <i class="pi pi-times text-[10px]"></i>
+            </button>
+          </span>
+        } @else {
+          <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Cliente' : ''"
+            ariaLabel="Asociar cliente" class="btn-kt-marron" (onClick)="abrirDialogoNuevoCliente()"
+            pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
+            tooltipPosition="bottom" />
+        }
+
+        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''"
+          ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
+          (onClick)="abrirDialogVisor()"
+          pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
+          tooltipPosition="bottom" />
+
         <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
           ariaLabel="Ver historial de presupuestos" class="btn-kt-marron"
           routerLink="/presupuestos/historial"
@@ -1015,6 +1042,76 @@
   [(visible)]="mostrarDialogGenerico"
   [sku]="skuGenerico()"
   (agregar)="onAgregarGenerico($event)" />
+
+<!-- ============= DIALOG NUEVO CLIENTE (sesión compartida con el showroom) =============
+     Asocia un cliente a la atención. Mismo mecanismo que el showroom: cierra la
+     sesión anterior del operador (y vacía su carrito del showroom). El nombre
+     prellena el campo del presupuesto; es opcional armar sin cliente. -->
+<p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
+  [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="focusInput()">
+  <div class="flex flex-col gap-3">
+    @if (haySesionActiva()) {
+    <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
+      <i class="pi pi-info-circle text-amber-700 dark:text-amber-300"></i>
+      <span class="text-amber-900 dark:text-amber-200 ml-1">
+        Ya hay una sesión activa con <strong>{{ sesionActiva().nombre }}</strong>. Iniciar una nueva
+        la cierra (también vacía el carrito del showroom).
+      </span>
+    </div>
+    }
+    <div class="text-sm text-surface-700 dark:text-surface-200">
+      Asociá un cliente a la atención. El nombre se usa en el presupuesto y se muestra en el visor;
+      lo podés cambiar después en "Datos del cliente". Es opcional: podés armar el presupuesto sin cliente.
+    </div>
+    <div class="flex flex-col gap-1.5">
+      <label for="dlgPresupNuevoCliente" class="text-sm font-medium text-muted-color">
+        Nombre del cliente <span class="text-red-500">*</span>
+      </label>
+      <input pInputText id="dlgPresupNuevoCliente" type="text" autofocus
+        [ngModel]="nombreNuevoCliente()" (ngModelChange)="nombreNuevoCliente.set($event)"
+        (keydown.enter)="confirmarNuevoCliente()"
+        placeholder="Ej: María Pérez" maxlength="150" class="w-full"
+        [disabled]="iniciandoSesion()" />
+    </div>
+  </div>
+  <ng-template #footer>
+    <p-button label="Cancelar" severity="secondary" [outlined]="true"
+      (onClick)="mostrarDialogoNuevoCliente.set(false)" [disabled]="iniciandoSesion()" />
+    <p-button label="Iniciar sesión" icon="pi pi-check"
+      (onClick)="confirmarNuevoCliente()" [loading]="iniciandoSesion()" />
+  </ng-template>
+</p-dialog>
+
+<!-- ============= DIALOG QR DEL VISOR DE PRESUPUESTO =============
+     El cliente escanea el QR y ve el presupuesto armarse en vivo en su celular
+     (solo lectura). Reusa VisorConfig.baseUrl (config del showroom). -->
+<p-dialog header="QR del presupuesto para el celular" [(visible)]="mostrarDialogVisor" [modal]="true"
+  [draggable]="false" [style]="{ width: '95vw', maxWidth: '30rem' }" [breakpoints]="{ '640px': '95vw' }"
+  (onHide)="focusInput()">
+  <div class="flex flex-col items-center gap-3">
+    <div class="text-sm text-surface-700 dark:text-surface-200 text-center">
+      El cliente escanea este QR y ve el presupuesto armarse en vivo en su celular (solo lectura).
+    </div>
+    @if (qrVisorDataUrl(); as qr) {
+    <p-image [src]="qr" alt="QR del visor de presupuesto" [preview]="true"
+      imageClass="w-full max-h-[60vh] object-contain rounded-xl shadow-sm cursor-zoom-in bg-white" class="w-full" />
+    <div class="text-[10px] font-mono text-muted-color break-all text-center max-w-full select-all">
+      {{ visorUrl() }}
+    </div>
+    } @else if (qrVisorGenerando()) {
+    <div class="w-full aspect-square max-h-[60vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
+      <i class="pi pi-spin pi-spinner text-3xl text-muted-color"></i>
+    </div>
+    } @else {
+    <div class="w-full aspect-square max-h-[60vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex flex-col items-center justify-center gap-2 p-4 text-center">
+      <i class="pi pi-exclamation-triangle text-2xl text-muted-color"></i>
+      <span class="text-xs text-muted-color">No se pudo generar el QR. Ingresá esta dirección en el celular:</span>
+      <span class="text-xs font-mono text-color break-all select-all">{{ visorUrl() }}</span>
+    </div>
+    }
+  </div>
+</p-dialog>
 
 <!-- ============= DIALOG "VER PRODUCTO" =============
      Preview rápido de un resultado de búsqueda: foto grande + datos

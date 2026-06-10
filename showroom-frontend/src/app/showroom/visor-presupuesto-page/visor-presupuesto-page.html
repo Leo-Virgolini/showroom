@@ -1,0 +1,143 @@
+<div class="min-h-screen bg-gradient-to-b from-orange-50/50 to-white dark:from-surface-950 dark:to-surface-900 flex flex-col relative">
+  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+
+  <!-- Overlay de "URL inválida" — operador no existe / username vacío / 404
+       del backend. Mismo patrón que el visor del showroom. -->
+  @if (operadorInvalido()) {
+  <div class="fixed inset-0 z-[60] flex items-center justify-center px-4 bg-white/95 dark:bg-surface-950/95">
+    <div class="max-w-md w-full rounded-2xl border-2 border-amber-400 bg-white dark:bg-surface-900 shadow-2xl overflow-hidden">
+      <div class="bg-amber-400 text-amber-950 px-4 py-2 flex items-center gap-2 font-bold">
+        <i class="pi pi-exclamation-triangle"></i>
+        <span>URL del visor no válida</span>
+      </div>
+      <div class="p-5 flex flex-col items-center gap-3 text-center">
+        <div class="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center">
+          <i class="pi pi-qrcode text-amber-700 dark:text-amber-300 text-3xl"></i>
+        </div>
+        <div class="text-sm text-surface-700 dark:text-surface-200">
+          @if (!operadorUsername) {
+            La URL no incluye el código del vendedor.
+          } @else {
+            El vendedor <strong class="font-mono">{{ operadorUsername }}</strong> no existe
+            o no está disponible.
+          }
+        </div>
+        <div class="text-xs text-muted-color">
+          Pedile al vendedor que te muestre el QR correcto del presupuesto para
+          escanearlo nuevamente.
+        </div>
+      </div>
+    </div>
+  </div>
+  }
+
+  <header class="px-4 pt-4 pb-2 flex flex-col items-center gap-2">
+    <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
+    <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full">
+      <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 inline-flex items-center gap-2">
+        <i class="pi pi-file-edit text-[#FF861C] text-base"></i>
+        <span class="inline-flex items-baseline gap-2">
+          @if (clienteNombre(); as nombre) {
+            <span class="text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Presupuesto para</span>
+            <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0 truncate">{{ nombre }}</span>
+          } @else {
+            <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0">Presupuesto</span>
+          }
+        </span>
+      </div>
+    </div>
+  </header>
+
+  @if (hayItems()) {
+  <main class="flex-1 flex flex-col gap-4 px-3 sm:px-4 pb-6 w-full max-w-2xl mx-auto">
+    <!-- Lista de ítems del presupuesto -->
+    <div class="flex flex-col gap-2">
+      @for (it of items(); track $index) {
+      <div class="flex items-center gap-3 rounded-2xl border border-surface-200/70 dark:border-surface-700 bg-white dark:bg-surface-950 p-2.5 shadow-sm">
+        @if (it.imagenUrl) {
+        <div class="shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-surface-50 dark:bg-surface-900 flex items-center justify-center">
+          <p-image [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku" [preview]="false"
+                   imageClass="w-16 h-16 object-contain" />
+        </div>
+        } @else {
+        <div class="shrink-0 w-16 h-16 rounded-lg bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
+          <i class="pi pi-box text-surface-400 text-2xl"></i>
+        </div>
+        }
+        <div class="min-w-0 flex-1">
+          <div class="text-sm sm:text-base font-medium text-surface-800 dark:text-surface-100 line-clamp-2">
+            {{ it.descripcion ?? it.sku }}
+          </div>
+          <div class="text-xs text-muted-color mt-0.5">
+            {{ it.cantidad }} × {{ formatMoneda(it.precioUnitario) }}
+          </div>
+        </div>
+        <div class="shrink-0 text-right font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0">
+          {{ formatMoneda(it.subtotalLinea) }}
+        </div>
+      </div>
+      }
+    </div>
+
+    <!-- TOTAL -->
+    <div class="rounded-2xl bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] shadow-sm">
+      <div class="rounded-2xl bg-white dark:bg-surface-900 px-4 py-3 flex items-center justify-between">
+        <span class="text-sm uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Total</span>
+        <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ formatMoneda(total()) }}</span>
+      </div>
+    </div>
+
+    <!-- Formas de pago — la "mejor" resaltada en verde. -->
+    @if (formasPago().length > 0) {
+    <div class="flex flex-col gap-2">
+      <div class="text-xs uppercase tracking-[0.15em] font-semibold text-muted-color px-1">Formas de pago</div>
+      @for (f of formasPago(); track $index) {
+      <div class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+           [class.border-emerald-400]="f.esMejorPrecio"
+           [class.bg-emerald-50]="f.esMejorPrecio"
+           [class.dark:bg-emerald-950/30]="f.esMejorPrecio"
+           [class.border-surface-200]="!f.esMejorPrecio"
+           [class.dark:border-surface-700]="!f.esMejorPrecio"
+           [class.bg-white]="!f.esMejorPrecio"
+           [class.dark:bg-surface-950]="!f.esMejorPrecio">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-surface-800 dark:text-surface-100 truncate">{{ f.nombre }}</span>
+            @if (f.esMejorPrecio) {
+            <span class="shrink-0 text-[0.65rem] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">Mejor precio</span>
+            }
+          </div>
+          @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+          <div class="text-xs text-muted-color mt-0.5">
+            {{ f.cantidadCuotas }} cuotas de {{ formatMoneda(precioPorCuota(f.precioFinal, f.cantidadCuotas)) }}
+          </div>
+          }
+        </div>
+        <div class="shrink-0 text-right font-bold text-lg"
+             [class.text-emerald-600]="f.esMejorPrecio"
+             [class.dark:text-emerald-400]="f.esMejorPrecio"
+             [class.text-surface-800]="!f.esMejorPrecio"
+             [class.dark:text-surface-0]="!f.esMejorPrecio">
+          {{ formatMoneda(f.precioFinal) }}
+        </div>
+      </div>
+      }
+    </div>
+    }
+  </main>
+  } @else {
+  <!-- Estado "esperando…" — el operador todavía no agregó productos. -->
+  <main class="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div class="w-20 h-20 rounded-full bg-orange-100 dark:bg-orange-950/40 flex items-center justify-center">
+      <i class="pi pi-file-edit text-[#FF861C] text-4xl"></i>
+    </div>
+    <div class="text-lg font-semibold text-surface-700 dark:text-surface-200">
+      Armando tu presupuesto…
+    </div>
+    <div class="text-sm text-muted-color max-w-xs">
+      En un momento vas a ver acá los productos y el total a medida que el
+      vendedor los agrega.
+    </div>
+  </main>
+  }
+</div>
