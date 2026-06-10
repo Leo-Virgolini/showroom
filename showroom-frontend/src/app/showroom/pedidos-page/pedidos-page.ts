@@ -407,6 +407,19 @@ export class PedidosPage {
     return m > 0.5 ? m : null;
   }
 
+  /** Texto del tooltip que aclara la convención del recargo: el `%` es el
+   *  descuento por pago al contado (fórmula base/(1−r)), no el % literal de
+   *  aumento — por eso el monto del recargo es mayor que `base × %`. El divisor
+   *  se formatea a 2 decimales para evitar floating-point feo (ej. 0,67). */
+  tooltipRecargo(porc: number | null | undefined): string {
+    const r = porc ?? 0;
+    const divisor = (1 - r / 100).toFixed(2).replace('.', ',');
+    return (
+      `El ${r}% es el descuento por pago al contado: el precio financiado se calcula ` +
+      `como base ÷ ${divisor}. Por eso el monto del recargo no es el ${r}% de la base, sino algo mayor.`
+    );
+  }
+
   /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas
    *  (ej. "6 Cuotas"), para no repetir "· N cuotas" al lado. Busca el número
    *  como token aislado (delimitado por no-dígitos) para no matchear, p. ej.,
