@@ -400,7 +400,14 @@
                               <span class="text-muted-color"> · {{ det.cantidadCuotas }} cuotas</span>
                             }
                             @if (det.recargoPorcentaje && det.recargoPorcentaje > 0) {
-                              <span class="text-amber-700 dark:text-amber-300 font-semibold ml-1">
+                              <span
+                                class="text-amber-700 dark:text-amber-300 font-semibold ml-1 cursor-help underline decoration-dotted underline-offset-2"
+                                [pTooltip]="
+                                  'El ' + det.recargoPorcentaje + '% es el descuento por pago al contado: el precio financiado se calcula como base ÷ ' +
+                                  (1 - det.recargoPorcentaje / 100) + '. Por eso el monto del recargo no es el ' + det.recargoPorcentaje + '% de la base, sino algo mayor.'
+                                "
+                                tooltipPosition="top"
+                              >
                                 +{{ det.recargoPorcentaje }}%
                               </span>
                               @if (montoRecargo(det); as mr) {
