@@ -346,6 +346,32 @@
                     {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
                   </span>
                 }
+                <!-- Actualizar precios: solo en edición. Trae los precios
+                     actuales del catálogo local (cache en BD, sin tocar DUX) y
+                     los pisa conservando cantidades y descuentos. Estilo pill
+                     verde KT coherente con el header del detalle. -->
+                @if (esModoEdicion() && hayItemsCatalogo()) {
+                  <button type="button"
+                    class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                           text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00]
+                           border border-[#FF6A00]/40 shadow-md ring-1 ring-[#FF861C]/30
+                           hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg hover:-translate-y-px
+                           active:translate-y-0 active:shadow-md
+                           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                           disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0
+                           transition-all duration-150"
+                    [disabled]="actualizandoPrecios()"
+                    (click)="actualizarPreciosDesdeCatalogo()"
+                    pTooltip="Trae los precios actuales del catálogo (no toca DUX). Conserva cantidades y descuentos."
+                    tooltipPosition="bottom"
+                    aria-label="Actualizar precios desde el catálogo">
+                    <i class="pi text-[0.7rem] transition-transform group-hover:rotate-180"
+                      [class.pi-refresh]="!actualizandoPrecios()"
+                      [class.pi-spinner]="actualizandoPrecios()"
+                      [class.pi-spin]="actualizandoPrecios()"></i>
+                    <span>{{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}</span>
+                  </button>
+                }
               </div>
               <!-- Chip "Datos del cliente" — abre el dialog en modo edición
                    libre. Si el cliente ya tiene datos, los muestra como
@@ -394,6 +420,44 @@
               <span class="text-[11px] text-muted-color hidden sm:inline">
                 {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
               </span>
+            </div>
+          }
+
+          <!-- Banner "precios desactualizados" — solo en edición, cuando al
+               abrir se detectó que el catálogo cambió respecto a lo guardado.
+               Reúne el conteo + CTA para traer los precios actuales. Las filas
+               afectadas llevan además un pill con el precio actual. -->
+          @if (esModoEdicion() && cantidadPreciosCambiados() > 0) {
+            <div class="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50
+                        dark:bg-amber-900/20 dark:border-amber-700/50
+                        flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
+              <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
+              <div class="flex-1 min-w-[12rem]">
+                <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
+                  {{ cantidadPreciosCambiados() }}
+                  {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
+                  en el catálogo desde que se guardó este presupuesto
+                </p>
+                <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
+                  Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
+                  conservando cantidades y descuentos.
+                </p>
+              </div>
+              <button type="button"
+                class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                       text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00] shadow-md
+                       hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg
+                       focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                       disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
+                [disabled]="actualizandoPrecios()"
+                (click)="actualizarPreciosDesdeCatalogo()"
+                aria-label="Actualizar precios desde el catálogo">
+                <i class="pi"
+                  [class.pi-refresh]="!actualizandoPrecios()"
+                  [class.pi-spinner]="actualizandoPrecios()"
+                  [class.pi-spin]="actualizandoPrecios()"></i>
+                {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
+              </button>
             </div>
           }
 
@@ -521,9 +585,28 @@
                       inputStyleClass="w-20 text-center" [allowEmpty]="false" />
                   </td>
                   <td class="text-right">
-                    <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-                      {{ precioMostrado(it) | currency:'ARS':'symbol':'1.0-0' }}
-                    </span>
+                    <div class="flex flex-col items-end gap-1">
+                      <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0"
+                        [class.line-through]="cambioPrecioDe(it.uid)"
+                        [class.text-muted-color]="cambioPrecioDe(it.uid)">
+                        {{ precioMostrado(it) | currency:'ARS':'symbol':'1.0-0' }}
+                      </span>
+                      <!-- Pill de precio desactualizado: el catálogo cambió desde
+                           que se guardó. Flecha ↑ si subió, ↓ si bajó. El precio
+                           tachado de arriba es el guardado; este es el actual. -->
+                      @if (cambioPrecioDe(it.uid); as cambio) {
+                        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-1.5 py-0.5 rounded
+                                     bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                          [pTooltip]="'Precio guardado: ' + (cambio.precioGuardado | currency:'ARS':'symbol':'1.0-0')
+                            + ' · Catálogo actual: ' + (cambio.precioActual | currency:'ARS':'symbol':'1.0-0')"
+                          tooltipPosition="left">
+                          <i class="pi text-[9px]"
+                            [class.pi-arrow-up]="cambio.precioActual > cambio.precioGuardado"
+                            [class.pi-arrow-down]="cambio.precioActual < cambio.precioGuardado"></i>
+                          {{ cambio.precioActual | currency:'ARS':'symbol':'1.0-0' }}
+                        </span>
+                      }
+                    </div>
                   </td>
                   <td class="text-center">
                     <p-inputNumber [ngModel]="it.descuentoPorcentaje"

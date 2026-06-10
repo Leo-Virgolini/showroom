@@ -14,7 +14,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -111,6 +111,7 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
 export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
@@ -283,6 +284,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ------------------------------------------------------------
   readonly generandoPreview = signal(false);
   readonly enviandoEmail = signal(false);
+  /** True mientras se traen los precios actuales del catálogo para el botón
+   *  "Actualizar precios" (modo edición). Pinta el botón en loading y lo
+   *  deshabilita para evitar disparos dobles. */
+  readonly actualizandoPrecios = signal(false);
   /** Dialog unificado de "Datos del cliente + confirmación". Se abre antes
    *  de generar el PDF / guardar cambios / enviar por email para que el
    *  operador cargue (o revise) los datos del cliente sin que el formulario
@@ -333,6 +338,33 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.itemsTick();
     return this.items().length > 0;
   });
+
+  /** True si hay al menos un ítem de catálogo (no genérico). Los genéricos no
+   *  tienen precio en el catálogo (su SKU es comodín), así que el botón
+   *  "Actualizar precios" no aplica cuando todos los ítems son genéricos. */
+  readonly hayItemsCatalogo = computed(() => {
+    this.itemsTick();
+    return this.items().some((it) => !it.generico);
+  });
+
+  /** Cambios de precio detectados al abrir el presupuesto en edición:
+   *  uid del ítem → {precioGuardado, precioActual}. Se llena en
+   *  {@link cargarParaEditar} comparando lo persistido contra el catálogo
+   *  actual (mismo lookup que ya se hace, sin llamadas extra), y se vacía
+   *  cuando el operador aplica "Actualizar precios". Alimenta el banner y el
+   *  pill por fila. Vacío = todo al día (o modo creación). */
+  readonly cambiosPrecio = signal<Map<string, CambioPrecio>>(new Map());
+
+  /** Cantidad de ítems cuyo precio/IVA cambió respecto al guardado — el
+   *  banner de aviso se muestra solo cuando es > 0 en modo edición. */
+  readonly cantidadPreciosCambiados = computed(() => this.cambiosPrecio().size);
+
+  /** Cambio de precio detectado para un ítem (por uid), o undefined si su
+   *  precio sigue igual al guardado. El template lo usa para pintar el pill
+   *  "precio desactualizado" en la fila. */
+  cambioPrecioDe(uid: string): CambioPrecio | undefined {
+    return this.cambiosPrecio().get(uid);
+  }
 
   /** Subtotal BRUTO EFECTIVO (sin ningún descuento) — precio efectivo unitario
    *  (forma primaria, según rubro) por cantidad. Es la base para calcular el
@@ -705,6 +737,31 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           this.api.lookupBulk(skus).subscribe({
             next: (frescos) => {
               const porSku = new Map(frescos.map((f) => [f.sku, f]));
+              // Detecta cambios de precio/IVA respecto a lo guardado ANTES de
+              // pisar descripción/stock — en este punto los precios del ítem
+              // siguen siendo los del JSON persistido. No pisamos el precio
+              // (eso lo hace el botón "Actualizar precios" a pedido), solo
+              // avisamos: alimentamos el banner + el pill por fila.
+              const cambios = new Map<string, CambioPrecio>();
+              for (const it of this.items()) {
+                if (it.generico) continue;
+                const f = porSku.get(it.sku);
+                if (!f) continue;
+                const cambioPrecio = redondearMoneda(f.pvpKtGastroConIva ?? 0)
+                  !== redondearMoneda(it.pvpKtGastroConIva ?? 0);
+                const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
+                if (!cambioPrecio && !cambioIva) continue;
+                cambios.set(it.uid, {
+                  precioGuardado: this.precioMostrado(it),
+                  precioActual: this.precioMostrado({
+                    pvpKtGastroConIva: f.pvpKtGastroConIva,
+                    pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+                    porcIva: f.porcIva,
+                    rubro: f.rubro ?? it.rubro,
+                  }),
+                });
+              }
+              this.cambiosPrecio.set(cambios);
               this.items.set(
                 this.items().map((it) => {
                   // Genéricos no se refrescan contra catálogo — su SKU es
@@ -760,6 +817,105 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Output del {@link CrearPedidoDialog} cuando el pedido se creó OK. */
   onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
     this.pedidoIdConvertido.set(evt.pedidoLocalId);
+  }
+
+  /** Reemplaza los precios de los ítems del presupuesto por los del catálogo
+   *  local (cache en BD, vía {@link ShowroomService.lookupBulk} — NO toca DUX).
+   *  Solo en modo edición: un presupuesto guardado congela los precios del
+   *  momento en que se creó, y la carga en edición a propósito NO los pisa
+   *  (ver {@link cargarParaEditar}). Este botón es la acción EXPLÍCITA para
+   *  traerlos al valor actual cuando el operador lo decide.
+   *
+   *  <p>Pisa únicamente precio c/IVA, s/IVA, %IVA y rubro; conserva cantidad,
+   *  descuento individual, uid y comentarios. Los genéricos se saltan (su SKU
+   *  es comodín y no representa un producto del catálogo). Pide confirmación
+   *  antes porque reemplaza precios que pudieron negociarse con el cliente. */
+  actualizarPreciosDesdeCatalogo(): void {
+    const skus = this.items().filter((it) => !it.generico).map((it) => it.sku);
+    if (skus.length === 0) {
+      this.warn('No hay productos de catálogo para actualizar.');
+      return;
+    }
+    this.confirmationService.confirm({
+      header: '¿Actualizar precios?',
+      message: 'Se van a reemplazar los precios de este presupuesto por los del '
+        + 'catálogo actual. Las cantidades y los descuentos se conservan. ¿Continuás?',
+      icon: 'pi pi-dollar',
+      acceptButtonProps: { label: 'Actualizar', icon: 'pi pi-refresh' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => this.ejecutarActualizarPrecios(skus),
+    });
+  }
+
+  private ejecutarActualizarPrecios(skus: string[]): void {
+    this.actualizandoPrecios.set(true);
+    this.api.lookupBulk(skus).subscribe({
+      next: (frescos) => {
+        this.actualizandoPrecios.set(false);
+        const porSku = new Map(frescos.map((f) => [f.sku, f]));
+        let actualizados = 0;
+        let sinCambios = 0;
+        let noEncontrados = 0;
+        this.items.set(
+          this.items().map((it) => {
+            // Genéricos no se refrescan contra catálogo — su SKU es comodín y
+            // el precio lo tipeó el operador.
+            if (it.generico) return it;
+            const f = porSku.get(it.sku);
+            if (!f) {
+              noEncontrados++;
+              return it;
+            }
+            const cambioPrecio =
+              redondearMoneda(f.pvpKtGastroConIva ?? 0) !==
+              redondearMoneda(it.pvpKtGastroConIva ?? 0);
+            const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
+            if (!cambioPrecio && !cambioIva) {
+              sinCambios++;
+              return it;
+            }
+            actualizados++;
+            // Pisa SOLO precio/IVA/rubro; conserva cantidad, descuento, uid,
+            // comentarios. Los totales y formas de pago son computed derivados
+            // de estos campos → se recalculan solos.
+            return {
+              ...it,
+              pvpKtGastroConIva: f.pvpKtGastroConIva,
+              pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+              porcIva: f.porcIva,
+              rubro: f.rubro ?? it.rubro,
+            };
+          }),
+        );
+        this.itemsTick.update((v) => v + 1);
+        if (actualizados > 0) this.hayCambiosSinGuardar.set(true);
+        // Ya quedaron al día — el banner y los pills de "precio desactualizado"
+        // dejan de tener sentido.
+        this.cambiosPrecio.set(new Map());
+
+        const partes: string[] = [
+          `${actualizados} ${actualizados === 1 ? 'precio actualizado' : 'precios actualizados'}`,
+        ];
+        if (sinCambios > 0) {
+          partes.push(`${sinCambios} sin ${sinCambios === 1 ? 'cambio' : 'cambios'}`);
+        }
+        if (noEncontrados > 0) {
+          partes.push(`${noEncontrados} fuera de catálogo`);
+        }
+        this.toast.add({
+          severity: actualizados > 0 ? 'success' : 'info',
+          summary: actualizados > 0 ? 'Precios actualizados' : 'Sin cambios de precio',
+          detail: partes.join(', ') + '.',
+          life: 5000,
+        });
+        this.focusInput();
+      },
+      error: (err) => {
+        this.actualizandoPrecios.set(false);
+        toastError(this.toast, 'Actualizar precios', err,
+          'No se pudieron actualizar los precios.');
+      },
+    });
   }
 
   /** Implementa {@link HasUnsavedChanges} para el {@link unsavedChangesGuard}.
@@ -1132,6 +1288,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   eliminarItem(uid: string): void {
     const it = this.items().find((x) => x.uid === uid);
     this.items.set(this.items().filter((x) => x.uid !== uid));
+    // Si la fila tenía un aviso de precio desactualizado, lo sacamos del map
+    // para que el contador del banner no quede inflado.
+    if (this.cambiosPrecio().has(uid)) {
+      const m = new Map(this.cambiosPrecio());
+      m.delete(uid);
+      this.cambiosPrecio.set(m);
+    }
     if (it) {
       this.notificarMutacion('warn', 'Producto quitado', this.etiquetaItem(it));
     }
@@ -1140,6 +1303,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   vaciar(): void {
     const cantidad = this.items().length;
     this.items.set([]);
+    this.cambiosPrecio.set(new Map());
     this.focusInput();
     if (cantidad > 0) {
       this.notificarMutacion('warn', 'Detalle vaciado',
@@ -1496,4 +1660,15 @@ interface GrupoItem {
 interface FormaPagoFooter extends PresupuestoFormaPagoSnapshot {
   indiceOriginal: number;
   esMejorPrecio: boolean;
+}
+
+/** Diferencia detectada al abrir un presupuesto en edición entre el precio
+ *  guardado y el del catálogo actual. Alimenta el banner "precios
+ *  desactualizados" y el pill por fila. Ambos precios son el precio de
+ *  REFERENCIA (la columna "Precio" del detalle), ya según el rubro del ítem. */
+interface CambioPrecio {
+  /** Precio de referencia con el que se guardó el presupuesto. */
+  precioGuardado: number;
+  /** Precio de referencia actual según el catálogo local. */
+  precioActual: number;
 }
