@@ -1812,6 +1812,17 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           return;
         }
         this.hayCambiosSinGuardar.set(false);
+        // Un presupuesto NUEVO se persiste al generar el PDF: el backend
+        // devuelve su número en el header. Lo tomamos para pasar a "modo
+        // edición" de ese presupuesto → habilita el botón "Crear pedido" y
+        // hace que una nueva generación ACTUALICE este presupuesto en vez de
+        // crear un duplicado.
+        if (editandoId == null) {
+          const nuevoId = Number(res.headers.get('X-Presupuesto-Id'));
+          if (Number.isFinite(nuevoId) && nuevoId > 0) {
+            this.presupuestoEditandoId.set(nuevoId);
+          }
+        }
         // Si el presupuesto ya tenía pedido, ahora quedó "editado tras
         // convertir" → reflejamos la nueva fecha de modificación en memoria
         // para habilitar el botón "Regenerar pedido" sin recargar.

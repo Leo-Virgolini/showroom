@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -65,7 +66,10 @@ public class SecurityConfig {
                         // El login no tiene sesión todavía → exento.
                         // El visor es público y sin sesión → su POST también va exento.
                         .ignoringRequestMatchers("/api/auth/login", "/api/showroom/visor/**"))
-                .cors(AbstractHttpConfigurer::disable)
+                // CORS unificado: toma el bean CorsConfigurationSource (ver
+                // CorsConfig). El filtro CORS de Security maneja el preflight
+                // OPTIONS antes de la autorización — un solo lugar para CORS.
+                .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
                         // Auth endpoints (login y me siempre disponibles; el chequeo de

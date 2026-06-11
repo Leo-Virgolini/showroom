@@ -193,14 +193,16 @@
           pTooltip="Iniciar sesión para registrar los scans del cliente"
           tooltipPosition="bottom" />
         }
+
+        <!-- QR del visor: junto a la badge del cliente (mismo lugar que el
+             presupuestador), no en el #end con las acciones. -->
+        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron ml-1 sm:ml-2"
+          (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)"
+          tooltipPosition="bottom" />
       </div>
     </ng-template>
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
-        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron"
-          (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)"
-          tooltipPosition="bottom" />
-
         @if (health()?.ultimaSincronizacionAt; as fecha) {
         <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') ?? ''"
           tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />

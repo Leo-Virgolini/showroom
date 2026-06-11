@@ -52,11 +52,19 @@
             pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
             tooltipPosition="bottom" />
         }
+
+        <!-- QR del visor: junto a la badge del cliente (mismo lugar que el
+             showroom), no en el #end con las acciones. -->
+        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''"
+          ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
+          (onClick)="abrirDialogVisor()"
+          pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
+          tooltipPosition="bottom" />
       </div>
     </ng-template>
 
     <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
+      <div class="inline-flex gap-1.5 items-center">
         @if (cargandoEdicion()) {
           <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
             <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
@@ -94,54 +102,47 @@
               : 'Generar y enviar el presupuesto al cliente'"
           tooltipPosition="bottom" />
 
-        @if (esModoEdicion()) {
-          @if (pedidoIdConvertido() != null) {
-            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
-              [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
-              tooltipPosition="bottom">
-              <i class="pi pi-check-circle"></i>
-              <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
-            </span>
-            @if (editadoTrasConvertir()) {
-              <p-button icon="pi pi-refresh"
-                [label]="screenLg() ? 'Regenerar' : ''"
-                ariaLabel="Regenerar el pedido en DUX con los cambios"
-                severity="warn"
-                [disabled]="hayCambiosSinGuardar()"
-                (onClick)="abrirRegenerarPedido()"
-                [pTooltip]="hayCambiosSinGuardar()
-                    ? 'Guardá los cambios antes de regenerar el pedido'
-                    : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
-                tooltipPosition="bottom" />
-            }
-          } @else {
-            <p-button icon="pi pi-cart-arrow-down"
-              [label]="screenLg() ? 'Crear pedido' : ''"
-              ariaLabel="Crear pedido en DUX a partir de este presupuesto"
-              severity="success"
+        @if (pedidoIdConvertido() != null) {
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
+            [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
+            tooltipPosition="bottom">
+            <i class="pi pi-check-circle"></i>
+            <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
+          </span>
+          @if (editadoTrasConvertir()) {
+            <p-button icon="pi pi-refresh"
+              [label]="screenLg() ? 'Regenerar' : ''"
+              ariaLabel="Regenerar el pedido en DUX con los cambios"
+              severity="warn"
               [disabled]="hayCambiosSinGuardar()"
-              (onClick)="abrirCrearPedido()"
+              (onClick)="abrirRegenerarPedido()"
               [pTooltip]="hayCambiosSinGuardar()
-                  ? 'Guardá los cambios antes de generar el pedido'
-                  : 'Crear pedido en DUX a partir de este presupuesto'"
+                  ? 'Guardá los cambios antes de regenerar el pedido'
+                  : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
               tooltipPosition="bottom" />
           }
+        } @else {
+          <!-- El botón se muestra siempre en el generador, deshabilitado hasta
+               que el presupuesto esté guardado (esModoEdicion = ya persistido,
+               sea por edición o tras "Generar PDF") y sin cambios pendientes. -->
+          <p-button icon="pi pi-cart-arrow-down"
+            [label]="screenLg() ? 'Crear pedido' : ''"
+            ariaLabel="Crear pedido en DUX a partir de este presupuesto"
+            severity="success"
+            [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
+            (onClick)="abrirCrearPedido()"
+            [pTooltip]="!esModoEdicion()
+                ? 'Generá el presupuesto primero para poder crear el pedido'
+                : (hayCambiosSinGuardar()
+                    ? 'Guardá los cambios antes de generar el pedido'
+                    : 'Crear pedido en DUX a partir de este presupuesto')"
+            tooltipPosition="bottom" />
         }
 
         @if (health()?.ultimaSincronizacionAt; as fecha) {
         <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') ?? ''"
-          tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
+          tooltipPosition="bottom" class="hidden xl:inline-flex mr-1" />
         }
-        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''"
-          ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
-          (onClick)="abrirDialogVisor()"
-          pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
-          tooltipPosition="bottom" />
-
-        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
-          ariaLabel="Ver historial de presupuestos" class="btn-kt-marron"
-          routerLink="/presupuestos/historial"
-          pTooltip="Ver presupuestos generados anteriormente" tooltipPosition="bottom" />
 
         <app-top-actions />
       </div>

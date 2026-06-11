@@ -34,7 +34,7 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { perfilForma, precioPorForma } from '../precio-referencia.util';
+import { perfilForma, precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
 
 /** Placeholder fijo que DUX recibe como apellido/razón social cuando el
@@ -196,6 +196,13 @@ export class CrearPedidoDialog {
    *  IVA de menaje a TODOS los ítems, ignorando los de maquinaria (otro recargo,
    *  sin IVA). Eso hacía que el preview no coincidiera con el total real del
    *  pedido ni con el del presupuesto. */
+  /** Ícono de la forma de pago — mismo criterio que scan/visor/showroom: si
+   *  tiene cuotas usa la tarjeta, sino la heurística canónica por nombre. */
+  iconoForma(forma: FormaPago): string {
+    if (forma.cantidadCuotas && forma.cantidadCuotas > 1) return 'pi pi-credit-card';
+    return iconoFormaReferencia(forma.nombre);
+  }
+
   totalParaFormaPago(forma: FormaPago): number {
     return this.itemsDelPresupuesto().reduce((acc, it) => {
       const esMaq = this.precioPerfil.rubroCotizaSinIva(it.rubro);

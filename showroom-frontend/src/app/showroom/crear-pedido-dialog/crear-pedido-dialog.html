@@ -4,7 +4,7 @@
      [(visible)]. Al abrirse con un presupuestoId válido, el componente
      carga el detalle internamente y pre-llena el form. -->
 <p-dialog [visible]="visible()" (visibleChange)="visible.set($event)" [modal]="true"
-  [style]="{ width: '95vw', maxWidth: '46rem' }" [breakpoints]="{ '768px': '95vw' }"
+  [style]="{ width: '95vw', maxWidth: '54rem' }" [breakpoints]="{ '768px': '95vw' }"
   [draggable]="false" [closable]="!enviandoPedido()"
   (onHide)="onCerrarDialog()">
   <ng-template #header>
@@ -215,11 +215,14 @@
           optionLabel="nombre" optionValue="id"
           [ngModel]="pedidoFormaPagoId()" (ngModelChange)="pedidoFormaPagoId.set($event)"
           placeholder="Elegí una forma de pago" class="w-full"
-          appendTo="body">
+          scrollHeight="350px" appendTo="body">
           <ng-template let-f #selectedItem>
             @if (f) {
               <div class="flex items-center justify-between gap-2 w-full">
-                <span class="truncate">{{ f.nombre }}</span>
+                <span class="flex items-center gap-2 truncate">
+                  <i [class]="iconoForma(f)" class="text-[#FF861C] shrink-0"></i>
+                  <span class="truncate">{{ f.nombre }}</span>
+                </span>
                 <span class="font-bold text-[#3B1E09] dark:text-surface-0 tabular-nums">
                   {{ totalParaFormaPago(f) | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
@@ -228,15 +231,18 @@
           </ng-template>
           <ng-template let-f #item>
             <div class="flex items-center justify-between gap-3 w-full py-0.5">
-              <div class="flex flex-col min-w-0 flex-1">
-                <span class="font-medium truncate">{{ f.nombre }}</span>
-                <span class="text-[10px] text-muted-color flex items-center gap-1.5">
-                  @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-                    <span>{{ f.cantidadCuotas }} cuotas</span>
-                    <span class="opacity-50">·</span>
-                  }
-                  <span>{{ f.aplicaIva ? 'con IVA' : 'sin IVA' }}</span>
-                </span>
+              <div class="flex items-center gap-2 min-w-0 flex-1">
+                <i [class]="iconoForma(f)" class="text-[#FF861C] shrink-0"></i>
+                <div class="flex flex-col min-w-0 flex-1">
+                  <span class="font-medium truncate">{{ f.nombre }}</span>
+                  <span class="text-[10px] text-muted-color flex items-center gap-1.5">
+                    @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                      <span>{{ f.cantidadCuotas }} cuotas</span>
+                      <span class="opacity-50">·</span>
+                    }
+                    <span>{{ f.aplicaIva ? 'con IVA' : 'sin IVA' }}</span>
+                  </span>
+                </div>
               </div>
               <span class="font-bold text-[#3B1E09] dark:text-surface-0 tabular-nums text-sm shrink-0">
                 {{ totalParaFormaPago(f) | currency:'ARS':'symbol':'1.0-0' }}
