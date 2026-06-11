@@ -337,9 +337,24 @@ public class ShowroomService {
     }
 
     /** Proveedores distintos del catálogo (no vacíos), alfabético. Pobla el
-     *  dropdown del filtro por proveedor del showroom/presupuestador. */
-    public List<String> listarProveedoresCatalogo() {
-        return productoCacheRepository.findDistinctProveedores();
+     *  dropdown del filtro por proveedor del showroom/presupuestador.
+     *
+     *  <p>Si {@code q} trae texto, devuelve SOLO los proveedores de los productos
+     *  que matchean esa búsqueda (mismo criterio de tokens que {@code buscarCatalogo})
+     *  — así el filtro muestra proveedores relevantes a lo buscado. Sin {@code q}
+     *  devuelve todos (query eficiente con DISTINCT en BD). */
+    public List<String> listarProveedoresCatalogo(String q) {
+        List<String> tokens = ProductoCacheSpecs.tokenizar(q);
+        if (tokens.isEmpty()) {
+            return productoCacheRepository.findDistinctProveedores();
+        }
+        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, false);
+        return productoCacheRepository.findAll(spec).stream()
+                .map(ProductoCache::getProveedor)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
     }
 
     /**
@@ -397,6 +412,7 @@ public class ShowroomService {
             boolean soloDeshabilitados,
             boolean soloSinStock,
             String rubro,
+            String proveedor,
             int page,
             int size,
             String sortField,
@@ -428,6 +444,7 @@ public class ShowroomService {
         if (soloDeshabilitados) spec = spec.and(ProductoCacheSpecs.soloDeshabilitados());
         if (soloSinStock) spec = spec.and(ProductoCacheSpecs.soloSinStock());
         if (rubro != null && !rubro.isBlank()) spec = spec.and(ProductoCacheSpecs.porRubro(rubro));
+        if (proveedor != null && !proveedor.isBlank()) spec = spec.and(ProductoCacheSpecs.porProveedor(proveedor));
 
         Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         // Bulk fetch de codigosBarra (colección lazy @ElementCollection) en una

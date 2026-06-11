@@ -266,6 +266,7 @@ export class CrearPedidoDialog {
         // presupuesto (el presupuesto no tiene razón social).
         this.pedidoNombre.set(det.clienteNombre ?? '');
         this.pedidoRazonSocial.set('');
+        this.clienteExistente.set(false);
         this.pedidoTelefono.set(det.clienteTelefono ?? '');
         this.pedidoEmail.set(det.clienteEmail ?? '');
         this.pedidoCuit.set(null); // no viene del presupuesto
@@ -447,6 +448,8 @@ export class CrearPedidoDialog {
     const nuevo = digits ? Number(digits) : null;
     const previo = this.pedidoCuit();
     this.pedidoCuit.set(nuevo);
+    // Al cambiar el CUIT deja de estar confirmado como cliente existente.
+    if (nuevo !== previo) this.clienteExistente.set(false);
     // Autocompletar al completar el CUIT (11 dígitos), solo en la transición a
     // un valor nuevo — evita disparar el lookup en cada tecla o al reabrir.
     if (digits.length === 11 && nuevo !== previo) {
@@ -474,6 +477,8 @@ export class CrearPedidoDialog {
    *  Reutilizado por el autocompletado por CUIT y por razón social. Devuelve la
    *  cantidad de campos completados. */
   private completarDesdeCliente(cli: ClienteAutocompletar): number {
+    // Se reconoció un cliente guardado (por CUIT o razón social).
+    this.clienteExistente.set(true);
     let completados = 0;
     if (cli.razonSocial && !this.pedidoRazonSocial().trim()) { this.pedidoRazonSocial.set(cli.razonSocial); completados++; }
     if (cli.nombre && !this.pedidoNombre().trim()) { this.pedidoNombre.set(cli.nombre); completados++; }
@@ -492,6 +497,10 @@ export class CrearPedidoDialog {
     }
     return completados;
   }
+
+  /** True cuando el CUIT/razón social corresponden a un cliente ya guardado
+   *  (reconocido por el autocompletado). Se muestra como badge en el diálogo. */
+  readonly clienteExistente = signal(false);
 
   /** Sugerencias del autocomplete por razón social (clientes guardados). */
   readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);

@@ -113,6 +113,12 @@
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
             <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> CUIT <span class="text-red-500">*</span>
+            @if (clienteExistente()) {
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold normal-case tracking-normal
+                           bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                <i class="pi pi-check-circle text-[9px]"></i> Cliente existente
+              </span>
+            }
           </label>
           <p-inputMask mask="99-99999999-9" [unmask]="true"
             [ngModel]="cuitInputValuePedido()" (ngModelChange)="onCuitChangePedido($event)"
@@ -190,6 +196,7 @@
             [ngModel]="pedidoIdLocalidad()" (ngModelChange)="pedidoIdLocalidad.set($event)"
             placeholder="Seleccioná provincia primero" class="w-full"
             [showClear]="true" [filter]="true" appendTo="body"
+            [virtualScroll]="true" [virtualScrollItemSize]="38"
             [disabled]="!pedidoCodigoProvincia() || cargandoLocalidadesPedido()" />
         </div>
       </div>

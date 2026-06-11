@@ -10,11 +10,13 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
+import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -23,6 +25,7 @@ import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ActualizarClienteRequest, ClientePresupuestos, Localidad, Provincia } from '../models';
+import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
@@ -48,11 +51,13 @@ import { TopActions } from '../top-actions/top-actions';
     CommonModule,
     FormsModule,
     RouterLink,
+    AutoCompleteModule,
     ButtonModule,
     CardModule,
     DialogModule,
     IconFieldModule,
     InputIconModule,
+    InputMaskModule,
     InputNumberModule,
     InputTextModule,
     SelectModule,
@@ -105,8 +110,26 @@ export class PresupuestosClientesPage {
   readonly editRubroOtros = signal('');
   readonly editNotas = signal('');
   // Datos de facturación y envío.
-  readonly editTipoDoc = signal<string | null>(null);
   readonly editNroDoc = signal<number | null>(null);
+  /** Sugerencias del autocomplete de email (mismos dominios que el modal de pedido). */
+  readonly sugerenciasEmail = signal<string[]>([]);
+
+  /** Valor (string de dígitos) que ve el inputMask del CUIT, derivado de editNroDoc. */
+  readonly editCuitInputValue = computed(() => {
+    const n = this.editNroDoc();
+    return n != null ? String(n) : '';
+  });
+
+  /** completeMethod del autocomplete de email. */
+  onCompletarEmail(event: AutoCompleteCompleteEvent): void {
+    this.sugerenciasEmail.set(calcularSugerenciasEmail(event.query));
+  }
+
+  /** Recibe el valor desenmascarado del CUIT (solo dígitos) y lo guarda como number. */
+  onEditCuitChange(value: string | null | undefined): void {
+    const digits = (value ?? '').replace(/\D/g, '');
+    this.editNroDoc.set(digits ? Number(digits) : null);
+  }
   readonly editDomicilio = signal('');
   readonly editCodigoProvincia = signal<string | null>(null);
   readonly editIdLocalidad = signal<string | null>(null);
@@ -119,11 +142,6 @@ export class PresupuestosClientesPage {
   readonly cargandoLocalidades = signal(false);
   private localidadesSub: Subscription | null = null;
 
-  readonly opcionesTipoDoc: { label: string; value: string }[] = [
-    { label: 'CUIT', value: 'CUIT' },
-    { label: 'DNI', value: 'DNI' },
-    { label: 'CUIL', value: 'CUIL' },
-  ];
 
   /** Opciones del dropdown de rubro — mismo set que /presupuestos y el modal
    *  de pedidos para que un mismo cliente caiga al mismo rubro en cualquier
@@ -318,7 +336,6 @@ export class PresupuestosClientesPage {
     this.editNotas.set('');
     this.editRubro.set(null);
     this.editRubroOtros.set('');
-    this.editTipoDoc.set(null);
     this.editNroDoc.set(null);
     this.editDomicilio.set('');
     this.editCodigoProvincia.set(null);
@@ -345,7 +362,6 @@ export class PresupuestosClientesPage {
       this.editRubroOtros.set('');
     }
     // Datos de facturación/envío.
-    this.editTipoDoc.set(c.tipoDoc ?? null);
     this.editNroDoc.set(c.nroDoc ?? null);
     this.editDomicilio.set(c.domicilio ?? '');
     this.editCodigoProvincia.set(c.codigoProvincia ?? null);
@@ -447,7 +463,9 @@ export class PresupuestosClientesPage {
       email: this.editEmail().trim() || null,
       rubro: this.rubroFinalEdicion(),
       notas: this.editNotas().trim() || null,
-      tipoDoc: this.editTipoDoc(),
+      // El documento del cliente siempre es CUIT (el modal de pedido y DUX
+      // trabajan con CUIT); no se pregunta el tipo.
+      tipoDoc: this.editNroDoc() != null ? 'CUIT' : null,
       nroDoc: this.editNroDoc(),
       domicilio: this.editDomicilio().trim() || null,
       codigoProvincia: this.editCodigoProvincia(),

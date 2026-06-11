@@ -980,6 +980,9 @@ export class ShowroomPage implements AfterViewInit {
     const nuevo = digits ? Number(digits) : null;
     const previo = this.cliente().nroDoc;
     this.actualizarCliente('nroDoc', nuevo);
+    // Al cambiar el CUIT deja de estar "confirmado" como cliente existente; el
+    // lookup de abajo lo vuelve a marcar si encuentra coincidencia.
+    if (nuevo !== previo) this.clienteExistente.set(false);
     // Autocompletar al completar el CUIT (11 dígitos), solo en la transición a
     // un valor nuevo — evita disparar el lookup en cada tecla.
     if (digits.length === 11 && nuevo !== previo) {
@@ -1001,6 +1004,9 @@ export class ShowroomPage implements AfterViewInit {
   /** Completa SOLO los campos vacíos del formulario desde un cliente guardado.
    *  Reutilizado por el autocompletado por CUIT y por razón social. */
   private completarDesdeCliente(cli: ClienteAutocompletar): void {
+    // Se reconoció un cliente guardado (por CUIT o razón social) → lo marcamos
+    // como existente para mostrarlo en el form.
+    this.clienteExistente.set(true);
     const c = this.cliente();
     const parche: Partial<DatosCliente> = {};
     let completados = 0;
@@ -1037,6 +1043,11 @@ export class ShowroomPage implements AfterViewInit {
       });
     }
   }
+
+  /** True cuando el CUIT/razón social cargados corresponden a un cliente ya
+   *  guardado (reconocido por el autocompletado). Se muestra como badge en el
+   *  form y se resetea al cambiar el CUIT o al limpiar el cliente. */
+  readonly clienteExistente = signal(false);
 
   /** Sugerencias del autocomplete por razón social (clientes guardados). */
   readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);
@@ -1475,6 +1486,9 @@ export class ShowroomPage implements AfterViewInit {
     // Los re-search por cambio de filtro/orden NO pasan por acá, así que se
     // preservan correctamente.
     this.proveedorFiltro.set(null);
+    // El dropdown de proveedores se acota a lo buscado: solo los proveedores de
+    // los productos que matchean esta query.
+    this.cargarProveedores(query);
 
     // Cada nuevo scan/búsqueda recibe un número de secuencia. Si llega la
     // respuesta de uno anterior (más lento), la descartamos.
@@ -1566,9 +1580,11 @@ export class ShowroomPage implements AfterViewInit {
     }
   }
 
-  /** Carga la lista de proveedores para el dropdown del filtro (best-effort). */
-  private cargarProveedores(): void {
-    this.api.listarProveedoresCatalogo()
+  /** Carga la lista de proveedores para el dropdown del filtro (best-effort).
+   *  Si se pasa `q`, trae solo los proveedores de los productos que matchean esa
+   *  búsqueda — así el filtro muestra proveedores relevantes a lo buscado. */
+  private cargarProveedores(q?: string): void {
+    this.api.listarProveedoresCatalogo(q)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (lista) => this.proveedoresDisponibles.set(lista),
@@ -2554,6 +2570,7 @@ export class ShowroomPage implements AfterViewInit {
             });
             this.vaciarCarrito();
             this.cliente.set({ ...CLIENTE_VACIO });
+            this.clienteExistente.set(false);
             // Reset de la forma de pago al default (primera de la lista) — el
             // próximo cliente arranca con el método configurado por el operador.
             const formas = this.formasPagoActivas();

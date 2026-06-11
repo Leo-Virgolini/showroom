@@ -1227,6 +1227,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // quedaba "pegado"). Los re-search por cambio de filtro/orden no pasan por
     // acá, así que se preservan.
     this.proveedorFiltro.set(null);
+    // El dropdown de proveedores se acota a lo buscado.
+    this.cargarProveedores(query);
     const seq = ++this.scanSeq;
     this.cargandoScan.set(true);
     this.buscarEnCatalogo(query, seq);
@@ -1271,9 +1273,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     }
   }
 
-  /** Carga la lista de proveedores para el dropdown del filtro (best-effort). */
-  private cargarProveedores(): void {
-    this.api.listarProveedoresCatalogo()
+  /** Carga la lista de proveedores para el dropdown del filtro (best-effort).
+   *  Si se pasa `q`, trae solo los proveedores de los productos que matchean esa
+   *  búsqueda — así el filtro muestra proveedores relevantes a lo buscado. */
+  private cargarProveedores(q?: string): void {
+    this.api.listarProveedoresCatalogo(q)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (lista) => this.proveedoresDisponibles.set(lista),

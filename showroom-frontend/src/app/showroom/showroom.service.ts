@@ -209,9 +209,12 @@ export class ShowroomService {
     return this.http.get<CatalogoPage>(`${this.base}/catalogo`, { params });
   }
 
-  /** Proveedores distintos del catálogo (para el dropdown del filtro). */
-  listarProveedoresCatalogo(): Observable<string[]> {
-    return this.http.get<string[]>(`${this.base}/catalogo/proveedores`);
+  /** Proveedores para el dropdown del filtro. Si se pasa `q`, devuelve solo los
+   *  proveedores de los productos que matchean esa búsqueda. */
+  listarProveedoresCatalogo(q?: string): Observable<string[]> {
+    let params = new HttpParams();
+    if (q && q.trim()) params = params.set('q', q.trim());
+    return this.http.get<string[]>(`${this.base}/catalogo/proveedores`, { params });
   }
 
   lookupBulk(skus: string[]): Observable<CatalogoItem[]> {
@@ -226,6 +229,7 @@ export class ShowroomService {
     if (opts.soloDeshabilitados) params = params.set('soloDeshabilitados', 'true');
     if (opts.soloSinStock) params = params.set('soloSinStock', 'true');
     if (opts.rubro && opts.rubro.trim()) params = params.set('rubro', opts.rubro.trim());
+    if (opts.proveedor && opts.proveedor.trim()) params = params.set('proveedor', opts.proveedor.trim());
     if (opts.sortField) params = params.set('sortField', opts.sortField);
     if (opts.sortOrder) params = params.set('sortOrder', opts.sortOrder);
     return this.http.get<ProductoListPage>(`${this.base}/productos`, { params });

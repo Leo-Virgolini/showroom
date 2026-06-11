@@ -75,6 +75,21 @@
             class="w-full" />
         </div>
 
+        <div class="w-full lg:w-64 shrink-0">
+          <label class="block text-xs font-semibold text-muted-color mb-1 uppercase tracking-wide">
+            Proveedor
+          </label>
+          <p-select
+            [options]="proveedoresDisponibles()"
+            [ngModel]="proveedorFiltro()"
+            (ngModelChange)="proveedorFiltro.set($event)"
+            placeholder="Todos los proveedores"
+            [showClear]="true"
+            [filter]="true"
+            appendTo="body"
+            class="w-full" />
+        </div>
+
         <div class="flex flex-wrap gap-4 lg:gap-6">
           <label class="flex items-center gap-2 text-sm cursor-pointer">
             <p-toggleSwitch

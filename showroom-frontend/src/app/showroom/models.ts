@@ -466,6 +466,8 @@ export interface ListarProductosParams {
   /** Filtro por rubro DUX exacto (ej. "MAQUINAS INDUSTRIALES"). El backend
    *  matchea case-insensitive. Null/undefined = sin filtro. */
   rubro?: string | null;
+  /** Filtro por proveedor exacto (nombre DUX). Null/undefined = sin filtro. */
+  proveedor?: string | null;
   page?: number;
   size?: number;
   sortField?: string;

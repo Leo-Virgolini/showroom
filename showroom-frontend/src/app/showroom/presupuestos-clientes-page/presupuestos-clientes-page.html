@@ -271,9 +271,9 @@
         Teléfono @if (modoNuevo()) { <span class="text-red-500">*</span> }
       </label>
       @if (modoNuevo()) {
-        <input pInputText id="edit-cliente-tel" type="text" maxlength="50"
-          [ngModel]="editTelefono()" (ngModelChange)="editTelefono.set($event)"
-          placeholder="Ej. 11-1234-5678" class="w-full" />
+        <p-inputMask id="edit-cliente-tel" mask="99-99999999" [unmask]="true"
+          [ngModel]="editTelefono()" (ngModelChange)="editTelefono.set($event ?? '')"
+          placeholder="11-12345678" class="w-full" />
         <span class="text-[0.7rem] text-muted-color">Clave del cliente.</span>
       } @else {
         <input pInputText type="text" [value]="clienteEditando()?.telefono ?? ''" disabled class="w-full" />
@@ -298,9 +298,11 @@
 
     <div class="flex flex-col gap-1">
       <label for="edit-cliente-email" class="text-sm font-medium text-muted-color">Email</label>
-      <input pInputText id="edit-cliente-email" type="email" maxlength="150"
-        [ngModel]="editEmail()" (ngModelChange)="editEmail.set($event)"
-        placeholder="cliente@dominio.com" class="w-full" />
+      <p-autoComplete inputId="edit-cliente-email" [ngModel]="editEmail()"
+        (ngModelChange)="editEmail.set($event ?? '')"
+        [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
+        [forceSelection]="false" [delay]="0"
+        placeholder="cliente@dominio.com" inputStyleClass="w-full" class="w-full" />
     </div>
 
     <div class="grid grid-cols-1 gap-3" [class.sm:grid-cols-2]="editRubro() === 'otros'">
@@ -322,21 +324,13 @@
     </div>
 
     <!-- Datos de facturación y envío. Se guardan en el maestro y pisan los
-         derivados del último pedido al armar el listado. -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Tipo doc.</label>
-        <p-select [options]="opcionesTipoDoc" [ngModel]="editTipoDoc()"
-          (ngModelChange)="editTipoDoc.set($event)"
-          optionLabel="label" optionValue="value" placeholder="—"
-          [showClear]="true" appendTo="body" class="w-full" />
-      </div>
-      <div class="flex flex-col gap-1 sm:col-span-2">
-        <label for="edit-cliente-nrodoc" class="text-sm font-medium text-muted-color">N° documento / CUIT</label>
-        <p-inputNumber inputId="edit-cliente-nrodoc" [ngModel]="editNroDoc()"
-          (ngModelChange)="editNroDoc.set($event)"
-          [useGrouping]="false" [min]="0" placeholder="Ej: 20123456789" class="w-full" />
-      </div>
+         derivados del último pedido al armar el listado. El documento siempre es
+         CUIT (no se pregunta el tipo). -->
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-nrodoc" class="text-sm font-medium text-muted-color">CUIT</label>
+      <p-inputMask inputId="edit-cliente-nrodoc" mask="99-99999999-9" [unmask]="true"
+        [ngModel]="editCuitInputValue()" (ngModelChange)="onEditCuitChange($event)"
+        placeholder="20-12345678-9" class="w-full" />
     </div>
 
     <div class="flex flex-col gap-1">
@@ -360,6 +354,7 @@
           (ngModelChange)="editIdLocalidad.set($event)"
           optionLabel="nombre" optionValue="id" placeholder="Seleccionar…"
           [showClear]="true" [filter]="true" [loading]="cargandoLocalidades()"
+          [virtualScroll]="true" [virtualScrollItemSize]="38"
           [disabled]="!editCodigoProvincia()" appendTo="body" class="w-full" />
       </div>
     </div>

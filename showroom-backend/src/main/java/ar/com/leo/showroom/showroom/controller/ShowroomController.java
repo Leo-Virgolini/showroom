@@ -474,8 +474,9 @@ public class ShowroomController {
      * showroom/presupuestador.
      */
     @GetMapping("/catalogo/proveedores")
-    public List<String> proveedoresCatalogo() {
-        return service.listarProveedoresCatalogo();
+    public List<String> proveedoresCatalogo(
+            @RequestParam(value = "q", required = false) String q) {
+        return service.listarProveedoresCatalogo(q);
     }
 
     /**
@@ -544,11 +545,12 @@ public class ShowroomController {
             @RequestParam(value = "soloDeshabilitados", defaultValue = "false") boolean soloDeshabilitados,
             @RequestParam(value = "soloSinStock", defaultValue = "false") boolean soloSinStock,
             @RequestParam(value = "rubro", required = false) String rubro,
+            @RequestParam(value = "proveedor", required = false) String proveedor,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size,
             @RequestParam(value = "sortField", required = false) String sortField,
             @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        return service.buscarProductos(q, soloDeshabilitados, soloSinStock, rubro,
+        return service.buscarProductos(q, soloDeshabilitados, soloSinStock, rubro, proveedor,
                 page, size, sortField, sortOrder);
     }
 

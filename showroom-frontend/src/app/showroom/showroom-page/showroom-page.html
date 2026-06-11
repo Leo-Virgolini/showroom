@@ -1062,8 +1062,14 @@
 
     <div class="grid grid-cols-2 gap-3">
       <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">
+        <label class="text-sm font-medium text-muted-color flex items-center gap-2">
           CUIT <span class="text-red-500">*</span>
+          @if (clienteExistente()) {
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold
+                         bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              <i class="pi pi-check-circle text-[10px]"></i> Cliente existente
+            </span>
+          }
         </label>
         <p-inputMask mask="99-99999999-9" [unmask]="true" [ngModel]="cuitInputValue()" (ngModelChange)="onCuitChange($event)" placeholder="XX-XXXXXXXX-X" class="w-full" />
         @if (cliente().nroDoc != null && !cuitValido(cliente().nroDoc)) {

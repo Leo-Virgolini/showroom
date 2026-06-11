@@ -77,6 +77,10 @@ export class ProductosPage {
    *  Se carga al iniciar; el refresh manual no la actualiza (el catálogo
    *  cambia rara vez de rubros, no vale la pena recargar). */
   readonly rubrosDisponibles = signal<string[]>([]);
+  /** Proveedor seleccionado en el dropdown del filtro — null = sin filtro. */
+  readonly proveedorFiltro = signal<string | null>(null);
+  /** Lista de proveedores distintos del cache — popula el dropdown del filtro. */
+  readonly proveedoresDisponibles = signal<string[]>([]);
 
   readonly cargando = signal(false);
   readonly productos = signal<ProductoListItem[]>([]);
@@ -104,7 +108,8 @@ export class ProductosPage {
       this.busqueda().trim().length > 0 ||
       this.soloDeshabilitados() ||
       this.soloSinStock() ||
-      this.rubroFiltro() != null,
+      this.rubroFiltro() != null ||
+      this.proveedorFiltro() != null,
   );
 
   constructor() {
@@ -122,6 +127,12 @@ export class ProductosPage {
       error: (err) => console.warn('[rubros] no se pudieron cargar:', err),
     });
 
+    // Proveedores para el dropdown del filtro (todos los del catálogo).
+    this.api.listarProveedoresCatalogo().subscribe({
+      next: (provs) => this.proveedoresDisponibles.set(provs),
+      error: (err) => console.warn('[proveedores] no se pudieron cargar:', err),
+    });
+
     // Guard contra doble request inicial: el effect corre la primera vez al
     // mount (los signals tienen valor inicial) y `onLazyLoad` del p-table
     // también dispara. Si no skipeamos la primera, se hacen 2 cargas idénticas.
@@ -132,6 +143,7 @@ export class ProductosPage {
       this.soloDeshabilitados();
       this.soloSinStock();
       this.rubroFiltro();
+      this.proveedorFiltro();
       if (!filtrosInicializados) {
         filtrosInicializados = true;
         return;
@@ -160,6 +172,7 @@ export class ProductosPage {
         soloDeshabilitados: this.soloDeshabilitados(),
         soloSinStock: this.soloSinStock(),
         rubro: this.rubroFiltro(),
+        proveedor: this.proveedorFiltro(),
         page,
         size,
         sortField: this.sortField(),
@@ -183,6 +196,7 @@ export class ProductosPage {
     this.soloDeshabilitados.set(false);
     this.soloSinStock.set(false);
     this.rubroFiltro.set(null);
+    this.proveedorFiltro.set(null);
   }
 
   refrescarFila(sku: string): void {
