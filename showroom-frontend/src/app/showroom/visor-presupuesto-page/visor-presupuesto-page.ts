@@ -63,6 +63,21 @@ export class VisorPresupuestoPage {
   readonly total = computed(() => this.snapshot()?.total ?? 0);
   readonly formasPago = computed(() => this.snapshot()?.formasPago ?? []);
 
+  /** Subtotal BRUTO (sin descuentos) = Σ precioUnitario × cantidad. */
+  readonly subtotalBruto = computed(() =>
+    this.items().reduce((acc, it) => acc + it.precioUnitario * it.cantidad, 0),
+  );
+  /** Monto descontado en total (bruto − total efectivo). */
+  readonly descuentoMonto = computed(() => Math.max(0, this.subtotalBruto() - this.total()));
+  /** % de descuento global sobre el subtotal bruto. */
+  readonly descuentoPorcentaje = computed(() => {
+    const bruto = this.subtotalBruto();
+    return bruto > 0 ? (this.descuentoMonto() / bruto) * 100 : 0;
+  });
+  /** True si hay un descuento aplicado a mostrar (umbral de $1 para evitar
+   *  ruido por redondeo). */
+  readonly hayDescuento = computed(() => this.descuentoMonto() >= 1);
+
   /** Nombre del cliente, o null si vacío/blank — en ese caso el header muestra
    *  el encabezado genérico "Presupuesto". */
   readonly clienteNombre = computed(() => {

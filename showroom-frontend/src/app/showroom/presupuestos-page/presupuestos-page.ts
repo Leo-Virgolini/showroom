@@ -1555,6 +1555,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       imagenUrl: it.imagenUrl ?? null,
       cantidad: it.cantidad,
       precioUnitario: redondearMoneda(this.precioMostrado(it)),
+      descuentoPorcentaje: it.descuentoPorcentaje ?? 0,
       subtotalLinea: redondearMoneda(this.totalLinea(it)),
     }));
     const formasPago = this.formasPagoFooter().map((f) => ({

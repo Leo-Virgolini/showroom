@@ -353,6 +353,8 @@ export interface PresupuestoVisorItem {
   cantidad: number;
   /** Precio de referencia unitario (forma destacada según el rubro del ítem). */
   precioUnitario: number;
+  /** % de descuento individual de la línea (0 = sin descuento). */
+  descuentoPorcentaje: number;
   /** `precioUnitario * (1 - descuento) * cantidad`. */
   subtotalLinea: number;
 }

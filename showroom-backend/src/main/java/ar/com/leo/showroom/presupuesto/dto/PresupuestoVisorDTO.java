@@ -47,12 +47,16 @@ public record PresupuestoVisorDTO(
             Integer cantidad,
             /** Precio de referencia unitario (forma destacada según el rubro). */
             BigDecimal precioUnitario,
+            /** % de descuento individual aplicado a la línea (0 = sin descuento).
+             *  El visor lo muestra para que el cliente vea el descuento aplicado. */
+            BigDecimal descuentoPorcentaje,
             /** {@code precioUnitario * (1 - descuento) * cantidad}. */
             BigDecimal subtotalLinea
     ) {
         public ItemVisor {
             if (cantidad == null) cantidad = 0;
             if (precioUnitario == null) precioUnitario = BigDecimal.ZERO;
+            if (descuentoPorcentaje == null) descuentoPorcentaje = BigDecimal.ZERO;
             if (subtotalLinea == null) subtotalLinea = BigDecimal.ZERO;
         }
     }
