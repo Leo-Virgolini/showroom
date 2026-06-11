@@ -38,7 +38,6 @@ import {
   EnviarPresupuestoRequest,
   FormaPago,
   GenerarPresupuestoRequest,
-  normalizarRubro,
   PresupuestoDetalle,
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
@@ -852,22 +851,20 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
                 if (it.generico) continue;
                 const f = porSku.get(it.sku);
                 if (!f) continue;
-                const cambioPrecio = redondearMoneda(f.pvpKtGastroConIva ?? 0)
-                  !== redondearMoneda(it.pvpKtGastroConIva ?? 0);
-                const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
-                // Un cambio de rubro (menaje↔maquinaria) cambia el precio de
-                // referencia aunque la lista no cambie — también lo flagueamos.
-                const cambioRubro = normalizarRubro(f.rubro) !== normalizarRubro(it.rubro);
-                if (!cambioPrecio && !cambioIva && !cambioRubro) continue;
-                cambios.set(it.uid, {
-                  precioGuardado: this.precioMostrado(it),
-                  precioActual: this.precioMostrado({
-                    pvpKtGastroConIva: f.pvpKtGastroConIva,
-                    pvpKtGastroSinIva: f.pvpKtGastroSinIva,
-                    porcIva: f.porcIva,
-                    rubro: f.rubro ?? it.rubro,
-                  }),
+                // Solo avisamos cuando cambia el PRECIO DE REFERENCIA que ve el
+                // cliente (precioMostrado), no los datos crudos. Así un cambio de
+                // rubro que cruza menaje↔maquinaria (que SÍ cambia el precio) se
+                // detecta, pero un cambio de rubro cosmético (mismo precio) no
+                // pinta un falso "precio desactualizado" con dos montos iguales.
+                const precioGuardado = this.precioMostrado(it);
+                const precioActual = this.precioMostrado({
+                  pvpKtGastroConIva: f.pvpKtGastroConIva,
+                  pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+                  porcIva: f.porcIva,
+                  rubro: f.rubro ?? it.rubro,
                 });
+                if (redondearMoneda(precioGuardado) === redondearMoneda(precioActual)) continue;
+                cambios.set(it.uid, { precioGuardado, precioActual });
               }
               this.cambiosPrecio.set(cambios);
               this.items.set(
@@ -977,15 +974,18 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
               noEncontrados++;
               return it;
             }
-            const cambioPrecio =
-              redondearMoneda(f.pvpKtGastroConIva ?? 0) !==
-              redondearMoneda(it.pvpKtGastroConIva ?? 0);
-            const cambioIva = (f.porcIva ?? null) !== (it.porcIva ?? null);
-            // El rubro también cuenta: si cambió menaje↔maquinaria, cambia el
-            // precio de referencia (y el perfil que va al pedido) aunque la
-            // lista sea igual.
-            const cambioRubro = normalizarRubro(f.rubro) !== normalizarRubro(it.rubro);
-            if (!cambioPrecio && !cambioIva && !cambioRubro) {
+            // Cuenta como cambio solo si cambia el PRECIO DE REFERENCIA que ve
+            // el cliente (precioMostrado). Esto capta los cambios de rubro que
+            // cruzan menaje↔maquinaria (que sí cambian el precio/perfil) pero
+            // ignora los cambios de rubro cosméticos que dejan el mismo precio.
+            const precioGuardado = this.precioMostrado(it);
+            const precioActual = this.precioMostrado({
+              pvpKtGastroConIva: f.pvpKtGastroConIva,
+              pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+              porcIva: f.porcIva,
+              rubro: f.rubro ?? it.rubro,
+            });
+            if (redondearMoneda(precioGuardado) === redondearMoneda(precioActual)) {
               sinCambios++;
               return it;
             }
