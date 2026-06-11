@@ -273,18 +273,51 @@ public class ShowroomService {
     }
 
     /**
-     * Búsqueda paginada en el cache local (sin tocar DUX).
-     * Usada por la pantalla de generación de etiquetas QR.
+     * Whitelist de campos por los que el operador puede ordenar los resultados
+     * de búsqueda del catálogo (showroom + presupuestador). Mapea el id que manda
+     * el front a la propiedad de la entity {@link ProductoCache}. "precio" =
+     * PVP con IVA. Sin entrada → se cae al orden por relevancia/SKU.
      */
-    public CatalogoPageDTO buscarCatalogo(String q, int page, int size) {
+    private static final Map<String, String> SORT_CATALOGO = Map.of(
+            "descripcion", "descripcion",
+            "precio", "pvpKtGastroConIva"
+    );
+
+    /**
+     * Búsqueda paginada en el cache local (sin tocar DUX).
+     * Usada por la pantalla de generación de etiquetas QR, el showroom y el
+     * presupuestador. {@code sortField} ("descripcion"/"precio") + {@code sortOrder}
+     * ("asc"/"desc") son opcionales: si vienen, el operador eligió el orden y
+     * manda el Pageable; si no, se usa el ranking por relevancia.
+     */
+    public CatalogoPageDTO buscarCatalogo(String q, int page, int size, String sortField, String sortOrder) {
         int pageSafe = Math.max(0, page);
         int sizeSafe = Math.min(Math.max(size, 1), 200);
         List<String> tokens = ProductoCacheSpecs.tokenizar(q);
-        // Si no hay tokens, devolvemos paginado por SKU asc (sin ranking).
-        Pageable pageable = tokens.isEmpty()
-                ? PageRequest.of(pageSafe, sizeSafe, Sort.by(Sort.Direction.ASC, "sku"))
-                : PageRequest.of(pageSafe, sizeSafe);
-        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, true);
+        // Orden: si el operador eligió un campo (producto/precio), manda el
+        // Pageable y se desactiva el ranking por relevancia. Si no, se mantiene
+        // el comportamiento histórico: ranking por relevancia cuando hay tokens,
+        // o SKU asc cuando la búsqueda está vacía.
+        boolean sortExplicito = sortField != null && SORT_CATALOGO.containsKey(sortField);
+        Pageable pageable;
+        boolean aplicarRanking;
+        if (sortExplicito) {
+            // Desempate por SKU para que la paginación sea ESTABLE cuando hay
+            // descripciones/precios repetidos: sin él, los ítems empatados pueden
+            // saltar entre páginas al traer "cargar más".
+            Sort sort = ar.com.leo.showroom.common.util.SortUtils
+                    .resolver(SORT_CATALOGO, sortField, sortOrder, "descripcion")
+                    .and(Sort.by(Sort.Direction.ASC, "sku"));
+            pageable = PageRequest.of(pageSafe, sizeSafe, sort);
+            aplicarRanking = false;
+        } else if (tokens.isEmpty()) {
+            pageable = PageRequest.of(pageSafe, sizeSafe, Sort.by(Sort.Direction.ASC, "sku"));
+            aplicarRanking = false;
+        } else {
+            pageable = PageRequest.of(pageSafe, sizeSafe);
+            aplicarRanking = true;
+        }
+        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, aplicarRanking);
         Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         List<CatalogoItemDTO> items = resultado.getContent().stream()
                 .map(this::toCatalogoItem)
@@ -401,6 +434,8 @@ public class ShowroomService {
      * via sort field" al pasar el parámetro directo al ORDER BY.
      */
     private static final Map<String, String> SORT_PEDIDOS = Map.ofEntries(
+            // Número interno del pedido (columna "#" del listado).
+            Map.entry("id", "id"),
             Map.entry("creadoAt", "creadoAt"),
             Map.entry("estado", "estado"),
             Map.entry("nroDoc", "nroDoc"),
@@ -857,22 +892,21 @@ public class ShowroomService {
                     : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
             boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
             BigDecimal recargoItem = recargoPerfil(formaPago, esMaq);
-            // Si el pedido viene de un presupuesto y trae el perfil de IVA
-            // congelado (precioReferenciaConIva), lo respetamos — así DUX factura
-            // con el mismo criterio con que se cotizó, sin re-deducirlo por el
-            // rubro/forma (que podría cambiar). Sino, lo deducimos como siempre.
-            boolean aplicaIvaItem = (request.origenPresupuesto() && it.precioReferenciaConIva() != null)
-                    ? it.precioReferenciaConIva()
-                    : aplicaIvaPerfil(formaPago, esMaq);
+            // El perfil de IVA sale de la forma ELEGIDA (según el rubro del ítem),
+            // igual para showroom y para pedidos de presupuesto: el operador elige
+            // con qué forma paga el cliente al crear el pedido y el IVA es parte de
+            // esa forma.
+            boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
 
-            // Precio que paga el cliente (BRUTO, sin el descuento de la línea).
-            // Si el pedido viene de un presupuesto y trae el precio efectivo
-            // cotizado (precioReferencia), lo RESPETAMOS tal cual — así el pedido
-            // coincide exacto con lo cotizado aunque cambien los recargos/IVA de la
-            // forma o el precio de lista. Sino, lo calculamos con la forma elegida.
-            BigDecimal precioFinal = (request.origenPresupuesto() && it.precioReferencia() != null)
-                    ? it.precioReferencia()
-                    : calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
+            // Precio que paga el cliente (BRUTO, sin el descuento de la línea),
+            // calculado con la forma de pago ELEGIDA sobre el precio de lista con
+            // IVA. Para pedidos de presupuesto, `precioBaseConIva` es el PVP
+            // CONGELADO del presupuesto (it.precioUnitario), de modo que el
+            // recargo/descuento de la forma elegida se aplica sobre lo cotizado —
+            // igual que el preview del diálogo. NO se usa `precioReferencia` (que
+            // ya traía aplicado el descuento de la forma de referencia/Efectivo y
+            // por eso ignoraba la forma elegida).
+            BigDecimal precioFinal = calcularPrecioFinal(precioBaseConIva, porcIva, recargoItem, aplicaIvaItem);
 
             // Descuento de la línea: el % que también viaja a DUX como porc_desc.
             // factorDesc = 1 − desc/100. El precioUnitario se persiste BRUTO; el
@@ -1243,26 +1277,17 @@ public class ShowroomService {
                     ? it.rubro()
                     : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
             boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
-            BigDecimal precioDux;
-            if (request.origenPresupuesto() && it.precioReferencia() != null) {
-                // Respetamos lo cotizado. DUX factura siempre c/IVA: si el ítem
-                // se cotizó CON IVA (menaje), el precioReferencia ya es c/IVA; si
-                // fue SIN IVA (maquinaria), le sumamos el IVA (el cliente paga sin
-                // y el operador absorbe la diferencia, igual que el flujo normal).
-                // El perfil de IVA lo tomamos del flag congelado del presupuesto
-                // (mismo criterio que crearPedido); si no vino, lo deducimos.
-                boolean conIva = it.precioReferenciaConIva() != null
-                        ? it.precioReferenciaConIva()
-                        : aplicaIvaPerfil(formaPago, esMaq);
-                BigDecimal ivaPorc = porcIva != null ? porcIva : PrecioPerfilCalculator.IVA_DEFAULT;
-                precioDux = conIva
-                        ? it.precioReferencia()
-                        : PrecioPerfilCalculator.agregarIva(it.precioReferencia(), ivaPorc);
-            } else {
-                precioDux = formaPago != null
-                        ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
-                        : precioBaseConIva;
-            }
+            // Precio a DUX = precio de lista (con IVA) con el recargo/descuento de
+            // la forma ELEGIDA, SIEMPRE con IVA (DUX factura con IVA; la diferencia
+            // de las formas s/IVA la absorbe el operador). Para pedidos de
+            // presupuesto, `precioBaseConIva` es el PVP CONGELADO del presupuesto
+            // (it.precioUnitario), así el precio respeta lo cotizado pero refleja la
+            // forma elegida — coincide con el preview del diálogo. NO se usa
+            // `precioReferencia` (traía el descuento de la forma de referencia/
+            // Efectivo, lo que hacía que DUX facturara siempre el precio de Efectivo).
+            BigDecimal precioDux = formaPago != null
+                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
+                    : precioBaseConIva;
             d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);
             if (StringUtils.hasText(it.comentarios())) {

@@ -104,10 +104,22 @@ export class CrearPedidoDialog {
   readonly visible = model<boolean>(false);
   /** Id del presupuesto a transformar. Null cierra/oculta el dialog. */
   readonly presupuestoId = input<number | null>(null);
-  /** Emite cuando se creó el pedido OK y se marcó el presupuesto como
-   *  convertido. El payload trae ambos ids para que el padre pueda
-   *  actualizar su listado o navegar. */
+  /** Id del pedido ANTERIOR cuando el dialog se abre en modo "regenerar"
+   *  (el presupuesto ya estaba convertido y se editó). Null = alta normal.
+   *  En modo regeneración: se pre-llenan CUIT/dirección/forma desde este
+   *  pedido, y al confirmar se llama al endpoint de regeneración (que anula
+   *  el viejo y re-vincula el presupuesto). */
+  readonly pedidoAnteriorId = input<number | null>(null);
+  /** Emite cuando se creó/regeneró el pedido OK. El payload trae el id del
+   *  presupuesto y el del pedido nuevo para que el padre actualice su listado. */
   readonly pedidoCreado = output<{ presupuestoId: number; pedidoLocalId: number }>();
+
+  /** True cuando el dialog está en modo regeneración (hay un pedido anterior). */
+  readonly esRegeneracion = computed(() => this.pedidoAnteriorId() != null);
+  /** True si el pedido anterior llegó a DUX (estado ENVIADO) — entonces hay un
+   *  comprobante que el operador debe cancelar a mano en DUX. Si fue ERROR/local,
+   *  no hay nada que cancelar y se omite ese aviso. */
+  readonly pedidoAnteriorEnviadoADux = signal(false);
 
   // ----------- Estado interno -----------
   readonly cargandoDetallePresupuesto = signal(false);
@@ -136,14 +148,6 @@ export class CrearPedidoDialog {
     /** Rubro del ítem — define el perfil (menaje/maquinaria) con que se calcula
      *  el precio por forma de pago, igual que en scan/visor/presupuestador. */
     rubro: string | null;
-    /** Precio efectivo cotizado en el presupuesto. Se manda al backend para que
-     *  el pedido respete lo cotizado sin recalcular. Null en presupuestos viejos
-     *  guardados antes del campo (el backend cae al recálculo). */
-    precioReferencia: number | null;
-    /** Perfil de IVA congelado del presupuesto (true = c/IVA menaje, false =
-     *  s/IVA maquinaria). El backend lo usa para facturar a DUX igual que la
-     *  cotización. Null en presupuestos viejos → el backend re-deduce. */
-    precioReferenciaConIva: boolean | null;
     comentarios: string | null;
   }[]>([]);
 
@@ -279,14 +283,17 @@ export class CrearPedidoDialog {
           porcIva: it.porcIva,
           descuentoPorcentaje: it.descuentoPorcentaje,
           rubro: it.rubro ?? null,
-          precioReferencia: it.precioReferencia ?? null,
-          precioReferenciaConIva: it.precioReferenciaConIva ?? null,
           comentarios: it.comentarios ?? null,
         })));
 
         this.cargarProvinciasSiHaceFalta();
         this.cargarFormasPagoSiHaceFalta();
         this.verificarCambiosPrecio();
+
+        // Modo regeneración: completar los datos que el presupuesto NO guarda
+        // (CUIT, dirección, forma de pago) con los del pedido anterior.
+        const anteriorId = this.pedidoAnteriorId();
+        if (anteriorId != null) this.prellenarDesdePedidoAnterior(anteriorId);
       },
       error: (err) => {
         this.cargandoDetallePresupuesto.set(false);
@@ -294,6 +301,48 @@ export class CrearPedidoDialog {
           'No se pudo cargar el detalle del presupuesto.');
         // No podemos seguir sin el detalle — cerramos el dialog.
         this.visible.set(false);
+      },
+    });
+  }
+
+  /** Modo regeneración: trae el detalle del pedido anterior y pre-llena los
+   *  campos que el presupuesto no conserva (CUIT, domicilio, provincia/localidad,
+   *  forma de pago, observaciones). Best-effort: si falla, el operador completa
+   *  a mano. También registra si el pedido anterior llegó a DUX, para decidir si
+   *  mostrar el aviso de "cancelá el comprobante viejo a mano". */
+  private prellenarDesdePedidoAnterior(pedidoId: number): void {
+    this.pedidoAnteriorEnviadoADux.set(false);
+    this.api.obtenerPedido(pedidoId).subscribe({
+      next: (ped) => {
+        this.pedidoAnteriorEnviadoADux.set(ped.estado === 'ENVIADO');
+        if (ped.nroDoc != null) this.pedidoCuit.set(ped.nroDoc);
+        if (ped.domicilio) this.pedidoDomicilio.set(ped.domicilio);
+        if (ped.formaPagoId != null) this.pedidoFormaPagoId.set(ped.formaPagoId);
+        // Observaciones: solo si el presupuesto no traía las suyas (no pisar).
+        if (ped.observaciones && !this.pedidoObservaciones().trim()) {
+          this.pedidoObservaciones.set(ped.observaciones);
+        }
+        // Provincia → cargar sus localidades y recién ahí setear la localidad.
+        if (ped.codigoProvincia) {
+          this.pedidoCodigoProvincia.set(ped.codigoProvincia);
+          this.cargandoLocalidadesPedido.set(true);
+          this.localidadesSub?.unsubscribe();
+          this.localidadesSub = this.api.obtenerLocalidades(ped.codigoProvincia).subscribe({
+            next: (lista) => {
+              this.cargandoLocalidadesPedido.set(false);
+              this.localidadesPedido.set(lista);
+              if (ped.idLocalidad) this.pedidoIdLocalidad.set(ped.idLocalidad);
+              this.localidadesSub = null;
+            },
+            error: () => {
+              this.cargandoLocalidadesPedido.set(false);
+              this.localidadesSub = null;
+            },
+          });
+        }
+      },
+      error: () => {
+        // Best-effort: sin los datos del pedido anterior el operador los completa.
       },
     });
   }
@@ -383,7 +432,75 @@ export class CrearPedidoDialog {
 
   onCuitChangePedido(value: string | null | undefined): void {
     const digits = (value ?? '').replace(/\D/g, '');
-    this.pedidoCuit.set(digits ? Number(digits) : null);
+    const nuevo = digits ? Number(digits) : null;
+    const previo = this.pedidoCuit();
+    this.pedidoCuit.set(nuevo);
+    // Autocompletar al completar el CUIT (11 dígitos), solo en la transición a
+    // un valor nuevo — evita disparar el lookup en cada tecla o al reabrir.
+    if (digits.length === 11 && nuevo !== previo) {
+      this.autocompletarDesdeCuit(nuevo!);
+    }
+  }
+
+  /** Busca un cliente por CUIT y completa SOLO los campos vacíos del formulario
+   *  (no pisa lo que el operador tipeó ni lo que vino del presupuesto). */
+  private autocompletarDesdeCuit(nroDoc: number): void {
+    this.api.buscarClientePorCuit(nroDoc).subscribe((cli) => {
+      if (!cli) return;
+      let completados = 0;
+      if (cli.nombre && !this.pedidoNombre().trim()) { this.pedidoNombre.set(cli.nombre); completados++; }
+      if (cli.email && !this.pedidoEmail().trim()) { this.pedidoEmail.set(cli.email); completados++; }
+      if (cli.telefono && !this.pedidoTelefono().trim()) { this.pedidoTelefono.set(cli.telefono); completados++; }
+      if (cli.rubro && !this.pedidoRubro()) { this.aplicarRubroPedido(cli.rubro); completados++; }
+      if (cli.domicilio && !this.pedidoDomicilio().trim()) { this.pedidoDomicilio.set(cli.domicilio); completados++; }
+      // Provincia/localidad: solo si la provincia está vacía (sino respetamos lo
+      // ya elegido). Al setear la provincia cargamos sus localidades y recién ahí
+      // completamos la localidad.
+      if (cli.codigoProvincia && !this.pedidoCodigoProvincia()) {
+        this.pedidoCodigoProvincia.set(cli.codigoProvincia);
+        completados++;
+        this.cargarLocalidadesYCompletar(cli.codigoProvincia, cli.idLocalidad ?? null);
+      }
+      if (completados > 0) {
+        this.toast.add({
+          severity: 'info',
+          summary: 'Cliente reconocido',
+          detail: 'Completé los datos desde un cliente guardado.',
+          life: 4000,
+        });
+      }
+    });
+  }
+
+  /** Aplica un rubro guardado al select: si coincide con una opción predefinida
+   *  la selecciona; sino usa "Otros…" + el texto libre. */
+  private aplicarRubroPedido(rubro: string): void {
+    if (this.opcionesRubroPedido.some((o) => o.value === rubro)) {
+      this.pedidoRubro.set(rubro);
+      this.pedidoRubroOtros.set('');
+    } else {
+      this.pedidoRubro.set('otros');
+      this.pedidoRubroOtros.set(rubro);
+    }
+  }
+
+  /** Carga las localidades de una provincia y completa la localidad SOLO si
+   *  todavía está vacía (autocompletado no destructivo). */
+  private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null): void {
+    this.cargandoLocalidadesPedido.set(true);
+    this.localidadesSub?.unsubscribe();
+    this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia).subscribe({
+      next: (lista) => {
+        this.cargandoLocalidadesPedido.set(false);
+        this.localidadesPedido.set(lista);
+        if (idLocalidad && !this.pedidoIdLocalidad()) this.pedidoIdLocalidad.set(idLocalidad);
+        this.localidadesSub = null;
+      },
+      error: () => {
+        this.cargandoLocalidadesPedido.set(false);
+        this.localidadesSub = null;
+      },
+    });
   }
 
   onTelefonoChangePedido(value: string | null | undefined): void {
@@ -442,14 +559,9 @@ export class CrearPedidoDialog {
         cantidad: it.cantidad,
         precioUnitario: it.precioConIva,
         // Rubro del presupuesto: el backend lo usa (sin caer al cache) para
-        // reproducir el perfil con que se cotizó cada ítem.
+        // reproducir el perfil (menaje/maquinaria) con que se cotizó cada ítem y
+        // resolver el recargo de la forma de pago elegida.
         rubro: it.rubro ?? undefined,
-        // Precio efectivo cotizado: el backend lo respeta para que el pedido
-        // coincida exacto con el presupuesto.
-        precioReferencia: it.precioReferencia ?? undefined,
-        // Perfil de IVA congelado: el backend factura a DUX con este criterio
-        // sin re-deducir el rubro.
-        precioReferenciaConIva: it.precioReferenciaConIva ?? undefined,
         descuentoPorcentaje: it.descuentoPorcentaje ?? undefined,
         // porcIva: relevante solo para items genéricos (el backend usa el
         // del cache para items normales). Lo forwardeamos siempre cuando
@@ -462,8 +574,14 @@ export class CrearPedidoDialog {
       })),
     };
 
+    const esRegen = this.esRegeneracion();
     this.enviandoPedido.set(true);
-    this.api.crearPedido(req).subscribe({
+    // Regeneración: el backend crea el nuevo pedido, anula el viejo y re-vincula
+    // el presupuesto en una sola operación. Alta normal: crea y luego marcamos.
+    const envio$ = esRegen
+      ? this.api.regenerarPedido(presupuestoId, req)
+      : this.api.crearPedido(req);
+    envio$.subscribe({
       next: (res) => {
         this.enviandoPedido.set(false);
         if (res.estado === 'ENVIADO') {
@@ -479,6 +597,24 @@ export class CrearPedidoDialog {
             return;
           }
           const pedidoLocalId = res.pedidoLocalId;
+          if (esRegen) {
+            // El backend ya anuló el pedido viejo y re-vinculó el presupuesto;
+            // no hay que marcar la conversión aparte.
+            const anteriorId = this.pedidoAnteriorId();
+            const avisoDux = this.pedidoAnteriorEnviadoADux()
+              ? ` Acordate de CANCELAR a mano el comprobante del pedido #${anteriorId} en DUX (la API de DUX no permite anularlo).`
+              : '';
+            this.toast.add({
+              severity: 'success',
+              summary: 'Pedido regenerado',
+              detail: `Presupuesto #${presupuestoId} → nuevo Pedido #${pedidoLocalId}. ` +
+                `El pedido anterior #${anteriorId} quedó anulado.` + avisoDux,
+              life: avisoDux ? 12000 : 6000,
+            });
+            this.visible.set(false);
+            this.pedidoCreado.emit({ presupuestoId, pedidoLocalId });
+            return;
+          }
           this.api.marcarPresupuestoConvertido(presupuestoId, pedidoLocalId).subscribe({
             next: () => {
               this.toast.add({
@@ -517,7 +653,8 @@ export class CrearPedidoDialog {
       },
       error: (err) => {
         this.enviandoPedido.set(false);
-        toastError(this.toast, 'Crear pedido', err, 'Error al enviar el pedido a DUX.');
+        toastError(this.toast, esRegen ? 'Regenerar pedido' : 'Crear pedido', err,
+          'Error al enviar el pedido a DUX.');
       },
     });
   }

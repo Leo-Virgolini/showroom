@@ -344,22 +344,48 @@ export class PresupuestosHistorialPage {
    *  consume {@link CrearPedidoDialog} via @Input para cargar el detalle
    *  internamente y armar el payload. */
   readonly presupuestoIdParaPedido = signal<number | null>(null);
+  /** Id del pedido anterior cuando se abre el dialog en modo "regenerar"
+   *  (presupuesto ya convertido y editado después). Null = alta normal. */
+  readonly pedidoAnteriorParaRegenerar = signal<number | null>(null);
+
+  /** True si el presupuesto se editó DESPUÉS de generar el pedido: tiene pedido,
+   *  fecha de conversión y la última modificación es posterior. Solo entonces
+   *  ofrecemos "Regenerar pedido". */
+  editadoTrasConvertir(p: PresupuestoListItem): boolean {
+    return p.convertidoEnPedidoId != null
+      && !!p.convertidoAt
+      && !!p.modificadoAt
+      && new Date(p.modificadoAt).getTime() > new Date(p.convertidoAt).getTime();
+  }
 
   /** Click en "Crear pedido" de una fila — el dialog se encarga de cargar
    *  el detalle y de mostrar su propio spinner mientras lo hace. */
   abrirCrearPedido(p: PresupuestoListItem): void {
     if (p.convertidoEnPedidoId != null) return;
+    this.pedidoAnteriorParaRegenerar.set(null);
     this.presupuestoIdParaPedido.set(p.id);
     this.mostrarDialogCrearPedido.set(true);
   }
 
-  /** Output del dialog cuando se creó el pedido OK. Updateamos el listado
-   *  optimistamente para que la fila muestre "→ Pedido #N" sin recargar. */
+  /** Click en "Regenerar pedido" — abre el mismo dialog en modo regeneración,
+   *  pasando el id del pedido anterior para que el backend lo anule y re-vincule. */
+  abrirRegenerarPedido(p: PresupuestoListItem): void {
+    if (p.convertidoEnPedidoId == null) return;
+    this.pedidoAnteriorParaRegenerar.set(p.convertidoEnPedidoId);
+    this.presupuestoIdParaPedido.set(p.id);
+    this.mostrarDialogCrearPedido.set(true);
+  }
+
+  /** Output del dialog cuando se creó/regeneró el pedido OK. Updateamos el
+   *  listado optimistamente: nuevo pedido vinculado + convertidoAt = ahora
+   *  (así desaparece el botón "Regenerar" hasta una próxima edición). */
   onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
+    const ahora = new Date().toISOString();
     this.presupuestos.set(this.presupuestos().map((x) =>
       x.id === evt.presupuestoId
-        ? { ...x, convertidoEnPedidoId: evt.pedidoLocalId }
+        ? { ...x, convertidoEnPedidoId: evt.pedidoLocalId, convertidoAt: ahora }
         : x));
+    this.pedidoAnteriorParaRegenerar.set(null);
   }
 
   /** Botón "Ver pedido" — navega a /pedidos con el id como filtro. */

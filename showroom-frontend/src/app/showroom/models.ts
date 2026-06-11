@@ -122,16 +122,10 @@ export interface CrearPedidoRequest {
     /** Rubro DUX del producto — el backend lo usa para resolver el perfil
      *  (Normal/Maquinaria) de la forma de pago. */
     rubro?: string | null;
+    /** Precio de lista unitario CON IVA (BRUTO). Base sobre la que el backend
+     *  aplica el recargo/descuento de la forma de pago elegida. Para pedidos de
+     *  presupuesto es el PVP congelado; para showroom, el del carrito. */
     precioUnitario: number | null;
-    /** Precio efectivo cotizado en el presupuesto. Solo se manda cuando el
-     *  pedido viene de un presupuesto (origenPresupuesto): el backend lo usa
-     *  como precio que paga el cliente, sin recalcular, para respetar la
-     *  cotización exacta. */
-    precioReferencia?: number | null;
-    /** True si `precioReferencia` es CON IVA (menaje), false si SIN IVA
-     *  (maquinaria) — perfil congelado del presupuesto. El backend lo usa para
-     *  facturar a DUX sin re-deducir el perfil por el rubro. */
-    precioReferenciaConIva?: boolean | null;
     descuentoPorcentaje?: number | null;
     /** % de IVA del producto. Solo se considera para ítems genéricos (SKU
      *  comodín de DUX): el cache del SKU 9999990 no tiene un IVA
@@ -846,6 +840,10 @@ export interface PresupuestoListItem {
   /** Id del pedido DUX si el operador transformó el presupuesto en pedido.
    *  Null = pendiente. El historial muestra pill "→ Pedido #N" cuando aplica. */
   convertidoEnPedidoId: number | null;
+  /** Cuándo se (re)generó el pedido. Null si nunca se convirtió. Si el
+   *  presupuesto se editó después (modificadoAt > convertidoAt), se ofrece
+   *  "Regenerar pedido". */
+  convertidoAt?: string | null;
 }
 
 /** Snapshot completo de un presupuesto persistido — el frontend lo consume
@@ -869,6 +867,10 @@ export interface PresupuestoDetalle {
    *  La pantalla de edición lo usa para mostrar el pill "→ Pedido #N" en
    *  lugar del botón "Crear pedido" y evitar la doble conversión. */
   convertidoEnPedidoId?: number | null;
+  /** Cuándo se (re)generó el pedido. Null si nunca se convirtió. Si el
+   *  presupuesto se editó después (modificadoAt > convertidoAt) se habilita
+   *  "Regenerar pedido". */
+  convertidoAt?: string | null;
   items: {
     sku: string;
     descripcion: string | null;
@@ -878,12 +880,13 @@ export interface PresupuestoDetalle {
     porcIva: number | null;
     descuentoPorcentaje: number | null;
     /** Precio unitario con la forma de pago de referencia, ya según rubro.
-     *  Null en presupuestos viejos persistidos antes de este campo — al editar,
-     *  el frontend lo recalcula y no rompe si viene ausente. */
+     *  Lo usa la pantalla de presupuesto (display/edición/PDF). Null en
+     *  presupuestos viejos persistidos antes de este campo — al editar, el
+     *  frontend lo recalcula y no rompe si viene ausente. */
     precioReferencia?: number | null;
     /** True si `precioReferencia` es CON IVA (menaje), false si SIN IVA
-     *  (maquinaria). Congela el perfil con que se cotizó; el pedido lo usa
-     *  para facturar a DUX sin re-deducir. Null en presupuestos viejos. */
+     *  (maquinaria). Congela el perfil con que se cotizó el ítem en el
+     *  presupuesto. Null en presupuestos viejos. */
     precioReferenciaConIva?: boolean;
     /** Comentarios libres persistidos junto al item — para items genéricos
      *  trae la descripción tipeada por el operador. Null en items normales. */
@@ -933,6 +936,17 @@ export interface ClientePresupuestos {
   ultimoPresupuestoId: number | null;
   /** ID del último pedido — null si solo tiene presupuestos. */
   ultimoPedidoId: number | null;
+  // ---- Datos de facturación y envío (del último pedido; null si el cliente
+  //      solo tiene presupuestos). El master, si los tiene, los pisa. ----
+  tipoDoc: string | null;
+  nroDoc: number | null;
+  domicilio: string | null;
+  /** Código (cod_iso) de la provincia — clave para editar/pre-seleccionar. */
+  codigoProvincia: string | null;
+  /** Nombre de la provincia resuelto en el backend — para mostrar/ordenar. */
+  provinciaNombre: string | null;
+  idLocalidad: string | null;
+  localidadNombre: string | null;
 }
 
 /** Payload del PUT /cliente-master — upsert del maestro editable de clientes.
@@ -945,6 +959,27 @@ export interface ActualizarClienteRequest {
   email: string | null;
   rubro: string | null;
   notas: string | null;
+  // ---- Datos de facturación y envío (opcionales) ----
+  tipoDoc: string | null;
+  nroDoc: number | null;
+  domicilio: string | null;
+  codigoProvincia: string | null;
+  idLocalidad: string | null;
+}
+
+/** Datos de un cliente para autocompletar el pedido al tipear el CUIT. Lo
+ *  resuelve el backend desde el maestro de clientes o el último pedido con ese
+ *  documento. Todos los campos son opcionales — el front completa solo lo vacío. */
+export interface ClienteAutocompletar {
+  nombre: string | null;
+  email: string | null;
+  telefono: string | null;
+  rubro: string | null;
+  tipoDoc: string | null;
+  nroDoc: number | null;
+  domicilio: string | null;
+  codigoProvincia: string | null;
+  idLocalidad: string | null;
 }
 
 export type PresupuestoEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';

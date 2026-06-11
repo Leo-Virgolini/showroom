@@ -16,6 +16,12 @@ public record ActualizarClienteRequestDTO(
         @Size(max = 150) String nombre,
         @Size(max = 150) String email,
         @Size(max = 100) String rubro,
-        @Size(max = 2000) String notas
+        @Size(max = 2000) String notas,
+        // ---- Datos de facturación y envío (opcionales) ----
+        @Size(max = 10) String tipoDoc,
+        Long nroDoc,
+        @Size(max = 200) String domicilio,
+        @Size(max = 10) String codigoProvincia,
+        @Size(max = 20) String idLocalidad
 ) {
 }

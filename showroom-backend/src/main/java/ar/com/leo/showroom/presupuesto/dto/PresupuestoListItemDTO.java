@@ -27,5 +27,9 @@ public record PresupuestoListItemDTO(
         /** Si este presupuesto fue transformado en pedido vía "Crear pedido"
          *  del historial, acá viene el id del pedido. Null = todavía
          *  pendiente. El frontend muestra "→ Pedido #N" cuando aplica. */
-        Long convertidoEnPedidoId
+        Long convertidoEnPedidoId,
+        /** Cuándo se (re)generó el pedido. Null si nunca se convirtió. El
+         *  frontend compara con {@link #modificadoAt} para ofrecer "Regenerar
+         *  pedido" solo cuando el presupuesto se editó tras la conversión. */
+        Instant convertidoAt
 ) {}

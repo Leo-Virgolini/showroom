@@ -47,6 +47,25 @@ public record ClientePresupuestosDTO(
         Long ultimoPresupuestoId,
         /** ID del pedido más reciente — sirve para el deep-link al listado
          *  de pedidos filtrado por este cliente. Null si solo tiene presupuestos. */
-        Long ultimoPedidoId
+        Long ultimoPedidoId,
+        // ---- Datos de facturación y envío ----
+        // Solo existen en pedidos: se toman del pedido más reciente del cliente
+        // (no del movimiento canónico, que podría ser un presupuesto sin estos
+        // datos). El master, si los tiene, los pisa.
+        /** Tipo de documento (DNI/CUIT/CUIL) del último pedido. Null si el
+         *  cliente solo tiene presupuestos. */
+        String tipoDoc,
+        /** Número de documento (CUIT/DNI) del último pedido. */
+        Long nroDoc,
+        String domicilio,
+        /** Código (cod_iso) de la provincia de envío — clave para editar. */
+        String codigoProvincia,
+        /** Nombre de la provincia resuelto desde {@code codigoProvincia}.
+         *  Null si no se pudo resolver. Para mostrar/ordenar en la tabla. */
+        String provinciaNombre,
+        /** Id de la localidad de envío — clave para editar. */
+        String idLocalidad,
+        /** Nombre de la localidad resuelto desde {@code idLocalidad}. */
+        String localidadNombre
 ) {
 }

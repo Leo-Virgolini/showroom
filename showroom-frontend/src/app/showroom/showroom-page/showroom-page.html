@@ -183,16 +183,20 @@
             <i class="pi pi-times-circle text-sm" aria-label="Finalizar sesión"></i>
           </div>
         </p-overlayBadge>
+        } @else {
+        <!-- Sin sesión: botón para iniciar una. Vive en el #start (junto al
+             título), en el mismo lugar donde aparece el chip cuando hay sesión
+             — el cliente/sesión es contexto "a quién atiendo", separado de las
+             acciones del #end. Mismo patrón que presupuestos-page. -->
+        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
+          class="btn-kt-verde ml-1 sm:ml-2" (onClick)="abrirDialogoNuevoCliente()"
+          pTooltip="Iniciar sesión para registrar los scans del cliente"
+          tooltipPosition="bottom" />
         }
       </div>
     </ng-template>
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
-        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
-          class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
-          [pTooltip]="haySesionActiva() ? 'Cerrar la sesión actual e iniciar otra' : 'Iniciar sesión para registrar los scans del cliente'"
-          tooltipPosition="bottom" />
-
         <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron"
           (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)"
           tooltipPosition="bottom" />
@@ -537,6 +541,15 @@
             <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true" size="small"
               (onClick)="cerrarResultadosBusqueda()"
               pTooltip="Cerrar búsqueda" tooltipPosition="left" ariaLabel="Cerrar búsqueda" />
+          </div>
+          <div class="flex items-center gap-2 px-1">
+            <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
+            <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
+              [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
+              size="small" appendTo="body" class="text-sm" />
+            @if (reordenando()) {
+              <p-progressSpinner class="!w-4 !h-4" strokeWidth="6" ariaLabel="Reordenando" />
+            }
           </div>
           <ul class="flex flex-col gap-1 flex-1 overflow-y-auto min-h-0 m-0 p-0 list-none">
             @for (it of resultadosBusqueda(); track it.sku) {

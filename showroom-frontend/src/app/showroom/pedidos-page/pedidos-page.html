@@ -43,7 +43,7 @@
             <input
               pInputText
               type="text"
-              placeholder="Buscar por CUIT o nombre…"
+              placeholder="Buscar por N° de pedido, CUIT o nombre…"
               [ngModel]="busqueda()"
               (ngModelChange)="busqueda.set($event)"
               class="w-full"
@@ -131,6 +131,9 @@
         <ng-template #header>
           <tr>
             <th style="width: 3rem"></th>
+            <th style="width: 5rem" pSortableColumn="id">
+              # <p-sortIcon field="id" />
+            </th>
             <th style="width: 9rem" pSortableColumn="creadoAt">
               Fecha <p-sortIcon field="creadoAt" />
             </th>
@@ -176,6 +179,9 @@
                 (onClick)="toggleRow(p)"
                 ariaLabel="Ver detalle"
               />
+            </td>
+            <td class="font-mono text-sm font-semibold text-[#FF861C] tabular-nums">
+              {{ p.id }}
             </td>
             <td class="text-xs tabular-nums">
               {{ p.creadoAt | date: 'dd/MM/yy HH:mm' }}
@@ -327,7 +333,7 @@
 
           @if (estaExpandido(p.id)) {
             <tr class="bg-surface-50 dark:bg-surface-900">
-              <td colspan="12" class="p-4">
+              <td colspan="13" class="p-4">
                 @if (estaCargandoDetalle(p.id)) {
                   <!-- Skeleton placeholder con el shape aproximado del detalle
                        (dos columnas Cliente/Pedido + lista de items). Mejor
@@ -577,7 +583,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="12" class="text-center py-12 text-muted-color">
+            <td colspan="13" class="text-center py-12 text-muted-color">
               <i class="pi pi-inbox text-3xl opacity-50 block mb-2"></i>
               @if (hayFiltros()) {
                 Ningún pedido coincide con los filtros.

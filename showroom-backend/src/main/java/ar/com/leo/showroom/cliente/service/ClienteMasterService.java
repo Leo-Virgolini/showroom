@@ -2,15 +2,20 @@ package ar.com.leo.showroom.cliente.service;
 
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.cliente.dto.ActualizarClienteRequestDTO;
+import ar.com.leo.showroom.cliente.dto.ClienteAutocompletarDTO;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.repository.ClienteMasterRepository;
+import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -28,6 +33,9 @@ public class ClienteMasterService {
 
     private final ClienteMasterRepository repository;
     private final UsuarioRepository usuarioRepository;
+    /** Para el fallback del autocompletado por CUIT: si no hay un maestro con ese
+     *  documento, se toman los datos del último pedido con ese CUIT. */
+    private final PedidoShowroomRepository pedidoRepository;
 
     /** Upsert: si existe master para ese teléfono lo actualiza, sino crea uno.
      *  Si el master estaba marcado como eliminado, al editarlo se reactiva
@@ -48,6 +56,11 @@ public class ClienteMasterService {
         master.setEmail(blankToNull(datos.email()));
         master.setRubro(blankToNull(datos.rubro()));
         master.setNotas(blankToNull(datos.notas()));
+        master.setTipoDoc(blankToNull(datos.tipoDoc()));
+        master.setNroDoc(datos.nroDoc());
+        master.setDomicilio(blankToNull(datos.domicilio()));
+        master.setCodigoProvincia(blankToNull(datos.codigoProvincia()));
+        master.setIdLocalidad(blankToNull(datos.idLocalidad()));
         master.setActualizadoPorUsuarioId(usuarioIdDe(username));
         master.setActualizadoAt(Instant.now());
         master.setEliminadoAt(null);
@@ -85,6 +98,49 @@ public class ClienteMasterService {
                         // Defensivo: en caso de duplicados por el índice único
                         // fallando (concurrencia), nos quedamos con el más reciente.
                         (a, b) -> a.getActualizadoAt().isAfter(b.getActualizadoAt()) ? a : b));
+    }
+
+    /**
+     * Resuelve los datos de un cliente a partir de su CUIT/documento para
+     * autocompletar el formulario de pedido. Prioridad:
+     * <ol>
+     *   <li>Maestro de clientes ({@code ClienteMaster}) con ese {@code nroDoc} —
+     *       el más reciente si hay varios (el CUIT no es único: distintos locales
+     *       de una empresa entran con teléfonos distintos).</li>
+     *   <li>Fallback: el último pedido con ese {@code nroDoc}.</li>
+     * </ol>
+     * {@code Optional.empty()} si no hay coincidencias (el operador completa a mano).
+     */
+    public Optional<ClienteAutocompletarDTO> buscarParaAutocompletar(Long nroDoc) {
+        if (nroDoc == null) return Optional.empty();
+        Optional<ClienteAutocompletarDTO> delMaestro = repository
+                .findByNroDocAndEliminadoAtIsNull(nroDoc).stream()
+                .max(Comparator.comparing(ClienteMaster::getActualizadoAt))
+                .map(this::toAutocompletar);
+        if (delMaestro.isPresent()) return delMaestro;
+        return pedidoRepository.findFirstByNroDocOrderByCreadoAtDesc(nroDoc)
+                .map(this::toAutocompletar);
+    }
+
+    private ClienteAutocompletarDTO toAutocompletar(ClienteMaster m) {
+        return new ClienteAutocompletarDTO(
+                m.getNombre(), m.getEmail(), denormalizarTelefono(m.getTelefonoNormalizado()),
+                m.getRubro(), m.getTipoDoc(), m.getNroDoc(), m.getDomicilio(),
+                m.getCodigoProvincia(), m.getIdLocalidad());
+    }
+
+    private ClienteAutocompletarDTO toAutocompletar(PedidoShowroom p) {
+        return new ClienteAutocompletarDTO(
+                p.getNombre(), p.getEmail(), p.getTelefono(), p.getRubro(),
+                p.getTipoDoc(), p.getNroDoc(), p.getDomicilio(),
+                p.getCodigoProvincia(), p.getIdLocalidad());
+    }
+
+    /** El maestro guarda el teléfono ya normalizado (solo dígitos). Para
+     *  autocompletar lo devolvemos tal cual — el front lo muestra/normaliza
+     *  igual que cualquier teléfono tipeado. */
+    private static String denormalizarTelefono(String telefonoNormalizado) {
+        return telefonoNormalizado;
     }
 
     /** Misma normalización que usa {@code PresupuestoComercialService#claveTelefono}.

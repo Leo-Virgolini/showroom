@@ -9,11 +9,11 @@
   (onHide)="onCerrarDialog()">
   <ng-template #header>
     <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
-      <i class="pi pi-cart-arrow-down text-[#FF861C]"></i>
+      <i class="pi pi-cart-arrow-down text-[#FF861C]" [class.pi-refresh]="esRegeneracion()" [class.pi-cart-arrow-down]="!esRegeneracion()"></i>
       <span class="font-bold">
-        Crear pedido en DUX
+        {{ esRegeneracion() ? 'Regenerar pedido en DUX' : 'Crear pedido en DUX' }}
         @if (presupuestoId() != null) {
-          desde Presupuesto #{{ presupuestoId() }}
+          {{ esRegeneracion() ? 'del' : 'desde' }} Presupuesto #{{ presupuestoId() }}
         }
       </span>
     </div>
@@ -34,6 +34,22 @@
           dirección, forma de pago).
         </span>
       </div>
+
+      @if (esRegeneracion()) {
+        <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
+          <i class="pi pi-exclamation-triangle text-amber-600 dark:text-amber-400 mt-0.5"></i>
+          <span class="text-surface-700 dark:text-surface-200">
+            Se creará un pedido <strong>nuevo</strong> en DUX con los datos editados y el
+            pedido anterior #{{ pedidoAnteriorId() }} quedará <strong>anulado</strong> automáticamente.
+            @if (pedidoAnteriorEnviadoADux()) {
+              <span class="text-amber-700 dark:text-amber-300 font-semibold">
+                Acordate de cancelar a mano el comprobante del pedido #{{ pedidoAnteriorId() }} en DUX
+              </span>
+              — la API de DUX no permite anularlo.
+            }
+          </span>
+        </div>
+      }
 
       <!-- Aviso de cambios de precio: el precio de lista actual (cache) difiere
            del snapshot del presupuesto. Solo informativo — el pedido usa el
@@ -245,7 +261,8 @@
     <p-button label="Cancelar" icon="pi pi-times" severity="secondary" [outlined]="true"
       [disabled]="enviandoPedido()"
       (onClick)="visible.set(false)" />
-    <p-button label="Crear en DUX" icon="pi pi-cart-arrow-down"
+    <p-button [label]="esRegeneracion() ? 'Regenerar en DUX' : 'Crear en DUX'"
+      [icon]="esRegeneracion() ? 'pi pi-refresh' : 'pi pi-cart-arrow-down'"
       severity="success"
       [disabled]="!puedeCrearPedido() || enviandoPedido() || cargandoDetallePresupuesto()"
       [loading]="enviandoPedido()"

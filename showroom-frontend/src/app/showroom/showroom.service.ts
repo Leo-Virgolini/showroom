@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
-import { Observable, map } from 'rxjs';
+import { Observable, map, of, catchError } from 'rxjs';
 import {
   ActualizarClienteRequest,
+  ClienteAutocompletar,
   CarritoAgregarGenericoRequest,
   CarritoAgregarResponse,
   CarritoState,
@@ -154,6 +155,23 @@ export class ShowroomService {
     return this.http.post<CrearPedidoResponse>(`${this.base}/pedido-dux`, request);
   }
 
+  /** Busca los datos de un cliente por CUIT para autocompletar el pedido.
+   *  Devuelve null si no hay coincidencias (el backend responde 404) o ante
+   *  cualquier error — es best-effort, nunca bloquea la carga del pedido. */
+  buscarClientePorCuit(nroDoc: number): Observable<ClienteAutocompletar | null> {
+    return this.http.get<ClienteAutocompletar>(`${this.base}/cliente-master/por-cuit/${nroDoc}`)
+      .pipe(catchError(() => of(null)));
+  }
+
+  /** Regenera el pedido de un presupuesto editado: crea uno nuevo en DUX con
+   *  `request`, anula el anterior (local) y re-vincula el presupuesto. El
+   *  backend hace todo en una operación; no hay que llamar a
+   *  `marcarPresupuestoConvertido` aparte. */
+  regenerarPedido(presupuestoId: number, request: CrearPedidoRequest): Observable<CrearPedidoResponse> {
+    return this.http.post<CrearPedidoResponse>(
+      `${this.base}/presupuesto-comercial/${presupuestoId}/regenerar-pedido`, request);
+  }
+
   syncCatalogo(force = false): Observable<{ message: string }> {
     let params = new HttpParams();
     if (force) params = params.set('force', 'true');
@@ -164,9 +182,19 @@ export class ShowroomService {
     return this.http.post<{ message: string }>(`${this.base}/sync-catalogo/cancelar`, {});
   }
 
-  buscarCatalogo(q: string, page = 0, size = 50): Observable<CatalogoPage> {
+  buscarCatalogo(
+    q: string,
+    page = 0,
+    size = 50,
+    sortField?: 'descripcion' | 'precio',
+    sortOrder?: 'asc' | 'desc',
+  ): Observable<CatalogoPage> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (q && q.trim()) params = params.set('q', q.trim());
+    // Orden elegido por el operador (producto/precio). Si no se manda, el
+    // backend ordena por relevancia (comportamiento por defecto).
+    if (sortField) params = params.set('sortField', sortField);
+    if (sortOrder) params = params.set('sortOrder', sortOrder);
     return this.http.get<CatalogoPage>(`${this.base}/catalogo`, { params });
   }
 

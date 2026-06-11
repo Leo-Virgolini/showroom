@@ -63,6 +63,31 @@ public class ClienteMaster {
     @Column(name = "notas", columnDefinition = "TEXT")
     private String notas;
 
+    // ---- Datos de facturación y envío ----
+    // CUIT/envío solo se guardan en los pedidos (los presupuestos no los tienen).
+    // El maestro permite corregirlos/completarlos sin tocar el historial; si están
+    // seteados pisan los datos derivados del último pedido al armar /clientes.
+
+    /** Tipo de documento (DNI/CUIT/CUIL) — mismo dominio que el pedido. */
+    @Column(name = "tipo_doc", length = 10)
+    private String tipoDoc;
+
+    /** Número de documento — Long para soportar CUIT/CUIL de 11 dígitos. */
+    @Column(name = "nro_doc")
+    private Long nroDoc;
+
+    @Column(name = "domicilio", length = 200)
+    private String domicilio;
+
+    /** Código (cod_iso) de la provincia de envío — misma clave que usa el
+     *  pedido y el endpoint /localidades. */
+    @Column(name = "codigo_provincia", length = 10)
+    private String codigoProvincia;
+
+    /** Id de la localidad de envío (como String, igual que en el pedido). */
+    @Column(name = "id_localidad", length = 20)
+    private String idLocalidad;
+
     /** Operador que hizo la última edición — snapshot del username logueado.
      *  Nullable para tolerar inserts iniciales sin auth en tests. */
     @Column(name = "actualizado_por_usuario_id")

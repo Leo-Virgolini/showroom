@@ -15,6 +15,10 @@ import ar.com.leo.showroom.presupuesto.dto.PresupuestoListItemDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListPageDTO;
 import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
 import ar.com.leo.showroom.presupuesto.repository.PresupuestoComercialRepository;
+import ar.com.leo.showroom.pedido.entity.EstadoPedido;
+import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
+import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
+import ar.com.leo.showroom.showroom.service.ShowroomService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -37,7 +41,10 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Orquesta el ciclo de vida del presupuesto comercial: calcula totales,
@@ -74,6 +81,10 @@ public class PresupuestoComercialService {
     /** Fórmula de precios por perfil (menaje/maquinaria), compartida con el
      *  showroom para que el presupuesto calcule las formas igual que el carrito. */
     private final PrecioPerfilCalculator precioPerfilCalculator;
+    /** Para resolver los nombres de provincia/localidad de envío (los pedidos
+     *  guardan solo los códigos) al armar la vista de /clientes. */
+    private final ar.com.leo.showroom.catalogo.repository.ProvinciaRepository provinciaRepository;
+    private final ar.com.leo.showroom.catalogo.repository.LocalidadRepository localidadRepository;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -85,6 +96,16 @@ public class PresupuestoComercialService {
     @Autowired
     @Lazy
     private PresupuestoComercialService self;
+
+    /**
+     * Para regenerar el pedido de un presupuesto editado: reusa la creación
+     * (alta + envío a DUX) y la anulación local de {@link ShowroomService}.
+     * {@code @Lazy} para no introducir un ciclo en el arranque — ShowroomService
+     * depende del REPO de presupuestos, no de este service.
+     */
+    @Autowired
+    @Lazy
+    private ShowroomService showroomService;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean emailEnabled;
@@ -105,7 +126,9 @@ public class PresupuestoComercialService {
             ar.com.leo.showroom.auth.service.UsuarioService usuarioService,
             ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository,
             ClienteMasterService clienteMasterService,
-            PrecioPerfilCalculator precioPerfilCalculator) {
+            PrecioPerfilCalculator precioPerfilCalculator,
+            ar.com.leo.showroom.catalogo.repository.ProvinciaRepository provinciaRepository,
+            ar.com.leo.showroom.catalogo.repository.LocalidadRepository localidadRepository) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
@@ -116,6 +139,8 @@ public class PresupuestoComercialService {
         this.pedidoRepository = pedidoRepository;
         this.clienteMasterService = clienteMasterService;
         this.precioPerfilCalculator = precioPerfilCalculator;
+        this.provinciaRepository = provinciaRepository;
+        this.localidadRepository = localidadRepository;
     }
 
     /** Resuelve username a usuarioId. Null si el username no existe (caso
@@ -236,6 +261,7 @@ public class PresupuestoComercialService {
                 p.getDescuentoGlobalPorcentaje(),
                 datos.cotizacionIndividual(),
                 p.getConvertidoEnPedidoId(),
+                p.getConvertidoAt(),
                 datos.items(),
                 datos.formasPago());
     }
@@ -367,16 +393,43 @@ public class PresupuestoComercialService {
         // quedan intactos (sus PDFs siguen mostrando los datos originales).
         Map<String, ClienteMaster> masters = clienteMasterService.cargarTodosIndexados();
 
-        // Convertimos a DTO ordenando por última actividad descendente (cliente
-        // más reciente arriba), independiente del orden de inserción. Excluimos
-        // los clientes con master marcado como eliminado (soft-delete) — el
-        // historial sigue intacto, solo desaparecen de esta vista.
-        return agrupados.entrySet().stream()
+        // Convertimos a DTO (con override del master) excluyendo los clientes
+        // con master marcado como eliminado (soft-delete) — el historial sigue
+        // intacto, solo desaparecen de esta vista.
+        List<ClientePresupuestosDTO> conMaster = agrupados.entrySet().stream()
                 .filter(e -> {
                     ClienteMaster m = masters.get(e.getKey());
                     return m == null || m.getEliminadoAt() == null;
                 })
                 .map(e -> aplicarMaster(e.getValue().toDTO(), masters.get(e.getKey())))
+                .toList();
+
+        // Resolución de nombres de provincia/localidad de envío. Se hace en
+        // batch para no caer en N+1: una sola lectura de provincias (pocas) y
+        // un findAllById de las localidades referenciadas.
+        Map<String, String> provinciaPorCodIso = provinciaRepository.findAll().stream()
+                .filter(p -> p.getCodIso() != null && p.getNombre() != null)
+                .collect(Collectors.toMap(
+                        p -> p.getCodIso().toLowerCase(),
+                        ar.com.leo.showroom.catalogo.entity.Provincia::getNombre,
+                        (a, b) -> a));
+        Set<Long> idsLocalidad = conMaster.stream()
+                .map(ClientePresupuestosDTO::idLocalidad)
+                .map(PresupuestoComercialService::parseLongOrNull)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, String> localidadPorId = idsLocalidad.isEmpty()
+                ? Map.of()
+                : localidadRepository.findAllById(idsLocalidad).stream()
+                        .collect(Collectors.toMap(
+                                ar.com.leo.showroom.catalogo.entity.Localidad::getId,
+                                ar.com.leo.showroom.catalogo.entity.Localidad::getNombre,
+                                (a, b) -> a));
+
+        // Ordenamos por última actividad descendente (cliente más reciente
+        // arriba), independiente del orden de inserción.
+        return conMaster.stream()
+                .map(dto -> resolverUbicacion(dto, provinciaPorCodIso, localidadPorId))
                 .sorted((a, b) -> {
                     if (a.ultimoMovimientoAt() == null) return 1;
                     if (b.ultimoMovimientoAt() == null) return -1;
@@ -402,7 +455,50 @@ public class PresupuestoComercialService {
                 base.ultimoMovimientoAt(),
                 base.ultimoTotalSinIva(),
                 base.ultimoPresupuestoId(),
-                base.ultimoPedidoId());
+                base.ultimoPedidoId(),
+                // Facturación/envío: el master pisa lo derivado del último pedido.
+                // Los nombres de provincia/localidad se resuelven en un paso
+                // posterior (sobre el código ya con override aplicado).
+                StringUtils.hasText(master.getTipoDoc()) ? master.getTipoDoc() : base.tipoDoc(),
+                master.getNroDoc() != null ? master.getNroDoc() : base.nroDoc(),
+                StringUtils.hasText(master.getDomicilio()) ? master.getDomicilio() : base.domicilio(),
+                StringUtils.hasText(master.getCodigoProvincia()) ? master.getCodigoProvincia() : base.codigoProvincia(),
+                base.provinciaNombre(),
+                StringUtils.hasText(master.getIdLocalidad()) ? master.getIdLocalidad() : base.idLocalidad(),
+                base.localidadNombre());
+    }
+
+    /** Completa {@code provinciaNombre}/{@code localidadNombre} resolviendo los
+     *  códigos contra los mapas precargados (provincias por cod_iso, localidades
+     *  por id). Se aplica DESPUÉS del merge con el master, así si el operador
+     *  editó la provincia/localidad en el maestro se muestra el nombre correcto. */
+    private static ClientePresupuestosDTO resolverUbicacion(
+            ClientePresupuestosDTO dto,
+            Map<String, String> provinciaPorCodIso,
+            Map<Long, String> localidadPorId) {
+        String provNombre = dto.codigoProvincia() != null
+                ? provinciaPorCodIso.get(dto.codigoProvincia().toLowerCase())
+                : null;
+        Long locId = parseLongOrNull(dto.idLocalidad());
+        String locNombre = locId != null ? localidadPorId.get(locId) : null;
+        if (provNombre == null && locNombre == null) return dto;
+        return new ClientePresupuestosDTO(
+                dto.email(), dto.telefono(), dto.nombre(), dto.rubro(),
+                dto.cantidadPresupuestos(), dto.cantidadPedidos(),
+                dto.primerMovimientoAt(), dto.ultimoMovimientoAt(), dto.ultimoTotalSinIva(),
+                dto.ultimoPresupuestoId(), dto.ultimoPedidoId(),
+                dto.tipoDoc(), dto.nroDoc(), dto.domicilio(),
+                dto.codigoProvincia(), provNombre,
+                dto.idLocalidad(), locNombre);
+    }
+
+    private static Long parseLongOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            return Long.parseLong(s.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /** Normaliza el teléfono a solo dígitos. Sin esto, "11-12345678" y
@@ -438,6 +534,16 @@ public class PresupuestoComercialService {
         private Instant ultimoPedidoAt;
         private Instant primerMovimientoAt;
 
+        // Snapshot de facturación/envío del pedido MÁS RECIENTE. Va aparte del
+        // canónico: el CUIT/envío solo existen en pedidos, así que aunque el
+        // último movimiento sea un presupuesto (sin estos datos), mostramos los
+        // del último pedido. Se actualizan en lock-step con ultimoPedidoAt.
+        private String tipoDoc;
+        private Long nroDoc;
+        private String domicilio;
+        private String codigoProvincia;
+        private String idLocalidad;
+
         void agregarPresupuesto(PresupuestoComercial p) {
             cantidadPresupuestos++;
             // Cada presupuesto entrante puede ser el más reciente del cliente
@@ -458,6 +564,12 @@ public class PresupuestoComercialService {
             if (ultimoPedidoAt == null || pedido.getCreadoAt().isAfter(ultimoPedidoAt)) {
                 ultimoPedidoAt = pedido.getCreadoAt();
                 ultimoPedidoId = pedido.getId();
+                // Snapshot de facturación/envío del pedido más reciente.
+                tipoDoc = pedido.getTipoDoc();
+                nroDoc = pedido.getNroDoc();
+                domicilio = pedido.getDomicilio();
+                codigoProvincia = pedido.getCodigoProvincia();
+                idLocalidad = pedido.getIdLocalidad();
             }
             // totalSinIva del pedido (no total con recargo) — coherente con
             // el total mostrado en presupuestos.
@@ -496,7 +608,10 @@ public class PresupuestoComercialService {
                     cantidadPresupuestos, cantidadPedidos,
                     primerMovimientoAt, ultimoMov,
                     ultimoTotalSinIva,
-                    ultimoPresupuestoId, ultimoPedidoId);
+                    ultimoPresupuestoId, ultimoPedidoId,
+                    // Facturación/envío del último pedido; nombres de
+                    // provincia/localidad se resuelven en listarClientes.
+                    tipoDoc, nroDoc, domicilio, codigoProvincia, null, idLocalidad, null);
         }
     }
 
@@ -690,7 +805,8 @@ public class PresupuestoComercialService {
                 p.getSubtotalSinIva(),
                 p.getDescuentoGlobalPorcentaje(),
                 creadoPor,
-                p.getConvertidoEnPedidoId());
+                p.getConvertidoEnPedidoId(),
+                p.getConvertidoAt());
     }
 
     /**
@@ -727,8 +843,54 @@ public class PresupuestoComercialService {
         }
         if (existente == null) {
             p.setConvertidoEnPedidoId(pedidoId);
+            p.setConvertidoAt(Instant.now());
             repository.save(p);
         }
+    }
+
+    /**
+     * Regenera el pedido de un presupuesto que ya fue convertido y luego editado.
+     * Crea un pedido NUEVO en DUX con los datos editados, anula el anterior
+     * (solo local — DUX no expone anulación de comprobantes; el operador lo
+     * cancela a mano) y re-vincula el presupuesto al pedido nuevo.
+     *
+     * <p>Atómico ante fallo de DUX: si el alta del nuevo pedido NO termina en
+     * {@link EstadoPedido#ENVIADO}, no se toca el pedido anterior ni el vínculo
+     * — el presupuesto sigue apuntando al pedido original.
+     *
+     * @return la respuesta del alta del nuevo pedido (el frontend la consume
+     *         igual que en la creación normal).
+     */
+    @Transactional
+    public CrearPedidoResponseDTO regenerarPedido(Long presupuestoId, CrearPedidoRequestDTO request,
+                                                  String clientId, String username) {
+        PresupuestoComercial p = obtener(presupuestoId);
+        Long viejoId = p.getConvertidoEnPedidoId();
+        if (viejoId == null) {
+            throw new ar.com.leo.showroom.common.exception.ConflictException(
+                    "El presupuesto " + presupuestoId + " no tiene un pedido generado — no hay nada que regenerar.");
+        }
+        // Alta del nuevo pedido (reusa la lógica de creación + envío a DUX).
+        CrearPedidoResponseDTO res = showroomService.crearPedido(request, clientId, username);
+        // Solo si DUX aceptó el nuevo pedido tocamos el anterior y el vínculo.
+        if (res.estado() == EstadoPedido.ENVIADO && res.pedidoLocalId() != null) {
+            Long nuevoId = res.pedidoLocalId();
+            // Anular el anterior solo si no estaba ya anulado (evita la
+            // ConflictException de anularPedido, que marcaría la tx rollback-only).
+            boolean viejoAnulable = pedidoRepository.findById(viejoId)
+                    .map(ped -> ped.getEstado() != EstadoPedido.ANULADO)
+                    .orElse(false);
+            if (viejoAnulable) {
+                showroomService.anularPedido(viejoId,
+                        "Regenerado: presupuesto #" + presupuestoId + " editado → pedido #" + nuevoId);
+            }
+            p.setConvertidoEnPedidoId(nuevoId);
+            p.setConvertidoAt(Instant.now());
+            repository.save(p);
+            log.info("Presupuesto #{} regenerado: pedido viejo #{} {} → nuevo #{}",
+                    presupuestoId, viejoId, viejoAnulable ? "anulado" : "(ya anulado)", nuevoId);
+        }
+        return res;
     }
 
     public Optional<String> motivoEmailNoConfigurado() {

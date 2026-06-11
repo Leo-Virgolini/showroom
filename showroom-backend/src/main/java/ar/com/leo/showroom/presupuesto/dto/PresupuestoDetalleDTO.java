@@ -32,6 +32,10 @@ public record PresupuestoDetalleDTO(
          * ya pasó a pedido.
          */
         Long convertidoEnPedidoId,
+        /** Cuándo se (re)generó el pedido. Null si nunca se convirtió. El
+         *  frontend compara con {@link #modificadoAt} para habilitar "Regenerar
+         *  pedido" solo cuando el presupuesto se editó tras la conversión. */
+        Instant convertidoAt,
         List<GenerarPresupuestoRequestDTO.Item> items,
         List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasPago
 ) {}

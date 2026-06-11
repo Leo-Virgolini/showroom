@@ -8,19 +8,21 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink, Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { ActualizarClienteRequest, ClientePresupuestos } from '../models';
+import { ActualizarClienteRequest, ClientePresupuestos, Localidad, Provincia } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { TopActions } from '../top-actions/top-actions';
@@ -51,6 +53,7 @@ import { TopActions } from '../top-actions/top-actions';
     DialogModule,
     IconFieldModule,
     InputIconModule,
+    InputNumberModule,
     InputTextModule,
     SelectModule,
     TableModule,
@@ -92,6 +95,26 @@ export class PresupuestosClientesPage {
   readonly editRubro = signal<string | null>(null);
   readonly editRubroOtros = signal('');
   readonly editNotas = signal('');
+  // Datos de facturación y envío.
+  readonly editTipoDoc = signal<string | null>(null);
+  readonly editNroDoc = signal<number | null>(null);
+  readonly editDomicilio = signal('');
+  readonly editCodigoProvincia = signal<string | null>(null);
+  readonly editIdLocalidad = signal<string | null>(null);
+
+  /** Catálogos para los selects de envío. Provincias se cargan al abrir el
+   *  dialog; localidades en cascada al elegir provincia (o al pre-cargar un
+   *  cliente que ya tenía provincia). Mismo patrón que crear-pedido-dialog. */
+  readonly provincias = signal<Provincia[]>([]);
+  readonly localidades = signal<Localidad[]>([]);
+  readonly cargandoLocalidades = signal(false);
+  private localidadesSub: Subscription | null = null;
+
+  readonly opcionesTipoDoc: { label: string; value: string }[] = [
+    { label: 'CUIT', value: 'CUIT' },
+    { label: 'DNI', value: 'DNI' },
+    { label: 'CUIL', value: 'CUIL' },
+  ];
 
   /** Opciones del dropdown de rubro — mismo set que /presupuestos y el modal
    *  de pedidos para que un mismo cliente caiga al mismo rubro en cualquier
@@ -247,12 +270,72 @@ export class PresupuestosClientesPage {
       this.editRubro.set(rubroActual || null);
       this.editRubroOtros.set('');
     }
+    // Datos de facturación/envío.
+    this.editTipoDoc.set(c.tipoDoc ?? null);
+    this.editNroDoc.set(c.nroDoc ?? null);
+    this.editDomicilio.set(c.domicilio ?? '');
+    this.editCodigoProvincia.set(c.codigoProvincia ?? null);
+    this.editIdLocalidad.set(c.idLocalidad ?? null);
+    this.localidades.set([]);
+    this.cargarProvincias();
+    // Si ya tenía provincia, traemos sus localidades preservando la selección
+    // actual (no usamos cambiarProvincia porque ese resetea la localidad).
+    if (c.codigoProvincia) {
+      this.cargarLocalidadesDe(c.codigoProvincia);
+    }
     this.mostrarDialogEditar.set(true);
   }
 
   cerrarDialogEditar(): void {
+    this.localidadesSub?.unsubscribe();
+    this.localidadesSub = null;
+    this.cargandoLocalidades.set(false);
     this.mostrarDialogEditar.set(false);
     this.clienteEditando.set(null);
+  }
+
+  /** Carga las provincias una sola vez (se reusan entre aperturas del dialog). */
+  private cargarProvincias(): void {
+    if (this.provincias().length > 0) return;
+    this.api.obtenerProvincias().subscribe({
+      next: (lista) => this.provincias.set(lista),
+      error: (err) =>
+        toastError(this.toast, 'Provincias', err, 'No se pudieron cargar las provincias'),
+    });
+  }
+
+  /** Trae las localidades de una provincia SIN tocar la localidad seleccionada
+   *  — usado al pre-cargar un cliente que ya tenía provincia/localidad. */
+  private cargarLocalidadesDe(codigo: string): void {
+    this.localidadesSub?.unsubscribe();
+    this.cargandoLocalidades.set(true);
+    this.localidadesSub = this.api.obtenerLocalidades(codigo).subscribe({
+      next: (lista) => {
+        this.cargandoLocalidades.set(false);
+        this.localidades.set(lista);
+        this.localidadesSub = null;
+      },
+      error: (err) => {
+        this.cargandoLocalidades.set(false);
+        this.localidadesSub = null;
+        toastError(this.toast, 'Localidades', err, 'No se pudieron cargar las localidades');
+      },
+    });
+  }
+
+  /** Cambio de provincia disparado por el operador: resetea la localidad y
+   *  recarga el catálogo. */
+  cambiarProvincia(codigo: string | null): void {
+    this.editCodigoProvincia.set(codigo);
+    this.editIdLocalidad.set(null);
+    this.localidades.set([]);
+    if (!codigo) {
+      this.localidadesSub?.unsubscribe();
+      this.localidadesSub = null;
+      this.cargandoLocalidades.set(false);
+      return;
+    }
+    this.cargarLocalidadesDe(codigo);
   }
 
   /** Resuelve el rubro final: si el operador eligió "otros" usa el texto
@@ -276,6 +359,11 @@ export class PresupuestosClientesPage {
       email: this.editEmail().trim() || null,
       rubro: this.rubroFinalEdicion(),
       notas: this.editNotas().trim() || null,
+      tipoDoc: this.editTipoDoc(),
+      nroDoc: this.editNroDoc(),
+      domicilio: this.editDomicilio().trim() || null,
+      codigoProvincia: this.editCodigoProvincia(),
+      idLocalidad: this.editIdLocalidad(),
     };
     this.guardandoEdicion.set(true);
     this.api.actualizarClienteMaster(payload).subscribe({
@@ -322,12 +410,20 @@ export class PresupuestosClientesPage {
       'Nombre',
       'Teléfono',
       'Rubro',
+      'CUIT',
+      'Domicilio',
+      'Localidad',
+      'Provincia',
     ];
     const rows = clientes.map((c) => [
       c.email ?? '',
       c.nombre ?? '',
       c.telefono ?? '',
       c.rubro ?? '',
+      c.nroDoc != null ? String(c.nroDoc) : '',
+      c.domicilio ?? '',
+      c.localidadNombre ?? '',
+      c.provinciaNombre ?? '',
     ]);
     const csv = [headers, ...rows].map((row) => row.map(escaparCsv).join(',')).join('\r\n');
     // BOM UTF-8 — sin esto Excel abre el CSV en latin1 y rompe los acentos.

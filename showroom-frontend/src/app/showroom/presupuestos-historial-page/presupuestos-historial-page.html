@@ -39,7 +39,7 @@
             <p-inputicon class="pi pi-search" />
             <input pInputText type="text" class="w-full"
               [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
-              placeholder="Buscar por nombre, email o teléfono..." />
+              placeholder="Buscar por N° de presupuesto, nombre, email o teléfono..." />
           </p-iconfield>
         </div>
         <p-datepicker [ngModel]="desde()" (ngModelChange)="desde.set($event)"
@@ -188,6 +188,18 @@
                     <i class="pi pi-check-circle text-[10px]"></i>
                     Pedido #{{ p.convertidoEnPedidoId }}
                   </button>
+                  @if (editadoTrasConvertir(p)) {
+                    <!-- El presupuesto se editó después de generar el pedido →
+                         ofrecemos regenerarlo (crea uno nuevo en DUX, anula el
+                         anterior y re-vincula). -->
+                    <p-button
+                      icon="pi pi-refresh"
+                      severity="warn" [outlined]="true" size="small" [rounded]="true"
+                      (onClick)="abrirRegenerarPedido(p)"
+                      pTooltip="El presupuesto cambió: regenerar el pedido en DUX"
+                      tooltipPosition="left"
+                      ariaLabel="Regenerar pedido" />
+                  }
                 } @else {
                   <!-- Crear pedido en DUX a partir del presupuesto — abre un
                        dialog con form pre-llenado para completar CUIT,
@@ -269,5 +281,6 @@
 <app-crear-pedido-dialog
   [(visible)]="mostrarDialogCrearPedido"
   [presupuestoId]="presupuestoIdParaPedido()"
+  [pedidoAnteriorId]="pedidoAnteriorParaRegenerar()"
   (pedidoCreado)="onPedidoCreado($event)" />
 

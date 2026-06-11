@@ -112,4 +112,11 @@ public class PresupuestoComercial {
      *  del pedido al volver al historial después. */
     @Column(name = "convertido_en_pedido_id")
     private Long convertidoEnPedidoId;
+
+    /** Cuándo se (re)generó el pedido a partir de este presupuesto. Null si
+     *  nunca se convirtió. Permite detectar que el presupuesto se editó DESPUÉS
+     *  de generar el pedido (modificadoAt posterior a convertidoAt) y ofrecer
+     *  "Regenerar pedido". Se actualiza en cada (re)vinculación. */
+    @Column(name = "convertido_at")
+    private Instant convertidoAt;
 }

@@ -218,6 +218,24 @@ export class ShowroomPage implements AfterViewInit {
   /** Tamaño de cada página de resultados. */
   private readonly BUSQUEDA_PAGE_SIZE = 50;
 
+  /** Orden elegido para los resultados de búsqueda. 'relevancia' = ranking del
+   *  backend (default). El resto fuerza el orden en el backend sobre TODO el
+   *  resultado (no solo la página visible). */
+  readonly ordenResultados = signal<'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'>('relevancia');
+
+  /** Opciones del selector de orden de resultados (para el template). */
+  readonly opcionesOrdenResultados: { label: string; value: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc' }[] = [
+    { label: 'Relevancia', value: 'relevancia' },
+    { label: 'Producto A-Z', value: 'producto' },
+    { label: 'Precio: menor a mayor', value: 'precio_asc' },
+    { label: 'Precio: mayor a menor', value: 'precio_desc' },
+  ];
+
+  /** True mientras se re-busca por un cambio de orden. Muestra un spinner chico
+   *  junto al selector SIN tapar la lista (a diferencia de `cargandoScan`, que
+   *  reemplaza toda el área de resultados). */
+  readonly reordenando = signal(false);
+
   /** Secuencia incremental para descartar respuestas obsoletas. Si el
    *  operador dispara un scan/búsqueda nuevo antes de que termine el
    *  anterior, solo la última respuesta actualiza la UI — así evitamos
@@ -919,7 +937,79 @@ export class ShowroomPage implements AfterViewInit {
    *  a number para que el resto del flujo (validación, payload a DUX) siga igual. */
   onCuitChange(value: string | null | undefined): void {
     const digits = (value ?? '').replace(/\D/g, '');
-    this.actualizarCliente('nroDoc', digits ? Number(digits) : null);
+    const nuevo = digits ? Number(digits) : null;
+    const previo = this.cliente().nroDoc;
+    this.actualizarCliente('nroDoc', nuevo);
+    // Autocompletar al completar el CUIT (11 dígitos), solo en la transición a
+    // un valor nuevo — evita disparar el lookup en cada tecla.
+    if (digits.length === 11 && nuevo !== previo) {
+      this.autocompletarDesdeCuit(nuevo!);
+    }
+  }
+
+  /** Busca un cliente por CUIT y completa SOLO los campos vacíos del formulario
+   *  (no pisa lo que el operador ya tipeó). */
+  private autocompletarDesdeCuit(nroDoc: number): void {
+    this.api.buscarClientePorCuit(nroDoc)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((cli) => {
+        if (!cli) return;
+        const c = this.cliente();
+        const parche: Partial<DatosCliente> = {};
+        let completados = 0;
+        if (cli.nombre && !c.nombre.trim()) { parche.nombre = cli.nombre; completados++; }
+        if (cli.email && !c.email.trim()) { parche.email = cli.email; completados++; }
+        if (cli.telefono && !c.telefono.trim()) { parche.telefono = cli.telefono; completados++; }
+        if (cli.domicilio && !c.domicilio.trim()) { parche.domicilio = cli.domicilio; completados++; }
+        if (cli.rubro && !c.rubro) {
+          if (this.opcionesRubro.some((o) => o.value === cli.rubro)) {
+            parche.rubro = cli.rubro;
+            parche.rubroOtros = '';
+          } else {
+            parche.rubro = 'otros';
+            parche.rubroOtros = cli.rubro;
+          }
+          completados++;
+        }
+        const completarProvincia = !!cli.codigoProvincia && !c.codigoProvincia;
+        if (completarProvincia) { parche.codigoProvincia = cli.codigoProvincia!; completados++; }
+        if (completados > 0) this.cliente.set({ ...c, ...parche });
+        // Provincia/localidad: cargar las localidades y completar la localidad
+        // solo si todavía está vacía.
+        if (completarProvincia) {
+          this.cargarLocalidadesYCompletar(cli.codigoProvincia!, cli.idLocalidad ?? null);
+        }
+        if (completados > 0) {
+          this.toast.add({
+            severity: 'info',
+            summary: 'Cliente reconocido',
+            detail: 'Completé los datos desde un cliente guardado.',
+            life: 4000,
+          });
+        }
+      });
+  }
+
+  /** Carga las localidades de una provincia y completa la localidad SOLO si
+   *  todavía está vacía (autocompletado no destructivo). */
+  private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null): void {
+    this.localidadesSub?.unsubscribe();
+    this.cargandoLocalidades.set(true);
+    this.localidades.set([]);
+    this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia).subscribe({
+      next: (lista) => {
+        this.cargandoLocalidades.set(false);
+        this.localidades.set(lista);
+        if (idLocalidad && !this.cliente().idLocalidad) {
+          this.cliente.set({ ...this.cliente(), idLocalidad });
+        }
+        this.localidadesSub = null;
+      },
+      error: () => {
+        this.cargandoLocalidades.set(false);
+        this.localidadesSub = null;
+      },
+    });
   }
 
   /** Recibe el valor del inputMask del teléfono con [unmask]="true" (solo dígitos).
@@ -1362,14 +1452,39 @@ export class ShowroomPage implements AfterViewInit {
    *  como fallback cuando el scan exacto no encuentra el código, o directamente
    *  cuando la query es texto descriptivo. Carga la primera página; el operador
    *  puede traer más con `cargarMasResultados()`. */
+  /** Traduce el orden elegido por el operador a los params del backend.
+   *  'relevancia' → sin params (el backend usa su ranking). */
+  private ordenResultadosParams(): { sortField?: 'descripcion' | 'precio'; sortOrder?: 'asc' | 'desc' } {
+    switch (this.ordenResultados()) {
+      case 'producto': return { sortField: 'descripcion', sortOrder: 'asc' };
+      case 'precio_asc': return { sortField: 'precio', sortOrder: 'asc' };
+      case 'precio_desc': return { sortField: 'precio', sortOrder: 'desc' };
+      default: return {};
+    }
+  }
+
+  /** Cambia el orden de los resultados y re-ejecuta la búsqueda desde la
+   *  primera página (el orden se aplica en el backend sobre todo el resultado). */
+  cambiarOrdenResultados(orden: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'): void {
+    if (this.ordenResultados() === orden) return;
+    this.ordenResultados.set(orden);
+    const query = this.busquedaQuery();
+    if (query) {
+      this.reordenando.set(true);
+      this.buscarPorDescripcion(query);
+    }
+  }
+
   private buscarPorDescripcion(query: string): void {
     const seq = ++this.scanSeq;
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
-    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE).subscribe({
+    const { sortField, sortOrder } = this.ordenResultadosParams();
+    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
+        this.reordenando.set(false);
         if (page.items.length === 0) {
           this.toast.add({
             severity: 'warn',
@@ -1395,6 +1510,7 @@ export class ShowroomPage implements AfterViewInit {
       error: (err) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
+        this.reordenando.set(false);
         this.focusInput();
         toastError(this.toast, 'Búsqueda', err, 'No se pudo buscar');
       },
@@ -1412,7 +1528,8 @@ export class ShowroomPage implements AfterViewInit {
     // página y vuelve, el operador hizo una búsqueda nueva, descartamos.
     const seq = this.scanSeq;
     const nextPage = this.paginaResultados() + 1;
-    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE).subscribe({
+    const { sortField, sortOrder } = this.ordenResultadosParams();
+    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoMasResultados.set(false);

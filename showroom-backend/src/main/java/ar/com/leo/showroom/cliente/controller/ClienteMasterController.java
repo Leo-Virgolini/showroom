@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.cliente.controller;
 
 import ar.com.leo.showroom.cliente.dto.ActualizarClienteRequestDTO;
+import ar.com.leo.showroom.cliente.dto.ClienteAutocompletarDTO;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
 import jakarta.validation.Valid;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -36,6 +38,16 @@ public class ClienteMasterController {
             Authentication auth) {
         ClienteMaster guardado = service.upsert(body, auth != null ? auth.getName() : null);
         return ResponseEntity.ok(guardado);
+    }
+
+    /** Autocompletado del pedido por CUIT: devuelve los datos del cliente con
+     *  ese documento (maestro o, en su defecto, el último pedido) para pre-llenar
+     *  el formulario. 404 si no hay coincidencias — el operador completa a mano. */
+    @GetMapping("/por-cuit/{nroDoc}")
+    public ResponseEntity<ClienteAutocompletarDTO> buscarPorCuit(@PathVariable Long nroDoc) {
+        return service.buscarParaAutocompletar(nroDoc)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     /** Soft-delete por teléfono — oculta el cliente del listado sin tocar el

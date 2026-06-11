@@ -30,6 +30,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
+import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { ToolbarModule } from 'primeng/toolbar';
@@ -53,6 +54,7 @@ import {
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
+import { SyncStateService } from '../sync-state.service';
 import { AuthService } from '../../auth/auth.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
@@ -103,6 +105,7 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
     ProgressSpinnerModule,
     SelectModule,
     TableModule,
+    TagModule,
     TextareaModule,
     SelectButtonModule,
     ToolbarModule,
@@ -119,7 +122,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
+  private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Estado de DUX/sync — misma fuente de verdad global que el showroom
+   *  (signal compartida en SyncStateService, providedIn root). Alimenta el
+   *  badge "Última sync" del toolbar. */
+  readonly health = this.syncState.health;
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly auth = inject(AuthService);
@@ -178,6 +187,23 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   readonly totalResultadosBusqueda = signal(0);
   /** Última query usada — necesaria para paginar. */
   private readonly busquedaQuery = signal('');
+
+  /** Orden elegido para los resultados de búsqueda. 'relevancia' = ranking del
+   *  backend (default). El resto fuerza el orden en el backend sobre TODO el
+   *  resultado (no solo la página visible). */
+  readonly ordenResultados = signal<'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'>('relevancia');
+
+  /** Opciones del selector de orden de resultados (para el template). */
+  readonly opcionesOrdenResultados: { label: string; value: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc' }[] = [
+    { label: 'Relevancia', value: 'relevancia' },
+    { label: 'Producto A-Z', value: 'producto' },
+    { label: 'Precio: menor a mayor', value: 'precio_asc' },
+    { label: 'Precio: mayor a menor', value: 'precio_desc' },
+  ];
+
+  /** True mientras se re-busca por un cambio de orden. Muestra un spinner chico
+   *  junto al selector SIN tapar la lista ni deshabilitar el input. */
+  readonly reordenando = signal(false);
   /** Última página cargada (0-indexed). */
   private readonly paginaResultados = signal(0);
   /** Loading state del botón "Cargar más" (separado de cargandoScan). */
@@ -338,6 +364,24 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  todavía no expone el flag — el control "no duplicar" para presupuestos
    *  ya convertidos antes de esta sesión vive en /historial. */
   readonly pedidoIdConvertido = signal<number | null>(null);
+  /** Fechas del presupuesto editado para detectar "editado tras convertir":
+   *  si {@link #modificadoAtPresupuesto} es posterior a {@link #convertidoAtPresupuesto}
+   *  el presupuesto cambió después de generar el pedido y se ofrece regenerar.
+   *  Se hidratan al cargar y se actualizan al guardar/regenerar en esta sesión. */
+  readonly convertidoAtPresupuesto = signal<string | null>(null);
+  readonly modificadoAtPresupuesto = signal<string | null>(null);
+  /** Id del pedido anterior cuando el dialog se abre en modo "regenerar". */
+  readonly pedidoAnteriorParaRegenerar = signal<number | null>(null);
+
+  /** True si el presupuesto en edición ya tiene pedido y se modificó después de
+   *  generarlo → se ofrece "Regenerar pedido" (deshabilitado si hay cambios sin
+   *  guardar: el dialog regenera desde el detalle PERSISTIDO). */
+  readonly editadoTrasConvertir = computed(() => {
+    const conv = this.convertidoAtPresupuesto();
+    const mod = this.modificadoAtPresupuesto();
+    return this.pedidoIdConvertido() != null && !!conv && !!mod
+      && new Date(mod).getTime() > new Date(conv).getTime();
+  });
 
   /** Footer sticky con TOTAL + formas de pago. Compacto por default (chips
    *  de TODAS las formas con su precio en 1 línea, con flex-wrap a 2 líneas
@@ -831,6 +875,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         // /historial. Con backend actualizado, los presupuestos ya
         // convertidos muestran directamente el pill "→ Pedido #N".
         this.pedidoIdConvertido.set(det.convertidoEnPedidoId ?? null);
+        this.convertidoAtPresupuesto.set(det.convertidoAt ?? null);
+        this.modificadoAtPresupuesto.set(det.modificadoAt ?? null);
         this.focusInput();
 
         // Lookup contra el cache local (no toca DUX) para traer imagen,
@@ -922,12 +968,32 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       return;
     }
     if (this.pedidoIdConvertido() != null) return;
+    this.pedidoAnteriorParaRegenerar.set(null);
     this.mostrarDialogCrearPedido.set(true);
   }
 
-  /** Output del {@link CrearPedidoDialog} cuando el pedido se creó OK. */
+  /** Abre el dialog en modo "regenerar": el presupuesto ya tiene pedido y se
+   *  editó después. El dialog regenera desde el detalle PERSISTIDO, así que
+   *  exigimos que no haya cambios sin guardar. */
+  abrirRegenerarPedido(): void {
+    if (!this.esModoEdicion()) return;
+    const anteriorId = this.pedidoIdConvertido();
+    if (anteriorId == null) return;
+    if (this.hayCambiosSinGuardar()) {
+      this.warn('Guardá los cambios antes de regenerar el pedido.');
+      return;
+    }
+    this.pedidoAnteriorParaRegenerar.set(anteriorId);
+    this.mostrarDialogCrearPedido.set(true);
+  }
+
+  /** Output del {@link CrearPedidoDialog} cuando el pedido se creó/regeneró OK.
+   *  Actualiza el vínculo y marca `convertidoAt = ahora` para que el botón
+   *  "Regenerar" desaparezca hasta una próxima edición guardada. */
   onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
     this.pedidoIdConvertido.set(evt.pedidoLocalId);
+    this.convertidoAtPresupuesto.set(new Date().toISOString());
+    this.pedidoAnteriorParaRegenerar.set(null);
   }
 
   /** Reemplaza los precios de los ítems del presupuesto por los del catálogo
@@ -1115,13 +1181,39 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   /** Búsqueda paginada en el catálogo CACHEADO (sin tocar DUX). Si la query
    *  matchea un único producto, lo carga directo. Si no, muestra la lista. */
+  /** Traduce el orden elegido por el operador a los params del backend.
+   *  'relevancia' → sin params (el backend usa su ranking). */
+  private ordenResultadosParams(): { sortField?: 'descripcion' | 'precio'; sortOrder?: 'asc' | 'desc' } {
+    switch (this.ordenResultados()) {
+      case 'producto': return { sortField: 'descripcion', sortOrder: 'asc' };
+      case 'precio_asc': return { sortField: 'precio', sortOrder: 'asc' };
+      case 'precio_desc': return { sortField: 'precio', sortOrder: 'desc' };
+      default: return {};
+    }
+  }
+
+  /** Cambia el orden de los resultados y re-ejecuta la búsqueda desde la
+   *  primera página (el orden se aplica en el backend sobre todo el resultado). */
+  cambiarOrdenResultados(orden: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'): void {
+    if (this.ordenResultados() === orden) return;
+    this.ordenResultados.set(orden);
+    const query = this.busquedaQuery();
+    if (query) {
+      const seq = ++this.scanSeq;
+      this.reordenando.set(true);
+      this.buscarEnCatalogo(query, seq);
+    }
+  }
+
   private buscarEnCatalogo(query: string, seq: number): void {
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
-    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE).subscribe({
+    const { sortField, sortOrder } = this.ordenResultadosParams();
+    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
+        this.reordenando.set(false);
         if (page.items.length === 0) {
           // Posible producto fuera del catálogo cacheado o catálogo desactualizado.
           // Mostramos un mensaje útil para que el operador sepa qué chequear.
@@ -1147,6 +1239,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       error: (err) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
+        this.reordenando.set(false);
         toastError(this.toast, 'Búsqueda', err, 'No se pudo buscar.');
         this.focusInput();
       },
@@ -1160,7 +1253,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.cargandoMasResultados.set(true);
     const seq = this.scanSeq;
     const nextPage = this.paginaResultados() + 1;
-    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE)
+    const { sortField, sortOrder } = this.ordenResultadosParams();
+    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder)
       .subscribe({
         next: (page) => {
           if (seq !== this.scanSeq) return;
@@ -1475,6 +1569,20 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.mostrarDialogoNuevoCliente.set(true);
   }
 
+  /** Formato relativo "hace X min/hora/día" para el badge "Última sync".
+   *  Misma lógica que showroom-page para que el badge sea idéntico. */
+  tiempoRelativo(iso: string | null | undefined): string {
+    if (!iso) return '—';
+    const ms = Date.now() - new Date(iso).getTime();
+    if (ms < 60_000) return 'hace unos segundos';
+    const min = Math.floor(ms / 60_000);
+    if (min < 60) return `hace ${min} min`;
+    const hs = Math.floor(min / 60);
+    if (hs < 24) return `hace ${hs} h`;
+    const d = Math.floor(hs / 24);
+    return `hace ${d} día${d === 1 ? '' : 's'}`;
+  }
+
   /** Inicia una sesión nueva con el nombre tipeado, vía el servicio compartido
    *  (cierra la sesión anterior del operador y vacía su carrito del showroom).
    *  El prellenado del nombre del presupuesto lo hace el effect de la sesión;
@@ -1704,6 +1812,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           return;
         }
         this.hayCambiosSinGuardar.set(false);
+        // Si el presupuesto ya tenía pedido, ahora quedó "editado tras
+        // convertir" → reflejamos la nueva fecha de modificación en memoria
+        // para habilitar el botón "Regenerar pedido" sin recargar.
+        if (editandoId != null && this.pedidoIdConvertido() != null) {
+          this.modificadoAtPresupuesto.set(new Date().toISOString());
+        }
         const detallePreview = editandoId != null
           ? `Presupuesto #${editandoId} actualizado — se abrió para previsualizar.`
           : 'Se abrió para previsualizar. Podés bajar el PDF desde el visor.';

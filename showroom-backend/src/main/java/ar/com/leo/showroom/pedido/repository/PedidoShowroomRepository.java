@@ -18,6 +18,10 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
 
     Page<PedidoShowroom> findAllByOrderByCreadoAtDesc(Pageable pageable);
 
+    /** Último pedido con un CUIT/documento dado — fallback para autocompletar
+     *  los datos del cliente al tipear el CUIT cuando no hay un maestro guardado. */
+    Optional<PedidoShowroom> findFirstByNroDocOrderByCreadoAtDesc(Long nroDoc);
+
     /**
      * Carga el pedido junto con sus items en una sola query (JOIN FETCH).
      * Indispensable cuando vamos a pasar la entidad a un método {@code @Async}
@@ -49,8 +53,10 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.
      * `q` matchea como substring case-insensitive contra nro_doc (CUIT),
-     * apellido_razon_social (placeholder fijo en pedidos del showroom) o
-     * nombre y apellido / razón social real del cliente (`nombre`). El filtro
+     * apellido_razon_social (placeholder fijo en pedidos del showroom),
+     * nombre y apellido / razón social real del cliente (`nombre`) y el
+     * teléfono — este último habilita el deep-link "Ver pedidos" desde
+     * /clientes, que filtra por un fragmento del teléfono. El filtro
      * {@code id} permite el deep-link desde /historial — cuando viene presente,
      * la lista colapsa al pedido específico que el operador clickeó. El orden
      * lo provee el {@link Pageable} (Spring concatena el ORDER BY automáticamente)
@@ -60,9 +66,11 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
             select p from PedidoShowroom p
             where (:id is null or p.id = :id)
               and (:q is null or :q = ''
+                   or cast(p.id as string) like concat('%', :q, '%')
                    or cast(p.nroDoc as string) like concat('%', :q, '%')
                    or lower(p.apellidoRazonSocial) like concat('%', lower(:q), '%')
-                   or lower(p.nombre) like concat('%', lower(:q), '%'))
+                   or lower(p.nombre) like concat('%', lower(:q), '%')
+                   or lower(coalesce(p.telefono, '')) like concat('%', lower(:q), '%'))
               and (:estado is null or p.estado = :estado)
               and (:desde is null or p.creadoAt >= :desde)
               and (:hasta is null or p.creadoAt <= :hasta)

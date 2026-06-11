@@ -42,7 +42,8 @@ public interface PresupuestoComercialRepository extends JpaRepository<Presupuest
         SELECT p FROM PresupuestoComercial p
         WHERE p.eliminadoAt IS NULL
           AND (:id IS NULL OR p.id = :id)
-          AND (:q IS NULL OR LOWER(COALESCE(p.clienteNombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
+          AND (:q IS NULL OR CAST(p.id AS string) LIKE CONCAT('%', :q, '%')
+                          OR LOWER(COALESCE(p.clienteNombre, '')) LIKE LOWER(CONCAT('%', :q, '%'))
                           OR LOWER(COALESCE(p.clienteEmail, ''))  LIKE LOWER(CONCAT('%', :q, '%'))
                           OR LOWER(COALESCE(p.clienteTelefono, '')) LIKE LOWER(CONCAT('%', :q, '%')))
           AND (:desde IS NULL OR p.creadoAt >= :desde)

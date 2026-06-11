@@ -58,7 +58,10 @@
         </div>
       </div>
 
-      <!-- Tabla -->
+      <!-- Tabla — con 13 columnas no entra a lo ancho en pantallas chicas, así
+           que la envolvemos en scroll horizontal y le damos min-width al table
+           para que las columnas no se aplasten. -->
+      <div class="overflow-x-auto">
       <p-table [value]="clientesFiltrados()" dataKey="telefono"
         [loading]="cargando()"
         [paginator]="true"
@@ -66,6 +69,7 @@
         [rowsPerPageOptions]="[25, 50, 100]"
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
         [showCurrentPageReport]="true"
+        [tableStyle]="{ 'min-width': '85rem' }"
         stripedRows>
         <ng-template #header>
           <tr>
@@ -80,6 +84,18 @@
             </th>
             <th style="width: 9rem" pSortableColumn="rubro">
               <i class="pi pi-tag text-[#FF861C] mr-1"></i> Rubro <p-sortIcon field="rubro" />
+            </th>
+            <th style="width: 10rem" pSortableColumn="nroDoc">
+              <i class="pi pi-id-card text-[#FF861C] mr-1"></i> CUIT <p-sortIcon field="nroDoc" />
+            </th>
+            <th style="width: 13rem" pSortableColumn="domicilio">
+              <i class="pi pi-map-marker text-[#FF861C] mr-1"></i> Domicilio <p-sortIcon field="domicilio" />
+            </th>
+            <th style="width: 10rem" pSortableColumn="localidadNombre">
+              <i class="pi pi-building text-[#FF861C] mr-1"></i> Localidad <p-sortIcon field="localidadNombre" />
+            </th>
+            <th style="width: 10rem" pSortableColumn="provinciaNombre">
+              <i class="pi pi-map text-[#FF861C] mr-1"></i> Provincia <p-sortIcon field="provinciaNombre" />
             </th>
             <th class="text-center" style="width: 8rem" pSortableColumn="cantidadPresupuestos">
               <i class="pi pi-file-edit text-[#FF861C] mr-1"></i> Presupuestos <p-sortIcon field="cantidadPresupuestos" />
@@ -115,6 +131,13 @@
                 <span class="text-muted-color">—</span>
               }
             </td>
+            <!-- CUIT/envío vienen del último pedido (los presupuestos no los
+                 guardan). Celdas en blanco cuando no hay dato — el operador las
+                 completa editando el cliente. -->
+            <td class="text-xs text-muted-color whitespace-nowrap">{{ c.nroDoc || '' }}</td>
+            <td class="text-xs text-muted-color">{{ c.domicilio || '' }}</td>
+            <td class="text-xs text-muted-color">{{ c.localidadNombre || '' }}</td>
+            <td class="text-xs text-muted-color">{{ c.provinciaNombre || '' }}</td>
             <td class="text-center">
               @if (c.cantidadPresupuestos > 0) {
                 <button type="button"
@@ -173,7 +196,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="9">
+            <td colspan="13">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-users text-4xl text-[#FF861C]"></i>
@@ -193,6 +216,7 @@
           </tr>
         </ng-template>
       </p-table>
+      </div>
     </p-card>
   </main>
 </div>
@@ -249,6 +273,49 @@
           placeholder="Ej: heladería, kiosco…" class="w-full" />
       </div>
       }
+    </div>
+
+    <!-- Datos de facturación y envío. Se guardan en el maestro y pisan los
+         derivados del último pedido al armar el listado. -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Tipo doc.</label>
+        <p-select [options]="opcionesTipoDoc" [ngModel]="editTipoDoc()"
+          (ngModelChange)="editTipoDoc.set($event)"
+          optionLabel="label" optionValue="value" placeholder="—"
+          [showClear]="true" appendTo="body" class="w-full" />
+      </div>
+      <div class="flex flex-col gap-1 sm:col-span-2">
+        <label for="edit-cliente-nrodoc" class="text-sm font-medium text-muted-color">N° documento / CUIT</label>
+        <p-inputNumber inputId="edit-cliente-nrodoc" [ngModel]="editNroDoc()"
+          (ngModelChange)="editNroDoc.set($event)"
+          [useGrouping]="false" [min]="0" placeholder="Ej: 20123456789" class="w-full" />
+      </div>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-domicilio" class="text-sm font-medium text-muted-color">Domicilio</label>
+      <input pInputText id="edit-cliente-domicilio" type="text" maxlength="200"
+        [ngModel]="editDomicilio()" (ngModelChange)="editDomicilio.set($event)"
+        placeholder="Calle y número" class="w-full" />
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Provincia</label>
+        <p-select [options]="provincias()" [ngModel]="editCodigoProvincia()"
+          (ngModelChange)="cambiarProvincia($event)"
+          optionLabel="nombre" optionValue="codigo" placeholder="Seleccionar…"
+          [showClear]="true" [filter]="true" appendTo="body" class="w-full" />
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium text-muted-color">Localidad</label>
+        <p-select [options]="localidades()" [ngModel]="editIdLocalidad()"
+          (ngModelChange)="editIdLocalidad.set($event)"
+          optionLabel="nombre" optionValue="id" placeholder="Seleccionar…"
+          [showClear]="true" [filter]="true" [loading]="cargandoLocalidades()"
+          [disabled]="!editCodigoProvincia()" appendTo="body" class="w-full" />
+      </div>
     </div>
 
     <div class="flex flex-col gap-1">

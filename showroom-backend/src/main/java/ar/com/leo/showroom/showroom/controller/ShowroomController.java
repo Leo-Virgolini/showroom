@@ -461,8 +461,10 @@ public class ShowroomController {
     public CatalogoPageDTO buscarCatalogo(
             @RequestParam(value = "q", required = false) String q,
             @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "50") int size) {
-        return service.buscarCatalogo(q, page, size);
+            @RequestParam(value = "size", defaultValue = "50") int size,
+            @RequestParam(value = "sortField", required = false) String sortField,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder) {
+        return service.buscarCatalogo(q, page, size, sortField, sortOrder);
     }
 
     /**
@@ -997,6 +999,28 @@ public class ShowroomController {
             @RequestParam("pedidoId") Long pedidoId) {
         presupuestoComercialService.marcarConvertido(id, pedidoId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Regenera el pedido de un presupuesto que ya fue convertido y luego editado:
+     * crea un pedido NUEVO en DUX con los datos del body, anula el anterior (solo
+     * local — DUX no expone anulación) y re-vincula el presupuesto al nuevo.
+     * 409 si el presupuesto no tenía un pedido generado. Mismo body que
+     * {@code /pedido-dux}; el frontend lo arma con los datos del presupuesto
+     * editado + los datos del pedido anterior (CUIT, forma de pago, dirección).
+     */
+    @PostMapping("/presupuesto-comercial/{id}/regenerar-pedido")
+    public ResponseEntity<CrearPedidoResponseDTO> regenerarPedido(
+            @PathVariable Long id,
+            @RequestBody @Valid CrearPedidoRequestDTO request,
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId,
+            Authentication auth) {
+        CrearPedidoResponseDTO response = presupuestoComercialService.regenerarPedido(
+                id, request, clientId, auth.getName());
+        HttpStatus status = response.estado() == EstadoPedido.ENVIADO
+                ? HttpStatus.CREATED
+                : HttpStatus.ACCEPTED;
+        return ResponseEntity.status(status).body(response);
     }
 
     // =====================================================
