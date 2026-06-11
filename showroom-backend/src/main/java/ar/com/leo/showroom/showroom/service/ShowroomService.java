@@ -1257,9 +1257,7 @@ public class ShowroomService {
                 BigDecimal ivaPorc = porcIva != null ? porcIva : PrecioPerfilCalculator.IVA_DEFAULT;
                 precioDux = conIva
                         ? it.precioReferencia()
-                        : it.precioReferencia().multiply(BigDecimal.ONE.add(
-                                ivaPorc.divide(new BigDecimal("100"), 6, RoundingMode.HALF_UP)))
-                          .setScale(4, RoundingMode.HALF_UP);
+                        : PrecioPerfilCalculator.agregarIva(it.precioReferencia(), ivaPorc);
             } else {
                 precioDux = formaPago != null
                         ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))

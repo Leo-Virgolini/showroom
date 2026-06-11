@@ -45,7 +45,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult, SesionShowroom } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import {
   hayEscalonSuperior,
@@ -53,8 +53,10 @@ import {
   ordenarEscalasPorUmbral,
 } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
+import { SesionClienteService } from '../sesion-cliente.service';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
+import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { toastError } from '../toast.utils';
 import {
   ProductoGenericoData,
@@ -191,6 +193,7 @@ export class ShowroomPage implements AfterViewInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly precioPerfil = inject(PrecioPerfilService);
+  private readonly sesionService = inject(SesionClienteService);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
@@ -229,11 +232,11 @@ export class ShowroomPage implements AfterViewInit {
   /** Sesión de atención al cliente — la mantiene el backend (global, como el
    *  carrito) y se sincroniza vía SSE `sesion-updated`. Cuando no hay activa
    *  todos los campos son null. */
-  readonly sesionActiva = signal<SesionShowroom>({
-    id: null, nombre: null, iniciadaAt: null, finalizadaAt: null,
-    pedidoId: null, cantidadEscaneados: 0,
-  });
-  readonly haySesionActiva = computed(() => this.sesionActiva().id != null);
+  /** Sesión de atención — el estado lo centraliza {@link SesionClienteService}
+   *  (global por operador, sincronizado por SSE), compartido con el
+   *  presupuestador. */
+  readonly sesionActiva = this.sesionService.sesion;
+  readonly haySesionActiva = this.sesionService.haySesionActiva;
   /** Iniciales del nombre del cliente activo — máx. 2 letras para el avatar.
    *  "María Pérez" → "MP" / "Juan" → "J" / "" → "?". */
   readonly inicialesCliente = computed(() => {
@@ -968,23 +971,30 @@ export class ShowroomPage implements AfterViewInit {
     // Si no hay sesión activa (carga limpia / reinicio / cliente recién
     // terminado), abrimos el modal de "Nuevo cliente" automáticamente para
     // que el operador identifique al cliente antes de empezar a escanear.
-    this.api.obtenerSesionActiva()
+    // El estado de sesión lo centraliza SesionClienteService (hidratación + SSE
+    // en vivo, compartido con el presupuestador). Acá solo hidratamos al cargar
+    // para decidir la UX: si no hay sesión activa, abrimos el modal de "Nuevo
+    // cliente" para que el operador identifique al cliente antes de escanear.
+    this.sesionService.hidratar()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (s) => {
-          this.aplicarSesion(s);
-          if (s.id == null) {
-            this.abrirDialogoNuevoCliente();
-          }
-        },
+        next: (s) => { if (s.id == null) this.abrirDialogoNuevoCliente(); },
         error: (err) => console.warn('[sesion] no se pudo hidratar:', err),
       });
 
-    // SSE en vivo: cualquier cambio en la sesión (iniciar/scan/finalizar)
-    // que dispare cualquier PC llega acá y refresca el estado local.
-    this.backendStatus.sesionEvents$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((s) => this.aplicarSesion(s));
+    // Pre-fill del nombre del cliente en el form cuando hay sesión y el campo
+    // está vacío (reacciona a la hidratación y a los cambios SSE de la sesión).
+    // Solo trackeamos `sesion()`; leer/escribir `cliente` va en untracked para
+    // NO re-dispararnos cuando el operador edita el campo Nombre — sino no
+    // podría dejarlo vacío con una sesión activa (lo volvería a llenar).
+    effect(() => {
+      const s = this.sesionService.sesion();
+      untracked(() => {
+        if (s.id != null && s.nombre && !this.cliente().nombre.trim()) {
+          this.actualizarCliente('nombre', s.nombre);
+        }
+      });
+    });
 
     // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor,
     // sync de catálogo) llega como SSE y reemplaza el estado local. Según el
@@ -1266,39 +1276,16 @@ export class ShowroomPage implements AfterViewInit {
     } catch {
       this.visorBaseConfig.set('');
     }
-    const base = this.visorBaseConfig() || window.location.origin;
-    const url = `${base}/visor/${encodeURIComponent(username)}`;
-    try {
-      // Carga dinámica para no inflar el bundle inicial — el dialog rara vez
-      // se abre y la lib pesa varios KB. `qrcode` es CommonJS: según el interop
-      // de esbuild las funciones pueden quedar bajo `.default` en vez de la raíz
-      // del namespace, así que normalizamos antes de usar `toDataURL`.
-      const mod = await import('qrcode');
-      const QRCode = ((mod as { default?: typeof import('qrcode') }).default ??
-        mod) as typeof import('qrcode');
-      const dataUrl = await QRCode.toDataURL(url, {
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 512,
-      });
-      this.qrVisorDataUrl.set(dataUrl);
-    } catch (err) {
-      // Si el browser no logra generar (raro), mostramos la URL como texto
-      // de fallback en el HTML.
-      console.error('No se pudo generar el QR del visor', err);
-      this.qrVisorDataUrl.set(null);
-    } finally {
-      this.qrVisorGenerando.set(false);
-    }
+    this.qrVisorDataUrl.set(await generarQrDataUrl(this.visorUrl()));
+    this.qrVisorGenerando.set(false);
   }
 
   /** URL completa del visor del operador — para mostrar como texto debajo del QR.
    *  Usa la base configurada en /configuracion si existe, sino el origin actual. */
   readonly visorUrl = computed(() => {
     const username = this.auth.currentUser()?.username;
-    if (!username || typeof window === 'undefined') return '';
-    const base = this.visorBaseConfig() || window.location.origin;
-    return `${base}/visor/${encodeURIComponent(username)}`;
+    if (!username) return '';
+    return construirVisorUrl(this.visorBaseConfig(), username, 'visor');
   });
 
   /**
@@ -1985,16 +1972,6 @@ export class ShowroomPage implements AfterViewInit {
   // Sesión de atención al cliente
   // =====================================================
 
-  /** Aplica el estado de sesión recibido del backend (hidratación inicial
-   *  y SSE). Si la sesión está activa y el form todavía tiene el campo
-   *  "Nombre y apellido" vacío, lo pre-rellena con el nombre cargado. */
-  private aplicarSesion(s: SesionShowroom): void {
-    this.sesionActiva.set(s);
-    if (s.id != null && s.nombre && !this.cliente().nombre.trim()) {
-      this.actualizarCliente('nombre', s.nombre);
-    }
-  }
-
   abrirDialogoNuevoCliente(): void {
     this.nombreNuevoCliente.set('');
     this.mostrarDialogoNuevoCliente.set(true);
@@ -2024,15 +2001,13 @@ export class ShowroomPage implements AfterViewInit {
       return;
     }
     this.iniciandoSesion.set(true);
-    this.api.iniciarSesion(nombre).subscribe({
-      next: (s) => {
+    this.sesionService.iniciar(nombre).subscribe({
+      next: () => {
         this.iniciandoSesion.set(false);
         this.mostrarDialogoNuevoCliente.set(false);
-        // Aplicamos manualmente para que el pre-fill del nombre arranque ya
-        // (sin esperar el SSE). El SSE igual va a llegar y será idempotente.
-        this.aplicarSesion(s);
         // Pre-fill explícito del nombre del cliente en el form de pedido —
-        // pisa cualquier valor previo porque arranca cliente nuevo.
+        // pisa cualquier valor previo porque arranca cliente nuevo. (El estado
+        // de sesión lo actualiza el servicio.)
         this.actualizarCliente('nombre', nombre);
         this.toast.add({
           severity: 'success',
@@ -2084,9 +2059,8 @@ export class ShowroomPage implements AfterViewInit {
     // El ConfirmDialog de PrimeNG (que viene de confirmarCancelarSesion) NO
     // tiene un signal que el effect de refocus pueda observar, así que
     // refocusemos manualmente acá.
-    this.api.cancelarSesion().subscribe({
-      next: (s) => {
-        this.aplicarSesion(s);
+    this.sesionService.cancelar().subscribe({
+      next: () => {
         this.toast.add({
           severity: 'info',
           summary: 'Sesión cancelada',

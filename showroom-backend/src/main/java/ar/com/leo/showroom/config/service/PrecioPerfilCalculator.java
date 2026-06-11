@@ -142,4 +142,16 @@ public class PrecioPerfilCalculator {
                                                    BigDecimal recargoPorc) {
         return calcularPrecioFinal(precioBaseConIva, porcIva, recargoPorc, true);
     }
+
+    /**
+     * Suma el IVA a un precio SIN IVA: {@code sinIva × (1 + porcIva/100)}, a 4
+     * decimales. Fuente única del factor de IVA (misma escala que el resto del
+     * cálculo). {@code porcIva} null o ≤ 0 ⇒ devuelve el precio sin cambios.
+     */
+    public static BigDecimal agregarIva(BigDecimal sinIva, BigDecimal porcIva) {
+        if (sinIva == null) return null;
+        if (porcIva == null || porcIva.signum() <= 0) return sinIva;
+        return sinIva.multiply(BigDecimal.ONE.add(porcIva.divide(CIEN, 6, RoundingMode.HALF_UP)))
+                .setScale(4, RoundingMode.HALF_UP);
+    }
 }

@@ -8,6 +8,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -43,7 +44,6 @@ import {
   PresupuestoItem,
   PresupuestoVisor,
   ScanResult,
-  SesionShowroom,
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
@@ -54,6 +54,8 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { AuthService } from '../../auth/auth.service';
+import { SesionClienteService } from '../sesion-cliente.service';
+import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import {
   ProductoGenericoData,
@@ -121,6 +123,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly auth = inject(AuthService);
+  private readonly sesionService = inject(SesionClienteService);
 
   /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
    *  pantalla pasa a modo edición: el botón principal dice "Guardar cambios",
@@ -351,11 +354,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // sesión y con o sin cliente). El nombre del presupuesto sale del campo
   // propio `clienteNombre`, que se prellena del de la sesión cuando está vacío.
   // ------------------------------------------------------------
-  readonly sesionActiva = signal<SesionShowroom>({
-    id: null, nombre: null, iniciadaAt: null, finalizadaAt: null,
-    pedidoId: null, cantidadEscaneados: 0,
-  });
-  readonly haySesionActiva = computed(() => this.sesionActiva().id != null);
+  /** Sesión de cliente compartida con el showroom — el estado vive en
+   *  {@link SesionClienteService} (misma SesionShowroom por operador). */
+  readonly sesionActiva = this.sesionService.sesion;
+  readonly haySesionActiva = this.sesionService.haySesionActiva;
   readonly mostrarDialogoNuevoCliente = signal(false);
   readonly nombreNuevoCliente = signal('');
   readonly iniciandoSesion = signal(false);
@@ -372,9 +374,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** URL del visor de presupuesto del operador logueado para el QR/fallback. */
   readonly visorUrl = computed(() => {
     const username = this.auth.currentUser()?.username;
-    if (!username || typeof window === 'undefined') return '';
-    const base = this.visorBaseConfig() || window.location.origin;
-    return `${base}/visor-presupuesto/${encodeURIComponent(username)}`;
+    if (!username) return '';
+    return construirVisorUrl(this.visorBaseConfig(), username, 'visor-presupuesto');
   });
   /** Coalesce los cambios del armado antes de publicarlos al visor (debounce). */
   private readonly visorPublish$ = new Subject<void>();
@@ -699,15 +700,20 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     });
 
     // --- Sesión de cliente compartida con el showroom ---
-    // Hidratación inicial + SSE: la badge y el prellenado del nombre reflejan
-    // la MISMA SesionShowroom que usa el showroom (misma por operador).
-    this.api.obtenerSesionActiva().subscribe({
-      next: (s) => this.aplicarSesion(s),
+    // El estado lo centraliza SesionClienteService (hidratación + SSE). Acá solo
+    // hidratamos al entrar y prellenamos el nombre del presupuesto (si está
+    // vacío) cuando hay sesión — el operador puede sobreescribirlo o borrarlo.
+    this.sesionService.hidratar().subscribe({
       error: () => { /* sin sesión: la badge queda en "Cliente" (asociar) */ },
     });
-    this.backendStatus.sesionEvents$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((s) => this.aplicarSesion(s));
+    effect(() => {
+      const s = this.sesionService.sesion();
+      // Leemos clienteNombre sin trackearlo para no re-disparar el effect al
+      // escribirlo (solo reacciona a cambios de la sesión).
+      if (s.id != null && s.nombre && !untracked(() => this.clienteNombre()).trim()) {
+        this.clienteNombre.set(s.nombre);
+      }
+    });
 
     // --- Publicación en vivo al visor de presupuesto ---
     // Cualquier cambio del armado o del nombre del cliente arma un snapshot y
@@ -1464,24 +1470,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ============================================================
   // Sesión de cliente compartida (badge "Atendiendo a X")
   // ============================================================
-  /** Aplica el estado de la sesión a la badge y prellena el nombre del cliente
-   *  del presupuesto SOLO si está vacío — así el operador puede sobreescribirlo
-   *  para un cliente ausente distinto del que se atiende, o borrarlo. */
-  private aplicarSesion(s: SesionShowroom): void {
-    this.sesionActiva.set(s);
-    if (s.id != null && s.nombre && !this.clienteNombre().trim()) {
-      this.clienteNombre.set(s.nombre);
-    }
-  }
-
   abrirDialogoNuevoCliente(): void {
     this.nombreNuevoCliente.set('');
     this.mostrarDialogoNuevoCliente.set(true);
   }
 
-  /** Inicia una sesión nueva con el nombre tipeado. Comparte el mecanismo del
-   *  showroom: cierra la sesión anterior del operador (y vacía el carrito del
-   *  showroom vía `SesionCerradaEvent`). */
+  /** Inicia una sesión nueva con el nombre tipeado, vía el servicio compartido
+   *  (cierra la sesión anterior del operador y vacía su carrito del showroom).
+   *  El prellenado del nombre del presupuesto lo hace el effect de la sesión;
+   *  acá lo forzamos porque el operador lo eligió explícitamente. */
   confirmarNuevoCliente(): void {
     const nombre = this.nombreNuevoCliente().trim();
     if (!nombre) {
@@ -1489,13 +1486,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       return;
     }
     this.iniciandoSesion.set(true);
-    this.api.iniciarSesion(nombre).subscribe({
-      next: (s) => {
+    this.sesionService.iniciar(nombre).subscribe({
+      next: () => {
         this.iniciandoSesion.set(false);
         this.mostrarDialogoNuevoCliente.set(false);
-        this.aplicarSesion(s);
-        // El operador eligió el cliente explícitamente → forzamos el nombre del
-        // presupuesto al de la sesión (atajo), aunque ya hubiera uno cargado.
         this.clienteNombre.set(nombre);
       },
       error: (err) => {
@@ -1505,8 +1499,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     });
   }
 
-  /** Finaliza la atención actual. Igual que en el showroom: cierra la sesión y
-   *  vacía el carrito del showroom. NO borra el armado del presupuesto. */
+  /** Finaliza la atención actual vía el servicio compartido. Igual que en el
+   *  showroom: cierra la sesión y vacía el carrito del showroom. NO borra el
+   *  armado del presupuesto. */
   finalizarSesion(): void {
     if (!this.haySesionActiva()) return;
     this.confirmationService.confirm({
@@ -1517,8 +1512,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       acceptButtonProps: { label: 'Finalizar', icon: 'pi pi-check' },
       rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
       accept: () => {
-        this.api.cancelarSesion().subscribe({
-          next: (s) => this.aplicarSesion(s),
+        this.sesionService.cancelar().subscribe({
           error: (err) => toastError(this.toast, 'Finalizar atención', err,
             'No se pudo finalizar la sesión.'),
         });
@@ -1547,22 +1541,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     } catch {
       this.visorBaseConfig.set('');
     }
-    const url = this.visorUrl();
-    try {
-      const mod = await import('qrcode');
-      const QRCode = (mod as { default?: typeof import('qrcode') }).default ?? mod;
-      const dataUrl = await QRCode.toDataURL(url, {
-        errorCorrectionLevel: 'M',
-        margin: 1,
-        width: 512,
-      });
-      this.qrVisorDataUrl.set(dataUrl);
-    } catch (err) {
-      console.error('No se pudo generar el QR del visor de presupuesto', err);
-      this.qrVisorDataUrl.set(null);
-    } finally {
-      this.qrVisorGenerando.set(false);
-    }
+    this.qrVisorDataUrl.set(await generarQrDataUrl(this.visorUrl()));
+    this.qrVisorGenerando.set(false);
   }
 
   /** Arma el snapshot del armado para el visor read-only. Vista AGREGADA

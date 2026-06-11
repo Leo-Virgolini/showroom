@@ -111,15 +111,4 @@ export class VisorPresupuestoPage {
     if (!cuotas || cuotas <= 1) return precioFinal;
     return precioFinal / cuotas;
   }
-
-  /** Formatea un monto en pesos sin decimales (mismo criterio visual que el
-   *  resto del showroom: "$ 12.345"). */
-  formatMoneda(n: number | null | undefined): string {
-    const v = typeof n === 'number' && Number.isFinite(n) ? n : 0;
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      maximumFractionDigits: 0,
-    }).format(v);
-  }
 }

@@ -70,11 +70,11 @@
             {{ it.descripcion ?? it.sku }}
           </div>
           <div class="text-xs text-muted-color mt-0.5">
-            {{ it.cantidad }} × {{ formatMoneda(it.precioUnitario) }}
+            {{ it.cantidad }} × {{ it.precioUnitario | currency:'ARS':'symbol':'1.0-0' }}
           </div>
         </div>
         <div class="shrink-0 text-right font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0">
-          {{ formatMoneda(it.subtotalLinea) }}
+          {{ it.subtotalLinea | currency:'ARS':'symbol':'1.0-0' }}
         </div>
       </div>
       }
@@ -110,7 +110,7 @@
               </div>
               @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
               <div class="text-xs text-muted-color mt-0.5">
-                {{ f.cantidadCuotas }} cuotas de {{ formatMoneda(precioPorCuota(f.precioFinal, f.cantidadCuotas)) }}
+                {{ f.cantidadCuotas }} cuotas de {{ precioPorCuota(f.precioFinal, f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
               </div>
               }
             </div>
@@ -120,7 +120,7 @@
                [class.dark:text-emerald-400]="f.esMejorPrecio"
                [class.text-surface-800]="!f.esMejorPrecio"
                [class.dark:text-surface-0]="!f.esMejorPrecio">
-            {{ formatMoneda(f.precioFinal) }}
+            {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
           </div>
         </div>
         }
@@ -134,7 +134,7 @@
         [attr.aria-expanded]="formasExpandidas()" aria-label="Mostrar formas de pago">
         <div class="flex flex-col items-start leading-none">
           <span class="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-color mb-1">Total</span>
-          <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ formatMoneda(total()) }}</span>
+          <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ total() | currency:'ARS':'symbol':'1.0-0' }}</span>
         </div>
         @if (formasPago().length > 0) {
         <span class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-orange-50 dark:bg-orange-950/40 text-sm font-semibold text-[#FF861C]">

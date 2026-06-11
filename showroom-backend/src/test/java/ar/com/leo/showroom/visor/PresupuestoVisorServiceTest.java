@@ -8,16 +8,13 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
  * Test unitario puro (sin contexto Spring) del {@link PresupuestoVisorService}:
- * guardar/recuperar/limpiar el snapshot en memoria y publicar al canal correcto.
+ * guardar/recuperar el snapshot en memoria y publicar al canal correcto.
  */
 class PresupuestoVisorServiceTest {
 
@@ -50,20 +47,5 @@ class PresupuestoVisorServiceTest {
         assertThat(r.items()).isEmpty();
         assertThat(r.formasPago()).isEmpty();
         assertThat(r.total()).isEqualByComparingTo(BigDecimal.ZERO);
-    }
-
-    @Test
-    void limpiar_dejaSnapshotVacioYReemite() {
-        service.publicar("leo", new PresupuestoVisorDTO(
-                "Juan", List.of(), new BigDecimal("100"), List.of()));
-
-        service.limpiar("leo");
-
-        PresupuestoVisorDTO r = service.obtener("leo");
-        assertThat(r.clienteNombre()).isNull();
-        assertThat(r.items()).isEmpty();
-        // Una emisión al publicar + otra al limpiar.
-        verify(eventService, times(2))
-                .publishTo(eq("leo"), eq(PresupuestoVisorService.EVENTO), any());
     }
 }

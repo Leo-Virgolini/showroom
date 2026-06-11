@@ -49,10 +49,4 @@ public class PresupuestoVisorService {
     public PresupuestoVisorDTO obtener(String username) {
         return snapshots.getOrDefault(username, PresupuestoVisorDTO.vacio());
     }
-
-    /** Limpia el visor del operador (presupuesto vaciado o salida de la
-     *  pantalla): publica y guarda un snapshot vacío. */
-    public void limpiar(String username) {
-        publicar(username, PresupuestoVisorDTO.vacio());
-    }
 }

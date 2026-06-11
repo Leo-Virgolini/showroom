@@ -327,14 +327,14 @@ export class PedidosPage {
    *  precio guardado: por default (aplicaIva true o null) el {@code precioUnitario}
    *  ya tiene IVA y se divide; si {@code aplicaIva===false} el precio guardado
    *  ya es sin IVA (el cliente paga sin IVA y DUX absorbe). */
-  precioSinIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
+  private precioSinIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
     if (aplicaIva === false) return precioGuardado;
     return quitarIva(precioGuardado, porcIva);
   }
 
   /** Precio con IVA por unidad. Default: el {@code precioUnitario} ya tiene IVA.
    *  Si {@code aplicaIva===false}, hay que sumarle IVA porque está sin (DUX recibe con). */
-  precioConIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
+  private precioConIva(precioGuardado: number | null, porcIva: number | null, aplicaIva: boolean | null): number | null {
     if (precioGuardado == null) return null;
     if (aplicaIva !== false) return precioGuardado;
     if (porcIva == null || porcIva === 0) return precioGuardado;
@@ -364,8 +364,9 @@ export class PedidosPage {
 
   /** Subtotal NETO de la línea que PAGA el cliente = precio unitario BRUTO (c/IVA
    *  si la forma aplica IVA, s/IVA si no) × cantidad × (1 − descuento/100). La
-   *  suma de estos subtotales da "Cliente paga" ({@code det.total}). Para la base
-   *  imponible/DUX están las columnas por unidad Precio s/IVA y Precio c/IVA. */
+   *  suma de estos subtotales da "Cliente paga" ({@code det.total}). El precio
+   *  unitario que se muestra (c/IVA o s/IVA según el perfil del ítem) lo
+   *  resuelve {@link precioForma}. */
   subtotalCliente(
     it: { precioUnitario: number | null; cantidad: number | null; descuentoPorcentaje?: number | null },
   ): number | null {
