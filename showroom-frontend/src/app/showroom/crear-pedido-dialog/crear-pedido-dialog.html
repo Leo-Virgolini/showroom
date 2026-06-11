@@ -108,15 +108,7 @@
           <p-autoComplete [ngModel]="pedidoRazonSocial()" (ngModelChange)="onRazonSocialChange($event)"
             [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
             optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
-            placeholder="Apellido / razón social en DUX" inputStyleClass="w-full" class="w-full" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-            <i class="pi pi-user text-[#FF861C] text-[10px]"></i> Nombre <span class="text-red-500">*</span>
-          </label>
-          <input pInputText type="text" class="w-full"
-            [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
-            placeholder="Nombre de fantasía / contacto" />
+            placeholder="Razón social — se sube a DUX" inputStyleClass="w-full" class="w-full" />
         </div>
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
@@ -125,6 +117,15 @@
           <p-inputMask mask="99-99999999-9" [unmask]="true"
             [ngModel]="cuitInputValuePedido()" (ngModelChange)="onCuitChangePedido($event)"
             placeholder="20-12345678-9" class="w-full" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+            <i class="pi pi-user text-[#FF861C] text-[10px]"></i> Nombre y apellido
+          </label>
+          <input pInputText type="text" class="w-full"
+            [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
+            maxlength="150"
+            placeholder="Opcional — se guarda en la ficha del cliente (no se sube a DUX)" />
         </div>
       </div>
 

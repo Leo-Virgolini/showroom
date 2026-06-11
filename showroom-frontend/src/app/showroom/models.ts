@@ -84,9 +84,11 @@ export type CategoriaFiscal =
 export type TipoDoc = 'DNI' | 'CUIT' | 'CUIL';
 
 export interface CrearPedidoRequest {
+  /** Razón social → DUX `apellido_razon_social` (obligatorio) + ficha de cliente. */
   apellidoRazonSocial: string;
-  /** Nombre del cliente — obligatorio desde mayo 2026 (antes opcional). */
-  nombre: string;
+  /** Nombre del cliente — OPCIONAL. NO se sube a DUX; solo se guarda en la ficha
+   *  del cliente (columna nombre). */
+  nombre?: string;
   categoriaFiscal?: CategoriaFiscal;
   tipoDoc?: TipoDoc;
   nroDoc?: number;
@@ -438,6 +440,8 @@ export interface ProductoListItem {
   sku: string;
   descripcion: string | null;
   rubro: string | null;
+  /** Nombre del proveedor en DUX. Null si no informado. */
+  proveedor?: string | null;
   pvpKtGastroConIva: number | null;
   pvpKtGastroSinIva: number | null;
   porcIva: number | null;
@@ -923,6 +927,8 @@ export interface ClientePresupuestos {
   email: string | null;
   telefono: string | null;
   nombre: string | null;
+  /** Razón social / apellido (del maestro editable). Null si no se cargó. */
+  razonSocial: string | null;
   rubro: string | null;
   /** Cantidad de presupuestos comerciales generados (0 si solo tiene pedidos). */
   cantidadPresupuestos: number;
@@ -957,6 +963,7 @@ export interface ClientePresupuestos {
  *  como null y el listado de /clientes cae al valor del último movimiento. */
 export interface ActualizarClienteRequest {
   telefono: string;
+  razonSocial: string | null;
   nombre: string | null;
   email: string | null;
   rubro: string | null;

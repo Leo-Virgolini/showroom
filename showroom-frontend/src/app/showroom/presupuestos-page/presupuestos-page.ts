@@ -1223,6 +1223,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // Reset de cantidades tipeadas — corresponden a la búsqueda anterior y
     // no deberían sobrevivir a una nueva query.
     this.cantidadesResultados.set({});
+    // Cada búsqueda NUEVA arranca sin el filtro de proveedor anterior (sino
+    // quedaba "pegado"). Los re-search por cambio de filtro/orden no pasan por
+    // acá, así que se preservan.
+    this.proveedorFiltro.set(null);
     const seq = ++this.scanSeq;
     this.cargandoScan.set(true);
     this.buscarEnCatalogo(query, seq);

@@ -70,4 +70,20 @@ public class ClienteMasterController {
         service.eliminar(telefono, auth != null ? auth.getName() : null);
         return ResponseEntity.noContent().build();
     }
+
+    /** Soft-delete masivo — oculta del listado todos los clientes de la lista de
+     *  teléfonos. Body: {@code { "telefonos": ["...", "..."] }}. Responde con la
+     *  cantidad de clientes marcados. */
+    @org.springframework.web.bind.annotation.PostMapping("/eliminar-masivo")
+    public ResponseEntity<java.util.Map<String, Integer>> eliminarMasivo(
+            @RequestBody EliminarMasivoRequest body,
+            Authentication auth) {
+        int eliminados = service.eliminarMasivo(
+                body != null ? body.telefonos() : null,
+                auth != null ? auth.getName() : null);
+        return ResponseEntity.ok(java.util.Map.of("eliminados", eliminados));
+    }
+
+    /** Body del borrado masivo. */
+    public record EliminarMasivoRequest(java.util.List<String> telefonos) {}
 }

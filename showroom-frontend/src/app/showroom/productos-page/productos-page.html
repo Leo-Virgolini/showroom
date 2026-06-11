@@ -137,6 +137,9 @@
             <th style="width: 11rem" pSortableColumn="rubro">
               Rubro <p-sortIcon field="rubro" />
             </th>
+            <th style="width: 11rem" pSortableColumn="proveedor">
+              Proveedor <p-sortIcon field="proveedor" />
+            </th>
             <th style="width: 11rem">Código de barra</th>
             <th class="text-right" style="width: 9rem" pSortableColumn="pvpKtGastroSinIva">
               PVP s/IVA <p-sortIcon field="pvpKtGastroSinIva" />
@@ -190,6 +193,13 @@
                 </span>
               } @else if (it.rubro) {
                 <span class="text-surface-700 dark:text-surface-200">{{ it.rubro }}</span>
+              } @else {
+                <span class="text-muted-color">—</span>
+              }
+            </td>
+            <td class="text-xs">
+              @if (it.proveedor) {
+                <span class="text-surface-700 dark:text-surface-200">{{ it.proveedor }}</span>
               } @else {
                 <span class="text-muted-color">—</span>
               }

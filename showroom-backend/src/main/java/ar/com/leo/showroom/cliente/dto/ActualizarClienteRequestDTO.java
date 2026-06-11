@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
  */
 public record ActualizarClienteRequestDTO(
         @NotBlank @Size(max = 50) String telefono,
+        @Size(max = 150) String razonSocial,
         @Size(max = 150) String nombre,
         @Size(max = 150) String email,
         @Size(max = 100) String rubro,

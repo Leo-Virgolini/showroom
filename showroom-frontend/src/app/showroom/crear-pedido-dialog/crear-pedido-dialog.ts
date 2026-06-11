@@ -217,7 +217,6 @@ export class CrearPedidoDialog {
     const cuitOk = cuit != null && String(cuit).length === 11;
     const emailOk = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(this.pedidoEmail().trim());
     const razonSocialOk = this.pedidoRazonSocial().trim().length > 0;
-    const nombreOk = this.pedidoNombre().trim().length > 0;
     const telOk = this.pedidoTelefono().trim().length > 0;
     const rubro = this.pedidoRubro();
     const rubroOk = !!rubro && (rubro !== 'otros' || this.pedidoRubroOtros().trim().length > 0);
@@ -225,7 +224,7 @@ export class CrearPedidoDialog {
     // maquinaria s/IVA) depende de la forma, y sin ella el backend no puede
     // facturar a DUX con el criterio correcto.
     const formaOk = this.pedidoFormaPagoId() != null;
-    return cuitOk && emailOk && razonSocialOk && nombreOk && telOk && rubroOk && formaOk
+    return cuitOk && emailOk && razonSocialOk && telOk && rubroOk && formaOk
       && this.itemsDelPresupuesto().length > 0;
   });
 
@@ -260,10 +259,13 @@ export class CrearPedidoDialog {
     this.api.obtenerDetallePresupuestoComercial(id).subscribe({
       next: (det) => {
         this.cargandoDetallePresupuesto.set(false);
-        // Razón social: arranca con el nombre del presupuesto (mejor estimación);
-        // el operador la edita o la pisa el autocompletado por CUIT.
-        this.pedidoRazonSocial.set(det.clienteNombre ?? '');
+        // El nombre cargado en el presupuesto es el nombre INFORMAL del cliente →
+        // va al campo "Nombre y apellido" (opcional, ficha de cliente). La razón
+        // social (formal, a DUX) arranca VACÍA: la completa el operador o la
+        // precarga el autocompletado por CUIT/razón social. No se asume del
+        // presupuesto (el presupuesto no tiene razón social).
         this.pedidoNombre.set(det.clienteNombre ?? '');
+        this.pedidoRazonSocial.set('');
         this.pedidoTelefono.set(det.clienteTelefono ?? '');
         this.pedidoEmail.set(det.clienteEmail ?? '');
         this.pedidoCuit.set(null); // no viene del presupuesto
@@ -578,7 +580,7 @@ export class CrearPedidoDialog {
       this.toast.add({
         severity: 'warn',
         summary: 'Faltan datos',
-        detail: 'Razón social, CUIT 11 dígitos, nombre, teléfono, email, rubro y forma de pago son obligatorios.',
+        detail: 'Razón social, CUIT 11 dígitos, teléfono, email, rubro y forma de pago son obligatorios.',
         life: 4000,
       });
       return;
@@ -589,7 +591,9 @@ export class CrearPedidoDialog {
     const cuit = this.pedidoCuit()!;
     const req: CrearPedidoRequest = {
       apellidoRazonSocial: this.pedidoRazonSocial().trim(),
-      nombre: this.pedidoNombre().trim(),
+      // `nombre` (opcional): NO se sube a DUX (el backend lo omite); se guarda en
+      // la ficha del cliente (columna nombre). Puede ir vacío.
+      nombre: this.pedidoNombre().trim() || undefined,
       categoriaFiscal: 'CONSUMIDOR_FINAL',
       tipoDoc: 'CUIT',
       nroDoc: cuit,

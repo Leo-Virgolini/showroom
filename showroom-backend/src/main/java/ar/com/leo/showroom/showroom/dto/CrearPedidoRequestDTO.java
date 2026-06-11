@@ -22,7 +22,8 @@ public record CrearPedidoRequestDTO(
         @NotBlank(message = "apellidoRazonSocial requerido")
         String apellidoRazonSocial,
 
-        @NotBlank(message = "nombre del cliente requerido")
+        // Nombre del cliente — OPCIONAL. No se sube a DUX; solo se guarda en el
+        // pedido y en la ficha de cliente (columna nombre).
         String nombre,
 
         @Pattern(

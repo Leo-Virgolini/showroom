@@ -66,6 +66,10 @@ public record ClientePresupuestosDTO(
         /** Id de la localidad de envío — clave para editar. */
         String idLocalidad,
         /** Nombre de la localidad resuelto desde {@code idLocalidad}. */
-        String localidadNombre
+        String localidadNombre,
+        /** Razón social / apellido del cliente — viene del maestro editable
+         *  ({@code ClienteMaster.razonSocial}); null para clientes que aún no la
+         *  tienen cargada. Es lo que va a DUX como {@code apellido_razon_social}. */
+        String razonSocial
 ) {
 }

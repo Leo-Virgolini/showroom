@@ -6,7 +6,6 @@ import ar.com.leo.showroom.cliente.dto.ClienteAutocompletarDTO;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.repository.ClienteMasterRepository;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
-import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +32,6 @@ public class ClienteMasterService {
 
     private final ClienteMasterRepository repository;
     private final UsuarioRepository usuarioRepository;
-    /** Para el fallback del autocompletado por CUIT: si no hay un maestro con ese
-     *  documento, se toman los datos del último pedido con ese CUIT. */
-    private final PedidoShowroomRepository pedidoRepository;
 
     /** Upsert: si existe master para ese teléfono lo actualiza, sino crea uno.
      *  Si el master estaba marcado como eliminado, al editarlo se reactiva
@@ -48,10 +44,7 @@ public class ClienteMasterService {
             throw new IllegalArgumentException(
                     "El teléfono debe tener al menos un dígito para identificar al cliente.");
         }
-        ClienteMaster master = repository.findByTelefonoNormalizado(telefonoNorm)
-                .orElseGet(() -> ClienteMaster.builder()
-                        .telefonoNormalizado(telefonoNorm)
-                        .build());
+        ClienteMaster master = masterPorTelefonoONuevo(telefonoNorm);
         // CUIT único: si el documento ya pertenece a OTRO cliente (otro teléfono),
         // rechazamos con un error claro (sino saltaría una violación de constraint
         // cruda al guardar). null/sin CUIT no valida (varios informales sin doc).
@@ -64,8 +57,7 @@ public class ClienteMasterService {
                         "Ese CUIT ya está asignado a otro cliente.");
             }
         }
-        // razonSocial no se toca acá: el editor de /clientes no la gestiona; la
-        // carga el flujo de pedido (registrarDesdePedido). Se preserva su valor.
+        master.setRazonSocial(blankToNull(datos.razonSocial()));
         master.setNombre(blankToNull(datos.nombre()));
         master.setEmail(blankToNull(datos.email()));
         master.setRubro(blankToNull(datos.rubro()));
@@ -91,14 +83,33 @@ public class ClienteMasterService {
             throw new IllegalArgumentException(
                     "El teléfono debe tener al menos un dígito para identificar al cliente.");
         }
-        ClienteMaster master = repository.findByTelefonoNormalizado(telefonoNorm)
-                .orElseGet(() -> ClienteMaster.builder()
-                        .telefonoNormalizado(telefonoNorm)
-                        .build());
+        ClienteMaster master = masterPorTelefonoONuevo(telefonoNorm);
         master.setActualizadoPorUsuarioId(usuarioIdDe(username));
         master.setActualizadoAt(Instant.now());
         master.setEliminadoAt(Instant.now());
         repository.save(master);
+    }
+
+    /** Soft-delete masivo: oculta del listado todos los clientes de la lista de
+     *  teléfonos (sin tocar el historial). Devuelve cuántos se marcaron. Los
+     *  teléfonos vacíos/inválidos se ignoran. */
+    @Transactional
+    public int eliminarMasivo(java.util.List<String> telefonos, String username) {
+        if (telefonos == null || telefonos.isEmpty()) return 0;
+        Long usuarioId = usuarioIdDe(username);
+        Instant ahora = Instant.now();
+        int eliminados = 0;
+        for (String telefono : telefonos) {
+            String telefonoNorm = normalizar(telefono);
+            if (telefonoNorm == null) continue;
+            ClienteMaster master = masterPorTelefonoONuevo(telefonoNorm);
+            master.setActualizadoPorUsuarioId(usuarioId);
+            master.setActualizadoAt(ahora);
+            master.setEliminadoAt(ahora);
+            repository.save(master);
+            eliminados++;
+        }
+        return eliminados;
     }
 
     /** Devuelve TODOS los masters indexados por teléfono normalizado, para
@@ -116,23 +127,17 @@ public class ClienteMasterService {
 
     /**
      * Resuelve los datos de un cliente a partir de su CUIT/documento para
-     * autocompletar el formulario de pedido. Prioridad:
-     * <ol>
-     *   <li>Maestro de clientes ({@code ClienteMaster}) con ese {@code nroDoc} —
-     *       el más reciente si hay varios (el CUIT no es único: distintos locales
-     *       de una empresa entran con teléfonos distintos).</li>
-     *   <li>Fallback: el último pedido con ese {@code nroDoc}.</li>
-     * </ol>
-     * {@code Optional.empty()} si no hay coincidencias (el operador completa a mano).
+     * autocompletar el formulario de pedido. Busca SOLO en el maestro de clientes
+     * ({@code ClienteMaster}) — NO cae al último pedido/presupuesto: el
+     * autocompletado refleja exactamente lo que está guardado en la tabla de
+     * clientes (decisión del usuario jun-2026). {@code Optional.empty()} si no hay
+     * un cliente con ese documento (el operador completa a mano).
      */
     public Optional<ClienteAutocompletarDTO> buscarParaAutocompletar(Long nroDoc) {
         if (nroDoc == null) return Optional.empty();
-        Optional<ClienteAutocompletarDTO> delMaestro = repository
+        return repository
                 .findByNroDocAndEliminadoAtIsNull(nroDoc).stream()
                 .max(Comparator.comparing(ClienteMaster::getActualizadoAt))
-                .map(this::toAutocompletar);
-        if (delMaestro.isPresent()) return delMaestro;
-        return pedidoRepository.findFirstByNroDocOrderByCreadoAtDesc(nroDoc)
                 .map(this::toAutocompletar);
     }
 
@@ -208,15 +213,72 @@ public class ClienteMasterService {
                 m.getCodigoProvincia(), m.getIdLocalidad());
     }
 
-    private ClienteAutocompletarDTO toAutocompletar(PedidoShowroom p) {
-        return new ClienteAutocompletarDTO(
-                p.getApellidoRazonSocial(), p.getNombre(), p.getEmail(), p.getTelefono(),
-                p.getRubro(), p.getTipoDoc(), p.getNroDoc(), p.getDomicilio(),
-                p.getCodigoProvincia(), p.getIdLocalidad());
+    /**
+     * Backfill: asegura que exista un master para un teléfono YA normalizado,
+     * SIN pisar uno existente y SIN setear CUIT/razón social (para no chocar el
+     * índice único de CUIT con datos legacy duplicados). Devuelve el master
+     * (existente o recién creado). Corre en su propia transacción
+     * ({@code REQUIRES_NEW}) para que una colisión rara (dos cargas concurrentes)
+     * no envenene la transacción del listado.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public ClienteMaster ensureClienteBackfill(String telefonoNormalizado, String nombre,
+                                               String email, String rubro, String tipoDoc,
+                                               Long nroDoc, String domicilio,
+                                               String codigoProvincia, String idLocalidad) {
+        ClienteMaster existente = repository.findByTelefonoNormalizado(telefonoNormalizado).orElse(null);
+        if (existente != null) return existente;
+        // Copiamos los datos del historial al maestro UNA sola vez. razonSocial
+        // queda null (los pedidos legacy traían placeholders). El nroDoc lo
+        // resuelve el caller (null si chocaría con otro master por el índice único).
+        ClienteMaster nuevo = ClienteMaster.builder()
+                .telefonoNormalizado(telefonoNormalizado)
+                .nombre(blankToNull(nombre))
+                .email(blankToNull(email))
+                .rubro(blankToNull(rubro))
+                .tipoDoc(blankToNull(tipoDoc))
+                .nroDoc(nroDoc)
+                .domicilio(blankToNull(domicilio))
+                .codigoProvincia(blankToNull(codigoProvincia))
+                .idLocalidad(blankToNull(idLocalidad))
+                .actualizadoAt(Instant.now())
+                .build();
+        return repository.save(nuevo);
+    }
+
+    /**
+     * Asegura/actualiza el cliente en el maestro a partir de un presupuesto. El
+     * maestro de clientes es la fuente única de la vista /clientes, así que cada
+     * presupuesto también registra su cliente (keyed por teléfono — los
+     * presupuestos no tienen CUIT ni razón social, esos campos NO se tocan acá:
+     * se preservan si vienen de un pedido). Best-effort y aislado
+     * ({@code REQUIRES_NEW}) para no tumbar el guardado del presupuesto.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void registrarDesdePresupuesto(String telefono, String nombre, String email,
+                                          String rubro, String username) {
+        String telefonoNorm = normalizar(telefono);
+        if (telefonoNorm == null) return; // sin teléfono no hay clave
+        ClienteMaster master = masterPorTelefonoONuevo(telefonoNorm);
+        setIfPresent(nombre, master::setNombre);
+        setIfPresent(email, master::setEmail);
+        setIfPresent(rubro, master::setRubro);
+        master.setActualizadoPorUsuarioId(usuarioIdDe(username));
+        master.setActualizadoAt(Instant.now());
+        repository.save(master);
     }
 
     private static void setIfPresent(String value, java.util.function.Consumer<String> setter) {
         if (StringUtils.hasText(value)) setter.accept(value.trim());
+    }
+
+    /** Master existente por teléfono normalizado, o uno nuevo (en memoria, sin
+     *  persistir) con ese teléfono — base común de los upserts por teléfono. */
+    private ClienteMaster masterPorTelefonoONuevo(String telefonoNorm) {
+        return repository.findByTelefonoNormalizado(telefonoNorm)
+                .orElseGet(() -> ClienteMaster.builder()
+                        .telefonoNormalizado(telefonoNorm)
+                        .build());
     }
 
     /** El maestro guarda el teléfono ya normalizado (solo dígitos). Para

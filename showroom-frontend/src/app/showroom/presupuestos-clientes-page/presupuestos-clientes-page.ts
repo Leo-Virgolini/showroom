@@ -78,6 +78,9 @@ export class PresupuestosClientesPage {
   readonly clientes = signal<ClientePresupuestos[]>([]);
   readonly busqueda = signal('');
 
+  /** Filas seleccionadas con el checkbox — para el borrado masivo. */
+  readonly seleccionados = signal<ClientePresupuestos[]>([]);
+
   /** Teléfonos en proceso de soft-delete — se usa para mostrar spinner en el
    *  botón de borrar y evitar doble click mientras la request está en vuelo. */
   readonly eliminando = signal<Set<string>>(new Set());
@@ -90,6 +93,12 @@ export class PresupuestosClientesPage {
   readonly mostrarDialogEditar = signal(false);
   readonly guardandoEdicion = signal(false);
   readonly clienteEditando = signal<ClientePresupuestos | null>(null);
+  /** True cuando el diálogo está en modo ALTA (cliente nuevo) en vez de edición.
+   *  En alta el teléfono (clave del cliente) es editable. */
+  readonly modoNuevo = signal(false);
+  /** Teléfono tipeado en modo alta (en edición el teléfono es la clave fija). */
+  readonly editTelefono = signal('');
+  readonly editRazonSocial = signal('');
   readonly editNombre = signal('');
   readonly editEmail = signal('');
   readonly editRubro = signal<string | null>(null);
@@ -135,10 +144,15 @@ export class PresupuestosClientesPage {
   readonly clientesFiltrados = computed(() => {
     const q = this.busqueda().trim().toLowerCase();
     if (!q) return this.clientes();
+    // Para CUIT comparamos también los dígitos puros del query (así "20-12..."
+    // o "2012..." matchean igual contra el nroDoc numérico).
+    const qDigitos = q.replace(/\D+/g, '');
     return this.clientes().filter((c) =>
+      (c.razonSocial ?? '').toLowerCase().includes(q) ||
       (c.nombre ?? '').toLowerCase().includes(q) ||
       (c.email ?? '').toLowerCase().includes(q) ||
-      (c.telefono ?? '').toLowerCase().includes(q),
+      (c.telefono ?? '').toLowerCase().includes(q) ||
+      (c.nroDoc != null && qDigitos.length > 0 && String(c.nroDoc).includes(qDigitos)),
     );
   });
 
@@ -227,6 +241,42 @@ export class PresupuestosClientesPage {
     });
   }
 
+  /** Borra (oculta) en lote los clientes seleccionados con el checkbox. */
+  eliminarSeleccionados(): void {
+    const sel = this.seleccionados().filter((c) => c.telefono);
+    if (sel.length === 0) return;
+    const n = sel.length;
+    this.confirmationService.confirm({
+      header: `¿Eliminar ${n} cliente${n === 1 ? '' : 's'}?`,
+      message: `Se ${n === 1 ? 'va' : 'van'} a ocultar ${n} cliente${n === 1 ? '' : 's'} de esta lista. ` +
+        'El historial (presupuestos/pedidos) NO se borra. ¿Confirmás?',
+      icon: 'pi pi-exclamation-triangle',
+      acceptButtonProps: { label: 'Eliminar', severity: 'danger', icon: 'pi pi-trash' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => this.ejecutarEliminarMasivo(sel),
+    });
+  }
+
+  private ejecutarEliminarMasivo(sel: ClientePresupuestos[]): void {
+    const telefonos = sel.map((c) => c.telefono).filter((t): t is string => !!t);
+    if (telefonos.length === 0) return;
+    this.api.eliminarClientesMasivo(telefonos).subscribe({
+      next: (res) => {
+        const borrados = new Set(telefonos);
+        this.clientes.set(this.clientes().filter((x) => !borrados.has(x.telefono ?? '')));
+        this.seleccionados.set([]);
+        this.toast.add({
+          severity: 'success',
+          summary: 'Clientes eliminados',
+          detail: `${res.eliminados} cliente${res.eliminados === 1 ? '' : 's'} ocultado${res.eliminados === 1 ? '' : 's'}. El historial sigue intacto.`,
+          life: 3500,
+        });
+      },
+      error: (err) => toastError(this.toast, 'Eliminar clientes', err,
+        'No se pudieron eliminar los clientes.'),
+    });
+  }
+
   /** Calcula un fragmento del teléfono útil como query LIKE en backend —
    *  los últimos 8 dígitos del teléfono normalizado. Funciona aunque el
    *  operador haya tipeado formatos distintos del mismo número en cada
@@ -256,8 +306,32 @@ export class PresupuestosClientesPage {
   /** Abre el dialog de edición con los valores actuales del cliente. Si el
    *  rubro guardado no es uno de los predefinidos, lo tratamos como "otros"
    *  con texto libre — mismo comportamiento que /presupuestos. */
+  /** Abre el diálogo en modo ALTA: campos vacíos y teléfono editable (es la
+   *  clave del nuevo cliente). Al guardar se crea un ClienteMaster nuevo. */
+  abrirDialogNuevo(): void {
+    this.modoNuevo.set(true);
+    this.clienteEditando.set(null);
+    this.editTelefono.set('');
+    this.editRazonSocial.set('');
+    this.editNombre.set('');
+    this.editEmail.set('');
+    this.editNotas.set('');
+    this.editRubro.set(null);
+    this.editRubroOtros.set('');
+    this.editTipoDoc.set(null);
+    this.editNroDoc.set(null);
+    this.editDomicilio.set('');
+    this.editCodigoProvincia.set(null);
+    this.editIdLocalidad.set(null);
+    this.localidades.set([]);
+    this.cargarProvincias();
+    this.mostrarDialogEditar.set(true);
+  }
+
   abrirDialogEditar(c: ClientePresupuestos): void {
+    this.modoNuevo.set(false);
     this.clienteEditando.set(c);
+    this.editRazonSocial.set(c.razonSocial ?? '');
     this.editNombre.set(c.nombre ?? '');
     this.editEmail.set(c.email ?? '');
     this.editNotas.set('');
@@ -292,6 +366,7 @@ export class PresupuestosClientesPage {
     this.cargandoLocalidades.set(false);
     this.mostrarDialogEditar.set(false);
     this.clienteEditando.set(null);
+    this.modoNuevo.set(false);
   }
 
   /** Carga las provincias una sola vez (se reusan entre aperturas del dialog). */
@@ -351,10 +426,23 @@ export class PresupuestosClientesPage {
   }
 
   guardarEdicion(): void {
-    const c = this.clienteEditando();
-    if (!c || !c.telefono) return;
+    // En alta el teléfono lo tipea el operador (clave del nuevo cliente); en
+    // edición es la clave fija del cliente existente.
+    const telefono = this.modoNuevo()
+      ? this.editTelefono().trim()
+      : (this.clienteEditando()?.telefono ?? '');
+    if (!telefono) {
+      this.toast.add({
+        severity: 'warn',
+        summary: 'Falta el teléfono',
+        detail: 'El teléfono es obligatorio: es la clave del cliente.',
+        life: 3500,
+      });
+      return;
+    }
     const payload: ActualizarClienteRequest = {
-      telefono: c.telefono,
+      telefono,
+      razonSocial: this.editRazonSocial().trim() || null,
       nombre: this.editNombre().trim() || null,
       email: this.editEmail().trim() || null,
       rubro: this.rubroFinalEdicion(),
@@ -368,16 +456,20 @@ export class PresupuestosClientesPage {
     this.guardandoEdicion.set(true);
     this.api.actualizarClienteMaster(payload).subscribe({
       next: () => {
+        const eraNuevo = this.modoNuevo();
         this.guardandoEdicion.set(false);
         this.mostrarDialogEditar.set(false);
         this.clienteEditando.set(null);
+        this.modoNuevo.set(false);
         this.toast.add({
           severity: 'success',
-          summary: 'Cliente actualizado',
-          detail: 'Los datos del cliente se guardaron en el maestro.',
+          summary: eraNuevo ? 'Cliente creado' : 'Cliente actualizado',
+          detail: eraNuevo
+            ? 'El cliente nuevo se agregó al maestro.'
+            : 'Los datos del cliente se guardaron en el maestro.',
           life: 3000,
         });
-        // Refrescamos la tabla para que el merge aplique los nuevos overrides.
+        // Refrescamos la tabla para que aparezca el nuevo / se apliquen los cambios.
         this.cargar();
       },
       error: (err) => {
@@ -408,6 +500,7 @@ export class PresupuestosClientesPage {
     const headers = [
       'Correo electrónico',
       'Nombre',
+      'Apellido / razón social',
       'Teléfono',
       'Rubro',
       'CUIT',
@@ -418,6 +511,7 @@ export class PresupuestosClientesPage {
     const rows = clientes.map((c) => [
       c.email ?? '',
       c.nombre ?? '',
+      c.razonSocial ?? '',
       c.telefono ?? '',
       c.rubro ?? '',
       c.nroDoc != null ? String(c.nroDoc) : '',

@@ -22,6 +22,8 @@ public record ProductoListItemDTO(
         String imagenUrl,
         /** Códigos de barra (EAN-13 u otros) ordenados alfabéticamente. */
         List<String> codigosBarra,
-        Instant sincronizadoAt
+        Instant sincronizadoAt,
+        /** Nombre del proveedor en DUX. Null si no informado. */
+        String proveedor
 ) {
 }

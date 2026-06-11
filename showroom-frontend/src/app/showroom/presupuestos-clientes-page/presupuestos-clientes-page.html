@@ -22,6 +22,16 @@
 
     <ng-template #end>
       <div class="inline-flex gap-2 items-center">
+        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''"
+          ariaLabel="Nuevo cliente" class="btn-kt-marron" (onClick)="abrirDialogNuevo()"
+          pTooltip="Dar de alta un cliente a mano" tooltipPosition="bottom" />
+        @if (seleccionados().length > 0) {
+          <p-button icon="pi pi-trash"
+            [label]="screenLg() ? ('Eliminar (' + seleccionados().length + ')') : ''"
+            [ariaLabel]="'Eliminar ' + seleccionados().length + ' clientes seleccionados'"
+            class="btn-kt-rojo" (onClick)="eliminarSeleccionados()"
+            pTooltip="Ocultar los clientes seleccionados del listado" tooltipPosition="bottom" />
+        }
         <p-button icon="pi pi-file-export" [label]="screenLg() ? 'Exportar CSV' : ''"
           ariaLabel="Exportar clientes a CSV" class="btn-kt-verde"
           [disabled]="cargando() || clientesFiltrados().length === 0"
@@ -42,7 +52,7 @@
             <p-inputicon class="pi pi-search" />
             <input pInputText type="text" class="w-full"
               [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)"
-              placeholder="Buscar por nombre, email o teléfono..." />
+              placeholder="Buscar por razón social, nombre, email, teléfono o CUIT..." />
           </p-iconfield>
         </div>
         <div class="flex items-center gap-2 text-sm text-muted-color">
@@ -70,11 +80,18 @@
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
         [showCurrentPageReport]="true"
         [tableStyle]="{ 'min-width': '85rem' }"
+        [selection]="seleccionados()" (selectionChange)="seleccionados.set($event)"
         stripedRows>
         <ng-template #header>
           <tr>
+            <th style="width: 3rem" class="text-center">
+              <p-tableHeaderCheckbox />
+            </th>
             <th pSortableColumn="nombre">
               <i class="pi pi-user text-[#FF861C] mr-1"></i> Nombre <p-sortIcon field="nombre" />
+            </th>
+            <th pSortableColumn="razonSocial">
+              <i class="pi pi-id-card text-[#FF861C] mr-1"></i> Apellido / razón social <p-sortIcon field="razonSocial" />
             </th>
             <th pSortableColumn="email">
               <i class="pi pi-envelope text-[#FF861C] mr-1"></i> Email <p-sortIcon field="email" />
@@ -115,8 +132,14 @@
 
         <ng-template #body let-c>
           <tr>
+            <td class="text-center">
+              <p-tableCheckbox [value]="c" />
+            </td>
             <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
               {{ c.nombre || '—' }}
+            </td>
+            <td class="text-sm text-[#3B1E09] dark:text-surface-0">
+              {{ c.razonSocial || '—' }}
             </td>
             <td class="text-xs text-muted-color">
               {{ c.email || '—' }}
@@ -196,7 +219,7 @@
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="13">
+            <td colspan="15">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-users text-4xl text-[#FF861C]"></i>
@@ -227,20 +250,35 @@
      master (editarlo rompería el join con los presupuestos/pedidos
      históricos). Los demás campos pisan los datos derivados al guardar.
      ===================================================================== -->
-<p-dialog header="Editar cliente" [modal]="true" [(visible)]="mostrarDialogEditar"
+<p-dialog [header]="modoNuevo() ? 'Nuevo cliente' : 'Editar cliente'" [modal]="true" [(visible)]="mostrarDialogEditar"
   [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }"
   [draggable]="false" [resizable]="false" (onHide)="cerrarDialogEditar()">
-  @if (clienteEditando(); as c) {
+  @if (mostrarDialogEditar()) {
   <div class="flex flex-col gap-4">
-    <p class="text-sm text-muted-color m-0">
-      Los cambios sobrescriben los datos derivados del último presupuesto/pedido al armar
-      esta lista. Los presupuestos históricos siguen mostrando sus datos originales.
-    </p>
+    @if (modoNuevo()) {
+      <p class="text-sm text-muted-color m-0">
+        Se da de alta un cliente en el maestro. El teléfono es la clave del cliente.
+      </p>
+    } @else {
+      <p class="text-sm text-muted-color m-0">
+        Los cambios sobrescriben los datos derivados del último presupuesto/pedido al armar
+        esta lista. Los presupuestos históricos siguen mostrando sus datos originales.
+      </p>
+    }
 
     <div class="flex flex-col gap-1">
-      <label class="text-sm font-medium text-muted-color">Teléfono</label>
-      <input pInputText type="text" [value]="c.telefono ?? ''" disabled class="w-full" />
-      <span class="text-[0.7rem] text-muted-color">Clave del cliente — no editable.</span>
+      <label for="edit-cliente-tel" class="text-sm font-medium text-muted-color">
+        Teléfono @if (modoNuevo()) { <span class="text-red-500">*</span> }
+      </label>
+      @if (modoNuevo()) {
+        <input pInputText id="edit-cliente-tel" type="text" maxlength="50"
+          [ngModel]="editTelefono()" (ngModelChange)="editTelefono.set($event)"
+          placeholder="Ej. 11-1234-5678" class="w-full" />
+        <span class="text-[0.7rem] text-muted-color">Clave del cliente.</span>
+      } @else {
+        <input pInputText type="text" [value]="clienteEditando()?.telefono ?? ''" disabled class="w-full" />
+        <span class="text-[0.7rem] text-muted-color">Clave del cliente — no editable.</span>
+      }
     </div>
 
     <div class="flex flex-col gap-1">
@@ -248,6 +286,14 @@
       <input pInputText id="edit-cliente-nombre" type="text" maxlength="150"
         [ngModel]="editNombre()" (ngModelChange)="editNombre.set($event)"
         placeholder="Nombre del cliente" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="edit-cliente-razon" class="text-sm font-medium text-muted-color">Apellido / razón social</label>
+      <input pInputText id="edit-cliente-razon" type="text" maxlength="150"
+        [ngModel]="editRazonSocial()" (ngModelChange)="editRazonSocial.set($event)"
+        placeholder="Apellido / razón social en DUX" class="w-full" />
+      <span class="text-[0.7rem] text-muted-color">Es lo que va a DUX como razón social al crear un pedido.</span>
     </div>
 
     <div class="flex flex-col gap-1">

@@ -1073,23 +1073,23 @@
 
       <div class="flex flex-col gap-1 col-span-2">
         <label class="text-sm font-medium text-muted-color">
-          Nombre y apellido <span class="text-red-500">*</span>
-        </label>
-        <input pInputText type="text" [ngModel]="cliente().nombre" (ngModelChange)="actualizarCliente('nombre', $event)"
-          placeholder="Aparece en la carátula del PDF y en DUX" maxlength="100" class="w-full" />
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">
           Apellido / razón social en DUX <span class="text-red-500">*</span>
         </label>
         <p-autoComplete [ngModel]="cliente().razonSocial" (ngModelChange)="onRazonSocialChange($event)"
           [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
           optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
-          placeholder="Apellido / razón social en DUX" inputStyleClass="w-full" class="w-full" />
+          placeholder="Razón social — se sube a DUX" inputStyleClass="w-full" class="w-full" />
       </div>
 
-      <div class="flex flex-col gap-1">
+      <div class="flex flex-col gap-1 col-span-2">
+        <label class="text-sm font-medium text-muted-color">
+          Nombre y apellido
+        </label>
+        <input pInputText type="text" [ngModel]="cliente().nombre" (ngModelChange)="actualizarCliente('nombre', $event)"
+          placeholder="Opcional — se guarda en la ficha del cliente (no se sube a DUX)" maxlength="150" class="w-full" />
+      </div>
+
+      <div class="flex flex-col gap-1 col-span-2">
         <label class="text-sm font-medium text-muted-color">
           Categoría fiscal <span class="text-red-500">*</span>
         </label>

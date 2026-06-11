@@ -601,6 +601,13 @@ export class ShowroomService {
       `${this.base}/cliente-master/${encodeURIComponent(telefono)}`);
   }
 
+  /** Soft-delete masivo de clientes por lista de teléfonos. Devuelve cuántos se
+   *  marcaron como eliminados. */
+  eliminarClientesMasivo(telefonos: string[]): Observable<{ eliminados: number }> {
+    return this.http.post<{ eliminados: number }>(
+      `${this.base}/cliente-master/eliminar-masivo`, { telefonos });
+  }
+
   /** Marca un presupuesto como transformado en pedido — el backend registra
    *  `convertidoEnPedidoId` y el historial muestra el pill "→ Pedido #N".
    *  Se llama después del POST a /pedido-dux con respuesta OK. */

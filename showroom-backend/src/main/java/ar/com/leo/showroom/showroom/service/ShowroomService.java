@@ -388,7 +388,8 @@ public class ShowroomService {
             Map.entry("porcIva", "porcIva"),
             Map.entry("stockTotal", "stockTotal"),
             Map.entry("habilitado", "habilitado"),
-            Map.entry("sincronizadoAt", "sincronizadoAt")
+            Map.entry("sincronizadoAt", "sincronizadoAt"),
+            Map.entry("proveedor", "proveedor")
     );
 
     public ProductoListPageDTO buscarProductos(
@@ -802,7 +803,8 @@ public class ShowroomService {
                 pc.getHabilitado(),
                 urlImagenLocal(pc.getSku()),
                 eans,
-                pc.getSincronizadoAt()
+                pc.getSincronizadoAt(),
+                pc.getProveedor()
         );
     }
 
@@ -1220,7 +1222,10 @@ public class ShowroomService {
         root.put("id_sucursal_empresa", empresa.idSucursal());
 
         root.put("apellido_razon_social", request.apellidoRazonSocial());
-        if (StringUtils.hasText(request.nombre())) root.put("nombre", request.nombre());
+        // El "nombre" NO se sube a DUX (decisión del usuario jun-2026): a DUX va
+        // solo la razón social como apellido_razon_social. El campo `nombre` del
+        // request igual se persiste en el pedido y se guarda en la tabla de
+        // clientes (columna nombre) — es dato interno, no se manda al ERP.
 
         String catFiscal = StringUtils.hasText(request.categoriaFiscal())
                 ? request.categoriaFiscal()

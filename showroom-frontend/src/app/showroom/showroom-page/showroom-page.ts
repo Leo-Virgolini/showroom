@@ -905,10 +905,9 @@ export class ShowroomPage implements AfterViewInit {
       c.nroDoc != null &&
       this.cuitValido(c.nroDoc) &&
       this.emailValido(c.email) &&
-      // Desde mayo 2026 también son obligatorios nombre, teléfono y rubro.
-      // Si el operador elige "Otros" en rubro, tiene que cargar el texto libre.
+      // Razón social (nombre del cliente), teléfono y rubro obligatorios. Si el
+      // operador elige "Otros" en rubro, tiene que cargar el texto libre.
       c.razonSocial.trim().length > 0 &&
-      c.nombre.trim().length > 0 &&
       c.telefono.trim().length > 0 &&
       this.rubroValido(c) &&
       this.carrito().length > 0
@@ -1471,6 +1470,11 @@ export class ShowroomPage implements AfterViewInit {
     this.resultadosBusqueda.set([]);
     // Reset de cantidades tipeadas — corresponden a la búsqueda anterior.
     this.cantidadesResultados.set({});
+    // Cada búsqueda NUEVA arranca sin el filtro de proveedor de la búsqueda
+    // anterior (sino quedaba "pegado" y filtraba sin que el operador lo note).
+    // Los re-search por cambio de filtro/orden NO pasan por acá, así que se
+    // preservan correctamente.
+    this.proveedorFiltro.set(null);
 
     // Cada nuevo scan/búsqueda recibe un número de secuencia. Si llega la
     // respuesta de uno anterior (más lento), la descartamos.
@@ -2481,12 +2485,13 @@ export class ShowroomPage implements AfterViewInit {
     this.enviando.set(true);
     this.api
       .crearPedido({
-        // `apellido_razon_social` (obligatorio en DUX): ahora lo carga el
-        // operador (editable). El dialog valida que no esté vacío.
+        // `apellido_razon_social` (obligatorio, lo único que va a DUX como
+        // identificación). El dialog valida que no esté vacío.
         apellidoRazonSocial: c.razonSocial.trim(),
-        // "Nombre y apellido" del cliente real → DUX `nombre`. Obligatorio
-        // desde mayo 2026 (validado por el dialog antes de llegar acá).
-        nombre: c.nombre.trim(),
+        // `nombre` (opcional): NO se sube a DUX (el backend lo omite del payload);
+        // se persiste en el pedido y se guarda en la ficha del cliente (columna
+        // nombre). Puede ir vacío.
+        nombre: c.nombre.trim() || undefined,
         categoriaFiscal: this.categoriaFiscalFinal,
         tipoDoc: 'CUIT',
         nroDoc: c.nroDoc ?? undefined,
