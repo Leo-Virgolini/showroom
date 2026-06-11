@@ -12,6 +12,7 @@ import { ActivatedRoute } from '@angular/router';
 import { ImageModule } from 'primeng/image';
 import { BackendStatusService } from '../backend-status.service';
 import { PresupuestoVisor } from '../models';
+import { iconoFormaReferencia } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 
 /**
@@ -69,6 +70,11 @@ export class VisorPresupuestoPage {
     return n ? n : null;
   });
 
+  /** Panel de formas de pago desplegado/colapsado. Colapsado por default: el
+   *  TOTAL queda siempre visible en el footer fijo y las formas se ven con un
+   *  toque, sin tener que scrollear todos los ítems. */
+  readonly formasExpandidas = signal(false);
+
   constructor() {
     // Username faltante en la URL (alguien tipeó /visor-presupuesto/ a mano).
     if (!this.operadorUsername) {
@@ -92,6 +98,12 @@ export class VisorPresupuestoPage {
     this.backendStatus.presupuestoVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((p) => this.snapshot.set(p));
+  }
+
+  /** Ícono PrimeNG para una forma de pago, inferido del nombre (efectivo,
+   *  transferencia, cuotas/tarjeta…). Reusa el helper compartido. */
+  iconoForma(nombre: string | null): string {
+    return iconoFormaReferencia(nombre);
   }
 
   /** Precio por cuota para el desglose "N cuotas de $X". */

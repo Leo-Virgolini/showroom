@@ -30,6 +30,28 @@
         <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
           [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
           pTooltip="Volver al showroom" tooltipPosition="bottom" />
+
+        <!-- Cliente en atención — sesión COMPARTIDA con el showroom. Va en el
+             header (junto al título) y NO en el #end con las acciones. Opcional:
+             el presupuesto se arma igual sin cliente asociado. -->
+        @if (haySesionActiva()) {
+          <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
+            [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
+            tooltipPosition="bottom" role="status" aria-live="polite">
+            <i class="pi pi-user"></i>
+            <span class="truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
+            <button type="button" aria-label="Finalizar atención"
+              class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
+              (click)="finalizarSesion()">
+              <i class="pi pi-times text-[10px]"></i>
+            </button>
+          </span>
+        } @else {
+          <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Cliente' : ''"
+            ariaLabel="Asociar cliente" class="btn-kt-marron" (onClick)="abrirDialogoNuevoCliente()"
+            pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
+            tooltipPosition="bottom" />
+        }
       </div>
     </ng-template>
 
@@ -92,27 +114,6 @@
                   : 'Crear pedido en DUX a partir de este presupuesto'"
               tooltipPosition="bottom" />
           }
-        }
-
-        <!-- Cliente en atención — sesión COMPARTIDA con el showroom. Opcional:
-             el presupuesto se arma igual sin cliente asociado. -->
-        @if (haySesionActiva()) {
-          <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
-            [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
-            tooltipPosition="bottom" role="status" aria-live="polite">
-            <i class="pi pi-user"></i>
-            <span class="hidden sm:inline truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
-            <button type="button" aria-label="Finalizar atención"
-              class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
-              (click)="finalizarSesion()">
-              <i class="pi pi-times text-[10px]"></i>
-            </button>
-          </span>
-        } @else {
-          <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Cliente' : ''"
-            ariaLabel="Asociar cliente" class="btn-kt-marron" (onClick)="abrirDialogoNuevoCliente()"
-            pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
-            tooltipPosition="bottom" />
         }
 
         <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''"

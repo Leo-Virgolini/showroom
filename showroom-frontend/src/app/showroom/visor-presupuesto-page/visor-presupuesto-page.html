@@ -49,7 +49,8 @@
   </header>
 
   @if (hayItems()) {
-  <main class="flex-1 flex flex-col gap-4 px-3 sm:px-4 pb-6 w-full max-w-2xl mx-auto">
+  <main class="flex-1 flex flex-col gap-2 px-3 sm:px-4 pt-1 w-full max-w-2xl mx-auto"
+    [style.padding-bottom.px]="104">
     <!-- Lista de ítems del presupuesto -->
     <div class="flex flex-col gap-2">
       @for (it of items(); track $index) {
@@ -78,53 +79,73 @@
       </div>
       }
     </div>
+  </main>
 
-    <!-- TOTAL -->
-    <div class="rounded-2xl bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] shadow-sm">
-      <div class="rounded-2xl bg-white dark:bg-surface-900 px-4 py-3 flex items-center justify-between">
-        <span class="text-sm uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Total</span>
-        <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ formatMoneda(total()) }}</span>
-      </div>
-    </div>
-
-    <!-- Formas de pago — la "mejor" resaltada en verde. -->
-    @if (formasPago().length > 0) {
-    <div class="flex flex-col gap-2">
-      <div class="text-xs uppercase tracking-[0.15em] font-semibold text-muted-color px-1">Formas de pago</div>
-      @for (f of formasPago(); track $index) {
-      <div class="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-           [class.border-emerald-400]="f.esMejorPrecio"
-           [class.bg-emerald-50]="f.esMejorPrecio"
-           [class.dark:bg-emerald-950/30]="f.esMejorPrecio"
-           [class.border-surface-200]="!f.esMejorPrecio"
-           [class.dark:border-surface-700]="!f.esMejorPrecio"
-           [class.bg-white]="!f.esMejorPrecio"
-           [class.dark:bg-surface-950]="!f.esMejorPrecio">
-        <div class="min-w-0">
-          <div class="flex items-center gap-2">
-            <span class="font-medium text-surface-800 dark:text-surface-100 truncate">{{ f.nombre }}</span>
-            @if (f.esMejorPrecio) {
-            <span class="shrink-0 text-[0.65rem] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">Mejor precio</span>
-            }
+  <!-- Footer FIJO: el TOTAL queda siempre visible y las formas de pago se ven
+       con un toque, sin tener que scrollear todos los ítems. El panel de formas
+       se despliega hacia arriba (scrolleable si son muchas). -->
+  <div class="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#FF861C]/60 bg-white/95 dark:bg-surface-900/95 shadow-[0_-6px_20px_rgba(0,0,0,0.10)]">
+    <div class="w-full max-w-2xl mx-auto">
+      <!-- Panel expandido: lista completa de formas con íconos -->
+      @if (formasExpandidas() && formasPago().length > 0) {
+      <div class="max-h-[55vh] overflow-y-auto flex flex-col gap-2 px-3 pt-3 pb-1">
+        @for (f of formasPago(); track $index) {
+        <div class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
+             [class.border-emerald-400]="f.esMejorPrecio"
+             [class.bg-emerald-50]="f.esMejorPrecio"
+             [class.dark:bg-emerald-950/30]="f.esMejorPrecio"
+             [class.border-surface-200]="!f.esMejorPrecio"
+             [class.dark:border-surface-700]="!f.esMejorPrecio"
+             [class.bg-white]="!f.esMejorPrecio"
+             [class.dark:bg-surface-950]="!f.esMejorPrecio">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <i class="text-lg shrink-0"
+               [ngClass]="iconoForma(f.nombre) + (f.esMejorPrecio ? ' text-emerald-600 dark:text-emerald-400' : ' text-[#FF861C]')"></i>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-surface-800 dark:text-surface-100 truncate">{{ f.nombre }}</span>
+                @if (f.esMejorPrecio) {
+                <span class="shrink-0 text-[0.6rem] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">Mejor precio</span>
+                }
+              </div>
+              @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+              <div class="text-xs text-muted-color mt-0.5">
+                {{ f.cantidadCuotas }} cuotas de {{ formatMoneda(precioPorCuota(f.precioFinal, f.cantidadCuotas)) }}
+              </div>
+              }
+            </div>
           </div>
-          @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-          <div class="text-xs text-muted-color mt-0.5">
-            {{ f.cantidadCuotas }} cuotas de {{ formatMoneda(precioPorCuota(f.precioFinal, f.cantidadCuotas)) }}
+          <div class="shrink-0 text-right font-bold text-base"
+               [class.text-emerald-600]="f.esMejorPrecio"
+               [class.dark:text-emerald-400]="f.esMejorPrecio"
+               [class.text-surface-800]="!f.esMejorPrecio"
+               [class.dark:text-surface-0]="!f.esMejorPrecio">
+            {{ formatMoneda(f.precioFinal) }}
           </div>
-          }
         </div>
-        <div class="shrink-0 text-right font-bold text-lg"
-             [class.text-emerald-600]="f.esMejorPrecio"
-             [class.dark:text-emerald-400]="f.esMejorPrecio"
-             [class.text-surface-800]="!f.esMejorPrecio"
-             [class.dark:text-surface-0]="!f.esMejorPrecio">
-          {{ formatMoneda(f.precioFinal) }}
-        </div>
+        }
       </div>
       }
+
+      <!-- Barra siempre visible: TOTAL + toggle de formas de pago -->
+      <button type="button"
+        class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
+        (click)="formasExpandidas.set(!formasExpandidas())"
+        [attr.aria-expanded]="formasExpandidas()" aria-label="Mostrar formas de pago">
+        <div class="flex flex-col items-start leading-none">
+          <span class="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-color mb-1">Total</span>
+          <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ formatMoneda(total()) }}</span>
+        </div>
+        @if (formasPago().length > 0) {
+        <span class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-orange-50 dark:bg-orange-950/40 text-sm font-semibold text-[#FF861C]">
+          <i class="pi pi-wallet"></i>
+          <span>{{ formasExpandidas() ? 'Ocultar' : 'Formas de pago' }}</span>
+          <i class="pi text-xs" [class.pi-chevron-down]="formasExpandidas()" [class.pi-chevron-up]="!formasExpandidas()"></i>
+        </span>
+        }
+      </button>
     </div>
-    }
-  </main>
+  </div>
   } @else {
   <!-- Estado "esperando…" — el operador todavía no agregó productos. -->
   <main class="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center">
