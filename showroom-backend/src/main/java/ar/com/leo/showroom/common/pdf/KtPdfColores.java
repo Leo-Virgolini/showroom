@@ -37,12 +37,12 @@ public final class KtPdfColores {
     public static final Color[] BORDE_FORMA_PAGO = new Color[]{
             new DeviceRgb(234, 179, 8),     // amarillo
             new DeviceRgb(59, 130, 246),    // azul
-            new DeviceRgb(16, 185, 129),    // verde esmeralda
+            new DeviceRgb(239, 68, 68),     // rojo (antes verde esmeralda — chocaba con "mejor precio")
             new DeviceRgb(249, 115, 22),    // naranja
             new DeviceRgb(168, 85, 247),    // púrpura
             new DeviceRgb(236, 72, 153),    // rosa
             new DeviceRgb(6, 182, 212),     // cian
-            new DeviceRgb(132, 204, 22),    // lima
+            new DeviceRgb(71, 85, 105),     // pizarra (antes lima — chocaba con "mejor precio")
             new DeviceRgb(99, 102, 241),    // índigo
             new DeviceRgb(217, 119, 6),     // ámbar oscuro
     };

@@ -163,6 +163,14 @@ export class ShowroomService {
       .pipe(catchError(() => of(null)));
   }
 
+  /** Busca clientes guardados por razón social / nombre (autocompletado del
+   *  pedido). Best-effort: ante error devuelve lista vacía. */
+  buscarClientesPorRazonSocial(q: string): Observable<ClienteAutocompletar[]> {
+    const params = new HttpParams().set('q', q);
+    return this.http.get<ClienteAutocompletar[]>(`${this.base}/cliente-master/buscar`, { params })
+      .pipe(catchError(() => of([])));
+  }
+
   /** Regenera el pedido de un presupuesto editado: crea uno nuevo en DUX con
    *  `request`, anula el anterior (local) y re-vincula el presupuesto. El
    *  backend hace todo en una operación; no hay que llamar a
@@ -188,6 +196,7 @@ export class ShowroomService {
     size = 50,
     sortField?: 'descripcion' | 'precio',
     sortOrder?: 'asc' | 'desc',
+    proveedor?: string | null,
   ): Observable<CatalogoPage> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (q && q.trim()) params = params.set('q', q.trim());
@@ -195,7 +204,14 @@ export class ShowroomService {
     // backend ordena por relevancia (comportamiento por defecto).
     if (sortField) params = params.set('sortField', sortField);
     if (sortOrder) params = params.set('sortOrder', sortOrder);
+    // Filtro por proveedor (nombre exacto). Vacío = sin filtro.
+    if (proveedor && proveedor.trim()) params = params.set('proveedor', proveedor.trim());
     return this.http.get<CatalogoPage>(`${this.base}/catalogo`, { params });
+  }
+
+  /** Proveedores distintos del catálogo (para el dropdown del filtro). */
+  listarProveedoresCatalogo(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.base}/catalogo/proveedores`);
   }
 
   lookupBulk(skus: string[]): Observable<CatalogoItem[]> {

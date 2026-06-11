@@ -45,7 +45,7 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, CategoriaFiscal, ClienteAutocompletar, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import {
   hayEscalonSuperior,
@@ -66,13 +66,15 @@ import { TopActions } from '../top-actions/top-actions';
 
 /**
  * Datos del cliente que el vendedor completa al cerrar el pedido.
- * El `apellido_razon_social` que recibe DUX es siempre el placeholder fijo
- * "PEDIDO SHOWROOM" (la operadora lo asocia con el cliente real al editar el
- * comprobante), así que no es input. categoriaFiscal y tipoDoc también van
- * hardcodeadas. El CUIT es la clave que conecta el pedido con el cliente real.
+ * El `apellido_razon_social` que recibe DUX ahora es editable ({@link razonSocial});
+ * antes era un placeholder fijo ("PEDIDO SHOWROOM"). categoriaFiscal y tipoDoc
+ * siguen hardcodeadas. El CUIT es la clave que conecta el pedido con el cliente real.
  */
 interface DatosCliente {
   nroDoc: number | null;
+  /** Razón social / apellido → DUX `apellido_razon_social`. Editable; se
+   * pre-llena por el autocompletado por CUIT/razón social. */
+  razonSocial: string;
   /** Nombre y apellido (o razón social) del cliente. Se manda a DUX en el campo
    * `nombre` del payload de /pedido/nuevopedido y se muestra en la carátula del
    * PDF de presupuesto y en la columna Cliente del listado. Opcional: si queda
@@ -99,6 +101,7 @@ interface DatosCliente {
 
 const CLIENTE_VACIO: DatosCliente = {
   nroDoc: null,
+  razonSocial: '',
   nombre: '',
   telefono: '',
   email: '',
@@ -122,10 +125,6 @@ const OPCIONES_RUBRO: { label: string; value: string }[] = [
   { label: 'Otros…', value: 'otros' },
 ];
 
-
-/** Nombre con el que se carga todo pedido del showroom — la operadora lo
- * sobrescribe en DUX al asociar el CUIT con el cliente real. */
-const APELLIDO_RAZON_SOCIAL = 'PEDIDO SHOWROOM';
 
 /**
  * Re-ordena una lista para que los items cuyo nombre empieza con `query` aparezcan
@@ -231,6 +230,13 @@ export class ShowroomPage implements AfterViewInit {
     { label: 'Precio: mayor a menor', value: 'precio_desc' },
   ];
 
+  /** Filtro por proveedor de los resultados de búsqueda. null = todos. Se
+   *  aplica en el backend sobre todo el resultado, igual que el orden. */
+  readonly proveedorFiltro = signal<string | null>(null);
+
+  /** Proveedores disponibles para el dropdown del filtro (cargados del backend). */
+  readonly proveedoresDisponibles = signal<string[]>([]);
+
   /** True mientras se re-busca por un cambio de orden. Muestra un spinner chico
    *  junto al selector SIN tapar la lista (a diferencia de `cargandoScan`, que
    *  reemplaza toda el área de resultados). */
@@ -247,6 +253,46 @@ export class ShowroomPage implements AfterViewInit {
    *  mano, salvo la asignación inicial al hidratar y los updates optimistas
    *  de cantidad (que después se reconcilian con el state del backend). */
   readonly carrito = signal<CarritoItem[]>([]);
+
+  /** Orden de visualización del carrito. {@code null} = orden de escaneo (como
+   *  llega del backend). Solo afecta cómo se muestra: el payload del pedido
+   *  sigue usando {@link carrito} en su orden original. */
+  readonly ordenCarrito = signal<{ campo: 'producto' | 'precio'; dir: 'asc' | 'desc' } | null>(null);
+
+  /** Carrito ordenado para el render. Copia ordenada por descripción (producto)
+   *  o por el precio unitario mostrado (con la forma elegida). */
+  readonly carritoOrdenado = computed<CarritoItem[]>(() => {
+    const items = this.carrito();
+    const orden = this.ordenCarrito();
+    if (!orden) return items;
+    const factor = orden.dir === 'asc' ? 1 : -1;
+    return [...items].sort((a, b) => {
+      if (orden.campo === 'producto') {
+        return (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor;
+      }
+      return (this.precioItemForma(a) - this.precioItemForma(b)) * factor;
+    });
+  });
+
+  /** Cicla el orden del carrito para un campo: asc → desc → sin orden (escaneo). */
+  ordenarCarritoPor(campo: 'producto' | 'precio'): void {
+    const actual = this.ordenCarrito();
+    if (!actual || actual.campo !== campo) {
+      this.ordenCarrito.set({ campo, dir: 'asc' });
+    } else if (actual.dir === 'asc') {
+      this.ordenCarrito.set({ campo, dir: 'desc' });
+    } else {
+      this.ordenCarrito.set(null);
+    }
+  }
+
+  /** Ícono del botón de orden de un campo: flecha según dirección, o neutro. */
+  iconoOrdenCarrito(campo: 'producto' | 'precio'): string {
+    const o = this.ordenCarrito();
+    if (!o || o.campo !== campo) return 'pi pi-sort-alt';
+    return o.dir === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down';
+  }
+
   /** Sesión de atención al cliente — la mantiene el backend (global, como el
    *  carrito) y se sincroniza vía SSE `sesion-updated`. Cuando no hay activa
    *  todos los campos son null. */
@@ -861,6 +907,7 @@ export class ShowroomPage implements AfterViewInit {
       this.emailValido(c.email) &&
       // Desde mayo 2026 también son obligatorios nombre, teléfono y rubro.
       // Si el operador elige "Otros" en rubro, tiene que cargar el texto libre.
+      c.razonSocial.trim().length > 0 &&
       c.nombre.trim().length > 0 &&
       c.telefono.trim().length > 0 &&
       this.rubroValido(c) &&
@@ -887,12 +934,6 @@ export class ShowroomPage implements AfterViewInit {
     if (c.rubro === 'otros') return c.rubroOtros.trim();
     return c.rubro ?? '';
   }
-
-  /** Valor de `apellido_razon_social` que recibe DUX. Siempre es el placeholder
-   *  fijo: la operadora lo asocia con el cliente real al editar el comprobante
-   *  en DUX usando el CUIT. El nombre real del cliente va en el campo `nombre`
-   *  del payload, no acá. */
-  readonly apellidoRazonSocialFinal: string = APELLIDO_RAZON_SOCIAL;
 
   /** Hardcoded en el envío a DUX. Se expone al operador como input deshabilitado
    *  para que vea exactamente qué se carga, y se referencia desde el payload de
@@ -954,40 +995,71 @@ export class ShowroomPage implements AfterViewInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((cli) => {
         if (!cli) return;
-        const c = this.cliente();
-        const parche: Partial<DatosCliente> = {};
-        let completados = 0;
-        if (cli.nombre && !c.nombre.trim()) { parche.nombre = cli.nombre; completados++; }
-        if (cli.email && !c.email.trim()) { parche.email = cli.email; completados++; }
-        if (cli.telefono && !c.telefono.trim()) { parche.telefono = cli.telefono; completados++; }
-        if (cli.domicilio && !c.domicilio.trim()) { parche.domicilio = cli.domicilio; completados++; }
-        if (cli.rubro && !c.rubro) {
-          if (this.opcionesRubro.some((o) => o.value === cli.rubro)) {
-            parche.rubro = cli.rubro;
-            parche.rubroOtros = '';
-          } else {
-            parche.rubro = 'otros';
-            parche.rubroOtros = cli.rubro;
-          }
-          completados++;
-        }
-        const completarProvincia = !!cli.codigoProvincia && !c.codigoProvincia;
-        if (completarProvincia) { parche.codigoProvincia = cli.codigoProvincia!; completados++; }
-        if (completados > 0) this.cliente.set({ ...c, ...parche });
-        // Provincia/localidad: cargar las localidades y completar la localidad
-        // solo si todavía está vacía.
-        if (completarProvincia) {
-          this.cargarLocalidadesYCompletar(cli.codigoProvincia!, cli.idLocalidad ?? null);
-        }
-        if (completados > 0) {
-          this.toast.add({
-            severity: 'info',
-            summary: 'Cliente reconocido',
-            detail: 'Completé los datos desde un cliente guardado.',
-            life: 4000,
-          });
-        }
+        this.completarDesdeCliente(cli);
       });
+  }
+
+  /** Completa SOLO los campos vacíos del formulario desde un cliente guardado.
+   *  Reutilizado por el autocompletado por CUIT y por razón social. */
+  private completarDesdeCliente(cli: ClienteAutocompletar): void {
+    const c = this.cliente();
+    const parche: Partial<DatosCliente> = {};
+    let completados = 0;
+    if (cli.razonSocial && !c.razonSocial.trim()) { parche.razonSocial = cli.razonSocial; completados++; }
+    if (cli.nombre && !c.nombre.trim()) { parche.nombre = cli.nombre; completados++; }
+    if (cli.email && !c.email.trim()) { parche.email = cli.email; completados++; }
+    if (cli.telefono && !c.telefono.trim()) { parche.telefono = cli.telefono; completados++; }
+    if (cli.nroDoc != null && c.nroDoc == null) { parche.nroDoc = cli.nroDoc; completados++; }
+    if (cli.domicilio && !c.domicilio.trim()) { parche.domicilio = cli.domicilio; completados++; }
+    if (cli.rubro && !c.rubro) {
+      if (this.opcionesRubro.some((o) => o.value === cli.rubro)) {
+        parche.rubro = cli.rubro;
+        parche.rubroOtros = '';
+      } else {
+        parche.rubro = 'otros';
+        parche.rubroOtros = cli.rubro;
+      }
+      completados++;
+    }
+    const completarProvincia = !!cli.codigoProvincia && !c.codigoProvincia;
+    if (completarProvincia) { parche.codigoProvincia = cli.codigoProvincia!; completados++; }
+    if (completados > 0) this.cliente.set({ ...c, ...parche });
+    // Provincia/localidad: cargar las localidades y completar la localidad
+    // solo si todavía está vacía.
+    if (completarProvincia) {
+      this.cargarLocalidadesYCompletar(cli.codigoProvincia!, cli.idLocalidad ?? null);
+    }
+    if (completados > 0) {
+      this.toast.add({
+        severity: 'info',
+        summary: 'Cliente reconocido',
+        detail: 'Completé los datos desde un cliente guardado.',
+        life: 4000,
+      });
+    }
+  }
+
+  /** Sugerencias del autocomplete por razón social (clientes guardados). */
+  readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);
+
+  /** completeMethod del p-autoComplete de razón social. */
+  buscarSugerenciasRazonSocial(event: { query: string }): void {
+    const q = (event.query ?? '').trim();
+    if (q.length < 2) { this.sugerenciasRazonSocial.set([]); return; }
+    this.api.buscarClientesPorRazonSocial(q)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
+  }
+
+  /** ngModelChange del p-autoComplete de razón social: objeto = sugerencia
+   *  elegida (completa el resto); string = texto libre. */
+  onRazonSocialChange(value: string | ClienteAutocompletar): void {
+    if (value && typeof value === 'object') {
+      this.actualizarCliente('razonSocial', value.razonSocial ?? value.nombre ?? '');
+      this.completarDesdeCliente(value);
+    } else {
+      this.actualizarCliente('razonSocial', value ?? '');
+    }
   }
 
   /** Carga las localidades de una provincia y completa la localidad SOLO si
@@ -1035,6 +1107,9 @@ export class ShowroomPage implements AfterViewInit {
     // qué productos usan el PVP sin IVA como precio base (si falla, todos
     // cotizan con IVA). Las formas alimentan el selector del carrito.
     this.precioPerfil.cargar();
+
+    // Proveedores para el dropdown del filtro de búsqueda.
+    this.cargarProveedores();
 
     // La primera forma de la lista (orden asc) queda seleccionada por default —
     // el operador la configuró como "default" desde /configuracion (p.ej.
@@ -1475,12 +1550,34 @@ export class ShowroomPage implements AfterViewInit {
     }
   }
 
+  /** Cambia el filtro por proveedor y re-ejecuta la búsqueda desde la primera
+   *  página (el filtro se aplica en el backend sobre todo el resultado). */
+  cambiarProveedorFiltro(proveedor: string | null): void {
+    if (this.proveedorFiltro() === proveedor) return;
+    this.proveedorFiltro.set(proveedor);
+    const query = this.busquedaQuery();
+    if (query) {
+      this.reordenando.set(true);
+      this.buscarPorDescripcion(query);
+    }
+  }
+
+  /** Carga la lista de proveedores para el dropdown del filtro (best-effort). */
+  private cargarProveedores(): void {
+    this.api.listarProveedoresCatalogo()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.proveedoresDisponibles.set(lista),
+        error: () => { /* sin proveedores el filtro queda vacío, no bloquea */ },
+      });
+  }
+
   private buscarPorDescripcion(query: string): void {
     const seq = ++this.scanSeq;
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
     const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
+    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro()).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
@@ -1529,7 +1626,7 @@ export class ShowroomPage implements AfterViewInit {
     const seq = this.scanSeq;
     const nextPage = this.paginaResultados() + 1;
     const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
+    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro()).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoMasResultados.set(false);
@@ -2384,9 +2481,9 @@ export class ShowroomPage implements AfterViewInit {
     this.enviando.set(true);
     this.api
       .crearPedido({
-        // `apellido_razon_social` (obligatorio en DUX) siempre es el placeholder fijo:
-        // la operadora lo edita en DUX al asociar el comprobante con el cliente real.
-        apellidoRazonSocial: APELLIDO_RAZON_SOCIAL,
+        // `apellido_razon_social` (obligatorio en DUX): ahora lo carga el
+        // operador (editable). El dialog valida que no esté vacío.
+        apellidoRazonSocial: c.razonSocial.trim(),
         // "Nombre y apellido" del cliente real → DUX `nombre`. Obligatorio
         // desde mayo 2026 (validado por el dialog antes de llegar acá).
         nombre: c.nombre.trim(),

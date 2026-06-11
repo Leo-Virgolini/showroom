@@ -8,6 +8,7 @@ package ar.com.leo.showroom.cliente.dto;
  * que están vacíos.
  */
 public record ClienteAutocompletarDTO(
+        String razonSocial,
         String nombre,
         String email,
         String telefono,

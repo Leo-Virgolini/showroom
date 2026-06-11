@@ -13,6 +13,8 @@ import java.math.BigDecimal;
  *                  el archivo no existe en la carpeta indexada.
  * @param stockTotal Stock total sumado de todos los depósitos. Null si nunca
  *                   se sincronizó.
+ * @param proveedor  Nombre del proveedor en DUX. Null si no informado. Lo usa el
+ *                   filtro por proveedor del showroom/presupuestador.
  */
 public record CatalogoItemDTO(
         String sku,
@@ -23,6 +25,7 @@ public record CatalogoItemDTO(
         BigDecimal porcIva,
         Boolean habilitado,
         String imagenUrl,
-        Integer stockTotal
+        Integer stockTotal,
+        String proveedor
 ) {
 }

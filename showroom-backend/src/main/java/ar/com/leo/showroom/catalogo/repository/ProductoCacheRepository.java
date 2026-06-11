@@ -51,6 +51,16 @@ public interface ProductoCacheRepository extends JpaRepository<ProductoCache, Lo
             """)
     List<String> findDistinctRubros();
 
+    /** Lista de proveedores distintos cacheados, ordenada alfabéticamente —
+     *  popula el dropdown del filtro por proveedor del showroom/presupuestador.
+     *  Excluye nulls/blancos. */
+    @Query("""
+            select distinct p.proveedor from ProductoCache p
+            where p.proveedor is not null and p.proveedor <> ''
+            order by p.proveedor asc
+            """)
+    List<String> findDistinctProveedores();
+
     // La búsqueda por texto + filtros vive en {@link ProductoCacheSpecs} +
     // {@code findAll(Specification, Pageable)} de JpaSpecificationExecutor.
     // La spec tokeniza el query y matchea cada token contra SKU/desc/EAN, lo

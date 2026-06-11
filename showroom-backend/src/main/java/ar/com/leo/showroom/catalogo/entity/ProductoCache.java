@@ -14,7 +14,8 @@ import java.util.Set;
 @Entity
 @Table(name = "producto_cache", indexes = {
         @Index(name = "idx_producto_cache_sku", columnList = "sku", unique = true),
-        @Index(name = "idx_producto_cache_descripcion", columnList = "descripcion")
+        @Index(name = "idx_producto_cache_descripcion", columnList = "descripcion"),
+        @Index(name = "idx_producto_cache_proveedor", columnList = "proveedor")
 })
 @Data
 @NoArgsConstructor
@@ -38,6 +39,12 @@ public class ProductoCache {
      *  aplican los descuentos por monto). Null si DUX no informa rubro. */
     @Column(name = "rubro", length = 120)
     private String rubro;
+
+    /** Nombre del proveedor del producto en DUX (ej. "SILCOOK SA"). Se usa para
+     *  el filtro por proveedor en la búsqueda del showroom/presupuestador. Null
+     *  si DUX no informa proveedor. */
+    @Column(name = "proveedor", length = 150)
+    private String proveedor;
 
     /** PVP de la lista "KT GASTRO" tal como viene de DUX (con IVA incluido). */
     @Column(name = "pvp_kt_gastro_con_iva", precision = 18, scale = 4)

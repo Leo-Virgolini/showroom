@@ -544,11 +544,15 @@
               (onClick)="cerrarResultadosBusqueda()"
               pTooltip="Cerrar búsqueda" tooltipPosition="left" ariaLabel="Cerrar búsqueda" />
           </div>
-          <div class="flex items-center gap-2 px-1">
+          <div class="flex items-center gap-2 px-1 flex-wrap">
             <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
             <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
               [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
               size="small" appendTo="body" class="text-sm" />
+            <span class="text-xs text-muted-color shrink-0">Proveedor:</span>
+            <p-select [options]="proveedoresDisponibles()" [ngModel]="proveedorFiltro()"
+              (ngModelChange)="cambiarProveedorFiltro($event)" [showClear]="true"
+              placeholder="Todos" [filter]="true" size="small" appendTo="body" class="text-sm" />
             @if (reordenando()) {
               <p-progressSpinner class="!w-4 !h-4" strokeWidth="6" ariaLabel="Reordenando" />
             }
@@ -791,8 +795,16 @@
           <p-tag severity="danger" icon="pi pi-exclamation-triangle" value="Hay items sin stock suficiente" />
           }
         </div>
+        <!-- Orden del carrito (solo visual; no cambia el pedido generado). -->
+        <div class="flex items-center gap-1 mb-1 text-xs">
+          <span class="text-muted-color mr-0.5">Ordenar:</span>
+          <p-button size="small" [text]="true" severity="secondary" label="Producto"
+            [icon]="iconoOrdenCarrito('producto')" (onClick)="ordenarCarritoPor('producto')" />
+          <p-button size="small" [text]="true" severity="secondary" label="Precio"
+            [icon]="iconoOrdenCarrito('precio')" (onClick)="ordenarCarritoPor('precio')" />
+        </div>
         <ul class="carrito-items flex flex-col divide-y divide-surface-200 dark:divide-surface-700 flex-1 overflow-y-auto overflow-x-auto min-h-0 px-1">
-          @for (it of carrito(); track it.itemKey) {
+          @for (it of carritoOrdenado(); track it.itemKey) {
           <!-- Item del carrito en UNA fila — los datos críticos (SKU, descripción,
                cantidad, subtotal) están todos en línea. La descripción se trunca
                con elipsis. min-w garantiza que todos los items tengan el mismo
@@ -1071,7 +1083,10 @@
         <label class="text-sm font-medium text-muted-color">
           Apellido / razón social en DUX <span class="text-red-500">*</span>
         </label>
-        <input pInputText type="text" [value]="apellidoRazonSocialFinal" [disabled]="true" class="w-full" />
+        <p-autoComplete [ngModel]="cliente().razonSocial" (ngModelChange)="onRazonSocialChange($event)"
+          [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
+          optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
+          placeholder="Apellido / razón social en DUX" inputStyleClass="w-full" class="w-full" />
       </div>
 
       <div class="flex flex-col gap-1">

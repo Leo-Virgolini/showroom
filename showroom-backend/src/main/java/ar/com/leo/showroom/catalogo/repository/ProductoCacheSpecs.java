@@ -118,4 +118,14 @@ public final class ProductoCacheSpecs {
                     rubro.trim().toLowerCase());
         };
     }
+
+    /** Filtra por nombre exacto de proveedor (case-insensitive). Si
+     *  {@code proveedor} es null o blank, devuelve un predicado neutro. */
+    public static Specification<ProductoCache> porProveedor(String proveedor) {
+        return (root, query, cb) -> {
+            if (proveedor == null || proveedor.isBlank()) return cb.conjunction();
+            return cb.equal(cb.lower(root.get("proveedor")),
+                    proveedor.trim().toLowerCase());
+        };
+    }
 }

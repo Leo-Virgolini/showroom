@@ -71,10 +71,6 @@
             Cargando presupuesto…
           </span>
         }
-        @if (items().length > 0) {
-          <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar el detalle"
-            class="btn-kt-rojo" (onClick)="vaciar()" pTooltip="Vaciar el detalle" tooltipPosition="bottom" />
-        }
         @if (esModoEdicion() && hayCambiosSinGuardar()) {
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
             pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
@@ -226,11 +222,15 @@
                 <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
                   size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
               </div>
-              <div class="flex items-center gap-2 px-3 py-2 border-b border-[#FF861C]/10">
+              <div class="flex items-center gap-2 px-3 py-2 border-b border-[#FF861C]/10 flex-wrap">
                 <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
                 <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
                   [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
                   size="small" appendTo="body" class="text-sm" />
+                <span class="text-xs text-muted-color shrink-0">Proveedor:</span>
+                <p-select [options]="proveedoresDisponibles()" [ngModel]="proveedorFiltro()"
+                  (ngModelChange)="cambiarProveedorFiltro($event)" [showClear]="true"
+                  placeholder="Todos" [filter]="true" size="small" appendTo="body" class="text-sm" />
                 @if (reordenando()) {
                   <p-progressSpinner class="!w-4 !h-4" strokeWidth="6" ariaLabel="Reordenando" />
                 }
@@ -524,18 +524,26 @@
               <p class="m-0 text-sm">Escaneá un código arriba para empezar.</p>
             </div>
           } @else {
-            <p-table [value]="items()" dataKey="uid" stripedRows class="kt-table">
+            <p-table [value]="itemsOrdenados()" dataKey="uid" stripedRows class="kt-table">
               <ng-template #header>
                 <tr>
                   <th style="width: 4rem"></th>
                   <th>
-                    <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
+                    <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
+                      (click)="ordenarItemsPor('producto')" pTooltip="Ordenar por producto" tooltipPosition="top">
+                      <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
+                      <i [class]="iconoOrdenItems('producto')" class="text-[10px] opacity-70"></i>
+                    </button>
                   </th>
                   <th class="text-center" style="width: 9rem">
                     <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> Cantidad
                   </th>
                   <th class="text-right" style="width: 8rem">
-                    <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Precio
+                    <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
+                      (click)="ordenarItemsPor('precio')" pTooltip="Ordenar por precio" tooltipPosition="top">
+                      <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Precio
+                      <i [class]="iconoOrdenItems('precio')" class="text-[10px] opacity-70"></i>
+                    </button>
                   </th>
                   <th class="text-center" style="width: 7rem">
                     <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
@@ -543,7 +551,13 @@
                   <th class="text-right" style="width: 9rem">
                     <i class="pi pi-calculator text-[#FF861C] mr-1"></i> Subtotal
                   </th>
-                  <th style="width: 3rem"></th>
+                  <th style="width: 3rem" class="text-center">
+                    <!-- Vaciar todo el detalle — al tope de la columna de los
+                         botones de quitar (×) por fila. -->
+                    <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true"
+                      size="small" (onClick)="vaciar()" ariaLabel="Vaciar el detalle"
+                      pTooltip="Vaciar el detalle" tooltipPosition="left" />
+                  </th>
                 </tr>
               </ng-template>
 
@@ -830,6 +844,10 @@
              informativo "Individual · N hojas" y el botón abre el preview
              por producto en el panel. -->
         <div class="kt-footer-formas">
+          <!-- Chips en UNA sola fila con scroll horizontal: nunca envuelven a
+               2 filas. El mejor precio (Efectivo) queda visible a la izquierda;
+               el resto se alcanza scrolleando o con el chevron (panel completo). -->
+          <div class="kt-footer-chips">
           @if (cotizacionIndividual()) {
             <span class="kt-forma-chip kt-forma-chip-info">
               <i class="pi pi-file-export"></i>
@@ -847,8 +865,7 @@
                 @if (f.esMejorPrecio) {
                   <i class="pi pi-check-circle text-[10px]"></i>
                 }
-                <i [class]="iconoForma(f.nombre)"></i>
-                <span class="font-bold">{{ f.nombre }}</span>
+                <span class="font-bold kt-forma-chip-nombre">{{ f.nombre }}</span>
                 <span class="kt-forma-chip-precio">
                   {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
@@ -860,6 +877,7 @@
               No hay formas de pago configuradas
             </span>
           }
+          </div>
 
           <!-- Botón toggle del panel — chevron que rota cuando se expande. -->
           <button type="button" class="kt-footer-toggle"

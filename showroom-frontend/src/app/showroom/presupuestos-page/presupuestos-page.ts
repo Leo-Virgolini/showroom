@@ -201,6 +201,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     { label: 'Precio: mayor a menor', value: 'precio_desc' },
   ];
 
+  /** Filtro por proveedor de los resultados (null = todos). Se aplica en el
+   *  backend sobre todo el resultado, igual que el orden. */
+  readonly proveedorFiltro = signal<string | null>(null);
+  /** Proveedores disponibles para el dropdown del filtro. */
+  readonly proveedoresDisponibles = signal<string[]>([]);
+
   /** True mientras se re-busca por un cambio de orden. Muestra un spinner chico
    *  junto al selector SIN tapar la lista ni deshabilitar el input. */
   readonly reordenando = signal(false);
@@ -225,6 +231,46 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  de propiedades de los ítems (totales) leen este signal para forzar el
    *  recompute sin necesidad de reemplazar el array. */
   private readonly itemsTick = signal(0);
+
+  /** Orden de visualización del detalle. {@code null} = orden de carga. Solo
+   *  afecta el render; el presupuesto generado usa {@link items} en su orden
+   *  original. NO depende de {@link itemsTick} a propósito: editar cantidad/
+   *  descuento no debe reordenar la grilla en vivo (robaría el foco del input). */
+  readonly ordenItems = signal<{ campo: 'producto' | 'precio'; dir: 'asc' | 'desc' } | null>(null);
+
+  /** Detalle ordenado para el render. Copia ordenada por descripción (producto)
+   *  o por el precio de referencia mostrado (con el perfil del rubro). */
+  readonly itemsOrdenados = computed<PresupuestoItem[]>(() => {
+    const lista = this.items();
+    const orden = this.ordenItems();
+    if (!orden) return lista;
+    const factor = orden.dir === 'asc' ? 1 : -1;
+    return [...lista].sort((a, b) => {
+      if (orden.campo === 'producto') {
+        return (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor;
+      }
+      return (this.precioMostrado(a) - this.precioMostrado(b)) * factor;
+    });
+  });
+
+  /** Cicla el orden del detalle para un campo: asc → desc → sin orden (carga). */
+  ordenarItemsPor(campo: 'producto' | 'precio'): void {
+    const actual = this.ordenItems();
+    if (!actual || actual.campo !== campo) {
+      this.ordenItems.set({ campo, dir: 'asc' });
+    } else if (actual.dir === 'asc') {
+      this.ordenItems.set({ campo, dir: 'desc' });
+    } else {
+      this.ordenItems.set(null);
+    }
+  }
+
+  /** Ícono del encabezado de orden de un campo: flecha según dirección, o neutro. */
+  iconoOrdenItems(campo: 'producto' | 'precio'): string {
+    const o = this.ordenItems();
+    if (!o || o.campo !== campo) return 'pi pi-sort-alt';
+    return o.dir === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down';
+  }
 
   // ------------------------------------------------------------
   // Datos del cliente / observaciones
@@ -630,6 +676,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // el showroom. Si fallan, las señales quedan vacías (el PDF se genera igual
     // sin sección de formas; todos los rubros cotizan con IVA).
     this.precioPerfil.cargar();
+
+    // Proveedores para el dropdown del filtro de búsqueda.
+    this.cargarProveedores();
 
     // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
     // edición: cargamos el detalle del presupuesto y poblamos el form.
@@ -1205,11 +1254,34 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     }
   }
 
+  /** Cambia el filtro por proveedor y re-ejecuta la búsqueda desde la primera
+   *  página (el filtro se aplica en el backend sobre todo el resultado). */
+  cambiarProveedorFiltro(proveedor: string | null): void {
+    if (this.proveedorFiltro() === proveedor) return;
+    this.proveedorFiltro.set(proveedor);
+    const query = this.busquedaQuery();
+    if (query) {
+      const seq = ++this.scanSeq;
+      this.reordenando.set(true);
+      this.buscarEnCatalogo(query, seq);
+    }
+  }
+
+  /** Carga la lista de proveedores para el dropdown del filtro (best-effort). */
+  private cargarProveedores(): void {
+    this.api.listarProveedoresCatalogo()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (lista) => this.proveedoresDisponibles.set(lista),
+        error: () => { /* sin proveedores el filtro queda vacío, no bloquea */ },
+      });
+  }
+
   private buscarEnCatalogo(query: string, seq: number): void {
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
     const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder).subscribe({
+    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro()).subscribe({
       next: (page) => {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
@@ -1254,7 +1326,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     const seq = this.scanSeq;
     const nextPage = this.paginaResultados() + 1;
     const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder)
+    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro())
       .subscribe({
         next: (page) => {
           if (seq !== this.scanSeq) return;

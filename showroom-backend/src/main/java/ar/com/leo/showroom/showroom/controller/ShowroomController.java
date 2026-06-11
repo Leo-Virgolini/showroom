@@ -463,8 +463,19 @@ public class ShowroomController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "50") int size,
             @RequestParam(value = "sortField", required = false) String sortField,
-            @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        return service.buscarCatalogo(q, page, size, sortField, sortOrder);
+            @RequestParam(value = "sortOrder", required = false) String sortOrder,
+            @RequestParam(value = "proveedor", required = false) String proveedor) {
+        return service.buscarCatalogo(q, page, size, sortField, sortOrder, proveedor);
+    }
+
+    /**
+     * Lista de proveedores distintos del catálogo (no vacíos), ordenada
+     * alfabéticamente. Pobla el dropdown del filtro por proveedor del
+     * showroom/presupuestador.
+     */
+    @GetMapping("/catalogo/proveedores")
+    public List<String> proveedoresCatalogo() {
+        return service.listarProveedoresCatalogo();
     }
 
     /**

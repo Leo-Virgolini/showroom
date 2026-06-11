@@ -360,7 +360,19 @@ public class CatalogoSyncService {
         pc.setStockTotal(sumarStock(item.getStock()));
         sincronizarCodigosBarra(pc, item.getCodigosBarra());
         pc.setRubro(extraerRubro(item));
+        pc.setProveedor(extraerProveedor(item));
         pc.setSincronizadoAt(ahora);
+    }
+
+    /** Nombre del proveedor tal como lo manda DUX (trimeado para la columna de
+     *  150 chars). Null si DUX no informa proveedor o el nombre viene vacío. */
+    private static String extraerProveedor(DuxItem item) {
+        if (item.getProveedor() == null) return null;
+        String nombre = item.getProveedor().getProveedor();
+        if (nombre == null) return null;
+        String trimmed = nombre.trim();
+        if (trimmed.isEmpty()) return null;
+        return trimmed.length() > 150 ? trimmed.substring(0, 150) : trimmed;
     }
 
     /** Nombre del rubro tal como lo manda DUX (truncado y trimeado para la

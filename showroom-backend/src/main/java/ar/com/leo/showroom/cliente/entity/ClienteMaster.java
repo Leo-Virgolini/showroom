@@ -27,6 +27,12 @@ import java.time.Instant;
 @Table(name = "cliente_master", indexes = {
         @Index(name = "uk_cliente_master_telefono",
                 columnList = "telefono_normalizado", unique = true),
+        // Índice ÚNICO sobre el CUIT: el cliente formal se identifica unívocamente
+        // por su documento. nro_doc es nullable y MySQL permite múltiples NULL en
+        // un índice único, así que los clientes informales sin CUIT (presupuestos)
+        // conviven sin chocar. El upsert reusa la fila del CUIT (no crea duplicados);
+        // la edición manual valida contra colisión antes de guardar.
+        @Index(name = "uk_cliente_master_nro_doc", columnList = "nro_doc", unique = true),
 })
 @Data
 @NoArgsConstructor
@@ -43,6 +49,12 @@ public class ClienteMaster {
      *  Sin esto "11-12345678" y "1112345678" caerían en masters distintos. */
     @Column(name = "telefono_normalizado", length = 50, nullable = false, unique = true)
     private String telefonoNormalizado;
+
+    /** Razón social / apellido del cliente — va a DUX como
+     *  {@code apellido_razon_social} al crear un pedido. Distinto de
+     *  {@link #nombre} (nombre de fantasía / contacto). */
+    @Column(name = "razon_social", length = 150)
+    private String razonSocial;
 
     @Column(name = "nombre", length = 150)
     private String nombre;

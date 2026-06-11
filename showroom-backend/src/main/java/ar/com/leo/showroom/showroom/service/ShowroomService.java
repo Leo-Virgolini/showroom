@@ -124,6 +124,9 @@ public class ShowroomService {
     private final HorarioSyncSchedulerService horarioSyncService;
     private final ConfiguracionService configuracionService;
     private final PrecioPerfilCalculator precioPerfilCalculator;
+    /** Maestro de clientes: al crear un pedido con CUIT, se guarda/actualiza el
+     *  cliente formal (upsert por CUIT). Best-effort — no rompe el pedido. */
+    private final ar.com.leo.showroom.cliente.service.ClienteMasterService clienteMasterService;
     /** Repositories (no services) para resolver el origen del pedido en el
      *  listado — usar el service de presupuestos generaría dependencia circular
      *  (PresupuestoComercialService ya depende de ShowroomService). */
@@ -291,6 +294,13 @@ public class ShowroomService {
      * manda el Pageable; si no, se usa el ranking por relevancia.
      */
     public CatalogoPageDTO buscarCatalogo(String q, int page, int size, String sortField, String sortOrder) {
+        return buscarCatalogo(q, page, size, sortField, sortOrder, null);
+    }
+
+    /** Variante con filtro por proveedor (nombre exacto). {@code proveedor} null/
+     *  blank = sin filtro. */
+    public CatalogoPageDTO buscarCatalogo(String q, int page, int size, String sortField,
+                                          String sortOrder, String proveedor) {
         int pageSafe = Math.max(0, page);
         int sizeSafe = Math.min(Math.max(size, 1), 200);
         List<String> tokens = ProductoCacheSpecs.tokenizar(q);
@@ -317,12 +327,19 @@ public class ShowroomService {
             pageable = PageRequest.of(pageSafe, sizeSafe);
             aplicarRanking = true;
         }
-        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, aplicarRanking);
+        Specification<ProductoCache> spec = ProductoCacheSpecs.matchTokens(tokens, aplicarRanking)
+                .and(ProductoCacheSpecs.porProveedor(proveedor));
         Page<ProductoCache> resultado = productoCacheRepository.findAll(spec, pageable);
         List<CatalogoItemDTO> items = resultado.getContent().stream()
                 .map(this::toCatalogoItem)
                 .toList();
         return new CatalogoPageDTO(items, resultado.getTotalElements(), pageSafe, sizeSafe);
+    }
+
+    /** Proveedores distintos del catálogo (no vacíos), alfabético. Pobla el
+     *  dropdown del filtro por proveedor del showroom/presupuestador. */
+    public List<String> listarProveedoresCatalogo() {
+        return productoCacheRepository.findDistinctProveedores();
     }
 
     /**
@@ -352,7 +369,8 @@ public class ShowroomService {
                 pc.getPorcIva(),
                 pc.getHabilitado(),
                 urlImagenLocal(pc.getSku()),
-                pc.getStockTotal());
+                pc.getStockTotal(),
+                pc.getProveedor());
     }
 
     /**
@@ -968,6 +986,17 @@ public class ShowroomService {
         }
         pedidoRepository.save(pedido);
 
+        // Guardar/actualizar el cliente formal en el maestro (upsert por CUIT).
+        // Best-effort y en su propia transacción: un fallo acá NO debe tumbar la
+        // creación del pedido. Aplica también a pedidos desde presupuesto: el
+        // pedido es real (con CUIT), aunque el presupuesto en sí sea informal.
+        try {
+            clienteMasterService.registrarDesdePedido(pedido, username);
+        } catch (Exception e) {
+            log.warn("No se pudo guardar el cliente formal del pedido {}: {}",
+                    pedido.getId(), e.getMessage());
+        }
+
         try {
             String body = construirPayloadDux(request, formaPago, caches);
             // No logueamos el payload entero: contiene PII del cliente (CUIT,
@@ -1170,16 +1199,6 @@ public class ShowroomService {
     }
 
     /**
-     * Precio CON IVA que va al comprobante DUX. Independiente del flag
-     * {@code aplicaIva} de la forma — DUX siempre factura con IVA, sea cual
-     * sea lo que pagó el cliente. Para "transferencia sin IVA" la diferencia
-     * la absorbe el operador.
-     */
-    private BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva, BigDecimal recargoPorc) {
-        return PrecioPerfilCalculator.calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPorc);
-    }
-
-    /**
      * Arma el JSON para POST /pedido/nuevopedido según la doc DUX:
      * https://duxsoftware.readme.io/reference/crear-pedido
      *
@@ -1277,16 +1296,18 @@ public class ShowroomService {
                     ? it.rubro()
                     : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
             boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
-            // Precio a DUX = precio de lista (con IVA) con el recargo/descuento de
-            // la forma ELEGIDA, SIEMPRE con IVA (DUX factura con IVA; la diferencia
-            // de las formas s/IVA la absorbe el operador). Para pedidos de
-            // presupuesto, `precioBaseConIva` es el PVP CONGELADO del presupuesto
-            // (it.precioUnitario), así el precio respeta lo cotizado pero refleja la
-            // forma elegida — coincide con el preview del diálogo. NO se usa
-            // `precioReferencia` (traía el descuento de la forma de referencia/
-            // Efectivo, lo que hacía que DUX facturara siempre el precio de Efectivo).
+            // Precio a DUX = EXACTAMENTE el que paga el cliente según el perfil de
+            // la forma ELEGIDA: parte del precio de lista (con IVA), aplica el
+            // recargo/descuento de la forma y vuelve a sumar IVA SOLO si el perfil
+            // del rubro lo aplica (menaje sí, maquinaria en formas s/IVA no). Es la
+            // MISMA fórmula que `precioFinal` en crearPedido, así DUX factura lo que
+            // paga el cliente (ya no se "absorbe" IVA en las líneas s/IVA). Para
+            // pedidos de presupuesto, `precioBaseConIva` es el PVP CONGELADO del
+            // presupuesto (it.precioUnitario), así respeta lo cotizado reflejando la
+            // forma elegida — coincide con el preview del diálogo.
+            boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
             BigDecimal precioDux = formaPago != null
-                    ? calcularPrecioParaDux(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq))
+                    ? calcularPrecioFinal(precioBaseConIva, porcIva, recargoPerfil(formaPago, esMaq), aplicaIvaItem)
                     : precioBaseConIva;
             d.put("precio", precioDux != null ? precioDux : BigDecimal.ZERO);
             d.put("porc_desc", it.descuentoPorcentaje() != null ? it.descuentoPorcentaje() : BigDecimal.ZERO);

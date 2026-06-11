@@ -25,6 +25,7 @@ import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 import {
+  ClienteAutocompletar,
   CrearPedidoRequest,
   FormaPago,
   Localidad,
@@ -36,12 +37,6 @@ import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { perfilForma, precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
-
-/** Placeholder fijo que DUX recibe como apellido/razón social cuando el
- *  pedido se crea a partir de un presupuesto. Distinto del placeholder del
- *  flujo de scan/carrito ("PEDIDO SHOWROOM") para que la operadora distinga
- *  el origen del comprobante en DUX y reemplace por el cliente real al editar. */
-const APELLIDO_RAZON_SOCIAL = 'PRESUPUESTO';
 
 /**
  * Dialog reusable para transformar un presupuesto comercial en un pedido en
@@ -152,6 +147,11 @@ export class CrearPedidoDialog {
   }[]>([]);
 
   // Datos del cliente — pre-llenados desde el presupuesto, editables.
+  /** Razón social / apellido que va a DUX como `apellido_razon_social`. Antes
+   *  era un placeholder fijo ("PRESUPUESTO"); ahora es editable. Se pre-llena
+   *  con el nombre del presupuesto y lo puede completar/corregir el operador o
+   *  el autocompletado por CUIT/razón social. */
+  readonly pedidoRazonSocial = signal('');
   readonly pedidoNombre = signal('');
   readonly pedidoTelefono = signal('');
   readonly pedidoEmail = signal('');
@@ -182,8 +182,7 @@ export class CrearPedidoDialog {
     { label: 'Otros…', value: 'otros' },
   ];
 
-  // Fijos que DUX espera y NO son editables.
-  readonly apellidoRazonSocialFijo = APELLIDO_RAZON_SOCIAL;
+  // Fijo que DUX espera y NO es editable.
   readonly categoriaFiscalFija = 'CONSUMIDOR_FINAL';
 
   // ----------- Totales por forma de pago -----------
@@ -217,6 +216,7 @@ export class CrearPedidoDialog {
     const cuit = this.pedidoCuit();
     const cuitOk = cuit != null && String(cuit).length === 11;
     const emailOk = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(this.pedidoEmail().trim());
+    const razonSocialOk = this.pedidoRazonSocial().trim().length > 0;
     const nombreOk = this.pedidoNombre().trim().length > 0;
     const telOk = this.pedidoTelefono().trim().length > 0;
     const rubro = this.pedidoRubro();
@@ -225,7 +225,7 @@ export class CrearPedidoDialog {
     // maquinaria s/IVA) depende de la forma, y sin ella el backend no puede
     // facturar a DUX con el criterio correcto.
     const formaOk = this.pedidoFormaPagoId() != null;
-    return cuitOk && emailOk && nombreOk && telOk && rubroOk && formaOk
+    return cuitOk && emailOk && razonSocialOk && nombreOk && telOk && rubroOk && formaOk
       && this.itemsDelPresupuesto().length > 0;
   });
 
@@ -260,6 +260,9 @@ export class CrearPedidoDialog {
     this.api.obtenerDetallePresupuestoComercial(id).subscribe({
       next: (det) => {
         this.cargandoDetallePresupuesto.set(false);
+        // Razón social: arranca con el nombre del presupuesto (mejor estimación);
+        // el operador la edita o la pisa el autocompletado por CUIT.
+        this.pedidoRazonSocial.set(det.clienteNombre ?? '');
         this.pedidoNombre.set(det.clienteNombre ?? '');
         this.pedidoTelefono.set(det.clienteTelefono ?? '');
         this.pedidoEmail.set(det.clienteEmail ?? '');
@@ -454,21 +457,7 @@ export class CrearPedidoDialog {
   private autocompletarDesdeCuit(nroDoc: number): void {
     this.api.buscarClientePorCuit(nroDoc).subscribe((cli) => {
       if (!cli) return;
-      let completados = 0;
-      if (cli.nombre && !this.pedidoNombre().trim()) { this.pedidoNombre.set(cli.nombre); completados++; }
-      if (cli.email && !this.pedidoEmail().trim()) { this.pedidoEmail.set(cli.email); completados++; }
-      if (cli.telefono && !this.pedidoTelefono().trim()) { this.pedidoTelefono.set(cli.telefono); completados++; }
-      if (cli.rubro && !this.pedidoRubro()) { this.aplicarRubroPedido(cli.rubro); completados++; }
-      if (cli.domicilio && !this.pedidoDomicilio().trim()) { this.pedidoDomicilio.set(cli.domicilio); completados++; }
-      // Provincia/localidad: solo si la provincia está vacía (sino respetamos lo
-      // ya elegido). Al setear la provincia cargamos sus localidades y recién ahí
-      // completamos la localidad.
-      if (cli.codigoProvincia && !this.pedidoCodigoProvincia()) {
-        this.pedidoCodigoProvincia.set(cli.codigoProvincia);
-        completados++;
-        this.cargarLocalidadesYCompletar(cli.codigoProvincia, cli.idLocalidad ?? null);
-      }
-      if (completados > 0) {
+      if (this.completarDesdeCliente(cli) > 0) {
         this.toast.add({
           severity: 'info',
           summary: 'Cliente reconocido',
@@ -477,6 +466,60 @@ export class CrearPedidoDialog {
         });
       }
     });
+  }
+
+  /** Completa SOLO los campos vacíos del formulario desde un cliente guardado.
+   *  Reutilizado por el autocompletado por CUIT y por razón social. Devuelve la
+   *  cantidad de campos completados. */
+  private completarDesdeCliente(cli: ClienteAutocompletar): number {
+    let completados = 0;
+    if (cli.razonSocial && !this.pedidoRazonSocial().trim()) { this.pedidoRazonSocial.set(cli.razonSocial); completados++; }
+    if (cli.nombre && !this.pedidoNombre().trim()) { this.pedidoNombre.set(cli.nombre); completados++; }
+    if (cli.email && !this.pedidoEmail().trim()) { this.pedidoEmail.set(cli.email); completados++; }
+    if (cli.telefono && !this.pedidoTelefono().trim()) { this.pedidoTelefono.set(cli.telefono); completados++; }
+    if (cli.nroDoc != null && this.pedidoCuit() == null) { this.pedidoCuit.set(cli.nroDoc); completados++; }
+    if (cli.rubro && !this.pedidoRubro()) { this.aplicarRubroPedido(cli.rubro); completados++; }
+    if (cli.domicilio && !this.pedidoDomicilio().trim()) { this.pedidoDomicilio.set(cli.domicilio); completados++; }
+    // Provincia/localidad: solo si la provincia está vacía (sino respetamos lo
+    // ya elegido). Al setear la provincia cargamos sus localidades y recién ahí
+    // completamos la localidad.
+    if (cli.codigoProvincia && !this.pedidoCodigoProvincia()) {
+      this.pedidoCodigoProvincia.set(cli.codigoProvincia);
+      completados++;
+      this.cargarLocalidadesYCompletar(cli.codigoProvincia, cli.idLocalidad ?? null);
+    }
+    return completados;
+  }
+
+  /** Sugerencias del autocomplete por razón social (clientes guardados). */
+  readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);
+
+  /** completeMethod del p-autoComplete de razón social: busca clientes guardados
+   *  cuyo razón social/nombre coincida con lo tipeado. */
+  buscarSugerenciasRazonSocial(event: { query: string }): void {
+    const q = (event.query ?? '').trim();
+    if (q.length < 2) { this.sugerenciasRazonSocial.set([]); return; }
+    this.api.buscarClientesPorRazonSocial(q).subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
+  }
+
+  /** ngModelChange del p-autoComplete de razón social. Si llega un objeto, el
+   *  operador eligió una sugerencia → completamos el resto y fijamos la razón
+   *  social; si llega un string, es texto libre. */
+  onRazonSocialChange(value: string | ClienteAutocompletar): void {
+    if (value && typeof value === 'object') {
+      this.pedidoRazonSocial.set(value.razonSocial ?? value.nombre ?? '');
+      const completados = this.completarDesdeCliente(value);
+      if (completados > 0) {
+        this.toast.add({
+          severity: 'info',
+          summary: 'Cliente reconocido',
+          detail: 'Completé los datos desde un cliente guardado.',
+          life: 4000,
+        });
+      }
+    } else {
+      this.pedidoRazonSocial.set(value ?? '');
+    }
   }
 
   /** Aplica un rubro guardado al select: si coincide con una opción predefinida
@@ -535,7 +578,7 @@ export class CrearPedidoDialog {
       this.toast.add({
         severity: 'warn',
         summary: 'Faltan datos',
-        detail: 'CUIT 11 dígitos, nombre, teléfono, email, rubro y forma de pago son obligatorios.',
+        detail: 'Razón social, CUIT 11 dígitos, nombre, teléfono, email, rubro y forma de pago son obligatorios.',
         life: 4000,
       });
       return;
@@ -545,7 +588,7 @@ export class CrearPedidoDialog {
 
     const cuit = this.pedidoCuit()!;
     const req: CrearPedidoRequest = {
-      apellidoRazonSocial: APELLIDO_RAZON_SOCIAL,
+      apellidoRazonSocial: this.pedidoRazonSocial().trim(),
       nombre: this.pedidoNombre().trim(),
       categoriaFiscal: 'CONSUMIDOR_FINAL',
       tipoDoc: 'CUIT',

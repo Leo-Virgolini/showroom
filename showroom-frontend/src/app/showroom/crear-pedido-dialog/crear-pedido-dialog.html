@@ -89,35 +89,34 @@
         </div>
       }
 
-      <!-- Campos hardcoded que DUX exige y que NO son editables. -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 rounded-lg bg-surface-50 dark:bg-surface-800/40 border border-surface-200 dark:border-surface-700">
-        <div>
-          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-            <i class="pi pi-lock text-muted-color text-[10px]"></i>
-            Apellido / razón social en DUX
-          </label>
-          <input pInputText type="text" class="w-full" disabled
-            [value]="apellidoRazonSocialFijo" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-            <i class="pi pi-lock text-muted-color text-[10px]"></i>
-            Categoría fiscal
-          </label>
-          <input pInputText type="text" class="w-full" disabled
-            [value]="categoriaFiscalFija" />
-        </div>
+      <!-- Categoría fiscal: lo único que DUX exige fijo y NO editable. -->
+      <div class="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/40 border border-surface-200 dark:border-surface-700">
+        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+          <i class="pi pi-lock text-muted-color text-[10px]"></i>
+          Categoría fiscal
+        </label>
+        <input pInputText type="text" class="w-full" disabled
+          [value]="categoriaFiscalFija" />
       </div>
 
       <!-- Datos del cliente — pre-llenados editables -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+            <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> Razón social <span class="text-red-500">*</span>
+          </label>
+          <p-autoComplete [ngModel]="pedidoRazonSocial()" (ngModelChange)="onRazonSocialChange($event)"
+            [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
+            optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
+            placeholder="Apellido / razón social en DUX" inputStyleClass="w-full" class="w-full" />
+        </div>
+        <div>
+          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
             <i class="pi pi-user text-[#FF861C] text-[10px]"></i> Nombre <span class="text-red-500">*</span>
           </label>
           <input pInputText type="text" class="w-full"
             [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
-            placeholder="Nombre / razón social" />
+            placeholder="Nombre de fantasía / contacto" />
         </div>
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">

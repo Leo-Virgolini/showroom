@@ -413,6 +413,8 @@ export interface CatalogoItem {
   imagenUrl: string | null;
   /** Stock total sumado de todos los depósitos. Null si nunca se sincronizó. */
   stockTotal: number | null;
+  /** Nombre del proveedor en DUX. Null si no informado. */
+  proveedor?: string | null;
 }
 
 export interface CatalogoPage {
@@ -971,6 +973,7 @@ export interface ActualizarClienteRequest {
  *  resuelve el backend desde el maestro de clientes o el último pedido con ese
  *  documento. Todos los campos son opcionales — el front completa solo lo vacío. */
 export interface ClienteAutocompletar {
+  razonSocial: string | null;
   nombre: string | null;
   email: string | null;
   telefono: string | null;

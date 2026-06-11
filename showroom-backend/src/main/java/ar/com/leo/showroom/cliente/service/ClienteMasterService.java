@@ -52,6 +52,20 @@ public class ClienteMasterService {
                 .orElseGet(() -> ClienteMaster.builder()
                         .telefonoNormalizado(telefonoNorm)
                         .build());
+        // CUIT único: si el documento ya pertenece a OTRO cliente (otro teléfono),
+        // rechazamos con un error claro (sino saltaría una violación de constraint
+        // cruda al guardar). null/sin CUIT no valida (varios informales sin doc).
+        if (datos.nroDoc() != null) {
+            boolean cuitDeOtro = repository.findByNroDocOrderByActualizadoAtDesc(datos.nroDoc())
+                    .stream()
+                    .anyMatch(otro -> !otro.getTelefonoNormalizado().equals(telefonoNorm));
+            if (cuitDeOtro) {
+                throw new ar.com.leo.showroom.common.exception.ConflictException(
+                        "Ese CUIT ya está asignado a otro cliente.");
+            }
+        }
+        // razonSocial no se toca acá: el editor de /clientes no la gestiona; la
+        // carga el flujo de pedido (registrarDesdePedido). Se preserva su valor.
         master.setNombre(blankToNull(datos.nombre()));
         master.setEmail(blankToNull(datos.email()));
         master.setRubro(blankToNull(datos.rubro()));
@@ -122,18 +136,87 @@ public class ClienteMasterService {
                 .map(this::toAutocompletar);
     }
 
+    /**
+     * Autocompletado por razón social / nombre: busca clientes del maestro (no
+     * eliminados) cuyo razón social o nombre contenga el texto tipeado. Devuelve
+     * los candidatos para que el operador elija uno y precargue los datos.
+     * Limitado a {@code MAX_SUGERENCIAS_RAZON_SOCIAL} para no inundar el dropdown.
+     */
+    public java.util.List<ClienteAutocompletarDTO> buscarPorRazonSocial(String q) {
+        if (!StringUtils.hasText(q)) return java.util.List.of();
+        String texto = q.trim();
+        if (texto.length() < 2) return java.util.List.of();
+        return repository
+                .buscarPorRazonSocialONombre(texto, org.springframework.data.domain.PageRequest.of(0, 10))
+                .stream()
+                .map(this::toAutocompletar)
+                .toList();
+    }
+
+    /**
+     * Guarda/actualiza el cliente formal a partir de un pedido recién creado.
+     * Es lo que "guarda al cliente en la tabla" cuando se genera un pedido con
+     * CUIT. Identifica la fila por CUIT (la más reciente con ese documento); si
+     * no hay, por teléfono; si tampoco, crea una nueva. Solo pisa campos del
+     * maestro con valores presentes en el pedido (no borra datos ya cargados).
+     *
+     * <p>Best-effort y aislado: se ejecuta en su propia transacción
+     * ({@code REQUIRES_NEW}) para que un fallo acá NO tumbe la creación del
+     * pedido. El caller igualmente lo envuelve en try/catch.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void registrarDesdePedido(PedidoShowroom pedido, String username) {
+        Long nroDoc = pedido.getNroDoc();
+        String telefonoNorm = normalizar(pedido.getTelefono());
+        // Sin CUIT ni teléfono no hay forma de identificar/crear al cliente.
+        if (nroDoc == null && telefonoNorm == null) return;
+
+        ClienteMaster master = null;
+        if (nroDoc != null) {
+            master = repository.findByNroDocOrderByActualizadoAtDesc(nroDoc)
+                    .stream().findFirst().orElse(null);
+        }
+        if (master == null && telefonoNorm != null) {
+            master = repository.findByTelefonoNormalizado(telefonoNorm).orElse(null);
+        }
+        if (master == null) {
+            // Crear: el teléfono es la PK lógica (NOT NULL). Si no hay, no creamos.
+            if (telefonoNorm == null) return;
+            master = ClienteMaster.builder().telefonoNormalizado(telefonoNorm).build();
+        }
+        // No tocamos el teléfono de un master existente (evita chocar el índice
+        // único de teléfono si el pedido trae otro número).
+        setIfPresent(pedido.getApellidoRazonSocial(), master::setRazonSocial);
+        setIfPresent(pedido.getNombre(), master::setNombre);
+        setIfPresent(pedido.getEmail(), master::setEmail);
+        setIfPresent(pedido.getRubro(), master::setRubro);
+        setIfPresent(pedido.getTipoDoc(), master::setTipoDoc);
+        if (nroDoc != null) master.setNroDoc(nroDoc);
+        setIfPresent(pedido.getDomicilio(), master::setDomicilio);
+        setIfPresent(pedido.getCodigoProvincia(), master::setCodigoProvincia);
+        setIfPresent(pedido.getIdLocalidad(), master::setIdLocalidad);
+        master.setActualizadoPorUsuarioId(usuarioIdDe(username));
+        master.setActualizadoAt(Instant.now());
+        repository.save(master);
+    }
+
     private ClienteAutocompletarDTO toAutocompletar(ClienteMaster m) {
         return new ClienteAutocompletarDTO(
-                m.getNombre(), m.getEmail(), denormalizarTelefono(m.getTelefonoNormalizado()),
+                m.getRazonSocial(), m.getNombre(), m.getEmail(),
+                denormalizarTelefono(m.getTelefonoNormalizado()),
                 m.getRubro(), m.getTipoDoc(), m.getNroDoc(), m.getDomicilio(),
                 m.getCodigoProvincia(), m.getIdLocalidad());
     }
 
     private ClienteAutocompletarDTO toAutocompletar(PedidoShowroom p) {
         return new ClienteAutocompletarDTO(
-                p.getNombre(), p.getEmail(), p.getTelefono(), p.getRubro(),
-                p.getTipoDoc(), p.getNroDoc(), p.getDomicilio(),
+                p.getApellidoRazonSocial(), p.getNombre(), p.getEmail(), p.getTelefono(),
+                p.getRubro(), p.getTipoDoc(), p.getNroDoc(), p.getDomicilio(),
                 p.getCodigoProvincia(), p.getIdLocalidad());
+    }
+
+    private static void setIfPresent(String value, java.util.function.Consumer<String> setter) {
+        if (StringUtils.hasText(value)) setter.accept(value.trim());
     }
 
     /** El maestro guarda el teléfono ya normalizado (solo dígitos). Para

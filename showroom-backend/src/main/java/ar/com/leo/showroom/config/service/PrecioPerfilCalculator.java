@@ -133,14 +133,4 @@ public class PrecioPerfilCalculator {
         return precioRecargadoSinIva.setScale(4, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Precio CON IVA que va al comprobante DUX. Independiente del flag
-     * {@code aplicaIva} de la forma — DUX siempre factura con IVA, sea cual sea
-     * lo que pagó el cliente (para "sin IVA" la diferencia la absorbe el operador).
-     */
-    public static BigDecimal calcularPrecioParaDux(BigDecimal precioBaseConIva, BigDecimal porcIva,
-                                                   BigDecimal recargoPorc) {
-        return calcularPrecioFinal(precioBaseConIva, porcIva, recargoPorc, true);
-    }
-
 }
