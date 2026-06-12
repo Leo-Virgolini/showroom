@@ -957,6 +957,8 @@ export interface ClientePresupuestos {
   provinciaNombre: string | null;
   idLocalidad: string | null;
   localidadNombre: string | null;
+  /** Notas internas del operador (del maestro). Null si no tiene. */
+  notas?: string | null;
 }
 
 /** Payload del PUT /cliente-master — upsert del maestro editable de clientes.

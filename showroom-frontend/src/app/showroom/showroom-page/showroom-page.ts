@@ -1097,8 +1097,34 @@ export class ShowroomPage implements AfterViewInit {
   /** Recibe el valor del inputMask del teléfono con [unmask]="true" (solo dígitos).
    *  Lo guarda tal cual en el cliente — el formato visual con guión lo provee
    *  la máscara, no la data persistida. */
+  /** Cliente que YA tiene el teléfono ingresado (null = ninguno). Alimenta el
+   *  aviso "teléfono ya registrado para X". */
+  readonly clientePorTelefono = signal<ClienteAutocompletar | null>(null);
+  private ultimoTelefonoLookup = '';
+
   onTelefonoChange(value: string | null | undefined): void {
     this.actualizarCliente('telefono', value ?? '');
+    this.chequearTelefonoExistente(value ?? '');
+  }
+
+  /** Busca si el teléfono ya pertenece a un cliente (a partir de 8 dígitos) y
+   *  actualiza {@link clientePorTelefono} para el aviso. Evita lookups repetidos
+   *  para el mismo número. */
+  private chequearTelefonoExistente(telefono: string): void {
+    const digits = (telefono ?? '').replace(/\D/g, '');
+    if (digits.length < 8) {
+      this.clientePorTelefono.set(null);
+      this.ultimoTelefonoLookup = '';
+      return;
+    }
+    if (digits === this.ultimoTelefonoLookup) return;
+    this.ultimoTelefonoLookup = digits;
+    this.api.buscarClientePorTelefono(digits)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((cli) => {
+        // Solo si el teléfono no cambió mientras volvía la respuesta.
+        if (digits === this.ultimoTelefonoLookup) this.clientePorTelefono.set(cli);
+      });
   }
 
   constructor() {
@@ -2571,6 +2597,8 @@ export class ShowroomPage implements AfterViewInit {
             this.vaciarCarrito();
             this.cliente.set({ ...CLIENTE_VACIO });
             this.clienteExistente.set(false);
+            this.clientePorTelefono.set(null);
+            this.ultimoTelefonoLookup = '';
             // Reset de la forma de pago al default (primera de la lista) — el
             // próximo cliente arranca con el método configurado por el operador.
             const formas = this.formasPagoActivas();

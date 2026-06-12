@@ -351,7 +351,7 @@ export class PresupuestosClientesPage {
     this.editRazonSocial.set(c.razonSocial ?? '');
     this.editNombre.set(c.nombre ?? '');
     this.editEmail.set(c.email ?? '');
-    this.editNotas.set('');
+    this.editNotas.set(c.notas ?? '');
     const rubroActual = c.rubro ?? '';
     const esPredefinido = this.opcionesRubro.some((o) => o.value === rubroActual);
     if (rubroActual && !esPredefinido) {

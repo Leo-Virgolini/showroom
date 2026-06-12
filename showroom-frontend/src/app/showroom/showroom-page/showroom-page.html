@@ -1149,6 +1149,14 @@
           Teléfono <span class="text-red-500">*</span>
         </label>
         <p-inputMask mask="99-99999999" [unmask]="true" [ngModel]="telefonoInputValue()" (ngModelChange)="onTelefonoChange($event)" placeholder="11-12345678" class="w-full" />
+        @if (!clienteExistente() && clientePorTelefono(); as cli) {
+          <span class="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded
+                       bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+            <i class="pi pi-info-circle text-[10px]"></i>
+            Este teléfono ya pertenece a <strong>{{ cli.razonSocial || cli.nombre || 'un cliente' }}</strong>.
+            Si es el mismo cliente, perfecto; si no, revisá el número.
+          </span>
+        }
       </div>
 
       <div class="flex flex-col gap-1">

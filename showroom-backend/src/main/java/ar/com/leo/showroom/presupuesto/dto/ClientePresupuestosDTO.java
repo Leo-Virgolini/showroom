@@ -70,6 +70,9 @@ public record ClientePresupuestosDTO(
         /** Razón social / apellido del cliente — viene del maestro editable
          *  ({@code ClienteMaster.razonSocial}); null para clientes que aún no la
          *  tienen cargada. Es lo que va a DUX como {@code apellido_razon_social}. */
-        String razonSocial
+        String razonSocial,
+        /** Notas internas del operador (del maestro). Se devuelve para que el
+         *  diálogo de edición las pre-llene y no se pierdan al guardar. */
+        String notas
 ) {
 }

@@ -50,6 +50,15 @@ public class ClienteMasterController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /** Devuelve el cliente que YA tiene ese teléfono (si existe) — para avisar al
+     *  operador que está reusando el teléfono de otro cliente. 404 si no hay. */
+    @GetMapping("/por-telefono/{telefono}")
+    public ResponseEntity<ClienteAutocompletarDTO> buscarPorTelefono(@PathVariable String telefono) {
+        return service.buscarPorTelefono(telefono)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     /** Autocompletado del pedido por razón social / nombre: devuelve los clientes
      *  guardados que coinciden con el texto, para que el operador elija uno y
      *  precargue sus datos. Lista vacía si no hay coincidencias o el texto es muy

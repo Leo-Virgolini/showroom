@@ -382,9 +382,10 @@ public class PresupuestoComercialService {
     public List<ClientePresupuestosDTO> listarClientes() {
         // La LISTA de clientes sale del MAESTRO (ClienteMaster) — fuente única.
         // El historial (presupuestos + pedidos) se usa SOLO para la actividad
-        // (contadores, último movimiento, montos, deep-links) y como fallback de
-        // datos para clientes legacy que aún no tienen todos los campos en el
-        // master. Agrupamos los movimientos por teléfono para esa actividad.
+        // (contadores, último movimiento, montos, deep-links) y, una única vez,
+        // para sembrar el master de clientes legacy (backfill). Los DATOS del
+        // cliente salen SIEMPRE del master, sin fallback al historial. Agrupamos
+        // los movimientos por teléfono para esa actividad/backfill.
         Map<String, AgregadorCliente> agrupados = new LinkedHashMap<>();
 
         // 1. Presupuestos comerciales (excluidos los soft-deleted).
@@ -434,10 +435,10 @@ public class PresupuestoComercialService {
             }
         }
 
-        // La LISTA = masters (no eliminados). Cada fila combina los datos del
-        // master (fuente) con fallback al historial (legacy) + la actividad.
-        // Los clientes con master eliminado (soft-delete) quedan fuera; los de
-        // alta manual (sin movimientos) aparecen con la actividad en cero.
+        // La LISTA = masters (no eliminados). Cada fila usa los datos del master
+        // (sin fallback al historial) + la actividad calculada arriba. Los
+        // clientes con master eliminado (soft-delete) quedan fuera; los de alta
+        // manual (sin movimientos) aparecen con la actividad en cero.
         List<ClientePresupuestosDTO> conMaster = masters.values().stream()
                 .filter(m -> m.getEliminadoAt() == null)
                 .map(m -> dtoDesdeMaster(m, agrupados.get(m.getTelefonoNormalizado())))
@@ -506,7 +507,8 @@ public class PresupuestoComercialService {
                 null,
                 m.getIdLocalidad(),
                 null,
-                m.getRazonSocial());
+                m.getRazonSocial(),
+                m.getNotas());
     }
 
     /** Completa {@code provinciaNombre}/{@code localidadNombre} resolviendo los
@@ -530,7 +532,7 @@ public class PresupuestoComercialService {
                 dto.ultimoPresupuestoId(), dto.ultimoPedidoId(),
                 dto.tipoDoc(), dto.nroDoc(), dto.domicilio(),
                 dto.codigoProvincia(), provNombre,
-                dto.idLocalidad(), locNombre, dto.razonSocial());
+                dto.idLocalidad(), locNombre, dto.razonSocial(), dto.notas());
     }
 
     private static Long parseLongOrNull(String s) {

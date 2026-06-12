@@ -163,6 +163,13 @@ export class ShowroomService {
       .pipe(catchError(() => of(null)));
   }
 
+  /** Busca el cliente que YA tiene ese teléfono (para el aviso "teléfono ya
+   *  registrado"). null si no hay ninguno. Best-effort. */
+  buscarClientePorTelefono(telefono: string): Observable<ClienteAutocompletar | null> {
+    return this.http.get<ClienteAutocompletar>(`${this.base}/cliente-master/por-telefono/${encodeURIComponent(telefono)}`)
+      .pipe(catchError(() => of(null)));
+  }
+
   /** Busca clientes guardados por razón social / nombre (autocompletado del
    *  pedido). Best-effort: ante error devuelve lista vacía. */
   buscarClientesPorRazonSocial(q: string): Observable<ClienteAutocompletar[]> {

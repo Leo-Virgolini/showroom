@@ -142,6 +142,21 @@ public class ClienteMasterService {
     }
 
     /**
+     * Busca el cliente del maestro (no eliminado) que YA tiene este teléfono.
+     * Lo usa el aviso "este teléfono ya pertenece a X" al crear un presupuesto/
+     * pedido nuevo — el teléfono es la clave del cliente, así que reutilizarlo
+     * fusiona los movimientos en ese cliente. {@code Optional.empty()} si nadie
+     * lo tiene todavía.
+     */
+    public Optional<ClienteAutocompletarDTO> buscarPorTelefono(String telefono) {
+        String telefonoNorm = normalizar(telefono);
+        if (telefonoNorm == null) return Optional.empty();
+        return repository.findByTelefonoNormalizado(telefonoNorm)
+                .filter(m -> m.getEliminadoAt() == null)
+                .map(this::toAutocompletar);
+    }
+
+    /**
      * Autocompletado por razón social / nombre: busca clientes del maestro (no
      * eliminados) cuyo razón social o nombre contenga el texto tipeado. Devuelve
      * los candidatos para que el operador elija uno y precargue los datos.
@@ -196,7 +211,15 @@ public class ClienteMasterService {
         setIfPresent(pedido.getEmail(), master::setEmail);
         setIfPresent(pedido.getRubro(), master::setRubro);
         setIfPresent(pedido.getTipoDoc(), master::setTipoDoc);
-        if (nroDoc != null) master.setNroDoc(nroDoc);
+        // CUIT: solo lo seteamos si no pertenece YA a OTRO cliente (otro teléfono)
+        // — sino violaría el índice único de CUIT. Si choca, dejamos el master sin
+        // tocar su CUIT (el pedido igual se crea; este upsert es best-effort).
+        if (nroDoc != null) {
+            final String telMaster = master.getTelefonoNormalizado();
+            boolean cuitDeOtro = repository.findByNroDocOrderByActualizadoAtDesc(nroDoc).stream()
+                    .anyMatch(otro -> !otro.getTelefonoNormalizado().equals(telMaster));
+            if (!cuitDeOtro) master.setNroDoc(nroDoc);
+        }
         setIfPresent(pedido.getDomicilio(), master::setDomicilio);
         setIfPresent(pedido.getCodigoProvincia(), master::setCodigoProvincia);
         setIfPresent(pedido.getIdLocalidad(), master::setIdLocalidad);
