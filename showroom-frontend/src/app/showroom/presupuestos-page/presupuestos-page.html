@@ -1200,6 +1200,34 @@
           }
         </div>
       </div>
+
+      <!-- Proveedor, rubro e IVA del producto (datos DUX). -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
+            <i class="pi pi-truck text-[10px]"></i> Proveedor
+          </div>
+          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
+            {{ p.proveedor || '—' }}
+          </div>
+        </div>
+        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
+            <i class="pi pi-tag text-[10px]"></i> Rubro
+          </div>
+          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
+            {{ p.rubro || '—' }}
+          </div>
+        </div>
+        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
+            <i class="pi pi-percentage text-[10px]"></i> IVA
+          </div>
+          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+            {{ p.porcIva != null ? p.porcIva + '%' : '—' }}
+          </div>
+        </div>
+      </div>
     </div>
 
     <ng-template #footer>

@@ -1280,7 +1280,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     if (query) {
       const seq = ++this.scanSeq;
       this.reordenando.set(true);
-      this.buscarEnCatalogo(query, seq);
+      // Refinamiento de la lista: nunca auto-agregar aunque quede 1 resultado.
+      this.buscarEnCatalogo(query, seq, false);
     }
   }
 
@@ -1293,7 +1294,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     if (query) {
       const seq = ++this.scanSeq;
       this.reordenando.set(true);
-      this.buscarEnCatalogo(query, seq);
+      // Refinamiento de la lista: nunca auto-agregar aunque quede 1 resultado.
+      this.buscarEnCatalogo(query, seq, false);
     }
   }
 
@@ -1309,7 +1311,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       });
   }
 
-  private buscarEnCatalogo(query: string, seq: number): void {
+  private buscarEnCatalogo(query: string, seq: number, autoAgregarSiUnico = true): void {
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
     const { sortField, sortOrder } = this.ordenResultadosParams();
@@ -1329,8 +1331,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           });
           this.resultadosBusqueda.set([]);
           this.totalResultadosBusqueda.set(0);
-        } else if (page.items.length === 1 && page.total === 1) {
+        } else if (autoAgregarSiUnico && page.items.length === 1 && page.total === 1) {
           // Único resultado en todo el catálogo — lo agregamos directo.
+          // Solo en la búsqueda inicial (el operador tipeó una query): al
+          // refinar filtro/orden NO auto-agregamos, sino el cambio de filtro
+          // metía el producto al detalle (o le sumaba cantidad si ya estaba).
           this.totalResultadosBusqueda.set(1);
           this.seleccionarResultado(page.items[0].sku);
           return;

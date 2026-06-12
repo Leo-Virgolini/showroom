@@ -1163,7 +1163,8 @@ export class ShowroomPage implements AfterViewInit {
     const query = this.busquedaQuery();
     if (query) {
       this.reordenando.set(true);
-      this.buscarPorDescripcion(query);
+      // Refinamiento de la lista: nunca auto-cargar aunque quede 1 resultado.
+      this.buscarPorDescripcion(query, false);
     }
   }
 
@@ -1175,7 +1176,8 @@ export class ShowroomPage implements AfterViewInit {
     const query = this.busquedaQuery();
     if (query) {
       this.reordenando.set(true);
-      this.buscarPorDescripcion(query);
+      // Refinamiento de la lista: nunca auto-cargar aunque quede 1 resultado.
+      this.buscarPorDescripcion(query, false);
     }
   }
 
@@ -1191,7 +1193,7 @@ export class ShowroomPage implements AfterViewInit {
       });
   }
 
-  private buscarPorDescripcion(query: string): void {
+  private buscarPorDescripcion(query: string, autoAgregarSiUnico = true): void {
     const seq = ++this.scanSeq;
     this.busquedaQuery.set(query);
     this.paginaResultados.set(0);
@@ -1210,9 +1212,12 @@ export class ShowroomPage implements AfterViewInit {
           this.ultimoScan.set(null);
           this.resultadosBusqueda.set([]);
           this.totalResultadosBusqueda.set(0);
-        } else if (page.items.length === 1 && page.total === 1) {
+        } else if (autoAgregarSiUnico && page.items.length === 1 && page.total === 1) {
           // Único resultado en TODO el catálogo (no solo en la primera página)
-          // — lo cargamos directo, ahorrando un click.
+          // — lo cargamos directo, ahorrando un click. Solo en la búsqueda
+          // inicial; al refinar filtro/orden NO auto-cargamos (sino el cambio
+          // de filtro escaneaba el producto al carrito sin que el operador lo
+          // pidiera).
           this.totalResultadosBusqueda.set(1);
           this.seleccionarResultado(page.items[0].sku);
           return;
