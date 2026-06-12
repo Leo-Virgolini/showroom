@@ -73,9 +73,6 @@ export class PresupuestosClientesPage {
   private readonly route = inject(ActivatedRoute);
   private readonly confirmationService = inject(ConfirmationService);
 
-  readonly screenLg = signal(
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
-  );
 
   readonly cargando = signal(false);
   readonly clientes = signal<ClientePresupuestos[]>([]);

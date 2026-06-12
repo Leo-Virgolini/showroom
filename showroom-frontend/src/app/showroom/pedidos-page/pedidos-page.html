@@ -132,9 +132,6 @@
             </th>
             <th class="text-right" style="width: 11rem" pSortableColumn="total">
               Total <p-sortIcon field="total" />
-              <div class="text-[0.65rem] font-normal text-muted-color leading-none">
-                c/IVA · s/IVA
-              </div>
             </th>
             <th class="text-center" style="width: 8rem">Acciones</th>
           </tr>
@@ -233,11 +230,6 @@
               <div class="font-semibold text-base">
                 {{ (p.total ?? p.totalSinIva) | currency:'ARS':'symbol':'1.0-0' }}
               </div>
-              @if (p.totalSinIva != null && p.total != null && p.totalSinIva !== p.total) {
-                <div class="text-[0.7rem] text-muted-color leading-tight">
-                  s/IVA: {{ p.totalSinIva | currency:'ARS':'symbol':'1.0-0' }}
-                </div>
-              }
             </td>
             <td class="text-center">
               <div class="inline-flex gap-1">
@@ -419,7 +411,6 @@
                           <dt class="text-muted-color">DUX facturó</dt>
                           <dd class="tabular-nums font-semibold">
                             {{ totalDux(det) | currency:'ARS':'symbol':'1.0-0' }}
-                            <span class="text-xs font-normal text-muted-color ml-1">c/IVA</span>
                           </dd>
                         } @else if (det.totalSinIva != null && det.total != null && det.totalSinIva !== det.total) {
                           <dt class="text-muted-color">Sin IVA</dt>

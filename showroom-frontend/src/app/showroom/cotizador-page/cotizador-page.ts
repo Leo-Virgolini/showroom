@@ -90,9 +90,6 @@ export class CotizadorPage {
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
 
-  readonly screenLg = signal(
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
-  );
 
   /** Modo edición: si la URL trae `:id`, lo cargamos y al guardar usamos PUT. */
   readonly cotizacionEditandoId = signal<number | null>(null);

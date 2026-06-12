@@ -62,9 +62,6 @@ export class CotizadorHistorialPage {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly route = inject(ActivatedRoute);
 
-  readonly screenLg = signal(
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
-  );
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);

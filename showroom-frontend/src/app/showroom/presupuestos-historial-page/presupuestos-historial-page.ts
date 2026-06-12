@@ -70,10 +70,6 @@ export class PresupuestosHistorialPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  /** Pantalla ≥ 1024px — usado para mostrar/ocultar labels de botones. */
-  readonly screenLg = signal(
-    typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
-  );
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
