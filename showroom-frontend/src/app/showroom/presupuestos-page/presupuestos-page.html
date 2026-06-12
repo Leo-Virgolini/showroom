@@ -260,10 +260,13 @@
                 }
               </div>
               @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-                <div class="p-2 border-t border-[#FF861C]/10 bg-[#FF861C]/5 text-center">
-                  <p-button icon="pi pi-plus" label="Cargar más resultados" severity="secondary"
+                <div class="px-3 py-1.5 border-t border-[#FF861C]/10 bg-[#FF861C]/5 flex items-center justify-center gap-2">
+                  <p-button icon="pi pi-chevron-down" label="Cargar más" severity="secondary"
                     [text]="true" size="small"
                     [loading]="cargandoMasResultados()" (onClick)="cargarMasResultados()" />
+                  <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-[#FF861C]/10">
+                    {{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}
+                  </span>
                 </div>
               }
             </div>
@@ -281,7 +284,7 @@
              están "comprometidos" en el presupuesto. -->
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
-            <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex flex-col gap-2.5">
               <div class="kt-card-title kt-card-title-detalle">
                 <i class="pi pi-shopping-cart"></i>
                 <span>Detalle del presupuesto</span>
@@ -318,9 +321,10 @@
                   </button>
                 }
               </div>
-              <div class="flex items-center gap-1.5 flex-wrap justify-end">
-                <!-- Acciones del presupuesto — movidas acá desde el header para
-                     no saturarlo (antes lo dejaban en 2 filas). -->
+              <div class="flex items-center gap-2 flex-wrap pt-2.5 border-t border-[#7EBA00]/25 dark:border-[#7EBA00]/15">
+                <!-- Acciones del presupuesto — en su propia fila (barra de
+                     acciones) separada del título con un divisor, para que los
+                     botones tengan aire y no queden apretados al envolverse. -->
                 @if (cargandoEdicion()) {
                   <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
                     <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
@@ -384,8 +388,9 @@
                     tooltipPosition="bottom" />
                 }
 
-                <!-- Chip "Datos del cliente" -->
-                <button type="button" class="kt-cliente-chip"
+                <!-- Chip "Datos del cliente" — empujado a la derecha de la
+                     barra (identidad, separada de las acciones). -->
+                <button type="button" class="kt-cliente-chip sm:ml-auto"
                   (click)="abrirDialogCliente(null)"
                   [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
                   <i class="pi pi-user"></i>

@@ -120,7 +120,8 @@
           <input pInputText type="text" class="w-full"
             [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
             maxlength="150"
-            placeholder="Opcional — se guarda en la ficha del cliente (no se sube a DUX)" />
+            placeholder="Opcional — solo para la ficha"
+            pTooltip="Se guarda en la ficha del cliente. No se sube a DUX." tooltipPosition="top" />
         </div>
       </div>
 
