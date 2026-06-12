@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -45,16 +44,24 @@ public class ClienteMasterService {
                     "El teléfono debe tener al menos un dígito para identificar al cliente.");
         }
         ClienteMaster master = masterPorTelefonoONuevo(telefonoNorm);
-        // CUIT único: si el documento ya pertenece a OTRO cliente (otro teléfono),
-        // rechazamos con un error claro (sino saltaría una violación de constraint
-        // cruda al guardar). null/sin CUIT no valida (varios informales sin doc).
+        // CUIT único: si el documento ya pertenece a OTRO cliente hay que decidir
+        // según su estado (sino saltaría una violación de constraint cruda al
+        // guardar). null/sin CUIT no valida (varios informales sin doc).
         if (datos.nroDoc() != null) {
-            boolean cuitDeOtro = repository.findByNroDocOrderByActualizadoAtDesc(datos.nroDoc())
-                    .stream()
-                    .anyMatch(otro -> !otro.getTelefonoNormalizado().equals(telefonoNorm));
-            if (cuitDeOtro) {
-                throw new ar.com.leo.showroom.common.exception.ConflictException(
-                        "Ese CUIT ya está asignado a otro cliente.");
+            for (ClienteMaster otro : repository.findByNroDocOrderByActualizadoAtDesc(datos.nroDoc())) {
+                if (otro.getTelefonoNormalizado().equals(telefonoNorm)) continue; // es este mismo cliente
+                if (otro.getEliminadoAt() == null) {
+                    // Colisión real con un cliente ACTIVO: error claro en vez de
+                    // dejar saltar la violación cruda del índice único.
+                    throw new ar.com.leo.showroom.common.exception.ConflictException(
+                            "Ese CUIT ya está asignado a otro cliente.");
+                }
+                // El CUIT lo retiene un cliente ELIMINADO (oculto del listado): se lo
+                // liberamos para poder reasignarlo acá, sino chocaría el índice único
+                // al guardar. Si ese cliente se reactiva luego, se le recarga el CUIT
+                // a mano. Flush inmediato para liberar el índice antes del save final.
+                otro.setNroDoc(null);
+                repository.saveAndFlush(otro);
             }
         }
         master.setRazonSocial(blankToNull(datos.razonSocial()));
@@ -135,9 +142,10 @@ public class ClienteMasterService {
      */
     public Optional<ClienteAutocompletarDTO> buscarParaAutocompletar(Long nroDoc) {
         if (nroDoc == null) return Optional.empty();
+        // El CUIT es único (índice único): a lo sumo una fila no-eliminada.
         return repository
                 .findByNroDocAndEliminadoAtIsNull(nroDoc).stream()
-                .max(Comparator.comparing(ClienteMaster::getActualizadoAt))
+                .findFirst()
                 .map(this::toAutocompletar);
     }
 
@@ -167,10 +175,21 @@ public class ClienteMasterService {
         String texto = q.trim();
         if (texto.length() < 2) return java.util.List.of();
         return repository
-                .buscarPorRazonSocialONombre(texto, org.springframework.data.domain.PageRequest.of(0, 10))
+                .buscarPorRazonSocialONombre(escaparLike(texto),
+                        org.springframework.data.domain.PageRequest.of(0, 10))
                 .stream()
                 .map(this::toAutocompletar)
                 .toList();
+    }
+
+    /** Escapa los comodines de LIKE ({@code \}, {@code %}, {@code _}) para que un
+     *  texto tipeado por el operador se busque como literal y no como patrón. El
+     *  backslash va primero (sino re-escaparía los que agregamos). Pareado con la
+     *  cláusula {@code escape '\'} de {@code buscarPorRazonSocialONombre}. */
+    private static String escaparLike(String s) {
+        return s.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     /**
@@ -234,7 +253,9 @@ public class ClienteMasterService {
     private ClienteAutocompletarDTO toAutocompletar(ClienteMaster m) {
         return new ClienteAutocompletarDTO(
                 m.getRazonSocial(), m.getNombre(), m.getEmail(),
-                denormalizarTelefono(m.getTelefonoNormalizado()),
+                // El teléfono se guarda ya normalizado (solo dígitos); lo devolvemos
+                // tal cual — el front lo muestra/normaliza igual que cualquier tipeo.
+                m.getTelefonoNormalizado(),
                 m.getRubro(), m.getTipoDoc(), m.getNroDoc(), m.getDomicilio(),
                 m.getCodigoProvincia(), m.getIdLocalidad());
     }
@@ -308,13 +329,6 @@ public class ClienteMasterService {
                 .orElseGet(() -> ClienteMaster.builder()
                         .telefonoNormalizado(telefonoNorm)
                         .build());
-    }
-
-    /** El maestro guarda el teléfono ya normalizado (solo dígitos). Para
-     *  autocompletar lo devolvemos tal cual — el front lo muestra/normaliza
-     *  igual que cualquier teléfono tipeado. */
-    private static String denormalizarTelefono(String telefonoNormalizado) {
-        return telefonoNormalizado;
     }
 
     /** Misma normalización que usa {@code PresupuestoComercialService#claveTelefono}.

@@ -596,11 +596,14 @@
             }
           </ul>
           @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-          <div class="flex justify-center pt-2 border-t border-stone-200 dark:border-stone-800 shrink-0">
-            <p-button [label]="'Cargar más (' + (totalResultadosBusqueda() - resultadosBusqueda().length) + ' restantes)'"
-              icon="pi pi-chevron-down" severity="secondary" [outlined]="true" size="small"
+          <div class="flex items-center justify-center gap-2 pt-2 border-t border-stone-200 dark:border-stone-800 shrink-0">
+            <p-button label="Cargar más" icon="pi pi-chevron-down" severity="secondary"
+              [text]="true" size="small"
               [loading]="cargandoMasResultados()"
               (onClick)="cargarMasResultados()" />
+            <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-stone-200/70 dark:bg-stone-700/50">
+              {{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}
+            </span>
           </div>
           }
         </div>

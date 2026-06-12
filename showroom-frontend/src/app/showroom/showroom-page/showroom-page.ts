@@ -177,12 +177,17 @@ export class ShowroomPage implements AfterViewInit {
     const orden = this.ordenCarrito();
     if (!orden) return items;
     const factor = orden.dir === 'asc' ? 1 : -1;
-    return [...items].sort((a, b) => {
-      if (orden.campo === 'producto') {
-        return (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor;
-      }
-      return (this.precioItemForma(a) - this.precioItemForma(b)) * factor;
-    });
+    if (orden.campo === 'producto') {
+      return [...items].sort((a, b) =>
+        (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor);
+    }
+    // Orden por precio: pre-calcular el precio de cada ítem UNA vez
+    // (decorate-sort-undecorate) en vez de reevaluar `precioItemForma` en cada
+    // comparación del sort (O(n log n) llamadas → O(n)).
+    return items
+      .map((it) => ({ it, precio: this.precioItemForma(it) }))
+      .sort((a, b) => (a.precio - b.precio) * factor)
+      .map((x) => x.it);
   });
 
   /** Cicla el orden del carrito para un campo: asc → desc → sin orden (escaneo). */
@@ -204,9 +209,6 @@ export class ShowroomPage implements AfterViewInit {
     return o.dir === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down';
   }
 
-  /** Sesión de atención al cliente — la mantiene el backend (global, como el
-   *  carrito) y se sincroniza vía SSE `sesion-updated`. Cuando no hay activa
-   *  todos los campos son null. */
   /** Sesión de atención — el estado lo centraliza {@link SesionClienteService}
    *  (global por operador, sincronizado por SSE), compartido con el
    *  presupuestador. */
@@ -514,16 +516,32 @@ export class ShowroomPage implements AfterViewInit {
     this.carrito().some((it) => this.descuentoManual(it.itemKey) > 0),
   );
 
+  /** Total del carrito por forma de pago, calculado UNA sola vez por cambio
+   *  (carrito / formas / precios). Antes {@link totalParaForma} recorría todo el
+   *  carrito en cada llamada, y el dialog comparativo lo invoca por fila + lo
+   *  usa {@link formaMasBarata} → O(formas × ítems) recalculado en cada change
+   *  detection. Memoizado como `Map<formaId, total>` se calcula una vez y se
+   *  lee O(1). Descuento per-item para que los rubros excluidos (MAQUINAS
+   *  INDUSTRIALES) no reciban la rebaja por escala. */
+  private readonly totalesPorForma = computed<Map<number, number>>(() => {
+    const carrito = this.carrito();
+    const mapa = new Map<number, number>();
+    for (const fp of this.formasPagoActivas()) {
+      let total = 0;
+      for (const it of carrito) {
+        const descuento = this.descuentoParaItem(it);
+        total += this.precioReferenciaPorForma(it, fp) * (1 - descuento / 100) * it.cantidad;
+      }
+      mapa.set(fp.id, total);
+    }
+    return mapa;
+  });
+
   /** Total final del carrito para una forma de pago dada — usado en el dialog
    *  "comparativa de formas de pago" que el operador le muestra al cliente.
-   *  Descuento per-item para que los rubros excluidos (MAQUINAS INDUSTRIALES)
-   *  no reciban la rebaja por escala. */
+   *  Lee del mapa memoizado {@link totalesPorForma}. */
   totalParaForma(fp: FormaPago): number {
-    return this.carrito().reduce((acc, it) => {
-      const descuento = this.descuentoParaItem(it);
-      const unit = this.precioReferenciaPorForma(it, fp) * (1 - descuento / 100);
-      return acc + unit * it.cantidad;
-    }, 0);
+    return this.totalesPorForma().get(fp.id) ?? 0;
   }
 
   /** Toggle del dialog que lista todas las formas con su total — para mostrar
@@ -566,14 +584,16 @@ export class ShowroomPage implements AfterViewInit {
     () => this.carrito().some((it) => this.rubroCotizaSinIva(it.rubro)),
   );
 
-  /** Forma de pago con el menor total — para el badge "MEJOR PRECIO". */
+  /** Forma de pago con el menor total — para el badge "MEJOR PRECIO". Deriva del
+   *  mapa memoizado en vez de recorrer el carrito por cada forma. */
   readonly formaMasBarata = computed(() => {
     const formas = this.formasPagoActivas();
     if (formas.length === 0) return null;
+    const totales = this.totalesPorForma();
     let min = formas[0];
-    let minTotal = this.totalParaForma(min);
+    let minTotal = totales.get(min.id) ?? Infinity;
     for (const fp of formas.slice(1)) {
-      const t = this.totalParaForma(fp);
+      const t = totales.get(fp.id) ?? Infinity;
       if (t < minTotal) {
         min = fp;
         minTotal = t;
@@ -607,7 +627,9 @@ export class ShowroomPage implements AfterViewInit {
    *  excluidos por rubro no empujan el escalón. */
   private readonly proximoEscalonObj = computed(() => {
     const sub = this.subtotalElegibleDescuento();
-    return this.escalasDescuento().find((e) => sub < e.umbralMin) ?? null;
+    // Sobre la lista ordenada por umbral asc — no confiar en el orden de la signal
+    // cruda (el "más cercano" depende de que estén ordenados de menor a mayor).
+    return this.escalasOrdenadas().find((e) => sub < e.umbralMin) ?? null;
   });
 
   /** Pesos que faltan para llegar al próximo escalón — null si ya está en el tope. */
@@ -888,10 +910,6 @@ export class ShowroomPage implements AfterViewInit {
     this.destroyRef.onDestroy(() =>
       mq.removeEventListener('change', sync as (e: MediaQueryListEvent) => void),
     );
-
-    // Cancela la request de localidades en vuelo cuando el componente se
-    // destruye. No es un leak crítico (la respuesta sería ignorada igual),
-    // pero evita el warning de Angular Zoneless sobre observables huérfanos.
 
     // En dispositivos táctiles (tablets/phones) reenfocar al click abre el
     // teclado virtual cada vez que tocan algo. Solo activamos el auto-refocus

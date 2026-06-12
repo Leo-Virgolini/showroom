@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Fija el comportamiento de {@link PrecioPerfilCalculator#calcularPrecioFinal}
  * por perfil de IVA. Esta es la fórmula que ahora usa TAMBIÉN el payload a DUX
- * ({@code ShowroomService.construirPayloadDux}): a DUX se sube exactamente el
+ * ({@code PedidoService.construirPayloadDux}): a DUX se sube exactamente el
  * precio que paga el cliente según el perfil del rubro, no siempre con IVA.
  *
  * <p>Regresión: antes el payload DUX forzaba {@code aplicaIva=true} (vía el

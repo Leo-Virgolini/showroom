@@ -1431,11 +1431,6 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     /**
-     * Cintillo al pie del PDF de ítems de interés que invita a consultar otras
-     * formas de pago — complementa el "PRECIO EFECTIVO" del encabezado para que
-     * el cliente sepa que ese precio es el de contado y que hay alternativas.
-     */
-    /**
      * Aclaraciones finas debajo de la tabla de ítems de interés: los montos son
      * de contado y sin IVA, y (si hay escalones) cómo aplican los descuentos —
      * sobre el total de la compra y no acumulables, para que el cliente no

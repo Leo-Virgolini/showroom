@@ -12,6 +12,7 @@ import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
+import ar.com.leo.showroom.pedido.service.PedidoService;
 import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.PerfilEtiquetasService;
 import ar.com.leo.showroom.picking.PickingEmailService;
@@ -91,6 +92,7 @@ import java.util.Map;
 public class ShowroomController {
 
     private final ShowroomService service;
+    private final PedidoService pedidoService;
     private final CarritoService carritoService;
     private final ar.com.leo.showroom.auth.repository.UsuarioRepository usuarioRepository;
     private final CatalogoSyncService catalogoSync;
@@ -327,7 +329,7 @@ public class ShowroomController {
             @RequestParam(value = "desde", required = false) Instant desde,
             @RequestParam(value = "hasta", required = false) Instant hasta,
             @RequestParam(value = "topN", defaultValue = "10") int topN) {
-        return service.obtenerEstadisticasHistorial(desde, hasta, topN);
+        return pedidoService.obtenerEstadisticasHistorial(desde, hasta, topN);
     }
 
     /**
@@ -578,7 +580,7 @@ public class ShowroomController {
             @RequestParam(value = "size", defaultValue = "50") int size,
             @RequestParam(value = "sortField", required = false) String sortField,
             @RequestParam(value = "sortOrder", required = false) String sortOrder) {
-        return service.listarPedidos(id, q, estado, desde, hasta, page, size, sortField, sortOrder);
+        return pedidoService.listarPedidos(id, q, estado, desde, hasta, page, size, sortField, sortOrder);
     }
 
     /**
@@ -586,7 +588,7 @@ public class ShowroomController {
      */
     @GetMapping("/pedidos/{id}")
     public PedidoDetailDTO obtenerPedido(@PathVariable Long id) {
-        return service.obtenerPedido(id);
+        return pedidoService.obtenerPedido(id);
     }
 
     /**
@@ -658,8 +660,8 @@ public class ShowroomController {
     /**
      * Anula un pedido (acción manual del operador). Marca estado=ANULADO,
      * registra timestamp y motivo opcional. NO cancela en DUX — la API de DUX
-     * no expone esa operación; si el pedido ya estaba CARGADO_EN_DUX hay que
-     * cancelarlo manualmente desde la UI de DUX.
+     * no expone esa operación; si el pedido ya estaba ENVIADO (cargado en DUX) hay
+     * que cancelarlo manualmente desde la UI de DUX.
      *
      * Devuelve el detalle del pedido ya con estado ANULADO. 409 si ya estaba.
      */
@@ -668,7 +670,7 @@ public class ShowroomController {
             @PathVariable Long id,
             @RequestBody(required = false) @Valid AnularPedidoRequestDTO body) {
         String motivo = body != null ? body.motivo() : null;
-        return service.anularPedido(id, motivo);
+        return pedidoService.anularPedido(id, motivo);
     }
 
     /**
@@ -678,7 +680,7 @@ public class ShowroomController {
      */
     @PostMapping("/pedidos/{id}/reactivar")
     public PedidoDetailDTO reactivarPedido(@PathVariable Long id) {
-        return service.reactivarPedido(id);
+        return pedidoService.reactivarPedido(id);
     }
 
     /**
@@ -797,7 +799,7 @@ public class ShowroomController {
             @RequestBody @Valid CrearPedidoRequestDTO request,
             @RequestHeader(value = "X-Client-Id", required = false) String clientId,
             Authentication auth) {
-        CrearPedidoResponseDTO response = service.crearPedido(request, clientId, auth.getName());
+        CrearPedidoResponseDTO response = pedidoService.crearPedido(request, clientId, auth.getName());
         HttpStatus status = response.estado() == EstadoPedido.ENVIADO
                 ? HttpStatus.CREATED
                 : HttpStatus.ACCEPTED; // 202 si quedó local pero DUX falló

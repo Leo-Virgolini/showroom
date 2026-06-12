@@ -62,6 +62,7 @@ import {
   ProductoGenericoDialog,
 } from '../producto-generico-dialog/producto-generico-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
+import { crearTelefonoLookup } from '../telefono-lookup.util';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { toastError } from '../toast.utils';
 import { PageHeader } from '../page-header/page-header';
@@ -275,7 +276,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Cliente que YA tiene el teléfono ingresado (null = ninguno) — alimenta el
    *  aviso "este teléfono ya pertenece a X". */
   readonly clientePorTelefono = signal<ClienteAutocompletar | null>(null);
-  private ultimoTelefonoLookup = '';
 
   /** ngModelChange del teléfono: setea el signal + chequea si el teléfono ya
    *  pertenece a un cliente (para el aviso). */
@@ -284,23 +284,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.chequearTelefonoExistente(value ?? '');
   }
 
-  /** Busca si el teléfono ya es de un cliente (a partir de 8 dígitos) y actualiza
-   *  {@link clientePorTelefono}. Evita lookups repetidos para el mismo número. */
-  private chequearTelefonoExistente(telefono: string): void {
-    const digits = (telefono ?? '').replace(/\D/g, '');
-    if (digits.length < 8) {
-      this.clientePorTelefono.set(null);
-      this.ultimoTelefonoLookup = '';
-      return;
-    }
-    if (digits === this.ultimoTelefonoLookup) return;
-    this.ultimoTelefonoLookup = digits;
-    this.api.buscarClientePorTelefono(digits)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((cli) => {
-        if (digits === this.ultimoTelefonoLookup) this.clientePorTelefono.set(cli);
-      });
-  }
+  /** Chequea si el teléfono ya es de un cliente (a partir de 8 dígitos) y
+   *  actualiza {@link clientePorTelefono}. La lógica (normalización + dedupe +
+   *  guard de respuesta tardía) vive en {@link crearTelefonoLookup}, compartida
+   *  con la pantalla de clientes. */
+  private readonly chequearTelefonoExistente = crearTelefonoLookup(
+    (d) => this.api.buscarClientePorTelefono(d),
+    this.destroyRef,
+    (cli) => this.clientePorTelefono.set(cli),
+  );
   /** Lista dinámica de sugerencias del autocomplete del email — se rearma
    *  con cada keystroke (ver {@link onCompletarEmail}). */
   readonly sugerenciasEmail = signal<string[]>([]);

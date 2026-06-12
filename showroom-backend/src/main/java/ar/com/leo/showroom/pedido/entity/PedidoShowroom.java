@@ -114,15 +114,17 @@ public class PedidoShowroom {
     @Column(name = "total_sin_recargo", precision = 18, scale = 2)
     private BigDecimal totalSinRecargo;
 
-    /** Datos del cliente del pedido — copiados del payload al crear. */
+    /** Razón social del cliente — editable y obligatoria en pedidos nuevos; es lo
+     *  ÚNICO que va a DUX como `apellido_razon_social`. Dato principal de la columna
+     *  Cliente del listado. (Pedidos legacy podían traer el placeholder fijo
+     *  "PEDIDO SHOWROOM"/"PRESUPUESTO" acá.) */
     @Column(name = "apellido_razon_social", length = 100)
     private String apellidoRazonSocial;
 
-    /** Nombre y apellido (o razón social) real del cliente. Se manda a DUX en el
-     *  campo `nombre` del payload de /pedido/nuevopedido. Opcional: si el operador
-     *  no lo carga queda null y la columna Cliente del listado muestra "—".
-     *  El campo `apellidoRazonSocial` se reserva para el placeholder fijo
-     *  "PEDIDO SHOWROOM" que la operadora reemplaza en DUX al asociar el comprobante. */
+    /** Nombre de contacto informal del cliente (opcional). NO se sube a DUX
+     *  (decisión jun-2026): se persiste como dato interno y se guarda en la ficha
+     *  de clientes. En el listado se muestra entre paréntesis junto a la razón
+     *  social; si no hay ninguno, la columna Cliente muestra "—". */
     @Column(name = "nombre", length = 100)
     private String nombre;
 
@@ -168,15 +170,27 @@ public class PedidoShowroom {
     private List<PedidoShowroomItem> items = new ArrayList<>();
 
     /**
-     * Nombre del cliente real para mostrar en PDF, email y nombre de archivo.
-     * Prioriza `nombre` (donde el operador carga el nombre y apellido / razón
-     * social real del cliente) y cae a `apellidoRazonSocial` solo si no hay
-     * nombre — en pedidos del showroom ese fallback va a ser el placeholder
-     * "PEDIDO SHOWROOM" que la operadora reemplaza al editar el comprobante en DUX.
+     * Nombre del cliente para mostrar en PDF, email, WhatsApp y nombre de archivo.
+     * Prioriza la razón social (`apellidoRazonSocial`, editable y obligatoria en
+     * pedidos nuevos, la que va a DUX) y cae al `nombre` de contacto solo si no hay
+     * razón social. Ignora los placeholders legacy ("PEDIDO SHOWROOM"/"PRESUPUESTO")
+     * que algunos pedidos viejos guardaban en la razón social. Null si no hay
+     * ninguno. Mismo criterio de prioridad que la columna Cliente del listado (que
+     * además agrega el nombre de contacto entre paréntesis cuando difiere).
      */
     public String getNombreCompleto() {
-        if (nombre != null && !nombre.isBlank()) return nombre.trim();
-        if (apellidoRazonSocial != null && !apellidoRazonSocial.isBlank()) return apellidoRazonSocial.trim();
-        return null;
+        String razon = sinPlaceholderLegacy(apellidoRazonSocial);
+        if (razon != null) return razon;
+        return (nombre != null && !nombre.isBlank()) ? nombre.trim() : null;
+    }
+
+    /** Razón social trimmeada, descartando los placeholders legacy ("PEDIDO
+     *  SHOWROOM"/"PRESUPUESTO") que los pedidos viejos guardaban en
+     *  {@code apellidoRazonSocial}. Null si queda vacía. */
+    private static String sinPlaceholderLegacy(String razon) {
+        if (razon == null || razon.isBlank()) return null;
+        String v = razon.trim();
+        String up = v.toUpperCase();
+        return (up.equals("PEDIDO SHOWROOM") || up.equals("PRESUPUESTO")) ? null : v;
     }
 }

@@ -295,25 +295,43 @@ export class PedidosPage {
     });
   }
 
-  /** Nombre del cliente real (lo que el operador tipeó en "Nombre y apellido")
-   *  para mostrar en la columna Cliente, detalle y modal de anulación. NO
-   *  cae a `apellidoRazonSocial`: ese campo es el placeholder fijo "PEDIDO
-   *  SHOWROOM" que se manda a DUX como `apellido_razon_social`, no info del
-   *  cliente real. Si el operador no cargó nombre, devolvemos null para que
-   *  el template muestre "—". */
-  nombreCliente(p: { nombre: string | null }): string | null {
-    return p.nombre?.trim() || null;
+  /** Texto de la columna Cliente (también en detalle y modal de anulación):
+   *  razón social como principal + nombre informal entre paréntesis si difiere.
+   *  `apellidoRazonSocial` es la razón social real editable (obligatoria en
+   *  pedidos nuevos, va a DUX); `nombre` es el contacto opcional. Se ignoran los
+   *  placeholders legacy ("PEDIDO SHOWROOM"/"PRESUPUESTO") que algunos pedidos
+   *  viejos guardaban en la razón social. Si falta uno, muestra el otro; si
+   *  faltan ambos, null para que el template muestre "—". */
+  nombreCliente(p: { nombre: string | null; apellidoRazonSocial: string | null }): string | null {
+    const razon = this.sinPlaceholderLegacy(p.apellidoRazonSocial);
+    const nombre = p.nombre?.trim() || null;
+    if (razon && nombre && razon.toLowerCase() !== nombre.toLowerCase()) {
+      return `${razon} (${nombre})`;
+    }
+    return razon ?? nombre;
+  }
+
+  /** Razón social trimmeada, descartando los placeholders legacy que los pedidos
+   *  viejos del showroom/presupuesto guardaban en `apellidoRazonSocial` (el código
+   *  actual ya guarda la razón social real). Null si queda vacía. */
+  private sinPlaceholderLegacy(razon: string | null): string | null {
+    const v = razon?.trim();
+    if (!v) return null;
+    const up = v.toUpperCase();
+    return up === 'PEDIDO SHOWROOM' || up === 'PRESUPUESTO' ? null : v;
   }
 
   /** Filtro para abrir la ficha del cliente desde la lista: teléfono (últimos 8
    *  dígitos, igual que el camino inverso en la página de clientes), porque el
    *  maestro está indexado por teléfono. Sin teléfono cae a CUIT y, en última
-   *  instancia, al nombre. Null si no hay nada con qué identificar al cliente. */
+   *  instancia, a la razón social o el nombre crudos (no al texto compuesto con
+   *  paréntesis, que no serviría como término de búsqueda). Null si no hay nada
+   *  con qué identificar al cliente. */
   private filtroCliente(p: PedidoListItem): string | null {
     const tel = (p.telefono ?? '').replace(/\D+/g, '');
-    if (tel) return tel.slice(-8) || tel;
+    if (tel) return tel.slice(-8);
     if (p.nroDoc != null) return String(p.nroDoc);
-    return this.nombreCliente(p);
+    return this.sinPlaceholderLegacy(p.apellidoRazonSocial) ?? p.nombre?.trim() ?? null;
   }
 
   /** True si la fila tiene con qué filtrar la ficha del cliente. */

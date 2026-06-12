@@ -17,11 +17,12 @@ public record PedidoListItemDTO(
         Instant anuladoAt,
         EstadoPedido estado,
         Long nroDoc,
-        /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`.
-         *  No es el nombre real del cliente — eso vive en `nombre`. */
+        /** Razón social del cliente (editable, va a DUX como `apellido_razon_social`).
+         *  Dato principal de la columna Cliente. Pedidos legacy podían traer el
+         *  placeholder "PEDIDO SHOWROOM"/"PRESUPUESTO". */
         String apellidoRazonSocial,
-        /** Nombre y apellido (o razón social) real del cliente. Es el campo que se
-         *  muestra en la columna Cliente del listado. Null si el operador no lo cargó. */
+        /** Nombre de contacto informal del cliente (opcional). Se muestra entre
+         *  paréntesis en la columna Cliente cuando difiere de la razón social. */
         String nombre,
         /** Email del cliente. Se incluye en el listado (no solo el detalle) para
          *  que el frontend decida si mostrar el botón "Reenviar email". */

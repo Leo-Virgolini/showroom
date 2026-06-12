@@ -233,6 +233,13 @@ export class CrearPedidoDialog {
   ];
 
   // ----------- Totales por forma de pago -----------
+  /** Ícono de la forma de pago — mismo criterio que scan/visor/showroom: si
+   *  tiene cuotas usa la tarjeta, sino la heurística canónica por nombre. */
+  iconoForma(forma: FormaPago): string {
+    if (forma.cantidadCuotas && forma.cantidadCuotas > 1) return 'pi pi-credit-card';
+    return iconoFormaReferencia(forma.nombre);
+  }
+
   /** Total que paga el cliente con una forma — calculado POR ÍTEM con el perfil
    *  (menaje/maquinaria) de su rubro, usando la fórmula canónica `precioPorForma`
    *  (la misma de scan/visor/presupuestador y del backend al crear el pedido).
@@ -242,13 +249,6 @@ export class CrearPedidoDialog {
    *  IVA de menaje a TODOS los ítems, ignorando los de maquinaria (otro recargo,
    *  sin IVA). Eso hacía que el preview no coincidiera con el total real del
    *  pedido ni con el del presupuesto. */
-  /** Ícono de la forma de pago — mismo criterio que scan/visor/showroom: si
-   *  tiene cuotas usa la tarjeta, sino la heurística canónica por nombre. */
-  iconoForma(forma: FormaPago): string {
-    if (forma.cantidadCuotas && forma.cantidadCuotas > 1) return 'pi pi-credit-card';
-    return iconoFormaReferencia(forma.nombre);
-  }
-
   totalParaFormaPago(forma: FormaPago): number {
     return this.itemsDelPresupuesto().reduce((acc, it) => {
       const esMaq = this.precioPerfil.rubroCotizaSinIva(it.rubro);

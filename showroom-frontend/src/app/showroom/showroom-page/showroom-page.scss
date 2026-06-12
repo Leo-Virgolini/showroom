@@ -64,22 +64,25 @@
   }
 }
 
-// Modo compacto para notebooks 1920×1080 con scaling Windows 125–150%, que
-// dejan ~720–864px de viewport efectivo. Sin esto el panel de "Escanear
-// muestra" no entra entero (imagen grande + tags + precio + N tiles de
-// ahorro), y el CTA "Agregar al carrito" termina recortado.
+// Modo compacto para que el panel "Escanear muestra" (imagen + tags + precio +
+// N tiles de ahorro + CTA) entre SIN scroll en pantallas de hasta 1080px de
+// alto. Sin esto el contenido no entra entero y el scan-body queda con scroll
+// interno (o el CTA "Agregar al carrito" termina recortado).
 //
-// Umbral 880px elegido para cubrir el caso canónico (notebook 1080p @ 125%
-// fullscreen → viewport 864) con algo de margen, sin pisar a las notebooks
-// 1080p @ 100% (viewport ≥1000px con chrome, 1080 sin chrome). También
-// captura 150% (720) e intermedios.
+// Umbral 1080px: cubre las notebooks/monitores 1920×1080 en todas sus
+// configuraciones —scaling Windows 125–150% (~720–864px de viewport) y @ 100%
+// (~1000–1080px según el chrome del navegador)—. El diseño grande sin compactar
+// solo queda en monitores realmente altos (1440p/4K → viewport ≥1400px), donde
+// hay altura de sobra y este media query no aplica.
+//
+// (Antes el umbral era 880px y solo cubría el scaling alto; las 1080p @ 100%
+// caían en una zona muerta —sin compactar y sin entrar— y mostraban scroll.)
 //
 // Aplica solo en pantallas anchas (≥ 1024px) donde la layout dashboard
 // (page-container con `height: 100vh; overflow: hidden`) está activa.
-// El scan-body además tiene `overflow-y-auto` como red de seguridad — si
-// aún con la compresión no entra todo, scrollea dentro del card en lugar
-// de recortar el CTA.
-@media (min-width: 1024px) and (max-height: 880px) {
+// El scan-body conserva `overflow-y-auto` como red de seguridad — si aún con la
+// compresión no entra todo, scrollea dentro del card en lugar de recortar el CTA.
+@media (min-width: 1024px) and (max-height: 1080px) {
   // Recortar el padding de los paneles del splitter (antes estaba en `main`,
   // pero ahora main no tiene padding; el splitter renderiza dos paneles que
   // contienen <section> y <aside> con padding propio).

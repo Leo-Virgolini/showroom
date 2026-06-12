@@ -35,6 +35,12 @@ export const unsavedChangesGuard: CanDeactivateFn<HasUnsavedChanges> = (componen
         'Tenés cambios en este presupuesto que todavía no guardaste. ' +
         'Si salís ahora, se van a perder.',
       icon: 'pi pi-exclamation-triangle',
+      // ESC NO debe cerrar el diálogo: el `<p-dialog>` interno del ConfirmDialog
+      // maneja Escape sin emitir `rejectEvent`, así que el callback `reject` no
+      // correría y este Observable nunca resolvería → la navegación quedaría
+      // colgada. Forzamos la decisión por botón (ambos resuelven el subscriber).
+      // La X del header sí llama `reject` (vía close()), así que se mantiene.
+      closeOnEscape: false,
       acceptButtonProps: {
         label: 'Salir sin guardar',
         icon: 'pi pi-sign-out',

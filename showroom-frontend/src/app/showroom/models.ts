@@ -594,11 +594,12 @@ export interface PedidoListItem {
   anuladoAt: string | null;
   estado: EstadoPedido;
   nroDoc: number | null;
-  /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`.
-   *  No es el nombre real del cliente — eso vive en `nombre`. */
+  /** Razón social del cliente, editable y obligatoria en pedidos nuevos. Va a DUX
+   *  como `apellido_razon_social` y es el dato principal de la columna Cliente.
+   *  (Pedidos legacy podían traer el placeholder "PEDIDO SHOWROOM"/"PRESUPUESTO"). */
   apellidoRazonSocial: string | null;
-  /** Nombre y apellido (o razón social) real del cliente. Es lo que se muestra
-   *  en la columna Cliente del listado. Null si el operador no lo cargó. */
+  /** Nombre de contacto informal del cliente (opcional). Se muestra entre
+   *  paréntesis en la columna Cliente cuando difiere de la razón social. */
   nombre: string | null;
   /** Email del cliente. Si está vacío, el botón "Reenviar email" se oculta. */
   email: string | null;
@@ -672,9 +673,10 @@ export interface PedidoDetalle {
   respuestaDux: string | null;
   nroDoc: number | null;
   tipoDoc: string | null;
-  /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`. */
+  /** Razón social del cliente (editable, va a DUX como `apellido_razon_social`).
+   *  Pedidos legacy podían traer el placeholder "PEDIDO SHOWROOM"/"PRESUPUESTO". */
   apellidoRazonSocial: string | null;
-  /** Nombre y apellido (o razón social) real del cliente. Null si no se cargó. */
+  /** Nombre de contacto informal del cliente (opcional). Null si no se cargó. */
   nombre: string | null;
   telefono: string | null;
   email: string | null;

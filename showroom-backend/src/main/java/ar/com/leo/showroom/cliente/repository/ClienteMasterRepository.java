@@ -15,10 +15,12 @@ public interface ClienteMasterRepository extends JpaRepository<ClienteMaster, Lo
      *  el merge en {@code PresupuestoComercialService#listarClientes}. */
     Optional<ClienteMaster> findByTelefonoNormalizado(String telefonoNormalizado);
 
-    /** Clientes maestros (no eliminados) con un CUIT/documento dado. El CUIT NO
-     *  es único (varios locales de una empresa entran con teléfonos distintos),
-     *  por eso devuelve lista — el caller toma el más reciente. Usado para
-     *  autocompletar los datos del cliente al tipear el CUIT en el pedido. */
+    /** Cliente maestro (no eliminado) con un CUIT/documento dado. El CUIT es
+     *  ÚNICO en la tabla (índice único {@code uk_cliente_master_nro_doc}), así que
+     *  a lo sumo hay un master no-eliminado con ese documento. Devolvemos lista por
+     *  la convención de derivación de Spring Data; el caller toma el más reciente
+     *  de forma defensiva. Usado para autocompletar los datos del cliente al tipear
+     *  el CUIT en el pedido. */
     List<ClienteMaster> findByNroDocAndEliminadoAtIsNull(Long nroDoc);
 
     /** Clientes con ese CUIT (incluye eliminados), del más reciente al más viejo.
@@ -27,12 +29,15 @@ public interface ClienteMasterRepository extends JpaRepository<ClienteMaster, Lo
 
     /** Autocompletado por razón social o nombre (no eliminados, case-insensitive,
      *  sub-string). Ordena por actualización reciente. El {@link Pageable} limita
-     *  la cantidad de sugerencias. */
+     *  la cantidad de sugerencias. {@code :texto} debe venir con los comodines de
+     *  LIKE ya escapados ({@code \\}, {@code %}, {@code _}) — ver
+     *  {@code ClienteMasterService.escaparLike}; la cláusula {@code escape '\'} los
+     *  trata como literales para que un '%' tipeado no actúe de comodín. */
     @Query("""
             select c from ClienteMaster c
             where c.eliminadoAt is null
-              and (lower(c.razonSocial) like lower(concat('%', :texto, '%'))
-                or lower(c.nombre) like lower(concat('%', :texto, '%')))
+              and (lower(c.razonSocial) like lower(concat('%', :texto, '%')) escape '\\'
+                or lower(c.nombre) like lower(concat('%', :texto, '%')) escape '\\')
             order by c.actualizadoAt desc
             """)
     List<ClienteMaster> buscarPorRazonSocialONombre(@Param("texto") String texto, Pageable pageable);

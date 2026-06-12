@@ -1,13 +1,23 @@
 package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
+import ar.com.leo.showroom.auth.service.UsuarioService;
+import ar.com.leo.showroom.catalogo.entity.Localidad;
+import ar.com.leo.showroom.catalogo.entity.Provincia;
+import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
+import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
+import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.common.exception.UserMessages;
+import ar.com.leo.showroom.common.util.SortUtils;
 import ar.com.leo.showroom.common.util.TextUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.events.SyncEventService;
+import ar.com.leo.showroom.pedido.entity.EstadoPedido;
+import ar.com.leo.showroom.pedido.repository.ClienteActividadView;
+import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoDetalleDTO;
@@ -15,10 +25,9 @@ import ar.com.leo.showroom.presupuesto.dto.PresupuestoListItemDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListPageDTO;
 import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
 import ar.com.leo.showroom.presupuesto.repository.PresupuestoComercialRepository;
-import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoRequestDTO;
 import ar.com.leo.showroom.showroom.dto.CrearPedidoResponseDTO;
-import ar.com.leo.showroom.showroom.service.ShowroomService;
+import ar.com.leo.showroom.pedido.service.PedidoService;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -26,6 +35,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -38,6 +49,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,11 +81,11 @@ public class PresupuestoComercialService {
     private final UsuarioRepository usuarioRepository;
     /** Lookup bulk de operadores (usuarioId → displayName) compartido por todos
      *  los listados. */
-    private final ar.com.leo.showroom.auth.service.UsuarioService usuarioService;
+    private final UsuarioService usuarioService;
     /** Para unificar la vista de clientes con los pedidos (no solo
      *  presupuestos). El service lee pedidos directamente del repo y los
      *  agrupa junto con los presupuestos por teléfono normalizado. */
-    private final ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository;
+    private final PedidoShowroomRepository pedidoRepository;
     /** Maestro editable de clientes — se mergea con los datos derivados del
      *  historial al armar la vista de /clientes (nombre/email/rubro del master
      *  pisan los del último movimiento). */
@@ -83,8 +95,8 @@ public class PresupuestoComercialService {
     private final PrecioPerfilCalculator precioPerfilCalculator;
     /** Para resolver los nombres de provincia/localidad de envío (los pedidos
      *  guardan solo los códigos) al armar la vista de /clientes. */
-    private final ar.com.leo.showroom.catalogo.repository.ProvinciaRepository provinciaRepository;
-    private final ar.com.leo.showroom.catalogo.repository.LocalidadRepository localidadRepository;
+    private final ProvinciaRepository provinciaRepository;
+    private final LocalidadRepository localidadRepository;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -99,13 +111,13 @@ public class PresupuestoComercialService {
 
     /**
      * Para regenerar el pedido de un presupuesto editado: reusa la creación
-     * (alta + envío a DUX) y la anulación local de {@link ShowroomService}.
-     * {@code @Lazy} para no introducir un ciclo en el arranque — ShowroomService
+     * (alta + envío a DUX) y la anulación local de {@link PedidoService}.
+     * {@code @Lazy} para no introducir un ciclo en el arranque — PedidoService
      * depende del REPO de presupuestos, no de este service.
      */
     @Autowired
     @Lazy
-    private ShowroomService showroomService;
+    private PedidoService pedidoService;
 
     @Value("${showroom.picking.email-enabled:false}")
     private boolean emailEnabled;
@@ -123,12 +135,12 @@ public class PresupuestoComercialService {
             SyncEventService eventService,
             ObjectMapper mapper,
             UsuarioRepository usuarioRepository,
-            ar.com.leo.showroom.auth.service.UsuarioService usuarioService,
-            ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository pedidoRepository,
+            UsuarioService usuarioService,
+            PedidoShowroomRepository pedidoRepository,
             ClienteMasterService clienteMasterService,
             PrecioPerfilCalculator precioPerfilCalculator,
-            ar.com.leo.showroom.catalogo.repository.ProvinciaRepository provinciaRepository,
-            ar.com.leo.showroom.catalogo.repository.LocalidadRepository localidadRepository) {
+            ProvinciaRepository provinciaRepository,
+            LocalidadRepository localidadRepository) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
@@ -337,10 +349,8 @@ public class PresupuestoComercialService {
         String qNormalizada = (q == null || q.isBlank()) ? null : q.trim();
         // Resolver el sort: si el campo no está en la whitelist o no se pidió,
         // usar `creadoAt desc` (default histórico de la pantalla).
-        org.springframework.data.domain.Sort sort = ar.com.leo.showroom.common.util.SortUtils
-                .resolver(SORT_PRESUPUESTOS, sortField, sortOrder, "creadoAt");
-        org.springframework.data.domain.PageRequest pr =
-                org.springframework.data.domain.PageRequest.of(page, size, sort);
+        Sort sort = SortUtils.resolver(SORT_PRESUPUESTOS, sortField, sortOrder, "creadoAt");
+        PageRequest pr = PageRequest.of(page, size, sort);
         org.springframework.data.domain.Page<PresupuestoComercial> p =
                 repository.buscar(id, qNormalizada, desde, hasta, pr);
         // Bulk lookup de operadores para la página — una sola query a usuario.
@@ -398,7 +408,7 @@ public class PresupuestoComercialService {
         // 2. Pedidos. NO excluimos anulados — el contador es histórico (el
         // operador igual quiere ver "este cliente nos compró 3 veces" aunque
         // alguno haya quedado anulado por error).
-        for (var pedido : pedidoRepository.findAll()) {
+        for (var pedido : pedidoRepository.findActividadParaClientes()) {
             String clave = claveTelefono(pedido.getTelefono());
             if (clave == null) continue;
             agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPedido(pedido);
@@ -451,7 +461,7 @@ public class PresupuestoComercialService {
                 .filter(p -> p.getCodIso() != null && p.getNombre() != null)
                 .collect(Collectors.toMap(
                         p -> p.getCodIso().toLowerCase(),
-                        ar.com.leo.showroom.catalogo.entity.Provincia::getNombre,
+                        Provincia::getNombre,
                         (a, b) -> a));
         Set<Long> idsLocalidad = conMaster.stream()
                 .map(ClientePresupuestosDTO::idLocalidad)
@@ -462,8 +472,8 @@ public class PresupuestoComercialService {
                 ? Map.of()
                 : localidadRepository.findAllById(idsLocalidad).stream()
                         .collect(Collectors.toMap(
-                                ar.com.leo.showroom.catalogo.entity.Localidad::getId,
-                                ar.com.leo.showroom.catalogo.entity.Localidad::getNombre,
+                                Localidad::getId,
+                                Localidad::getNombre,
                                 (a, b) -> a));
 
         // Ordenamos por última actividad descendente (cliente más reciente
@@ -474,9 +484,9 @@ public class PresupuestoComercialService {
                 // ultimoMovimientoAt null) van al final. Usamos un Comparator
                 // total (nullsLast + reverseOrder) — un lambda casero null→±1
                 // viola la antisimetría y TimSort tira IllegalArgumentException.
-                .sorted(java.util.Comparator.comparing(
+                .sorted(Comparator.comparing(
                         ClientePresupuestosDTO::ultimoMovimientoAt,
-                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
@@ -603,7 +613,7 @@ public class PresupuestoComercialService {
             actualizarPrimerMovimiento(p.getCreadoAt());
         }
 
-        void agregarPedido(ar.com.leo.showroom.pedido.entity.PedidoShowroom pedido) {
+        void agregarPedido(ClienteActividadView pedido) {
             cantidadPedidos++;
             if (ultimoPedidoAt == null || pedido.getCreadoAt().isAfter(ultimoPedidoAt)) {
                 ultimoPedidoAt = pedido.getCreadoAt();
@@ -858,12 +868,12 @@ public class PresupuestoComercialService {
     public void marcarConvertido(Long presupuestoId, Long pedidoId) {
         PresupuestoComercial p = obtener(presupuestoId);
         if (!pedidoRepository.existsById(pedidoId)) {
-            throw new ar.com.leo.showroom.common.exception.ConflictException(
+            throw new ConflictException(
                     "El pedido " + pedidoId + " no existe — no se puede vincular al presupuesto " + presupuestoId);
         }
         Long existente = p.getConvertidoEnPedidoId();
         if (existente != null && !existente.equals(pedidoId)) {
-            throw new ar.com.leo.showroom.common.exception.ConflictException(
+            throw new ConflictException(
                     "El presupuesto " + presupuestoId + " ya fue convertido en el pedido " + existente
                     + ". Para vincularlo a otro, hay que limpiar manualmente la marca desde la BD.");
         }
@@ -893,11 +903,11 @@ public class PresupuestoComercialService {
         PresupuestoComercial p = obtener(presupuestoId);
         Long viejoId = p.getConvertidoEnPedidoId();
         if (viejoId == null) {
-            throw new ar.com.leo.showroom.common.exception.ConflictException(
+            throw new ConflictException(
                     "El presupuesto " + presupuestoId + " no tiene un pedido generado — no hay nada que regenerar.");
         }
         // Alta del nuevo pedido (reusa la lógica de creación + envío a DUX).
-        CrearPedidoResponseDTO res = showroomService.crearPedido(request, clientId, username);
+        CrearPedidoResponseDTO res = pedidoService.crearPedido(request, clientId, username);
         // Solo si DUX aceptó el nuevo pedido tocamos el anterior y el vínculo.
         if (res.estado() == EstadoPedido.ENVIADO && res.pedidoLocalId() != null) {
             Long nuevoId = res.pedidoLocalId();
@@ -907,7 +917,7 @@ public class PresupuestoComercialService {
                     .map(ped -> ped.getEstado() != EstadoPedido.ANULADO)
                     .orElse(false);
             if (viejoAnulable) {
-                showroomService.anularPedido(viejoId,
+                pedidoService.anularPedido(viejoId,
                         "Regenerado: presupuesto #" + presupuestoId + " editado → pedido #" + nuevoId);
             }
             p.setConvertidoEnPedidoId(nuevoId);

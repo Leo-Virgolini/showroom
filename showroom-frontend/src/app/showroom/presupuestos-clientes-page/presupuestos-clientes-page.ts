@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   inject,
   signal,
@@ -27,6 +28,7 @@ import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Lo
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
+import { crearTelefonoLookup } from '../telefono-lookup.util';
 import { PageHeader } from '../page-header/page-header';
 
 /**
@@ -68,6 +70,7 @@ import { PageHeader } from '../page-header/page-header';
 })
 export class PresupuestosClientesPage {
   private readonly api = inject(ShowroomService);
+  private readonly destroyRef = inject(DestroyRef);
   private readonly toast = inject(MessageService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
@@ -100,23 +103,20 @@ export class PresupuestosClientesPage {
   readonly editTelefono = signal('');
   /** Cliente que YA tiene el teléfono tipeado en alta (null = libre) — aviso. */
   readonly telefonoExistente = signal<ClienteAutocompletar | null>(null);
-  private ultimoTelefonoLookup = '';
 
-  /** ngModelChange del teléfono en alta: setea + chequea si ya existe. */
+  /** ngModelChange del teléfono en alta: setea + chequea si ya existe. La lógica
+   *  (normalización + dedupe + guard de respuesta tardía) vive en
+   *  {@link crearTelefonoLookup}, compartida con /presupuestos. */
   onEditTelefonoChange(value: string | null | undefined): void {
     this.editTelefono.set(value ?? '');
-    const digits = (value ?? '').replace(/\D/g, '');
-    if (digits.length < 8) {
-      this.telefonoExistente.set(null);
-      this.ultimoTelefonoLookup = '';
-      return;
-    }
-    if (digits === this.ultimoTelefonoLookup) return;
-    this.ultimoTelefonoLookup = digits;
-    this.api.buscarClientePorTelefono(digits).subscribe((cli) => {
-      if (digits === this.ultimoTelefonoLookup) this.telefonoExistente.set(cli);
-    });
+    this.chequearTelefono(value ?? '');
   }
+
+  private readonly chequearTelefono = crearTelefonoLookup(
+    (d) => this.api.buscarClientePorTelefono(d),
+    this.destroyRef,
+    (cli) => this.telefonoExistente.set(cli),
+  );
   readonly editRazonSocial = signal('');
   readonly editNombre = signal('');
   readonly editEmail = signal('');
@@ -351,8 +351,8 @@ export class PresupuestosClientesPage {
     this.modoNuevo.set(true);
     this.clienteEditando.set(null);
     this.editTelefono.set('');
-    this.telefonoExistente.set(null);
-    this.ultimoTelefonoLookup = '';
+    // Resetea el dedupe interno del lookup y limpia el aviso (teléfono < 8 → null).
+    this.chequearTelefono('');
     this.editRazonSocial.set('');
     this.editNombre.set('');
     this.editEmail.set('');

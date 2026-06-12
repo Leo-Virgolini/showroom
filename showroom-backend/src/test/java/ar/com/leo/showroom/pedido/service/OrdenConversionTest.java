@@ -1,4 +1,4 @@
-package ar.com.leo.showroom.showroom.service;
+package ar.com.leo.showroom.pedido.service;
 
 import ar.com.leo.showroom.showroom.dto.ConversionProductoDTO;
 import org.junit.jupiter.api.Test;
@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Verifica el orden del "Top productos por conversión"
- * ({@link ShowroomService#ORDEN_CONVERSION}).
+ * ({@link PedidoService#ORDEN_CONVERSION}).
  *
  * <p>Regresión de dos bugs reales:
  * <ul>
@@ -32,7 +32,7 @@ class OrdenConversionTest {
                 dto("baja", 4, 1, 25.0),
                 dto("alta", 3, 1, 33.3),
                 dto("cero", 2, 0, 0.0)
-        ).stream().sorted(ShowroomService.ORDEN_CONVERSION).toList();
+        ).stream().sorted(PedidoService.ORDEN_CONVERSION).toList();
 
         assertThat(ordenado).extracting(ConversionProductoDTO::sku)
                 .as("el de mayor %% de conversión debe quedar primero, no último")
@@ -47,7 +47,7 @@ class OrdenConversionTest {
                 dto("9999991", 2, 0, 0.0),
                 dto("0000001", 6, 0, 0.0),
                 dto("5000000", 4, 0, 0.0)
-        ).stream().sorted(ShowroomService.ORDEN_CONVERSION).toList();
+        ).stream().sorted(PedidoService.ORDEN_CONVERSION).toList();
 
         assertThat(ordenado).extracting(ConversionProductoDTO::sesionesEscaneadas)
                 .as("entre empatados en 0%%, el más escaneado va primero")
@@ -61,7 +61,7 @@ class OrdenConversionTest {
         List<ConversionProductoDTO> ordenado = List.of(
                 dto("4-compras", 8, 4, 50.0),
                 dto("2-compras", 4, 2, 50.0)
-        ).stream().sorted(ShowroomService.ORDEN_CONVERSION).toList();
+        ).stream().sorted(PedidoService.ORDEN_CONVERSION).toList();
 
         assertThat(ordenado).extracting(ConversionProductoDTO::sku)
                 .containsExactly("4-compras", "2-compras");

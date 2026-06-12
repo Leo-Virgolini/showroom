@@ -1,6 +1,8 @@
 package ar.com.leo.showroom.showroom.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -100,6 +102,13 @@ public record CrearPedidoRequestDTO(
              *  es el PVP CONGELADO del presupuesto; para showroom, el del carrito.
              *  Null → el backend cae al precio del cache. */
             BigDecimal precioUnitario,
+            /** Descuento de la línea, 0–100 %. No admite negativos: el factor y el
+             *  porc_desc que van a DUX usan el valor crudo, pero el descuento solo
+             *  se persiste si es > 0; un negativo dejaría el total recalculado al
+             *  reabrir distinto del facturado. La UI ya nulifica los ≤ 0; esto lo
+             *  garantiza también del lado del servidor. */
+            @DecimalMin(value = "0", message = "descuentoPorcentaje no puede ser negativo")
+            @DecimalMax(value = "100", message = "descuentoPorcentaje no puede superar 100")
             BigDecimal descuentoPorcentaje,
             /** Rubro DUX del producto. Lo manda el frontend para que el backend
              *  resuelva el perfil (Normal/Maquinaria) de la forma de pago — sobre

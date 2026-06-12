@@ -18,10 +18,10 @@ public record PedidoDetailDTO(
         String respuestaDux,
         Long nroDoc,
         String tipoDoc,
-        /** Placeholder fijo "PEDIDO SHOWROOM" que va a DUX como `apellido_razon_social`.
-         *  No es el nombre real del cliente — eso vive en `nombre`. */
+        /** Razón social del cliente (editable, va a DUX como `apellido_razon_social`).
+         *  Pedidos legacy podían traer el placeholder "PEDIDO SHOWROOM"/"PRESUPUESTO". */
         String apellidoRazonSocial,
-        /** Nombre y apellido (o razón social) real del cliente. Null si el operador no lo cargó. */
+        /** Nombre de contacto informal del cliente (opcional). Null si no se cargó. */
         String nombre,
         String telefono,
         String email,

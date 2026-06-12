@@ -50,6 +50,21 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
     @Query("select i.pedido.id, count(i) from PedidoShowroomItem i where i.pedido.id in :ids group by i.pedido.id")
     List<Object[]> contarItemsPorPedidoIds(@Param("ids") Collection<Long> ids);
 
+    /** Proyección liviana de TODOS los pedidos para la vista de clientes
+     *  (/clientes): solo los ~12 campos escalares que necesita el agregador de
+     *  actividad, sin hidratar la entidad ni su colección de items. Reemplaza un
+     *  {@code findAll()} que materializaba entidades completas para leer pocas
+     *  columnas. No filtra anulados: el contador de pedidos es histórico. */
+    @Query("""
+            select p.telefono as telefono, p.creadoAt as creadoAt, p.id as id,
+                   p.tipoDoc as tipoDoc, p.nroDoc as nroDoc, p.domicilio as domicilio,
+                   p.codigoProvincia as codigoProvincia, p.idLocalidad as idLocalidad,
+                   p.email as email, p.nombre as nombre, p.rubro as rubro,
+                   p.totalSinIva as totalSinIva
+            from PedidoShowroom p
+            """)
+    List<ClienteActividadView> findActividadParaClientes();
+
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.
      * `q` matchea como substring case-insensitive contra nro_doc (CUIT),
