@@ -297,7 +297,7 @@ public class ShowroomService {
                 pc.getPvpKtGastroConIva(),
                 pc.getPorcIva(),
                 pc.getHabilitado(),
-                urlImagenLocal(pc.getSku()),
+                imagenLocalService.urlPublica(pc.getSku()),
                 pc.getStockTotal(),
                 pc.getProveedor());
     }
@@ -394,22 +394,11 @@ public class ShowroomService {
                 pc.getPorcIva(),
                 pc.getStockTotal(),
                 pc.getHabilitado(),
-                urlImagenLocal(pc.getSku()),
+                imagenLocalService.urlPublica(pc.getSku()),
                 eans,
                 pc.getSincronizadoAt(),
                 pc.getProveedor()
         );
-    }
-
-    /**
-     * Devuelve la URL del endpoint local que sirve la imagen del producto, o
-     * null si el archivo no existe en disco. Así el frontend solo hace request
-     * cuando hay imagen real para mostrar.
-     */
-    private String urlImagenLocal(String sku) {
-        return imagenLocalService.buscar(sku).isPresent()
-                ? "/api/showroom/productos/" + sku + "/imagen"
-                : null;
     }
 
     // =====================================================
@@ -429,7 +418,7 @@ public class ShowroomService {
                 pc.getPorcIva(),
                 pc.getStockTotal(),
                 pc.getHabilitado(),
-                urlImagenLocal(pc.getSku()),
+                imagenLocalService.urlPublica(pc.getSku()),
                 pc.getSincronizadoAt()
         );
     }

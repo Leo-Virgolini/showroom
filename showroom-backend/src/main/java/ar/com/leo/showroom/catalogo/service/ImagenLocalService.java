@@ -99,6 +99,16 @@ public class ImagenLocalService {
         return index.size();
     }
 
+    /** URL pública del endpoint que sirve la imagen del producto (la expone
+     *  {@code ShowroomController}), o null si no hay archivo para ese SKU — así el
+     *  frontend solo pide la imagen cuando existe. Centraliza la construcción que
+     *  antes duplicaban ShowroomService y PedidoService. */
+    public String urlPublica(String sku) {
+        return buscar(sku).isPresent()
+                ? "/api/showroom/productos/" + sku + "/imagen"
+                : null;
+    }
+
     private static int prioridad(File f) {
         String name = f.getName().toLowerCase();
         for (int i = 0; i < EXTENSIONES_PRIORIDAD.length; i++) {

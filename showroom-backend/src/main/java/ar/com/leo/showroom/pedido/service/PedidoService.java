@@ -297,7 +297,7 @@ public class PedidoService {
                         it.getPorcIva(),
                         it.getAplicaIva(),
                         it.getDescuentoPorcentaje(),
-                        urlImagenLocal(it.getSku()),
+                        imagenLocalService.urlPublica(it.getSku()),
                         it.getComentarios()))
                 .toList();
         String provinciaNombre = p.getCodigoProvincia() != null
@@ -960,13 +960,5 @@ public class PedidoService {
     /** aplicaIva del perfil: maquinaria null→false; normal null→true. */
     private static boolean aplicaIvaPerfil(FormaPago fp, boolean esMaquinaria) {
         return PrecioPerfilCalculator.aplicaIvaPerfil(fp, esMaquinaria);
-    }
-
-    /** URL del endpoint local que sirve la imagen del producto, o null si el
-     *  archivo no existe en disco (así el frontend solo pide cuando hay imagen). */
-    private String urlImagenLocal(String sku) {
-        return imagenLocalService.buscar(sku).isPresent()
-                ? "/api/showroom/productos/" + sku + "/imagen"
-                : null;
     }
 }
