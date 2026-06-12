@@ -225,6 +225,9 @@ public class ClienteMasterService {
         setIfPresent(pedido.getIdLocalidad(), master::setIdLocalidad);
         master.setActualizadoPorUsuarioId(usuarioIdDe(username));
         master.setActualizadoAt(Instant.now());
+        // Un pedido nuevo reactiva al cliente: si estaba soft-deleted, vuelve a
+        // aparecer en /clientes (tiene actividad otra vez).
+        master.setEliminadoAt(null);
         repository.save(master);
     }
 
@@ -288,6 +291,9 @@ public class ClienteMasterService {
         setIfPresent(rubro, master::setRubro);
         master.setActualizadoPorUsuarioId(usuarioIdDe(username));
         master.setActualizadoAt(Instant.now());
+        // Un movimiento nuevo reactiva al cliente: si estaba soft-deleted, vuelve
+        // a aparecer en /clientes (tiene actividad otra vez).
+        master.setEliminadoAt(null);
         repository.save(master);
     }
 

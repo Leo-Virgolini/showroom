@@ -272,9 +272,18 @@
       </label>
       @if (modoNuevo()) {
         <p-inputMask id="edit-cliente-tel" mask="99-99999999" [unmask]="true"
-          [ngModel]="editTelefono()" (ngModelChange)="editTelefono.set($event ?? '')"
+          [ngModel]="editTelefono()" (ngModelChange)="onEditTelefonoChange($event)"
           placeholder="11-12345678" class="w-full" />
-        <span class="text-[0.7rem] text-muted-color">Clave del cliente.</span>
+        @if (telefonoExistente(); as cli) {
+          <span class="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded mt-1
+                       bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+            <i class="pi pi-exclamation-triangle text-[10px]"></i>
+            Ya existe un cliente con este teléfono: <strong>{{ cli.razonSocial || cli.nombre || 'sin nombre' }}</strong>.
+            Editalo desde la lista en vez de crear uno nuevo.
+          </span>
+        } @else {
+          <span class="text-[0.7rem] text-muted-color">Clave del cliente.</span>
+        }
       } @else {
         <input pInputText type="text" [value]="clienteEditando()?.telefono ?? ''" disabled class="w-full" />
         <span class="text-[0.7rem] text-muted-color">Clave del cliente — no editable.</span>

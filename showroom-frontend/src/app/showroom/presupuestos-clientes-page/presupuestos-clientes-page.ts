@@ -24,7 +24,7 @@ import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
-import { ActualizarClienteRequest, ClientePresupuestos, Localidad, Provincia } from '../models';
+import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Localidad, Provincia } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -103,6 +103,25 @@ export class PresupuestosClientesPage {
   readonly modoNuevo = signal(false);
   /** Teléfono tipeado en modo alta (en edición el teléfono es la clave fija). */
   readonly editTelefono = signal('');
+  /** Cliente que YA tiene el teléfono tipeado en alta (null = libre) — aviso. */
+  readonly telefonoExistente = signal<ClienteAutocompletar | null>(null);
+  private ultimoTelefonoLookup = '';
+
+  /** ngModelChange del teléfono en alta: setea + chequea si ya existe. */
+  onEditTelefonoChange(value: string | null | undefined): void {
+    this.editTelefono.set(value ?? '');
+    const digits = (value ?? '').replace(/\D/g, '');
+    if (digits.length < 8) {
+      this.telefonoExistente.set(null);
+      this.ultimoTelefonoLookup = '';
+      return;
+    }
+    if (digits === this.ultimoTelefonoLookup) return;
+    this.ultimoTelefonoLookup = digits;
+    this.api.buscarClientePorTelefono(digits).subscribe((cli) => {
+      if (digits === this.ultimoTelefonoLookup) this.telefonoExistente.set(cli);
+    });
+  }
   readonly editRazonSocial = signal('');
   readonly editNombre = signal('');
   readonly editEmail = signal('');
@@ -330,6 +349,8 @@ export class PresupuestosClientesPage {
     this.modoNuevo.set(true);
     this.clienteEditando.set(null);
     this.editTelefono.set('');
+    this.telefonoExistente.set(null);
+    this.ultimoTelefonoLookup = '';
     this.editRazonSocial.set('');
     this.editNombre.set('');
     this.editEmail.set('');
@@ -456,6 +477,31 @@ export class PresupuestosClientesPage {
       });
       return;
     }
+    this.guardandoEdicion.set(true);
+    // En ALTA: el teléfono es la clave. Verificamos que NO pertenezca ya a otro
+    // cliente (sino el upsert lo sobrescribiría sin avisar). Si existe, abortamos.
+    if (this.modoNuevo()) {
+      this.api.buscarClientePorTelefono(telefono).subscribe((existente) => {
+        if (existente) {
+          this.guardandoEdicion.set(false);
+          const nombre = existente.razonSocial || existente.nombre || 'otro cliente';
+          this.toast.add({
+            severity: 'error',
+            summary: 'Teléfono ya registrado',
+            detail: `Ya existe un cliente con ese teléfono: ${nombre}. Editalo desde la lista en vez de crear uno nuevo.`,
+            life: 6000,
+          });
+          return;
+        }
+        this.ejecutarGuardar(telefono);
+      });
+      return;
+    }
+    this.ejecutarGuardar(telefono);
+  }
+
+  /** Construye el payload y lo guarda (alta o edición ya validada). */
+  private ejecutarGuardar(telefono: string): void {
     const payload: ActualizarClienteRequest = {
       telefono,
       razonSocial: this.editRazonSocial().trim() || null,
@@ -471,7 +517,6 @@ export class PresupuestosClientesPage {
       codigoProvincia: this.editCodigoProvincia(),
       idLocalidad: this.editIdLocalidad(),
     };
-    this.guardandoEdicion.set(true);
     this.api.actualizarClienteMaster(payload).subscribe({
       next: () => {
         const eraNuevo = this.modoNuevo();
