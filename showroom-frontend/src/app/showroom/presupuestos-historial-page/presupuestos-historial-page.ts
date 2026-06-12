@@ -21,7 +21,6 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
@@ -29,7 +28,7 @@ import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -48,7 +47,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     DatePickerModule,
@@ -57,11 +55,10 @@ import { TopActions } from '../top-actions/top-actions';
     InputTextModule,
     SplitButtonModule,
     TableModule,
-    ToolbarModule,
     TooltipModule,
     CrearPedidoDialog,
-    TopActions,
-  ],
+    RouterLink,
+    PageHeader,  ],
   templateUrl: './presupuestos-historial-page.html',
   styleUrl: './presupuestos-historial-page.scss',
 })
@@ -379,7 +376,7 @@ export class PresupuestosHistorialPage {
   /** Output del dialog cuando se creó/regeneró el pedido OK. Updateamos el
    *  listado optimistamente: nuevo pedido vinculado + convertidoAt = ahora
    *  (así desaparece el botón "Regenerar" hasta una próxima edición). */
-  onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
+  onPedidoCreado(evt: { presupuestoId: number | null; pedidoLocalId: number }): void {
     const ahora = new Date().toISOString();
     this.presupuestos.set(this.presupuestos().map((x) =>
       x.id === evt.presupuestoId
@@ -391,5 +388,26 @@ export class PresupuestosHistorialPage {
   /** Botón "Ver pedido" — navega a /pedidos con el id como filtro. */
   irAlPedido(pedidoId: number): void {
     this.router.navigate(['/pedidos'], { queryParams: { id: pedidoId } });
+  }
+
+  /** Filtro para abrir la ficha del cliente: teléfono (últimos 8 dígitos, igual
+   *  que el camino inverso en la página de clientes), porque el maestro está
+   *  indexado por teléfono. Sin teléfono cae al nombre. Null si no hay nada. */
+  private filtroCliente(p: PresupuestoListItem): string | null {
+    const tel = (p.clienteTelefono ?? '').replace(/\D+/g, '');
+    if (tel) return tel.slice(-8) || tel;
+    return p.clienteNombre?.trim() || null;
+  }
+
+  /** True si la fila tiene con qué filtrar la ficha del cliente. */
+  tieneFichaCliente(p: PresupuestoListItem): boolean {
+    return this.filtroCliente(p) != null;
+  }
+
+  /** Navega a la tabla de Clientes filtrada por este cliente. */
+  verCliente(p: PresupuestoListItem): void {
+    const q = this.filtroCliente(p);
+    if (!q) return;
+    this.router.navigate(['/clientes'], { queryParams: { q } });
   }
 }

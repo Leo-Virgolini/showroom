@@ -1,27 +1,6 @@
 <div class="flex flex-col min-h-screen bg-slate-50/60 dark:bg-surface-950">
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-slate-100 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Volver al inicio" pTooltip="Volver al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">Configuración</span>
-          <span class="text-[0.6rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">
-            Ajustes del sistema
-          </span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom" label="Volver" class="btn-volver" routerLink="/" />
-      </div>
-    </ng-template>
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
+  <app-page-header title="Configuración" subtitle="Ajustes del sistema"
+    titleIcon="pi pi-cog" toolbarClass="!bg-slate-100 dark:!bg-surface-900" />
 
   <main class="flex-1 flex flex-col gap-4 p-3 sm:p-4 lg:p-6">
     <!-- Tabs para agrupar las secciones por dominio funcional. El operador

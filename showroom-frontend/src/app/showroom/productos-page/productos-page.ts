@@ -9,7 +9,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
@@ -24,14 +23,13 @@ import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ProductoListItem, rubroExcluyeDescuentos } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { SyncStateService } from '../sync-state.service';
 import { marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 @Component({
   selector: 'app-productos-page',
@@ -40,7 +38,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     IconFieldModule,
@@ -52,9 +49,8 @@ import { TopActions } from '../top-actions/top-actions';
     TableModule,
     TagModule,
     ToggleSwitchModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
+    PageHeader,
   ],
   templateUrl: './productos-page.html',
   styleUrl: './productos-page.scss',

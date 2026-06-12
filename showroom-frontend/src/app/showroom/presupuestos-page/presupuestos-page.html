@@ -1,149 +1,11 @@
 <div class="page-container flex flex-col bg-amber-50/60 dark:bg-surface-950 min-h-screen">
-  <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient que /showroom y el PDF) -->
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-
-  <!-- ============= TOOLBAR ============= -->
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-amber-100 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-            <i class="pi pi-file-edit text-[#FF861C]"></i>
-            @if (esModoEdicion()) {
-              Editando presupuesto #{{ presupuestoEditandoId() }}
-            } @else {
-              Presupuestos
-            }
-          </span>
-          <span class="text-[0.65rem] text-muted-color">
-            @if (esModoEdicion()) {
-              Modificá productos, cantidades o datos del cliente
-            } @else {
-              Armar y enviar al cliente
-            }
-          </span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
-          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
-          pTooltip="Volver al showroom" tooltipPosition="bottom" />
-
-        <!-- Cliente en atención — sesión COMPARTIDA con el showroom. Va en el
-             header (junto al título) y NO en el #end con las acciones. Opcional:
-             el presupuesto se arma igual sin cliente asociado. -->
-        @if (haySesionActiva()) {
-          <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
-            [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
-            tooltipPosition="bottom" role="status" aria-live="polite">
-            <i class="pi pi-user"></i>
-            <span class="truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
-            <button type="button" aria-label="Finalizar atención"
-              class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
-              (click)="finalizarSesion()">
-              <i class="pi pi-times text-[10px]"></i>
-            </button>
-          </span>
-        } @else {
-          <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''"
-            ariaLabel="Asociar cliente" class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
-            pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
-            tooltipPosition="bottom" />
-        }
-
-        <!-- QR del visor: junto a la badge del cliente (mismo lugar que el
-             showroom), no en el #end con las acciones. -->
-        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''"
-          ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
-          (onClick)="abrirDialogVisor()"
-          pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
-          tooltipPosition="bottom" />
-      </div>
-    </ng-template>
-
-    <ng-template #end>
-      <div class="inline-flex gap-1.5 items-center">
-        @if (cargandoEdicion()) {
-          <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
-            <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
-            Cargando presupuesto…
-          </span>
-        }
-        @if (esModoEdicion() && hayCambiosSinGuardar()) {
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
-            pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
-            tooltipPosition="bottom" role="status" aria-live="polite">
-            <i class="pi pi-exclamation-circle"></i>
-            <span class="hidden sm:inline">Sin guardar</span>
-          </span>
-        }
-        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
-          [label]="screenLg() ? (esModoEdicion() ? 'Guardar cambios' : 'Generar PDF') : ''"
-          [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
-          class="btn-kt-marron" [disabled]="!hayItems() || generandoPreview()"
-          [loading]="generandoPreview()" (onClick)="previsualizar()"
-          [pTooltip]="esModoEdicion()
-              ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
-              : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
-          tooltipPosition="bottom" />
-        <p-button icon="pi pi-send"
-          [label]="screenLg() ? (esModoEdicion() ? 'Guardar y enviar' : 'Enviar') : ''"
-          ariaLabel="Enviar por email"
-          class="btn-kt-naranja" [disabled]="!hayItems()"
-          (onClick)="abrirDialogEnviar()"
-          [pTooltip]="esModoEdicion()
-              ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
-              : 'Generar y enviar el presupuesto al cliente'"
-          tooltipPosition="bottom" />
-
-        @if (pedidoIdConvertido() != null) {
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
-            [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
-            tooltipPosition="bottom">
-            <i class="pi pi-check-circle"></i>
-            <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
-          </span>
-          @if (editadoTrasConvertir()) {
-            <p-button icon="pi pi-refresh"
-              [label]="screenLg() ? 'Regenerar' : ''"
-              ariaLabel="Regenerar el pedido en DUX con los cambios"
-              severity="warn"
-              [disabled]="hayCambiosSinGuardar()"
-              (onClick)="abrirRegenerarPedido()"
-              [pTooltip]="hayCambiosSinGuardar()
-                  ? 'Guardá los cambios antes de regenerar el pedido'
-                  : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
-              tooltipPosition="bottom" />
-          }
-        } @else {
-          <!-- El botón se muestra siempre en el generador, deshabilitado hasta
-               que el presupuesto esté guardado (esModoEdicion = ya persistido,
-               sea por edición o tras "Generar PDF") y sin cambios pendientes. -->
-          <p-button icon="pi pi-cart-arrow-down"
-            [label]="screenLg() ? 'Crear pedido' : ''"
-            ariaLabel="Crear pedido en DUX a partir de este presupuesto"
-            severity="success"
-            [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
-            (onClick)="abrirCrearPedido()"
-            [pTooltip]="!esModoEdicion()
-                ? 'Generá el presupuesto primero para poder crear el pedido'
-                : (hayCambiosSinGuardar()
-                    ? 'Guardá los cambios antes de generar el pedido'
-                    : 'Crear pedido en DUX a partir de este presupuesto')"
-            tooltipPosition="bottom" />
-        }
-
-        @if (health()?.ultimaSincronizacionAt; as fecha) {
-        <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') ?? ''"
-          tooltipPosition="bottom" class="hidden xl:inline-flex mr-1" />
-        }
-
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
+  <app-page-header titleIcon="pi pi-file-edit" toolbarClass="!bg-amber-100 dark:!bg-surface-900"
+    [title]="esModoEdicion() ? ('Editando presupuesto #' + presupuestoEditandoId()) : 'Presupuestos'"
+    [subtitle]="esModoEdicion() ? 'Modificá productos, cantidades o datos del cliente' : 'Armar y enviar al cliente'">
+    <div header-end class="inline-flex gap-1.5 items-center">
+      <app-sync-button (dialogClosed)="focusInput()" />
+    </div>
+  </app-page-header>
 
   <!-- ============= CONTENIDO =============
        Layout split 50/50 en lg+: izquierda buscador, derecha presupuesto
@@ -167,9 +29,38 @@
         <!-- Card: scan + búsqueda por descripción -->
         <p-card class="kt-card">
           <ng-template #title>
-            <div class="kt-card-title">
-              <i class="pi pi-barcode"></i>
-              <span>Escanear / buscar producto</span>
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="kt-card-title">
+                <i class="pi pi-barcode"></i>
+                <span>Escanear / buscar producto</span>
+              </div>
+              <!-- Contexto de la atención (movido desde el header para no dejarlo
+                   en 2 filas): chip de sesión / "Nuevo cliente" + QR del visor. -->
+              <div class="flex items-center gap-2.5 flex-wrap">
+                @if (haySesionActiva()) {
+                  <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
+                    [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
+                    tooltipPosition="bottom" role="status" aria-live="polite">
+                    <i class="pi pi-user"></i>
+                    <span class="truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
+                    <button type="button" aria-label="Finalizar atención"
+                      class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
+                      (click)="finalizarSesion()">
+                      <i class="pi pi-times text-[10px]"></i>
+                    </button>
+                  </span>
+                } @else {
+                  <p-button icon="pi pi-user-plus" label="Nuevo cliente"
+                    ariaLabel="Asociar cliente" class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
+                    pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
+                    tooltipPosition="bottom" />
+                }
+                <p-button icon="pi pi-mobile" label="QR"
+                  ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
+                  (onClick)="abrirDialogVisor()"
+                  pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
+                  tooltipPosition="bottom" />
+              </div>
             </div>
           </ng-template>
           <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
@@ -427,22 +318,87 @@
                   </button>
                 }
               </div>
-              <!-- Chip "Datos del cliente" — abre el dialog en modo edición
-                   libre. Si el cliente ya tiene datos, los muestra como
-                   resumen rápido; si no, invita a cargarlos. -->
-              <button type="button" class="kt-cliente-chip"
-                (click)="abrirDialogCliente(null)"
-                [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
-                <i class="pi pi-user"></i>
-                @if (clienteNombre().trim() || clienteTelefono().trim()) {
-                  <span class="truncate max-w-[12rem]">
-                    {{ clienteNombre().trim() || clienteTelefono() }}
+              <div class="flex items-center gap-1.5 flex-wrap justify-end">
+                <!-- Acciones del presupuesto — movidas acá desde el header para
+                     no saturarlo (antes lo dejaban en 2 filas). -->
+                @if (cargandoEdicion()) {
+                  <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
+                    <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
+                    Cargando presupuesto…
                   </span>
-                } @else {
-                  <span>Sin datos del cliente</span>
                 }
-                <i class="pi pi-pencil text-[10px] opacity-70"></i>
-              </button>
+                @if (esModoEdicion() && hayCambiosSinGuardar()) {
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
+                    pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
+                    tooltipPosition="bottom" role="status" aria-live="polite">
+                    <i class="pi pi-exclamation-circle"></i>
+                    <span class="hidden sm:inline">Sin guardar</span>
+                  </span>
+                }
+                <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
+                  [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                  [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                  class="btn-kt-azul" [disabled]="!hayItems() || generandoPreview()"
+                  [loading]="generandoPreview()" (onClick)="previsualizar()"
+                  [pTooltip]="esModoEdicion()
+                      ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+                      : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
+                  tooltipPosition="bottom" />
+                <p-button icon="pi pi-send"
+                  [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
+                  ariaLabel="Enviar por email"
+                  class="btn-kt-naranja" [disabled]="!hayItems()"
+                  (onClick)="abrirDialogEnviar()"
+                  [pTooltip]="esModoEdicion()
+                      ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
+                      : 'Generar y enviar el presupuesto al cliente'"
+                  tooltipPosition="bottom" />
+                @if (pedidoIdConvertido() != null) {
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
+                    [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
+                    tooltipPosition="bottom">
+                    <i class="pi pi-check-circle"></i>
+                    <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
+                  </span>
+                  @if (editadoTrasConvertir()) {
+                    <p-button icon="pi pi-refresh" label="Regenerar"
+                      ariaLabel="Regenerar el pedido en DUX con los cambios"
+                      severity="warn" [disabled]="hayCambiosSinGuardar()"
+                      (onClick)="abrirRegenerarPedido()"
+                      [pTooltip]="hayCambiosSinGuardar()
+                          ? 'Guardá los cambios antes de regenerar el pedido'
+                          : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
+                      tooltipPosition="bottom" />
+                  }
+                } @else {
+                  <p-button icon="pi pi-cart-arrow-down" label="Crear pedido"
+                    ariaLabel="Crear pedido en DUX a partir de este presupuesto"
+                    class="btn-kt-naranja-oscuro"
+                    [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
+                    (onClick)="abrirCrearPedido()"
+                    [pTooltip]="!esModoEdicion()
+                        ? 'Generá el presupuesto primero para poder crear el pedido'
+                        : (hayCambiosSinGuardar()
+                            ? 'Guardá los cambios antes de generar el pedido'
+                            : 'Crear pedido en DUX a partir de este presupuesto')"
+                    tooltipPosition="bottom" />
+                }
+
+                <!-- Chip "Datos del cliente" -->
+                <button type="button" class="kt-cliente-chip"
+                  (click)="abrirDialogCliente(null)"
+                  [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
+                  <i class="pi pi-user"></i>
+                  @if (clienteNombre().trim() || clienteTelefono().trim()) {
+                    <span class="truncate max-w-[12rem]">
+                      {{ clienteNombre().trim() || clienteTelefono() }}
+                    </span>
+                  } @else {
+                    <span>Sin datos del cliente</span>
+                  }
+                  <i class="pi pi-pencil text-[10px] opacity-70"></i>
+                </button>
+              </div>
             </div>
           </ng-template>
 
@@ -1000,11 +956,10 @@
           [ngModel]="clienteTelefono()" (ngModelChange)="onClienteTelefonoChange($event)"
           placeholder="11-12345678" class="w-full" />
         @if (clientePorTelefono(); as cli) {
-          <span class="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded mt-1
+          <span class="text-[11px] flex items-start gap-1.5 px-2 py-1 rounded mt-1
                        bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-            <i class="pi pi-info-circle text-[10px]"></i>
-            Este teléfono ya pertenece a <strong>{{ cli.razonSocial || cli.nombre || 'un cliente' }}</strong>.
-            Si es el mismo cliente, perfecto; si no, revisá el número.
+            <i class="pi pi-info-circle text-[10px] mt-0.5 shrink-0"></i>
+            <span>Este teléfono ya pertenece a <strong>{{ cli.razonSocial || cli.nombre || 'un cliente' }}</strong>. Si es el mismo cliente, perfecto; si no, revisá el número.</span>
           </span>
         }
       </div>
@@ -1137,35 +1092,12 @@
   </ng-template>
 </p-dialog>
 
-<!-- ============= DIALOG QR DEL VISOR DE PRESUPUESTO =============
-     El cliente escanea el QR y ve el presupuesto armarse en vivo en su celular
-     (solo lectura). Reusa VisorConfig.baseUrl (config del showroom). -->
-<p-dialog header="QR del presupuesto para el celular" [(visible)]="mostrarDialogVisor" [modal]="true"
-  [draggable]="false" [style]="{ width: '95vw', maxWidth: '30rem' }" [breakpoints]="{ '640px': '95vw' }"
-  (onHide)="focusInput()">
-  <div class="flex flex-col items-center gap-3">
-    <div class="text-sm text-surface-700 dark:text-surface-200 text-center">
-      El cliente escanea este QR y ve el presupuesto armarse en vivo en su celular (solo lectura).
-    </div>
-    @if (qrVisorDataUrl(); as qr) {
-    <p-image [src]="qr" alt="QR del visor de presupuesto" [preview]="true"
-      imageClass="w-full max-h-[60vh] object-contain rounded-xl shadow-sm cursor-zoom-in bg-white" class="w-full" />
-    <div class="text-[10px] font-mono text-muted-color break-all text-center max-w-full select-all">
-      {{ visorUrl() }}
-    </div>
-    } @else if (qrVisorGenerando()) {
-    <div class="w-full aspect-square max-h-[60vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
-      <i class="pi pi-spin pi-spinner text-3xl text-muted-color"></i>
-    </div>
-    } @else {
-    <div class="w-full aspect-square max-h-[60vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex flex-col items-center justify-center gap-2 p-4 text-center">
-      <i class="pi pi-exclamation-triangle text-2xl text-muted-color"></i>
-      <span class="text-xs text-muted-color">No se pudo generar el QR. Ingresá esta dirección en el celular:</span>
-      <span class="text-xs font-mono text-color break-all select-all">{{ visorUrl() }}</span>
-    </div>
-    }
-  </div>
-</p-dialog>
+<!-- QR para celular (3 códigos: WiFi + visor del PRESUPUESTO + reseña Google).
+     Unificado con el showroom vía app-qr-celular-dialog; el visor del medio es
+     el del presupuesto (no el producto-a-producto del showroom). -->
+<app-qr-celular-dialog [(visible)]="mostrarDialogVisor" [visorUrl]="visorUrl()"
+  [qrDataUrl]="qrVisorDataUrl()" [generando]="qrVisorGenerando()"
+  visorTitulo="Ver el presupuesto" (dialogClosed)="focusInput()" />
 
 <!-- ============= DIALOG "VER PRODUCTO" =============
      Preview rápido de un resultado de búsqueda: foto grande + datos

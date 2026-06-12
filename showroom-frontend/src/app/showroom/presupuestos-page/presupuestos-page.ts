@@ -15,7 +15,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime, firstValueFrom } from 'rxjs';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -30,10 +30,8 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
   CatalogoItem,
@@ -55,7 +53,6 @@ import {
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
-import { SyncStateService } from '../sync-state.service';
 import { AuthService } from '../../auth/auth.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
@@ -67,7 +64,9 @@ import {
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
+import { QrCelularDialog } from '../qr-celular-dialog/qr-celular-dialog';
+import { SyncButton } from '../sync-button/sync-button';
 import { HasUnsavedChanges } from './unsaved-changes.guard';
 
 /**
@@ -92,7 +91,6 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     AutoCompleteModule,
     ButtonModule,
     CardModule,
@@ -106,14 +104,14 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
     ProgressSpinnerModule,
     SelectModule,
     TableModule,
-    TagModule,
     TextareaModule,
     SelectButtonModule,
-    ToolbarModule,
     TooltipModule,
     CrearPedidoDialog,
     ProductoGenericoDialog,
-    TopActions,
+    PageHeader,
+    QrCelularDialog,
+    SyncButton,
   ],
   templateUrl: './presupuestos-page.html',
   styleUrl: './presupuestos-page.scss',
@@ -123,13 +121,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
-  private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Estado de DUX/sync — misma fuente de verdad global que el showroom
-   *  (signal compartida en SyncStateService, providedIn root). Alimenta el
-   *  badge "Última sync" del toolbar. */
-  readonly health = this.syncState.health;
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly auth = inject(AuthService);
@@ -1070,7 +1063,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Output del {@link CrearPedidoDialog} cuando el pedido se creó/regeneró OK.
    *  Actualiza el vínculo y marca `convertidoAt = ahora` para que el botón
    *  "Regenerar" desaparezca hasta una próxima edición guardada. */
-  onPedidoCreado(evt: { presupuestoId: number; pedidoLocalId: number }): void {
+  onPedidoCreado(evt: { presupuestoId: number | null; pedidoLocalId: number }): void {
     this.pedidoIdConvertido.set(evt.pedidoLocalId);
     this.convertidoAtPresupuesto.set(new Date().toISOString());
     this.pedidoAnteriorParaRegenerar.set(null);
@@ -1680,19 +1673,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.mostrarDialogoNuevoCliente.set(true);
   }
 
-  /** Formato relativo "hace X min/hora/día" para el badge "Última sync".
-   *  Misma lógica que showroom-page para que el badge sea idéntico. */
-  tiempoRelativo(iso: string | null | undefined): string {
-    if (!iso) return '—';
-    const ms = Date.now() - new Date(iso).getTime();
-    if (ms < 60_000) return 'hace unos segundos';
-    const min = Math.floor(ms / 60_000);
-    if (min < 60) return `hace ${min} min`;
-    const hs = Math.floor(min / 60);
-    if (hs < 24) return `hace ${hs} h`;
-    const d = Math.floor(hs / 24);
-    return `hace ${d} día${d === 1 ? '' : 's'}`;
-  }
 
   /** Inicia una sesión nueva con el nombre tipeado, vía el servicio compartido
    *  (cierra la sesión anterior del operador y vacía su carrito del showroom).

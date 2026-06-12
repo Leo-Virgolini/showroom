@@ -26,15 +26,6 @@
     </div>
   } @else {
     <div class="flex flex-col gap-3">
-      <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-xs">
-        <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
-        <span class="text-surface-700 dark:text-surface-200">
-          Los productos, cantidades, precios y descuentos del presupuesto se mandan
-          tal cual a DUX. Completá los datos extra que pide el pedido (CUIT,
-          dirección, forma de pago).
-        </span>
-      </div>
-
       @if (esRegeneracion()) {
         <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
           <i class="pi pi-exclamation-triangle text-amber-600 dark:text-amber-400 mt-0.5"></i>
@@ -89,16 +80,6 @@
         </div>
       }
 
-      <!-- Categoría fiscal: lo único que DUX exige fijo y NO editable. -->
-      <div class="p-2 rounded-lg bg-surface-50 dark:bg-surface-800/40 border border-surface-200 dark:border-surface-700">
-        <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-          <i class="pi pi-lock text-muted-color text-[10px]"></i>
-          Categoría fiscal
-        </label>
-        <input pInputText type="text" class="w-full" disabled
-          [value]="categoriaFiscalFija" />
-      </div>
-
       <!-- Datos del cliente — pre-llenados editables -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
@@ -124,7 +105,15 @@
             [ngModel]="cuitInputValuePedido()" (ngModelChange)="onCuitChangePedido($event)"
             placeholder="20-12345678-9" class="w-full" />
         </div>
-        <div class="sm:col-span-2">
+        <div>
+          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
+            <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> Categoría fiscal <span class="text-red-500">*</span>
+          </label>
+          <p-select [options]="opcionesCategoriaFiscal" optionLabel="label" optionValue="value"
+            [ngModel]="pedidoCategoriaFiscal()" (ngModelChange)="pedidoCategoriaFiscal.set($event)"
+            appendTo="body" class="w-full" />
+        </div>
+        <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
             <i class="pi pi-user text-[#FF861C] text-[10px]"></i> Nombre y apellido
           </label>

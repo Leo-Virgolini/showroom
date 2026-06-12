@@ -3,12 +3,12 @@ import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
-import { MoreMenu } from '../more-menu/more-menu';
+import { MainMenu } from '../main-menu/main-menu';
 import { UserChip } from '../user-chip/user-chip';
 
 /**
  * Acciones de la derecha del toolbar, comunes a todas las páginas
- * autenticadas: navegación ({@link MoreMenu}), identidad del operador
+ * autenticadas: navegación ({@link MainMenu}), identidad del operador
  * ({@link UserChip}) y cierre de sesión.
  *
  * <p>Antes estos tres elementos vivían sueltos y copiados a mano en el
@@ -26,9 +26,9 @@ import { UserChip } from '../user-chip/user-chip';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'contents' },
-  imports: [ButtonModule, TooltipModule, MoreMenu, UserChip],
+  imports: [ButtonModule, TooltipModule, MainMenu, UserChip],
   template: `
-    <app-more-menu />
+    <app-main-menu />
     <app-user-chip />
     <p-button icon="pi pi-sign-out" ariaLabel="Cerrar sesión" class="btn-kt-rojo"
       (onClick)="cerrarSesion()" pTooltip="Cerrar sesión" tooltipPosition="bottom" />

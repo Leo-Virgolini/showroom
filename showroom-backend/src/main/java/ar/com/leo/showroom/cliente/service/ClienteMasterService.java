@@ -160,7 +160,7 @@ public class ClienteMasterService {
      * Autocompletado por razón social / nombre: busca clientes del maestro (no
      * eliminados) cuyo razón social o nombre contenga el texto tipeado. Devuelve
      * los candidatos para que el operador elija uno y precargue los datos.
-     * Limitado a {@code MAX_SUGERENCIAS_RAZON_SOCIAL} para no inundar el dropdown.
+     * Limitado a 10 resultados para no inundar el dropdown.
      */
     public java.util.List<ClienteAutocompletarDTO> buscarPorRazonSocial(String q) {
         if (!StringUtils.hasText(q)) return java.util.List.of();

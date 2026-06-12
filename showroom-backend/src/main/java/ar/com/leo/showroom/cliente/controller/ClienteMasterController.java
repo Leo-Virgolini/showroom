@@ -41,8 +41,8 @@ public class ClienteMasterController {
     }
 
     /** Autocompletado del pedido por CUIT: devuelve los datos del cliente con
-     *  ese documento (maestro o, en su defecto, el último pedido) para pre-llenar
-     *  el formulario. 404 si no hay coincidencias — el operador completa a mano. */
+     *  ese documento (SOLO del maestro de clientes) para pre-llenar el
+     *  formulario. 404 si no hay coincidencias — el operador completa a mano. */
     @GetMapping("/por-cuit/{nroDoc}")
     public ResponseEntity<ClienteAutocompletarDTO> buscarPorCuit(@PathVariable Long nroDoc) {
         return service.buscarParaAutocompletar(nroDoc)

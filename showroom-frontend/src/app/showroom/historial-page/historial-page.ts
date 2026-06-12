@@ -28,7 +28,6 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
 import { TagModule } from 'primeng/tag';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
   ConversionProducto,
@@ -43,7 +42,7 @@ import { dispararDescargaBlob } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 @Component({
   selector: 'app-historial-page',
@@ -52,7 +51,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     ChartModule,
@@ -68,10 +66,9 @@ import { TopActions } from '../top-actions/top-actions';
     TableModule,
     TabsModule,
     TagModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
-  ],
+    RouterLink,
+    PageHeader,  ],
   templateUrl: './historial-page.html',
   styleUrl: './historial-page.scss',
 })

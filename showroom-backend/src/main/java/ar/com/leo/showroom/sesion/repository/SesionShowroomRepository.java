@@ -41,12 +41,20 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
     Optional<SesionShowroom> findByPedidoIdWithItems(@Param("pedidoId") Long pedidoId);
 
     /** Listado paginado de sesiones con filtros opcionales. Búsqueda LIKE
-     *  case-insensitive sobre el nombre del cliente. Rango de fechas optativo. */
+     *  case-insensitive sobre el nombre del cliente. Rango de fechas optativo.
+     *
+     *  <p>Muestra SOLO sesiones provenientes del showroom: las que tienen al
+     *  menos un scan o un pedido asociado. El presupuestador escanea con
+     *  {@code publicarVisor=false} (no registra scans en la sesión) y sus
+     *  pedidos no se asocian a la sesión ({@code origenPresupuesto}), así que
+     *  una sesión iniciada desde el presupuestador queda con 0 scans y sin
+     *  pedido → no es una atención del showroom y se excluye del historial. */
     @Query("""
             SELECT s FROM SesionShowroom s
             WHERE (:q IS NULL OR LOWER(s.nombre) LIKE LOWER(CONCAT('%', :q, '%')))
               AND (:desde IS NULL OR s.iniciadaAt >= :desde)
               AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
+              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL)
             """)
     Page<SesionShowroom> buscar(
             @Param("q") String q,
@@ -119,10 +127,16 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
 
     /** Cuenta sesiones cerradas en el rango. Una "sesión finalizada" es la que
      *  el operador cerró explícitamente (con o sin pedido) — es el denominador
-     *  natural del KPI de conversión. */
+     *  natural del KPI de conversión.
+     *
+     *  <p>Solo cuenta atenciones REALES del showroom (con al menos un scan o un
+     *  pedido); excluye las sesiones de presupuesto (0 scans, sin pedido) para
+     *  no inflar el denominador y bajar artificialmente la conversión. Coherente
+     *  con el filtro del listado {@link #buscar}. */
     @Query("""
             SELECT COUNT(s) FROM SesionShowroom s
             WHERE s.finalizadaAt IS NOT NULL
+              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL)
               AND (:desde IS NULL OR s.iniciadaAt >= :desde)
               AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
             """)

@@ -15,11 +15,9 @@ import {
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
-import { EMPTY, Subject, Subscription, firstValueFrom } from 'rxjs';
+import { EMPTY, Subject, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
 import { ConfirmationService, MessageService } from 'primeng/api';
-import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -28,25 +26,18 @@ import { DialogModule } from 'primeng/dialog';
 import { OverlayBadgeModule } from 'primeng/overlaybadge';
 import { IconFieldModule } from 'primeng/iconfield';
 import { ImageModule } from 'primeng/image';
-import { InputGroupModule } from 'primeng/inputgroup';
-import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputIconModule } from 'primeng/inputicon';
-import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { MeterGroupModule } from 'primeng/metergroup';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { SplitterModule } from 'primeng/splitter';
-import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
-import { TextareaModule } from 'primeng/textarea';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, CategoriaFiscal, ClienteAutocompletar, EscalaDescuento, FormaPago, Localidad, Provincia, ScanResult } from '../models';
-import { calcularSugerenciasEmail } from '../email-suggestions.utils';
+import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, ScanResult } from '../models';
 import {
   hayEscalonSuperior,
   iconoFormaReferencia,
@@ -55,95 +46,21 @@ import {
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { ShowroomService } from '../showroom.service';
-import { SyncStateService } from '../sync-state.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { toastError } from '../toast.utils';
 import {
   ProductoGenericoData,
   ProductoGenericoDialog,
 } from '../producto-generico-dialog/producto-generico-dialog';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
+import { QrCelularDialog } from '../qr-celular-dialog/qr-celular-dialog';
+import { SyncButton } from '../sync-button/sync-button';
+import {
+  CrearPedidoDialog,
+  PedidoClientePrefill,
+  PedidoItemEntrada,
+} from '../crear-pedido-dialog/crear-pedido-dialog';
 
-/**
- * Datos del cliente que el vendedor completa al cerrar el pedido.
- * El `apellido_razon_social` que recibe DUX ahora es editable ({@link razonSocial});
- * antes era un placeholder fijo ("PEDIDO SHOWROOM"). categoriaFiscal y tipoDoc
- * siguen hardcodeadas. El CUIT es la clave que conecta el pedido con el cliente real.
- */
-interface DatosCliente {
-  nroDoc: number | null;
-  /** Razón social / apellido → DUX `apellido_razon_social`. Editable; se
-   * pre-llena por el autocompletado por CUIT/razón social. */
-  razonSocial: string;
-  /** Nombre y apellido (o razón social) del cliente. Se manda a DUX en el campo
-   * `nombre` del payload de /pedido/nuevopedido y se muestra en la carátula del
-   * PDF de presupuesto y en la columna Cliente del listado. Opcional: si queda
-   * vacío, la columna Cliente muestra "—". */
-  nombre: string;
-  telefono: string;
-  email: string;
-  /** Rubro comercial del cliente — obligatorio desde mayo 2026 al crear el
-   *  pedido. Valor es el ID de la opción ({@code 'bar'}, {@code 'restaurant'},
-   *  etc.) o {@code 'otros'} cuando el operador eligió texto libre. Si es
-   *  {@code 'otros'}, el texto real va en {@link rubroOtros}. */
-  rubro: string | null;
-  /** Texto libre cuando {@link rubro} === 'otros'. Se envía al backend
-   *  resuelto: si rubro es una opción predefinida se manda esa; si es
-   *  'otros' se manda este texto. */
-  rubroOtros: string;
-  domicilio: string;
-  codigoProvincia: string | null;
-  idLocalidad: string | null;
-  /** Observaciones del pedido — se persisten en `pedido_showroom.observaciones` y
-   * también se envían a DUX en el campo `observaciones` del comprobante. */
-  observaciones: string;
-}
-
-const CLIENTE_VACIO: DatosCliente = {
-  nroDoc: null,
-  razonSocial: '',
-  nombre: '',
-  telefono: '',
-  email: '',
-  rubro: null,
-  rubroOtros: '',
-  domicilio: '',
-  codigoProvincia: null,
-  idLocalidad: null,
-  observaciones: '',
-};
-
-/** Opciones del dropdown de rubro — mismas que /presupuestos para coherencia.
- *  'otros' habilita un input libre. */
-const OPCIONES_RUBRO: { label: string; value: string }[] = [
-  { label: 'Bar', value: 'bar' },
-  { label: 'Restaurant', value: 'restaurant' },
-  { label: 'Catering', value: 'catering' },
-  { label: 'Cafetería', value: 'cafeteria' },
-  { label: 'Panadería', value: 'panaderia' },
-  { label: 'Pastelería', value: 'pasteleria' },
-  { label: 'Otros…', value: 'otros' },
-];
-
-
-/**
- * Re-ordena una lista para que los items cuyo nombre empieza con `query` aparezcan
- * antes que los que solo lo contienen. Mantiene el orden relativo dentro de cada
- * grupo. Útil para que al tipear "oliv" en el select aparezcan OLIVERA / OLIVIERA
- * antes que NICANOR OLIVERA / BOLIVAR.
- */
-function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => string): T[] {
-  const q = query.toLowerCase().trim();
-  if (!q) return items;
-  const starts: T[] = [];
-  const contains: T[] = [];
-  for (const it of items) {
-    const n = getNombre(it).toLowerCase();
-    if (n.startsWith(q)) starts.push(it);
-    else if (n.includes(q)) contains.push(it);
-  }
-  return [...starts, ...contains];
-}
 
 @Component({
   selector: 'app-showroom-page',
@@ -152,8 +69,6 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
-    AutoCompleteModule,
     AvatarModule,
     ButtonModule,
     CardModule,
@@ -161,10 +76,7 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     DialogModule,
     IconFieldModule,
     ImageModule,
-    InputGroupModule,
-    InputGroupAddonModule,
     InputIconModule,
-    InputMaskModule,
     InputNumberModule,
     InputTextModule,
     MeterGroupModule,
@@ -172,13 +84,13 @@ function ordenarPorPrefijo<T>(items: T[], query: string, getNombre: (it: T) => s
     ProgressSpinnerModule,
     SelectModule,
     SplitterModule,
-    TableModule,
     TagModule,
-    TextareaModule,
-    ToolbarModule,
     TooltipModule,
     ProductoGenericoDialog,
-    TopActions,
+    PageHeader,
+    QrCelularDialog,
+    SyncButton,
+    CrearPedidoDialog,
   ],
   templateUrl: './showroom-page.html',
   styleUrl: './showroom-page.scss',
@@ -188,7 +100,6 @@ export class ShowroomPage implements AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
-  private readonly syncState = inject(SyncStateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly precioPerfil = inject(PrecioPerfilService);
@@ -338,17 +249,32 @@ export class ShowroomPage implements AfterViewInit {
   /** Refresh on-demand del producto recién scaneado — distinto de `refrescando`
    *  que es para el carrito completo. */
   readonly refrescandoScan = signal(false);
-  readonly enviando = signal(false);
-
-  readonly mostrarConfirmacion = signal(false);
-  readonly cliente = signal<DatosCliente>({ ...CLIENTE_VACIO });
-
-  /** Lista de sugerencias actual del autocomplete del email — se actualiza
-   *  dinámicamente con cada keystroke (ver onCompletarEmail). */
-  readonly sugerenciasEmail = signal<string[]>([]);
-
-  readonly mostrarSyncDialog = signal(false);
-  readonly forzarSyncCompleto = signal(false);
+  /** Visibilidad del modal unificado de pedido (app-crear-pedido-dialog) en el
+   *  showroom. Reemplaza al formulario de cliente que vivía inline acá. */
+  readonly mostrarCrearPedidoShowroom = signal(false);
+  /** Ítems del carrito mapeados al formato que consume el modal de pedido —
+   *  mismo armado que usaba el envío directo (precio c/IVA, descuento efectivo
+   *  por ítem, IVA de genéricos), para no cambiar lo que se factura en DUX. */
+  readonly itemsPedidoShowroom = computed<PedidoItemEntrada[]>(() =>
+    this.carrito().map((it) => {
+      const d = this.descuentoParaItem(it);
+      return {
+        sku: it.sku,
+        cantidad: it.cantidad,
+        precioConIva: it.pvpKtGastroConIva,
+        porcIva: it.generico ? (it.porcIva ?? null) : null,
+        descuentoPorcentaje: d > 0 ? d : null,
+        rubro: it.rubro ?? null,
+        comentarios: it.comentarios ?? null,
+      };
+    }),
+  );
+  /** Pre-llenado del modal: nombre de la sesión de atención + forma de pago
+   *  elegida en el carrito. El resto de los datos los completa el operador. */
+  readonly prefillPedidoShowroom = computed<PedidoClientePrefill>(() => ({
+    nombre: this.haySesionActiva() ? (this.sesionActiva().nombre ?? null) : null,
+    formaPagoId: this.formaPagoSeleccionada()?.id ?? null,
+  }));
 
   /** Dialog "QR para celular" — muestra dos imágenes pre-generadas:
    *  WiFi (auto-conexión) y Visor (pantalla de precios). Ambas viven en
@@ -378,31 +304,13 @@ export class ShowroomPage implements AfterViewInit {
   }[]>([]);
   readonly mostrarDialogExcedidos = signal(false);
 
-  /** Estado de DUX/sync — fuente de verdad central, propagada vía SSE. */
-  readonly health = this.syncState.health;
-
   readonly screenLg = signal(
     typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
   );
 
-  // menuExtras vive ahora en <app-more-menu /> (componente reusable) — sin
-  // esto se duplicaba la lista en cada toolbar que quería el botón "Más".
+  // La navegación vive ahora en <app-main-menu /> (p-menubar reusable dentro
+  // de app-top-actions) — sin esto se duplicaba la lista en cada toolbar.
 
-  readonly provincias = signal<Provincia[]>([]);
-  readonly localidades = signal<Localidad[]>([]);
-  readonly cargandoLocalidades = signal(false);
-
-  /** Query actual del filtro interno de cada select — para reordenar matches. */
-  readonly provinciasQuery = signal('');
-  readonly localidadesQuery = signal('');
-
-  /** Lista re-ordenada con los que empiezan por la query antes que los que solo contienen. */
-  readonly provinciasOrdenadas = computed(() =>
-    ordenarPorPrefijo(this.provincias(), this.provinciasQuery(), (p) => p.nombre),
-  );
-  readonly localidadesOrdenadas = computed(() =>
-    ordenarPorPrefijo(this.localidades(), this.localidadesQuery(), (l) => l.nombre),
-  );
 
   /**
    * Escalones de descuento configurados (umbral subtotal s/IVA → % a aplicar).
@@ -606,17 +514,6 @@ export class ShowroomPage implements AfterViewInit {
     this.carrito().some((it) => this.descuentoManual(it.itemKey) > 0),
   );
 
-  /** Si la forma de pago elegida agrega IVA al precio que ve el cliente.
-   *  - Forma con {@code aplicaIva=true} (caso normal): cliente paga con IVA.
-   *  - Forma con {@code aplicaIva=false} (ej: "transferencia sin IVA"):
-   *    cliente paga sin IVA y el operador absorbe la diferencia.
-   *  - Sin forma elegida (todavía no decidió): mostramos el "precio efectivo"
-   *    sin IVA, igual al comportamiento histórico del carrito. */
-  readonly aplicaIvaCliente = computed(() => {
-    const fp = this.formaPagoSeleccionada();
-    return fp ? (fp.aplicaIva ?? true) : false;
-  });
-
   /** Total final del carrito para una forma de pago dada — usado en el dialog
    *  "comparativa de formas de pago" que el operador le muestra al cliente.
    *  Descuento per-item para que los rubros excluidos (MAQUINAS INDUSTRIALES)
@@ -738,11 +635,6 @@ export class ShowroomPage implements AfterViewInit {
     };
   });
 
-  stockSeverity(stock: number | null): 'success' | 'danger' | 'secondary' {
-    if (stock == null) return 'secondary';
-    return stock > 0 ? 'success' : 'danger';
-  }
-
   ahorro(base: number | null, descuento: number): number {
     if (base == null) return 0;
     return base * (descuento / 100);
@@ -770,41 +662,11 @@ export class ShowroomPage implements AfterViewInit {
     return this.precioPerfil.precioReferenciaPorForma(r, forma);
   }
 
-  /** Ícono PrimeNG para una forma de pago de referencia (inferido del nombre). */
-  iconoPrecioReferencia(nombre: string): string {
-    return iconoFormaReferencia(nombre);
-  }
-
   /** Precio unitario de un ítem del carrito según la forma elegida (o la primaria
    *  si no hay forma seleccionada) y el rubro. */
   precioItemForma(it: CarritoItem): number {
     const fp = this.formaPagoSeleccionada();
     return fp ? this.precioReferenciaPorForma(it, fp) : this.precioReferenciaPrimario(it);
-  }
-
-  /** True si el precio del ítem para la forma elegida lleva IVA, según el perfil
-   *  (Normal/Maquinaria) de su rubro. */
-  itemCarritoTieneIva(it: { rubro?: string | null }): boolean {
-    const fp = this.formaPagoSeleccionada();
-    if (!fp) return this.aplicaIvaCliente();
-    return this.precioReferenciaTieneIva(it, fp);
-  }
-
-  /** True si el precio mostrado para esta forma incluye IVA, según el perfil del
-   *  rubro: maquinaria usa `aplicaIvaMaquinaria` (null→false); el resto `aplicaIva`. */
-  precioReferenciaTieneIva(
-    r: { rubro?: string | null },
-    forma: FormaPago,
-  ): boolean {
-    return this.perfilForma(forma, this.rubroCotizaSinIva(r.rubro)).aplicaIva ?? true;
-  }
-
-  /** Clases del badge c/IVA (verde) o s/IVA (ámbar), reusando la paleta de la
-   *  tabla de formas de pago. */
-  badgeIvaClass(tieneIva: boolean): string {
-    return tieneIva
-      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
   }
 
   /** Precio de REFERENCIA de un producto (scan o ítem) según el rubro: el de la
@@ -863,19 +725,6 @@ export class ShowroomPage implements AfterViewInit {
     );
   }
 
-  /** Formato relativo "hace X min/hora/día" para fechas recientes. */
-  tiempoRelativo(iso: string | null | undefined): string {
-    if (!iso) return '—';
-    const ms = Date.now() - new Date(iso).getTime();
-    if (ms < 60_000) return 'hace unos segundos';
-    const min = Math.floor(ms / 60_000);
-    if (min < 60) return `hace ${min} min`;
-    const hs = Math.floor(min / 60);
-    if (hs < 24) return `hace ${hs} h`;
-    const d = Math.floor(hs / 24);
-    return `hace ${d} día${d === 1 ? '' : 's'}`;
-  }
-
   /** Tope de cantidad para los InputNumber. NO se topea al stock: se permite
    *  pedir más de lo disponible (el excedente queda como pendiente de
    *  reposición y el ítem se agrega "forzado"). Cap alto solo para evitar
@@ -898,234 +747,6 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   readonly hayItemsExcedidos = computed(() => this.carrito().some((it) => this.excedeStock(it)));
-
-  readonly puedeEnviar = computed(() => {
-    const c = this.cliente();
-    return (
-      c.nroDoc != null &&
-      this.cuitValido(c.nroDoc) &&
-      this.emailValido(c.email) &&
-      // Razón social (nombre del cliente), teléfono y rubro obligatorios. Si el
-      // operador elige "Otros" en rubro, tiene que cargar el texto libre.
-      c.razonSocial.trim().length > 0 &&
-      c.telefono.trim().length > 0 &&
-      this.rubroValido(c) &&
-      this.carrito().length > 0
-    );
-  });
-
-  /** Opciones del dropdown de rubro — expuestas para el template. */
-  readonly opcionesRubro = OPCIONES_RUBRO;
-
-  /** True si el cliente cargó un rubro válido: una opción predefinida, o
-   *  "Otros" con texto libre no vacío. */
-  rubroValido(c: DatosCliente): boolean {
-    if (!c.rubro) return false;
-    if (c.rubro === 'otros') return c.rubroOtros.trim().length > 0;
-    return true;
-  }
-
-  /** Resuelve el valor final del rubro para el payload del backend: si el
-   *  operador eligió "otros" se manda el texto libre; sino, la opción
-   *  predefinida. */
-  rubroFinal(): string {
-    const c = this.cliente();
-    if (c.rubro === 'otros') return c.rubroOtros.trim();
-    return c.rubro ?? '';
-  }
-
-  /** Hardcoded en el envío a DUX. Se expone al operador como input deshabilitado
-   *  para que vea exactamente qué se carga, y se referencia desde el payload de
-   *  `crearPedido` para no duplicar el literal. */
-  readonly categoriaFiscalFinal: CategoriaFiscal = 'CONSUMIDOR_FINAL';
-
-  /** Validación liviana de email — formato mínimo para que el backend lo acepte
-   *  y se pueda mandar el follow-up con el PDF de historial. Coincide con el
-   *  patrón del validador del email-picking en /configuracion. */
-  emailValido(email: string | null | undefined): boolean {
-    if (email == null) return false;
-    const trimmed = email.trim();
-    if (trimmed.length === 0) return false;
-    return /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(trimmed);
-  }
-
-  /** CUIT/CUIL = 11 dígitos. No validamos el dígito verificador para no rebotar
-   * a la operadora si DUX lo acepta igual. */
-  cuitValido(n: number | null | undefined): boolean {
-    if (n == null) return false;
-    const s = String(n);
-    return s.length === 11;
-  }
-
-  /** Valor (string) que ve el inputMask: el nroDoc del cliente como dígitos puros
-   *  para que la máscara `99-99999999-9` lo formatee con guiones automáticamente. */
-  readonly cuitInputValue = computed(() => {
-    const n = this.cliente().nroDoc;
-    return n != null ? String(n) : '';
-  });
-
-  /** Valor (string) que ve el inputMask del teléfono: solo dígitos del teléfono
-   *  guardado, para que la máscara `99-99999999` aplique el guión sola. Sirve
-   *  para limpiar valores legacy que tenían guiones u otros chars antes de
-   *  migrar al inputMask. */
-  readonly telefonoInputValue = computed(() => {
-    const t = this.cliente().telefono;
-    return t ? t.replace(/\D/g, '') : '';
-  });
-
-  /** Recibe el valor del inputMask con [unmask]="true" — solo dígitos. Lo convertimos
-   *  a number para que el resto del flujo (validación, payload a DUX) siga igual. */
-  onCuitChange(value: string | null | undefined): void {
-    const digits = (value ?? '').replace(/\D/g, '');
-    const nuevo = digits ? Number(digits) : null;
-    const previo = this.cliente().nroDoc;
-    this.actualizarCliente('nroDoc', nuevo);
-    // Al cambiar el CUIT deja de estar "confirmado" como cliente existente; el
-    // lookup de abajo lo vuelve a marcar si encuentra coincidencia.
-    if (nuevo !== previo) this.clienteExistente.set(false);
-    // Autocompletar al completar el CUIT (11 dígitos), solo en la transición a
-    // un valor nuevo — evita disparar el lookup en cada tecla.
-    if (digits.length === 11 && nuevo !== previo) {
-      this.autocompletarDesdeCuit(nuevo!);
-    }
-  }
-
-  /** Busca un cliente por CUIT y completa SOLO los campos vacíos del formulario
-   *  (no pisa lo que el operador ya tipeó). */
-  private autocompletarDesdeCuit(nroDoc: number): void {
-    this.api.buscarClientePorCuit(nroDoc)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((cli) => {
-        if (!cli) return;
-        this.completarDesdeCliente(cli);
-      });
-  }
-
-  /** Completa SOLO los campos vacíos del formulario desde un cliente guardado.
-   *  Reutilizado por el autocompletado por CUIT y por razón social. */
-  private completarDesdeCliente(cli: ClienteAutocompletar): void {
-    // Se reconoció un cliente guardado (por CUIT o razón social) → lo marcamos
-    // como existente para mostrarlo en el form.
-    this.clienteExistente.set(true);
-    const c = this.cliente();
-    const parche: Partial<DatosCliente> = {};
-    let completados = 0;
-    if (cli.razonSocial && !c.razonSocial.trim()) { parche.razonSocial = cli.razonSocial; completados++; }
-    if (cli.nombre && !c.nombre.trim()) { parche.nombre = cli.nombre; completados++; }
-    if (cli.email && !c.email.trim()) { parche.email = cli.email; completados++; }
-    if (cli.telefono && !c.telefono.trim()) { parche.telefono = cli.telefono; completados++; }
-    if (cli.nroDoc != null && c.nroDoc == null) { parche.nroDoc = cli.nroDoc; completados++; }
-    if (cli.domicilio && !c.domicilio.trim()) { parche.domicilio = cli.domicilio; completados++; }
-    if (cli.rubro && !c.rubro) {
-      if (this.opcionesRubro.some((o) => o.value === cli.rubro)) {
-        parche.rubro = cli.rubro;
-        parche.rubroOtros = '';
-      } else {
-        parche.rubro = 'otros';
-        parche.rubroOtros = cli.rubro;
-      }
-      completados++;
-    }
-    const completarProvincia = !!cli.codigoProvincia && !c.codigoProvincia;
-    if (completarProvincia) { parche.codigoProvincia = cli.codigoProvincia!; completados++; }
-    if (completados > 0) this.cliente.set({ ...c, ...parche });
-    // Provincia/localidad: cargar las localidades y completar la localidad
-    // solo si todavía está vacía.
-    if (completarProvincia) {
-      this.cargarLocalidadesYCompletar(cli.codigoProvincia!, cli.idLocalidad ?? null);
-    }
-    if (completados > 0) {
-      this.toast.add({
-        severity: 'info',
-        summary: 'Cliente reconocido',
-        detail: 'Completé los datos desde un cliente guardado.',
-        life: 4000,
-      });
-    }
-  }
-
-  /** True cuando el CUIT/razón social cargados corresponden a un cliente ya
-   *  guardado (reconocido por el autocompletado). Se muestra como badge en el
-   *  form y se resetea al cambiar el CUIT o al limpiar el cliente. */
-  readonly clienteExistente = signal(false);
-
-  /** Sugerencias del autocomplete por razón social (clientes guardados). */
-  readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);
-
-  /** completeMethod del p-autoComplete de razón social. */
-  buscarSugerenciasRazonSocial(event: { query: string }): void {
-    const q = (event.query ?? '').trim();
-    if (q.length < 2) { this.sugerenciasRazonSocial.set([]); return; }
-    this.api.buscarClientesPorRazonSocial(q)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
-  }
-
-  /** ngModelChange del p-autoComplete de razón social: objeto = sugerencia
-   *  elegida (completa el resto); string = texto libre. */
-  onRazonSocialChange(value: string | ClienteAutocompletar): void {
-    if (value && typeof value === 'object') {
-      this.actualizarCliente('razonSocial', value.razonSocial ?? value.nombre ?? '');
-      this.completarDesdeCliente(value);
-    } else {
-      this.actualizarCliente('razonSocial', value ?? '');
-    }
-  }
-
-  /** Carga las localidades de una provincia y completa la localidad SOLO si
-   *  todavía está vacía (autocompletado no destructivo). */
-  private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null): void {
-    this.localidadesSub?.unsubscribe();
-    this.cargandoLocalidades.set(true);
-    this.localidades.set([]);
-    this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia).subscribe({
-      next: (lista) => {
-        this.cargandoLocalidades.set(false);
-        this.localidades.set(lista);
-        if (idLocalidad && !this.cliente().idLocalidad) {
-          this.cliente.set({ ...this.cliente(), idLocalidad });
-        }
-        this.localidadesSub = null;
-      },
-      error: () => {
-        this.cargandoLocalidades.set(false);
-        this.localidadesSub = null;
-      },
-    });
-  }
-
-  /** Recibe el valor del inputMask del teléfono con [unmask]="true" (solo dígitos).
-   *  Lo guarda tal cual en el cliente — el formato visual con guión lo provee
-   *  la máscara, no la data persistida. */
-  /** Cliente que YA tiene el teléfono ingresado (null = ninguno). Alimenta el
-   *  aviso "teléfono ya registrado para X". */
-  readonly clientePorTelefono = signal<ClienteAutocompletar | null>(null);
-  private ultimoTelefonoLookup = '';
-
-  onTelefonoChange(value: string | null | undefined): void {
-    this.actualizarCliente('telefono', value ?? '');
-    this.chequearTelefonoExistente(value ?? '');
-  }
-
-  /** Busca si el teléfono ya pertenece a un cliente (a partir de 8 dígitos) y
-   *  actualiza {@link clientePorTelefono} para el aviso. Evita lookups repetidos
-   *  para el mismo número. */
-  private chequearTelefonoExistente(telefono: string): void {
-    const digits = (telefono ?? '').replace(/\D/g, '');
-    if (digits.length < 8) {
-      this.clientePorTelefono.set(null);
-      this.ultimoTelefonoLookup = '';
-      return;
-    }
-    if (digits === this.ultimoTelefonoLookup) return;
-    this.ultimoTelefonoLookup = digits;
-    this.api.buscarClientePorTelefono(digits)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((cli) => {
-        // Solo si el teléfono no cambió mientras volvía la respuesta.
-        if (digits === this.ultimoTelefonoLookup) this.clientePorTelefono.set(cli);
-      });
-  }
 
   constructor() {
     // Carga los escalones de descuento desde el backend al iniciar. Si la
@@ -1182,20 +803,6 @@ export class ShowroomPage implements AfterViewInit {
         next: (s) => { if (s.id == null) this.abrirDialogoNuevoCliente(); },
         error: (err) => console.warn('[sesion] no se pudo hidratar:', err),
       });
-
-    // Pre-fill del nombre del cliente en el form cuando hay sesión y el campo
-    // está vacío (reacciona a la hidratación y a los cambios SSE de la sesión).
-    // Solo trackeamos `sesion()`; leer/escribir `cliente` va en untracked para
-    // NO re-dispararnos cuando el operador edita el campo Nombre — sino no
-    // podría dejarlo vacío con una sesión activa (lo volvería a llenar).
-    effect(() => {
-      const s = this.sesionService.sesion();
-      untracked(() => {
-        if (s.id != null && s.nombre && !this.cliente().nombre.trim()) {
-          this.actualizarCliente('nombre', s.nombre);
-        }
-      });
-    });
 
     // Sincronización en vivo: cualquier mutación (esta PC, otra PC, visor,
     // sync de catálogo) llega como SSE y reemplaza el estado local. Según el
@@ -1285,7 +892,6 @@ export class ShowroomPage implements AfterViewInit {
     // Cancela la request de localidades en vuelo cuando el componente se
     // destruye. No es un leak crítico (la respuesta sería ignorada igual),
     // pero evita el warning de Angular Zoneless sobre observables huérfanos.
-    this.destroyRef.onDestroy(() => this.localidadesSub?.unsubscribe());
 
     // En dispositivos táctiles (tablets/phones) reenfocar al click abre el
     // teclado virtual cada vez que tocan algo. Solo activamos el auto-refocus
@@ -1301,10 +907,9 @@ export class ShowroomPage implements AfterViewInit {
     effect(() => {
       const algunoAbierto =
         this.mostrarDialogoNuevoCliente() ||
-        this.mostrarConfirmacion() ||
+        this.mostrarCrearPedidoShowroom() ||
         this.mostrarDialogVisor() ||
         this.mostrarDialogReview() ||
-        this.mostrarSyncDialog() ||
         this.mostrarDialogGenerico();
       if (dialogAbiertoPrevio && !algunoAbierto) {
         this.focusInput();
@@ -1313,7 +918,7 @@ export class ShowroomPage implements AfterViewInit {
     });
 
     const refocus = (e: MouseEvent) => {
-      if (this.mostrarConfirmacion()) return;
+      if (this.mostrarCrearPedidoShowroom()) return;
       const target = e.target as HTMLElement | null;
       // Click dentro de un toast (incluido el botón X de cerrar) → refocusear
       // el scan input. El operador acaba de descartar una notificación y
@@ -1350,7 +955,7 @@ export class ShowroomPage implements AfterViewInit {
 
   @HostListener('document:keydown', ['$event'])
   onKeyDown(e: KeyboardEvent): void {
-    if (e.key === '/' && !this.mostrarConfirmacion()) {
+    if (e.key === '/' && !this.mostrarCrearPedidoShowroom()) {
       const target = e.target as HTMLElement;
       if (target?.tagName !== 'INPUT' && target?.tagName !== 'TEXTAREA') {
         e.preventDefault();
@@ -1398,38 +1003,6 @@ export class ShowroomPage implements AfterViewInit {
       .subscribe({
         error: (err) => console.warn('[visor-forma] no se pudo publicar:', err),
       });
-  }
-
-  confirmarSincronizar(): void {
-    if (this.health()?.syncEnCurso) {
-      this.toast.add({
-        severity: 'info',
-        summary: 'Sincronización en curso',
-        detail: 'Ya hay un sync corriendo en background.',
-      });
-      return;
-    }
-    this.forzarSyncCompleto.set(false);
-    this.mostrarSyncDialog.set(true);
-  }
-
-  ejecutarSync(): void {
-    const force = this.forzarSyncCompleto();
-    this.mostrarSyncDialog.set(false);
-    this.api.syncCatalogo(force).subscribe({
-      next: () => {
-        this.toast.add({
-          severity: 'info',
-          summary: force ? 'Sync completo iniciado' : 'Sincronización iniciada',
-          detail: force
-            ? 'Descarga todo el catálogo (~15 min). El banner global muestra el progreso.'
-            : 'Va a correr en background. El banner global muestra el progreso.',
-          life: 5000,
-        });
-        this.syncState.refrescarHealth();
-      },
-      error: (err) => toastError(this.toast, 'Sync', err, 'No se pudo iniciar el sync'),
-    });
   }
 
   /** QR (data URL) del visor del operador logueado — se genera al abrir el
@@ -2218,14 +1791,69 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /** Abre el modal unificado de pedido. Si está activada la verificación de
+   *  stock, la corre ANTES como paso previo (gate): refresca contra DUX y, si
+   *  hay ítems excedidos, muestra el diálogo de stock; si todo alcanza (o la
+   *  verificación está desactivada), abre el modal de creación de pedido. */
   abrirConfirmacion(): void {
     if (this.carrito().length === 0) return;
-    this.mostrarConfirmacion.set(true);
-    this.cargarProvinciasSiHaceFalta();
+    if (!this.verificarStockAlEnviar()) {
+      this.mostrarCrearPedidoShowroom.set(true);
+      return;
+    }
+    const cantidadesPedidas = new Map(this.carrito().map((it) => [it.itemKey, it.cantidad]));
+    this.refrescando.set(true);
+    this.api.refrescarStockCarritoServer().subscribe({
+      next: (state) => {
+        this.refrescando.set(false);
+        this.carrito.set(state.items);
+        const excedidos: {
+          sku: string;
+          descripcion: string | null;
+          cantidadPedida: number;
+          stockDisponible: number;
+        }[] = [];
+        for (const it of state.items) {
+          const pedida = cantidadesPedidas.get(it.itemKey) ?? it.cantidad;
+          const stock = it.stockTotal;
+          if (stock != null && pedida > stock) {
+            excedidos.push({
+              sku: it.sku,
+              descripcion: it.descripcion,
+              cantidadPedida: pedida,
+              stockDisponible: stock,
+            });
+          }
+        }
+        if (excedidos.length > 0) {
+          this.excedidosStock.set(excedidos);
+          this.mostrarDialogExcedidos.set(true);
+          return;
+        }
+        this.mostrarCrearPedidoShowroom.set(true);
+      },
+      error: (err) => {
+        this.refrescando.set(false);
+        this.toast.add({
+          severity: 'warn',
+          summary: 'No se pudo verificar stock',
+          detail: 'Abriendo el pedido igual; DUX validará al recibirlo.',
+          life: 4000,
+        });
+        console.warn('[abrirConfirmacion] refresh failed:', err);
+        this.mostrarCrearPedidoShowroom.set(true);
+      },
+    });
   }
 
-  actualizarCliente<K extends keyof DatosCliente>(campo: K, valor: DatosCliente[K]): void {
-    this.cliente.set({ ...this.cliente(), [campo]: valor });
+  /** El modal creó el pedido en DUX OK (y el backend consumió la sesión de
+   *  atención por ser origen showroom). Limpiamos el carrito, reseteamos la
+   *  forma de pago al default y mostramos el diálogo de reseña en Google. */
+  onPedidoShowroomCreado(): void {
+    this.vaciarCarrito();
+    const formas = this.formasPagoActivas();
+    this.formaPagoSeleccionada.set(formas.length > 0 ? formas[0] : null);
+    this.mostrarDialogReview.set(true);
   }
 
   // =====================================================
@@ -2265,10 +1893,6 @@ export class ShowroomPage implements AfterViewInit {
       next: () => {
         this.iniciandoSesion.set(false);
         this.mostrarDialogoNuevoCliente.set(false);
-        // Pre-fill explícito del nombre del cliente en el form de pedido —
-        // pisa cualquier valor previo porque arranca cliente nuevo. (El estado
-        // de sesión lo actualiza el servicio.)
-        this.actualizarCliente('nombre', nombre);
         this.toast.add({
           severity: 'success',
           summary: 'Sesión iniciada',
@@ -2336,68 +1960,6 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
-  /** Sugerencias del autocomplete del email — delega en
-   *  {@link calcularSugerenciasEmail} (helper compartido por todas las
-   *  pantallas con autocomplete de email del cliente). */
-  onCompletarEmail(event: AutoCompleteCompleteEvent): void {
-    this.sugerenciasEmail.set(calcularSugerenciasEmail(event.query));
-  }
-
-  /**
-   * Carga la lista de provincias la primera vez que se abre el dialog.
-   * El backend ya cachea, así que llamadas subsiguientes son baratas — pero
-   * igual evitamos una HTTP innecesaria cuando ya está en memoria del frontend.
-   */
-  private cargarProvinciasSiHaceFalta(): void {
-    if (this.provincias().length > 0) return;
-    this.api.obtenerProvincias().subscribe({
-      next: (lista) => this.provincias.set(lista),
-      error: (err) =>
-        toastError(this.toast, 'Provincias', err, 'No se pudieron cargar las provincias'),
-    });
-  }
-
-  /** Subscription a la request en curso de localidades — para poder cancelarla. */
-  private localidadesSub: Subscription | null = null;
-
-  cambiarProvincia(codigo: string | null): void {
-    // Si ya había una request en curso (otra provincia), abortarla.
-    this.localidadesSub?.unsubscribe();
-    this.localidadesSub = null;
-
-    this.cliente.set({
-      ...this.cliente(),
-      codigoProvincia: codigo,
-      idLocalidad: null,
-    });
-    this.localidades.set([]);
-    if (!codigo) {
-      this.cargandoLocalidades.set(false);
-      return;
-    }
-    this.cargandoLocalidades.set(true);
-    this.localidadesSub = this.api.obtenerLocalidades(codigo).subscribe({
-      next: (lista) => {
-        this.cargandoLocalidades.set(false);
-        this.localidades.set(lista);
-        this.localidadesSub = null;
-      },
-      error: (err) => {
-        this.cargandoLocalidades.set(false);
-        this.localidadesSub = null;
-        toastError(this.toast, 'Localidades', err, 'No se pudieron cargar las localidades');
-      },
-    });
-  }
-
-  onFilterProvincias(event: { filter: string }): void {
-    this.provinciasQuery.set(event.filter || '');
-  }
-
-  onFilterLocalidades(event: { filter: string }): void {
-    this.localidadesQuery.set(event.filter || '');
-  }
-
   scrollAlInicio(): void {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2405,224 +1967,14 @@ export class ShowroomPage implements AfterViewInit {
     this.focusInput();
   }
 
-  /**
-   * Cancela la búsqueda de localidades en curso y limpia la provincia para que
-   * el operador pueda elegir otra. La descarga sigue en el backend (donde se
-   * guarda en BD, así que no es trabajo perdido), pero la UI ya no espera.
-   */
-  cancelarBusquedaLocalidades(): void {
-    this.localidadesSub?.unsubscribe();
-    this.localidadesSub = null;
-    this.cargandoLocalidades.set(false);
-    this.localidades.set([]);
-    this.cliente.set({
-      ...this.cliente(),
-      codigoProvincia: null,
-      idLocalidad: null,
-    });
-  }
-
-  /**
-   * Click en "Enviar a DUX" del diálogo de confirmación.
-   *
-   * Flujo:
-   *  1. Validaciones básicas (stock, datos del cliente).
-   *  2. Si `verificarStockAlEnviar()` está activo, refresca stock+precio
-   *     contra DUX. Si encuentra excedidos cierra el diálogo y avisa al
-   *     operador (los datos del cliente se preservan en el signal).
-   *     Si solo cambió el precio, avisa y sigue con los nuevos valores.
-   *  3. Manda el pedido a DUX.
-   */
-  confirmarEnvio(): void {
-    if (!this.puedeEnviar()) {
-      this.toast.add({
-        severity: 'warn',
-        summary: 'Faltan datos',
-        detail: 'CUIT (11 dígitos) requerido.',
-      });
-      return;
-    }
-
-    if (!this.verificarStockAlEnviar()) {
-      this.enviarPedido();
-      return;
-    }
-
-    // Refresh contra DUX antes de enviar — última validación. El backend
-    // sincroniza el cache + actualiza el carrito server-side (todas las PCs
-    // ven el nuevo stock vía SSE). Acá solo leemos el state resultante para
-    // detectar excedidos y mantenemos las cantidades pedidas (el operador
-    // decide si recortarlas en el diálogo).
-    // Indexamos por itemKey, no por sku, para que múltiples genéricos
-    // (todos con el SKU comodín) no colapsen al mismo entry del Map.
-    const cantidadesPedidas = new Map(this.carrito().map((it) => [it.itemKey, it.cantidad]));
-    this.refrescando.set(true);
-    this.api.refrescarStockCarritoServer().subscribe({
-      next: (state) => {
-        this.refrescando.set(false);
-        this.carrito.set(state.items);
-        const excedidos: {
-          sku: string;
-          descripcion: string | null;
-          cantidadPedida: number;
-          stockDisponible: number;
-        }[] = [];
-        for (const it of state.items) {
-          const pedida = cantidadesPedidas.get(it.itemKey) ?? it.cantidad;
-          const stock = it.stockTotal;
-          if (stock != null && pedida > stock) {
-            excedidos.push({
-              sku: it.sku,
-              descripcion: it.descripcion,
-              cantidadPedida: pedida,
-              stockDisponible: stock,
-            });
-          }
-        }
-
-        if (excedidos.length > 0) {
-          // Stock cambió y ya no alcanza — cerramos el diálogo de confirmación
-          // y abrimos uno dedicado con la lista detallada (SKU, descripción,
-          // cantidad pedida vs stock disponible). El diálogo se cierra solo
-          // manualmente para que el operador pueda leer tranquilo. Los datos
-          // del cliente persisten en `this.cliente` — al re-abrir el diálogo
-          // de pedido, el formulario sigue lleno.
-          this.mostrarConfirmacion.set(false);
-          this.excedidosStock.set(excedidos);
-          this.mostrarDialogExcedidos.set(true);
-          return;
-        }
-
-        // Stock OK (sin importar si cambió el precio en DUX) → enviar.
-        this.enviarPedido();
-      },
-      error: (err) => {
-        this.refrescando.set(false);
-        // Si DUX no responde, mandamos el pedido igual con los datos del cache.
-        // DUX validará al recibirlo — si rechaza, mostramos el error.
-        this.toast.add({
-          severity: 'warn',
-          summary: 'No se pudo verificar stock',
-          detail: 'Enviando el pedido igual; DUX validará al recibirlo.',
-          life: 4000,
-        });
-        console.warn('[confirmarEnvio] refresh failed:', err);
-        this.enviarPedido();
-      },
-    });
-  }
-
   /** Botón "Enviar igual" del dialog de stock insuficiente — el operador eligió
    *  mandar el pedido a DUX aunque haya items con cantidad > stock disponible.
    *  Cierra el dialog y dispara el envío sin re-validar contra DUX. */
   enviarIgualConExcedidos(): void {
     this.mostrarDialogExcedidos.set(false);
-    this.enviarPedido();
+    this.mostrarCrearPedidoShowroom.set(true);
   }
 
-  /** Manda el pedido a DUX con los datos actuales del carrito y del cliente.
-   *  Asume que las validaciones (stock, datos requeridos) ya fueron OK. */
-  private enviarPedido(): void {
-    const c = this.cliente();
-    this.enviando.set(true);
-    this.api
-      .crearPedido({
-        // `apellido_razon_social` (obligatorio, lo único que va a DUX como
-        // identificación). El dialog valida que no esté vacío.
-        apellidoRazonSocial: c.razonSocial.trim(),
-        // `nombre` (opcional): NO se sube a DUX (el backend lo omite del payload);
-        // se persiste en el pedido y se guarda en la ficha del cliente (columna
-        // nombre). Puede ir vacío.
-        nombre: c.nombre.trim() || undefined,
-        categoriaFiscal: this.categoriaFiscalFinal,
-        tipoDoc: 'CUIT',
-        nroDoc: c.nroDoc ?? undefined,
-        telefono: c.telefono.trim(),
-        email: c.email.trim(),
-        // Rubro: si eligió una opción predefinida va esa; si eligió "otros"
-        // mandamos el texto libre. El dialog garantiza que uno u otro tenga
-        // valor antes de llegar acá.
-        rubro: this.rubroFinal(),
-        domicilio: c.domicilio.trim() || undefined,
-        codigoProvincia: c.codigoProvincia ?? undefined,
-        idLocalidad: c.idLocalidad ?? undefined,
-        observaciones: c.observaciones.trim() || undefined,
-        // Forma de pago elegida en el carrito (null si "Efectivo" / sin
-        // selección). El backend aplica el recargo % a cada precioUnitario
-        // antes de mandar a DUX.
-        formaPagoId: this.formaPagoSeleccionada()?.id ?? undefined,
-        items: this.carrito().map((it) => {
-          // Descuento per-item EFECTIVO: si el ítem tiene descuento MANUAL (>0)
-          // se manda ese (reemplaza la escala para esa línea); sino el de escala
-          // para los elegibles. Los ítems excluidos por rubro (MAQUINAS
-          // INDUSTRIALES) sin manual NO reciben el descuento por escala —
-          // mandamos `undefined` para que DUX los facture al PVP de lista.
-          // Los genéricos marcados como "maquinaria" caen acá automáticamente
-          // porque el backend les setea ese mismo rubro al crearlos.
-          const descItem = this.descuentoParaItem(it);
-          return {
-            sku: it.sku,
-            cantidad: it.cantidad,
-            // Rubro del ítem: el backend lo usa para resolver el perfil
-            // (Normal/Maquinaria) de la forma de pago. Imprescindible para
-            // genéricos, cuyo rubro real no está en el cache del comodín.
-            rubro: it.rubro ?? undefined,
-            // Mandamos el precio CON IVA: la lista "KT GASTRO" en DUX está configurada
-            // como "incluye IVA", entonces DUX espera valores con-IVA y descuenta el IVA
-            // internamente. Si mandamos sin-IVA, DUX lo trata como con-IVA y queda mal.
-            // El display en el showroom sigue mostrando sin-IVA al operador (informativo).
-            precioUnitario: it.pvpKtGastroConIva,
-            descuentoPorcentaje: descItem > 0 ? descItem : undefined,
-            // Genéricos: el operador eligió el IVA en el dialog (21 o 10.5).
-            // Sin esto, el backend caería al porcIva del cache del SKU comodín
-            // que no representa al producto real.
-            porcIva: it.generico ? (it.porcIva ?? undefined) : undefined,
-            // Comentarios: descripción tipeada por el operador, viaja al
-            // campo `comentarios` de la línea en el payload DUX.
-            comentarios: it.comentarios ?? undefined,
-          };
-        }),
-      })
-      .subscribe({
-        next: (res) => {
-          this.enviando.set(false);
-          this.mostrarConfirmacion.set(false);
-          if (res.estado === 'ENVIADO') {
-            this.toast.add({
-              severity: 'success',
-              summary: 'Pedido cargado en DUX',
-              detail: res.mensaje,
-              life: 5000,
-            });
-            this.vaciarCarrito();
-            this.cliente.set({ ...CLIENTE_VACIO });
-            this.clienteExistente.set(false);
-            this.clientePorTelefono.set(null);
-            this.ultimoTelefonoLookup = '';
-            // Reset de la forma de pago al default (primera de la lista) — el
-            // próximo cliente arranca con el método configurado por el operador.
-            const formas = this.formasPagoActivas();
-            this.formaPagoSeleccionada.set(formas.length > 0 ? formas[0] : null);
-            // Dialog post-pedido para que el cliente nos califique en Google
-            // (la imagen incluye el QR pre-generado, ver public/opinion-google.png).
-            this.mostrarDialogReview.set(true);
-          } else {
-            this.toast.add({
-              severity: 'warn',
-              summary: 'Pedido pendiente',
-              detail: res.mensaje,
-              life: 8000,
-            });
-          }
-        },
-        error: (err) => {
-          this.enviando.set(false);
-          toastError(this.toast, 'Pedido', err, 'Error al enviar pedido');
-        },
-      });
-  }
-
-  trackBySku = (_: number, it: CarritoItem) => it.sku;
 }
 
 const ESCALA_COLOR_SCHEMES = [

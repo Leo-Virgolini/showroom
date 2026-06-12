@@ -1,34 +1,7 @@
 <div class="flex flex-col min-h-screen bg-amber-50/40 dark:bg-surface-950">
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+  <app-page-header title="Historial de presupuestos" subtitle="Buscar y reenviar presupuestos generados"
+    titleIcon="pi pi-history" toolbarClass="!bg-amber-100/80 dark:!bg-surface-900" />
 
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-amber-100/80 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-            <i class="pi pi-history text-[#FF861C]"></i> Historial de presupuestos
-          </span>
-          <span class="text-[0.65rem] text-muted-color">Buscar y reenviar presupuestos generados</span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
-          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
-          pTooltip="Volver al showroom" tooltipPosition="bottom" />
-      </div>
-    </ng-template>
-
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        <p-button icon="pi pi-file-edit" [label]="screenLg() ? 'Nuevo presupuesto' : ''"
-          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
-          pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
 
   <main class="flex-1 p-3 sm:p-4 lg:p-6">
     <p-card>
@@ -52,6 +25,10 @@
           <p-button icon="pi pi-filter-slash" label="Limpiar filtros" severity="secondary"
             [outlined]="true" (onClick)="limpiarFiltros()" />
         }
+        <!-- "Nuevo presupuesto" movido desde el header para no dejarlo en 2 filas. -->
+        <p-button icon="pi pi-file-edit" label="Nuevo presupuesto"
+          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
+          pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
       </div>
 
       <!-- Pill de deep-link por id (desde /pedidos → columna "Origen"). Muestra
@@ -135,7 +112,15 @@
               </div>
             </td>
             <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-              {{ p.clienteNombre || '—' }}
+              @if (tieneFichaCliente(p)) {
+                <button type="button" (click)="verCliente(p)"
+                  class="text-primary hover:underline cursor-pointer text-left font-medium"
+                  [pTooltip]="'Ver ficha de ' + (p.clienteNombre || 'este cliente')" tooltipPosition="top">
+                  {{ p.clienteNombre || '—' }}
+                </button>
+              } @else {
+                {{ p.clienteNombre || '—' }}
+              }
             </td>
             <td class="text-xs text-muted-color">
               {{ p.clienteEmail || '—' }}

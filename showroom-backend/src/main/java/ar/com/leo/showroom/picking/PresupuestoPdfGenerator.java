@@ -47,12 +47,10 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.math.BigDecimal;
-import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Genera un PDF de presupuesto con tema KT GASTRO para mandarle al cliente.
@@ -91,11 +89,6 @@ public class PresupuestoPdfGenerator {
     /** TZ del showroom: la fecha del pedido se computa según AR aunque la JVM
      *  corra en UTC (caso típico en cloud). */
     private static final ZoneId TZ_AR = ZoneId.of("America/Argentina/Buenos_Aires");
-    private static final NumberFormat PESO_FMT = NumberFormat.getCurrencyInstance(Locale.of("es", "AR"));
-    static {
-        PESO_FMT.setMaximumFractionDigits(0);
-        PESO_FMT.setMinimumFractionDigits(0);
-    }
 
     private final ImagenLocalService imagenLocalService;
     private final FormaPagoService formaPagoService;
@@ -454,7 +447,7 @@ public class PresupuestoPdfGenerator {
 
     private static String formatPesos(BigDecimal v) {
         if (v == null || v.signum() == 0) return "-";
-        return PESO_FMT.format(v.doubleValue());
+        return PdfFormatoUtils.formatPesos(v);
     }
 
     private static String safe(String s, String fallback) {

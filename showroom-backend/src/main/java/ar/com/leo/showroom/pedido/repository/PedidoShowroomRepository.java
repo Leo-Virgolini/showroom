@@ -103,19 +103,4 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
             @Param("hasta") Instant hasta,
             Pageable pageable);
 
-    /** Suma de unidades vendidas por SKU sin límite, para calcular la conversión
-     *  por producto contra los escaneados. Sin {@code Pageable} — el caller
-     *  arma el ranking final en Java. */
-    @Query("""
-            select new ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO(
-                i.sku, MAX(i.descripcion), CAST(SUM(i.cantidad) AS long))
-            from PedidoShowroomItem i
-            where i.pedido.estado <> ar.com.leo.showroom.pedido.entity.EstadoPedido.ANULADO
-              and (:desde is null or i.pedido.creadoAt >= :desde)
-              and (:hasta is null or i.pedido.creadoAt <= :hasta)
-            group by i.sku
-            """)
-    List<EstadisticaProductoDTO> sumarCompradosPorSku(
-            @Param("desde") Instant desde,
-            @Param("hasta") Instant hasta);
 }

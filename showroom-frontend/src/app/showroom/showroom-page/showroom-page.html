@@ -1,29 +1,3 @@
-<p-dialog header="Sincronizar catálogo con DUX" [(visible)]="mostrarSyncDialog" [modal]="true" [style]="{ width: '95vw', maxWidth: '34rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [draggable]="false" (onHide)="focusInput()">
-  <div class="flex flex-col gap-4">
-    <p class="m-0 text-surface-700 dark:text-surface-200">
-      Va a correr en background — podés seguir usando el sistema.
-      El banner global muestra el progreso a todos los usuarios conectados.
-    </p>
-
-    <div class="flex flex-col gap-2 p-3 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900">
-      <label class="flex items-start gap-2 cursor-pointer">
-        <p-checkbox [(ngModel)]="forzarSyncCompleto" [binary]="true" inputId="forzarSync" />
-        <div class="flex flex-col gap-1">
-          <span class="font-medium">Sincronización completa</span>
-          <span class="text-xs text-muted-color flex flex-col gap-1 mt-1">
-            <span><strong>Marcado:</strong> descarga TODO el catálogo desde DUX (~15 minutos).</span>
-            <span><strong>Sin marcar:</strong> solo trae los productos que tuvieron cambios de <strong>stock</strong> o <strong>precio</strong> desde la última sincronización (más rápido).</span>
-          </span>
-        </div>
-      </label>
-    </div>
-  </div>
-  <ng-template #footer>
-    <p-button label="Cancelar" severity="secondary" [outlined]="true" (onClick)="mostrarSyncDialog.set(false)" />
-    <p-button [label]="forzarSyncCompleto() ? 'Sincronizar todo' : 'Sincronizar'" icon="pi pi-sync" (onClick)="ejecutarSync()" />
-  </ng-template>
-</p-dialog>
 
 <p-dialog [(visible)]="mostrarDialogReview" [modal]="true" [style]="{ width: '95vw', maxWidth: '42rem' }" [breakpoints]="{ '640px': '95vw' }"
   [draggable]="false" [showHeader]="false" [closeOnEscape]="true" [dismissableMask]="true" (onHide)="focusInput()">
@@ -50,62 +24,9 @@
   </ng-template>
 </p-dialog>
 
-<p-dialog header="QR para celular" [(visible)]="mostrarDialogVisor" [modal]="true" [style]="{ width: '98vw', maxWidth: '140rem', maxHeight: '98vh' }" [breakpoints]="{ '1280px': '98vw', '768px': '98vw' }"
-  [draggable]="false" [pt]="{ root: { class: 'dialog-qr-celular' } }" (onHide)="focusInput()">
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 md:divide-x md:divide-surface-200 dark:md:divide-surface-700">
-
-    <!-- Sección WiFi -->
-    <div class="flex flex-col items-center gap-1.5 md:pr-3">
-      <div class="w-full flex items-center gap-1.5">
-        <i class="pi pi-wifi text-[#FF861C] text-base"></i>
-        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">1. Conectarse al WiFi</h3>
-      </div>
-      <p-image src="conexion-wifi.png" alt="QR del WiFi" [preview]="true"
-        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
-    </div>
-
-    <!-- Sección Visor — QR dinámico que apunta a /visor/{username} del operador
-         logueado, así cada operador tiene su propio canal y el cliente solo ve
-         los scans de su vendedor. -->
-    <div class="flex flex-col items-center gap-1.5 md:px-3 border-t pt-3 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
-      <div class="w-full flex items-center gap-1.5">
-        <i class="pi pi-mobile text-[#FF861C] text-base"></i>
-        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">2. Ver los precios</h3>
-      </div>
-      @if (qrVisorDataUrl()) {
-      <p-image [src]="qrVisorDataUrl()!" alt="QR del visor del operador" [preview]="true"
-        imageClass="w-full max-h-[70vh] object-contain rounded-xl shadow-sm cursor-zoom-in bg-white" class="w-full" />
-      <div class="text-[10px] font-mono text-muted-color break-all text-center max-w-full select-all">
-        {{ visorUrl() }}
-      </div>
-      } @else if (qrVisorGenerando()) {
-      <div class="w-full aspect-square max-h-[70vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
-        <i class="pi pi-spin pi-spinner text-3xl text-muted-color"></i>
-      </div>
-      } @else {
-      <!-- No se pudo generar el QR — mostramos la URL como fallback para que el
-           cliente la pueda tipear/copiar a mano. -->
-      <div class="w-full aspect-square max-h-[70vh] rounded-xl bg-surface-100 dark:bg-surface-800 flex flex-col items-center justify-center gap-2 p-4 text-center">
-        <i class="pi pi-exclamation-triangle text-2xl text-muted-color"></i>
-        <span class="text-xs text-muted-color">No se pudo generar el QR. Ingresá esta dirección en el celular:</span>
-        <span class="text-xs font-mono text-color break-all select-all">{{ visorUrl() }}</span>
-      </div>
-      }
-    </div>
-
-    <!-- Sección Reseña Google — usa la misma imagen que el dialog post-pedido
-         (opinion-google.png). El operador la muestra al cliente al despedirse. -->
-    <div class="flex flex-col items-center gap-1.5 md:pl-3 border-t pt-3 md:border-t-0 md:pt-0 border-surface-200 dark:border-surface-700">
-      <div class="w-full flex items-center gap-1.5">
-        <i class="pi pi-star-fill text-[#FF861C] text-base"></i>
-        <h3 class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 m-0">3. Calificanos en Google</h3>
-      </div>
-      <p-image src="opinion-google.png" alt="QR para reseña en Google" [preview]="true"
-        imageClass="w-full max-h-[80vh] object-contain rounded-xl shadow-sm cursor-zoom-in" class="w-full" />
-    </div>
-
-  </div>
-</p-dialog>
+<app-qr-celular-dialog [(visible)]="mostrarDialogVisor" [visorUrl]="visorUrl()"
+  [qrDataUrl]="qrVisorDataUrl()" [generando]="qrVisorGenerando()"
+  visorTitulo="Ver los precios" (dialogClosed)="focusInput()" />
 
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
@@ -152,68 +73,13 @@
   [sku]="skuGenerico()"
   (agregar)="onAgregarGenerico($event)" />
 
-<div class="page-container flex flex-col bg-orange-50/60 dark:bg-surface-950">
-  <!-- Banda decorativa naranja → verde, identidad KT (mismo gradient del PDF) -->
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-orange-50 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom" (click)="scrollAlInicio()"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">Showroom</span>
-        </div>
-        @if (haySesionActiva()) {
-        <!-- Chip de sesión activa: click en cualquier parte abre el confirm de
-             finalizar sesión (la X refuerza visualmente que es una acción). -->
-        <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="kt-badge-xs ml-1 sm:ml-2">
-          <div
-            class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
-            [pTooltip]="'Sesión activa — ' + sesionActiva().cantidadEscaneados + ' scan(s) registrados. Click para finalizar.'"
-            tooltipPosition="bottom"
-            (click)="confirmarCancelarSesion()">
-            <p-avatar [label]="inicialesCliente()" shape="circle" size="normal"
-              class="!bg-emerald-600 !text-white !text-[10px] !w-6 !h-6" />
-            <span class="text-xs sm:text-sm font-semibold">
-              <span class="hidden md:inline">Cliente: </span>{{ sesionActiva().nombre }}
-            </span>
-            <i class="pi pi-times-circle text-sm" aria-label="Finalizar sesión"></i>
-          </div>
-        </p-overlayBadge>
-        } @else {
-        <!-- Sin sesión: botón para iniciar una. Vive en el #start (junto al
-             título), en el mismo lugar donde aparece el chip cuando hay sesión
-             — el cliente/sesión es contexto "a quién atiendo", separado de las
-             acciones del #end. Mismo patrón que presupuestos-page. -->
-        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''" ariaLabel="Iniciar nueva sesión de atención"
-          class="btn-kt-verde ml-1 sm:ml-2" (onClick)="abrirDialogoNuevoCliente()"
-          pTooltip="Iniciar sesión para registrar los scans del cliente"
-          tooltipPosition="bottom" />
-        }
-
-        <!-- QR del visor: junto a la badge del cliente (mismo lugar que el
-             presupuestador), no en el #end con las acciones. -->
-        <p-button icon="pi pi-mobile" [label]="screenLg() ? 'QR' : ''" ariaLabel="Abrir visor en celular" class="btn-kt-marron ml-1 sm:ml-2"
-          (onClick)="abrirDialogVisor()" pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)"
-          tooltipPosition="bottom" />
-      </div>
-    </ng-template>
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        @if (health()?.ultimaSincronizacionAt; as fecha) {
-        <p-tag severity="secondary" icon="pi pi-clock" [value]="'Última sync: ' + tiempoRelativo(fecha)" [pTooltip]="(fecha | date: 'dd/MM/yyyy HH:mm:ss' : undefined : 'es-AR') ?? ''"
-          tooltipPosition="bottom" class="hidden md:inline-flex mr-1" />
-        }
-        <p-button icon="pi pi-sync" [label]="screenLg() ? 'Sincronizar' : ''" ariaLabel="Sincronizar catálogo desde DUX" class="btn-kt-naranja" [disabled]="health()?.syncEnCurso === true"
-          [loading]="health()?.syncEnCurso === true" (onClick)="confirmarSincronizar()" pTooltip="Descarga el catálogo desde DUX" />
-
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
+<div class="page-container flex flex-col bg-indigo-50/60 dark:bg-surface-950">
+  <app-page-header title="Atención" subtitle="Escaneá muestras y armá el pedido del cliente"
+    titleIcon="pi pi-comments" toolbarClass="!bg-indigo-100 dark:!bg-surface-900" (logoClick)="scrollAlInicio()">
+    <div header-end class="inline-flex gap-2 items-center">
+      <app-sync-button (dialogClosed)="focusInput()" />
+    </div>
+  </app-page-header>
 
   <main class="flex-1 min-h-0 flex">
     <!-- Splitter redimensionable entre scan + carrito. El usuario ajusta el
@@ -230,9 +96,36 @@
     <section class="flex flex-col min-h-0 h-full p-3 sm:p-4 lg:p-6">
       <p-card class="stretch-card">
         <ng-template #title>
-          <div class="flex items-center gap-2">
-            <i class="pi pi-search text-primary"></i>
-            <span>Escanear muestra</span>
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <i class="pi pi-search text-primary"></i>
+              <span>Escanear muestra</span>
+            </div>
+            <!-- Contexto de la atención (movido desde el header para no dejarlo
+                 en 2 filas): chip de sesión / "Nuevo cliente" + QR del visor. -->
+            <div class="flex items-center gap-2.5 flex-wrap">
+              @if (haySesionActiva()) {
+                <p-overlayBadge [value]="sesionActiva().cantidadEscaneados" severity="info" class="kt-badge-xs mr-1.5">
+                  <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200"
+                    [pTooltip]="'Sesión activa — ' + sesionActiva().cantidadEscaneados + ' scan(s) registrados. Click para finalizar.'"
+                    tooltipPosition="bottom" (click)="confirmarCancelarSesion()">
+                    <p-avatar [label]="inicialesCliente()" shape="circle" size="normal"
+                      class="!bg-emerald-600 !text-white !text-[10px] !w-6 !h-6" />
+                    <span class="text-xs sm:text-sm font-semibold">
+                      <span class="hidden md:inline">Cliente: </span>{{ sesionActiva().nombre }}
+                    </span>
+                    <i class="pi pi-times-circle text-sm" aria-label="Finalizar sesión"></i>
+                  </div>
+                </p-overlayBadge>
+              } @else {
+                <p-button icon="pi pi-user-plus" label="Nuevo cliente" ariaLabel="Iniciar nueva sesión de atención"
+                  class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
+                  pTooltip="Iniciar sesión para registrar los scans del cliente" tooltipPosition="bottom" />
+              }
+              <p-button icon="pi pi-mobile" label="QR" ariaLabel="Abrir visor en celular" class="btn-kt-marron"
+                (onClick)="abrirDialogVisor()"
+                pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
+            </div>
           </div>
         </ng-template>
         <div class="flex items-center gap-2 mb-4">
@@ -1026,9 +919,16 @@
             <span>Hay items sin stock o que lo superan — el pedido se va a generar igual.</span>
           </p>
           }
+          <label class="flex items-center gap-2 text-xs text-muted-color cursor-pointer shrink-0"
+            pTooltip="Antes de crear el pedido refresca el stock de cada ítem contra DUX (tarda ~7s por ítem)."
+            tooltipPosition="top">
+            <p-checkbox [ngModel]="verificarStockAlEnviar()" (ngModelChange)="verificarStockAlEnviar.set($event)"
+              [binary]="true" [disabled]="refrescando()" inputId="verifStockEnvio" />
+            Verificar stock
+          </label>
           <p-button class="shrink-0" label="Crear Pedido en Dux" icon="pi pi-cloud-upload" size="large"
             [disabled]="carrito().length === 0"
-            [loading]="enviando()"
+            [loading]="refrescando()"
             (onClick)="abrirConfirmacion()" />
         </div>
         }
@@ -1040,208 +940,9 @@
 
 </div>
 
-<p-dialog header="Confirmar pedido a DUX" [(visible)]="mostrarConfirmacion" [modal]="true" [style]="{ width: '90vw', maxWidth: '60rem' }"
-  [breakpoints]="{ '1280px': '85vw', '1024px': '92vw', '640px': '96vw' }" [closable]="!enviando()" [draggable]="false" (onHide)="focusInput()">
-  <div class="flex flex-col gap-4">
-    <div class="flex items-center gap-3 p-3 rounded-lg bg-primary-50 dark:bg-primary-950 border border-primary-200 dark:border-primary-900">
-      <i class="pi pi-shopping-cart text-2xl text-primary"></i>
-      <div class="flex-1">
-        <div class="text-sm text-muted-color">Resumen del pedido</div>
-        <div>
-          <strong>{{ cantidadTotal() }}</strong> items
-          ({{ carrito().length }} SKUs únicos) ·
-          <strong class="text-primary">{{ totalACobrar() | currency:'ARS':'symbol':'1.0-0' }}</strong>
-          @if (formaPagoSeleccionada(); as fp) {
-            <span class="text-xs text-amber-700 dark:text-amber-300">
-              ({{ fp.nombre }}@if (!aplicaIvaCliente()) {, sin IVA})
-            </span>
-          }
-        </div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-2 gap-3">
-      <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color flex items-center gap-2">
-          CUIT <span class="text-red-500">*</span>
-          @if (clienteExistente()) {
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold
-                         bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-              <i class="pi pi-check-circle text-[10px]"></i> Cliente existente
-            </span>
-          }
-        </label>
-        <p-inputMask mask="99-99999999-9" [unmask]="true" [ngModel]="cuitInputValue()" (ngModelChange)="onCuitChange($event)" placeholder="XX-XXXXXXXX-X" class="w-full" />
-        @if (cliente().nroDoc != null && !cuitValido(cliente().nroDoc)) {
-        <span class="text-xs text-red-600 dark:text-red-400">El CUIT debe tener 11 dígitos.</span>
-        }
-      </div>
-
-      <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">
-          Apellido / razón social en DUX <span class="text-red-500">*</span>
-        </label>
-        <p-autoComplete [ngModel]="cliente().razonSocial" (ngModelChange)="onRazonSocialChange($event)"
-          [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
-          optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
-          placeholder="Razón social — se sube a DUX" inputStyleClass="w-full" class="w-full" />
-      </div>
-
-      <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">
-          Nombre y apellido
-        </label>
-        <input pInputText type="text" [ngModel]="cliente().nombre" (ngModelChange)="actualizarCliente('nombre', $event)"
-          placeholder="Opcional — se guarda en la ficha del cliente (no se sube a DUX)" maxlength="150" class="w-full" />
-      </div>
-
-      <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">
-          Categoría fiscal <span class="text-red-500">*</span>
-        </label>
-        <input pInputText type="text" [value]="categoriaFiscalFinal" [disabled]="true" class="w-full" />
-      </div>
-
-      <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">
-          <i class="pi pi-truck"></i>
-          Datos de envío
-        </h4>
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Provincia</label>
-        <p-select [options]="provinciasOrdenadas()" [ngModel]="cliente().codigoProvincia" (ngModelChange)="cambiarProvincia($event)" (onFilter)="onFilterProvincias($event)"
-          optionLabel="nombre" optionValue="codigo" [filter]="true" filterBy="nombre" placeholder="Seleccionar…" appendTo="body" class="w-full" />
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">Localidad</label>
-        <div class="flex gap-1 items-center">
-          <div class="flex-1 min-w-0">
-            <p-select [options]="localidadesOrdenadas()" [ngModel]="cliente().idLocalidad" (ngModelChange)="actualizarCliente('idLocalidad', $event)"
-              (onFilter)="onFilterLocalidades($event)" optionLabel="nombre" optionValue="id" [filter]="true" filterBy="nombre" [showClear]="true"
-              [disabled]="!cliente().codigoProvincia || cargandoLocalidades()" [loading]="cargandoLocalidades()" placeholder="Seleccionar…" appendTo="body" [virtualScroll]="true"
-              [virtualScrollItemSize]="44" class="w-full" />
-          </div>
-          @if (cargandoLocalidades()) {
-          <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true" size="small" (onClick)="cancelarBusquedaLocalidades()" pTooltip="Cancelar búsqueda"
-            ariaLabel="Cancelar búsqueda de localidades" />
-          }
-        </div>
-      </div>
-
-      <div class="flex flex-col gap-1 col-span-2">
-        <label class="text-sm font-medium text-muted-color">Domicilio de entrega</label>
-        <input pInputText type="text" [ngModel]="cliente().domicilio" (ngModelChange)="actualizarCliente('domicilio', $event)" placeholder="Calle y altura donde se entrega el pedido"
-          class="w-full" />
-      </div>
-
-      <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">
-          <i class="pi pi-phone"></i>
-          Contacto
-        </h4>
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">
-          Teléfono <span class="text-red-500">*</span>
-        </label>
-        <p-inputMask mask="99-99999999" [unmask]="true" [ngModel]="telefonoInputValue()" (ngModelChange)="onTelefonoChange($event)" placeholder="11-12345678" class="w-full" />
-        @if (!clienteExistente() && clientePorTelefono(); as cli) {
-          <span class="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded
-                       bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-            <i class="pi pi-info-circle text-[10px]"></i>
-            Este teléfono ya pertenece a <strong>{{ cli.razonSocial || cli.nombre || 'un cliente' }}</strong>.
-            Si es el mismo cliente, perfecto; si no, revisá el número.
-          </span>
-        }
-      </div>
-
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">
-          Email <span class="text-red-500">*</span>
-        </label>
-        <p-iconfield iconPosition="left">
-          <p-inputicon><i class="pi pi-envelope"></i></p-inputicon>
-          <p-autoComplete [ngModel]="cliente().email" (ngModelChange)="actualizarCliente('email', $event)" [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
-            [forceSelection]="false" [delay]="0" placeholder="cliente@gmail.com" inputStyleClass="w-full pl-10" class="w-full" />
-        </p-iconfield>
-        @if (cliente().email && !emailValido(cliente().email)) {
-        <span class="text-xs text-red-600 dark:text-red-400">Formato de email inválido.</span>
-        }
-      </div>
-
-      <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">
-          <i class="pi pi-briefcase"></i>
-          Comercial
-        </h4>
-        <p class="text-xs text-muted-color m-0 mt-1">
-          El rubro se guarda con el pedido y se usa para segmentar la vista de clientes.
-        </p>
-      </div>
-
-      <!-- Rubro: dropdown con opciones predefinidas + input libre cuando se elige "Otros".
-           Mismas opciones que /presupuestos para que un mismo cliente caiga al mismo
-           rubro en ambos flujos y agrupe parejo en /clientes. -->
-      <div class="flex flex-col gap-1" [class.col-span-2]="cliente().rubro !== 'otros'">
-        <label class="text-sm font-medium text-muted-color">
-          Rubro <span class="text-red-500">*</span>
-        </label>
-        <p-select [options]="opcionesRubro" [ngModel]="cliente().rubro"
-          (ngModelChange)="actualizarCliente('rubro', $event)"
-          optionLabel="label" optionValue="value" placeholder="Seleccionar…"
-          appendTo="body" class="w-full" />
-      </div>
-      @if (cliente().rubro === 'otros') {
-      <div class="flex flex-col gap-1">
-        <label class="text-sm font-medium text-muted-color">
-          Detalle del rubro <span class="text-red-500">*</span>
-        </label>
-        <input pInputText type="text" maxlength="100"
-          [ngModel]="cliente().rubroOtros"
-          (ngModelChange)="actualizarCliente('rubroOtros', $event)"
-          placeholder="Ej: heladería, kiosco…" class="w-full" />
-      </div>
-      }
-
-      <div class="col-span-2 mt-2 pt-3 border-t border-surface-200 dark:border-surface-700">
-        <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-color inline-flex items-center gap-2 m-0">
-          <i class="pi pi-pencil"></i>
-          Observaciones
-        </h4>
-        <p class="text-xs text-muted-color m-0 mt-1">
-          Se guardan localmente y se envían a DUX en el campo "Observaciones" del comprobante.
-        </p>
-      </div>
-
-      <div class="flex flex-col gap-1 col-span-2">
-        <textarea pTextarea rows="2" [ngModel]="cliente().observaciones" (ngModelChange)="actualizarCliente('observaciones', $event)"
-          placeholder="Ej: el cliente pidió que se le avise antes de la entrega…" class="w-full resize-y" maxlength="500"></textarea>
-      </div>
-    </div>
-  </div>
-  <ng-template #footer>
-    <div class="flex items-center justify-between flex-wrap gap-3 w-full">
-      <label class="flex items-center gap-2 text-xs text-muted-color cursor-pointer"
-        pTooltip="Antes de mandar a DUX refresca stock y precio de cada item para confirmar que no cambiaron. Tarda ~7s por item — desactivalo si no querés verificar stock."
-        tooltipPosition="top">
-        <p-checkbox [ngModel]="verificarStockAlEnviar()" (ngModelChange)="verificarStockAlEnviar.set($event)"
-          [binary]="true" [disabled]="enviando() || refrescando()" inputId="verifStockEnvio" />
-        Verificar stock contra DUX antes de enviar
-      </label>
-      <div class="flex gap-2">
-        <p-button label="Cancelar" severity="secondary" [outlined]="true" [disabled]="enviando() || refrescando()" (onClick)="mostrarConfirmacion.set(false)" />
-        <p-button [label]="refrescando() ? 'Verificando stock…' : 'Enviar a DUX'" icon="pi pi-cloud-upload"
-          [loading]="enviando() || refrescando()"
-          [disabled]="!puedeEnviar() || refrescando()"
-          (onClick)="confirmarEnvio()" />
-      </div>
-    </div>
-  </ng-template>
-</p-dialog>
+<app-crear-pedido-dialog [(visible)]="mostrarCrearPedidoShowroom" [items]="itemsPedidoShowroom()"
+  [clientePrefill]="prefillPedidoShowroom()" [origenPresupuesto]="false"
+  (pedidoCreado)="onPedidoShowroomCreado()" />
 
 <!-- Diálogo modal cuando al re-validar contra DUX el stock ya no alcanza para
      el pedido. NO se cierra solo: el operador tiene que clickear "Entendido"
@@ -1294,7 +995,7 @@
     <p-button label="Ajustar cantidades" icon="pi pi-pencil" severity="secondary"
       [outlined]="true" (onClick)="mostrarDialogExcedidos.set(false)" />
     <p-button label="Enviar igual" icon="pi pi-cloud-upload" severity="warn"
-      [loading]="enviando()" (onClick)="enviarIgualConExcedidos()" />
+      (onClick)="enviarIgualConExcedidos()" />
   </ng-template>
 </p-dialog>
 

@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
@@ -27,7 +27,6 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
   EstadoPedido,
@@ -39,7 +38,7 @@ import { precioSinIva as quitarIva } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 @Component({
   selector: 'app-pedidos-page',
@@ -48,7 +47,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     DatePickerModule,
@@ -63,10 +61,9 @@ import { TopActions } from '../top-actions/top-actions';
     TableModule,
     TagModule,
     TextareaModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
-  ],
+    RouterLink,
+    PageHeader,  ],
   templateUrl: './pedidos-page.html',
   styleUrl: './pedidos-page.scss',
 })
@@ -75,6 +72,7 @@ export class PedidosPage {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly backendStatus = inject(BackendStatusService);
 
   readonly busqueda = signal('');
@@ -305,6 +303,29 @@ export class PedidosPage {
    *  el template muestre "—". */
   nombreCliente(p: { nombre: string | null }): string | null {
     return p.nombre?.trim() || null;
+  }
+
+  /** Filtro para abrir la ficha del cliente desde la lista: teléfono (últimos 8
+   *  dígitos, igual que el camino inverso en la página de clientes), porque el
+   *  maestro está indexado por teléfono. Sin teléfono cae a CUIT y, en última
+   *  instancia, al nombre. Null si no hay nada con qué identificar al cliente. */
+  private filtroCliente(p: PedidoListItem): string | null {
+    const tel = (p.telefono ?? '').replace(/\D+/g, '');
+    if (tel) return tel.slice(-8) || tel;
+    if (p.nroDoc != null) return String(p.nroDoc);
+    return this.nombreCliente(p);
+  }
+
+  /** True si la fila tiene con qué filtrar la ficha del cliente. */
+  tieneFichaCliente(p: PedidoListItem): boolean {
+    return this.filtroCliente(p) != null;
+  }
+
+  /** Navega a la tabla de Clientes filtrada por este cliente. */
+  verCliente(p: PedidoListItem): void {
+    const q = this.filtroCliente(p);
+    if (!q) return;
+    this.router.navigate(['/clientes'], { queryParams: { q } });
   }
 
   estadoSeverity(e: EstadoPedido): 'success' | 'warn' | 'danger' | 'secondary' {

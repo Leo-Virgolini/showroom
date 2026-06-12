@@ -21,14 +21,13 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { CotizacionListItem } from '../models';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 /**
  * Listado histórico de cotizaciones financieras guardadas — mismo patrón
@@ -42,7 +41,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     DatePickerModule,
@@ -51,10 +49,9 @@ import { TopActions } from '../top-actions/top-actions';
     InputTextModule,
     ProgressSpinnerModule,
     TableModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
-  ],
+    RouterLink,
+    PageHeader,  ],
   templateUrl: './cotizador-historial-page.html',
   styleUrl: './cotizador-historial-page.scss',
 })

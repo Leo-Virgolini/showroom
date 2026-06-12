@@ -7,7 +7,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -23,13 +22,12 @@ import { TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService, Usuario } from '../../auth/auth.service';
 import { EscalaDescuento, FormaPago, HorarioSync, NotificacionesAutoConfig, PickitConfig } from '../models';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 /**
  * Fila editable de la tabla de escalones. {@code umbralMin} y {@code porcentaje}
@@ -59,7 +57,6 @@ interface FilaHorario {
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     CheckboxModule,
@@ -74,9 +71,8 @@ interface FilaHorario {
     TabsModule,
     TextareaModule,
     ToggleSwitchModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
+    PageHeader,
   ],
   templateUrl: './configuracion-page.html',
   styleUrl: './configuracion-page.scss',

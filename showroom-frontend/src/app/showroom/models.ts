@@ -148,11 +148,6 @@ export interface CrearPedidoResponse {
   mensaje: string;
 }
 
-export interface BackendError {
-  message: string;
-  path: string;
-}
-
 export interface Health {
   /** Epoch ms cuando arrancó el backend. Cambia en cada reinicio — el frontend
    *  lo compara contra el último visto para detectar reinicio y limpiar el

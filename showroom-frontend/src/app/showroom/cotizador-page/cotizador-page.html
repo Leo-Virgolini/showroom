@@ -1,69 +1,8 @@
-<div class="page-container flex flex-col bg-teal-50/60 dark:bg-surface-950 min-h-screen">
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-
-  <!-- ============= TOOLBAR ============= -->
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-teal-100 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-            <i class="pi pi-calculator text-[#FF861C]"></i>
-            @if (esModoEdicion()) {
-              Editando cotización #{{ cotizacionEditandoId() }}
-            } @else {
-              Cotizador de financiación
-            }
-          </span>
-          <span class="text-[0.65rem] text-muted-color">
-            Monto + formas de pago, sin productos
-          </span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
-          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
-          pTooltip="Volver al showroom" tooltipPosition="bottom" />
-      </div>
-    </ng-template>
-
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        @if (cargandoEdicion()) {
-          <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
-            <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
-            Cargando cotización…
-          </span>
-        }
-        <p-button icon="pi pi-trash" [label]="screenLg() ? 'Vaciar' : ''" ariaLabel="Vaciar"
-          class="btn-kt-rojo" (onClick)="vaciar()"
-          [disabled]="!hayMonto()"
-          pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
-        <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
-          [label]="screenLg() ? (esModoEdicion() ? 'Guardar cambios' : 'Generar PDF') : ''"
-          class="btn-kt-marron" [disabled]="!hayMonto() || generandoPreview()"
-          [loading]="generandoPreview()" (onClick)="previsualizar()"
-          [pTooltip]="esModoEdicion()
-              ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
-              : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva'"
-          tooltipPosition="bottom" />
-        <p-button icon="pi pi-send"
-          [label]="screenLg() ? (esModoEdicion() ? 'Guardar y enviar' : 'Enviar') : ''"
-          ariaLabel="Enviar por email"
-          class="btn-kt-naranja" [disabled]="!hayMonto()"
-          (onClick)="abrirDialogEnviar()"
-          pTooltip="Generar y enviar la cotización al cliente" tooltipPosition="bottom" />
-
-        <p-button icon="pi pi-history" [label]="screenLg() ? 'Historial' : ''"
-          ariaLabel="Ver historial de cotizaciones" class="btn-kt-marron"
-          routerLink="/cotizador/historial"
-          pTooltip="Ver cotizaciones generadas anteriormente" tooltipPosition="bottom" />
-
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
+<div class="page-container flex flex-col bg-violet-50/60 dark:bg-surface-950 min-h-screen">
+  <app-page-header titleIcon="pi pi-calculator" toolbarClass="!bg-violet-100 dark:!bg-surface-900"
+    [title]="esModoEdicion() ? ('Editando cotización #' + cotizacionEditandoId()) : 'Cotizador de financiación'"
+    subtitle="Monto + formas de pago, sin productos">
+  </app-page-header>
 
   <!-- ============= CONTENIDO ============= -->
   <main class="flex-1 p-3 sm:p-4 lg:p-6">
@@ -81,15 +20,47 @@
              ponderado) para que el operador vea el efecto en el acto. -->
         <p-card class="kt-card">
           <ng-template #title>
-            <div class="kt-card-title">
-              <i class="pi pi-dollar"></i>
-              <span>Montos a cotizar</span>
-              @if (hayMonto()) {
-                <span class="ml-auto text-xs font-normal text-muted-color hidden sm:inline-flex items-center gap-1.5">
-                  <i class="pi pi-check-circle text-[#7EBA00]"></i>
-                  Total c/IVA: <strong class="text-[#3B1E09] dark:text-surface-0">{{ totalConIva() | currency:'ARS':'symbol':'1.0-0' }}</strong>
-                </span>
-              }
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="kt-card-title">
+                <i class="pi pi-dollar"></i>
+                <span>Montos a cotizar</span>
+                @if (hayMonto()) {
+                  <span class="text-xs font-normal text-muted-color hidden sm:inline-flex items-center gap-1.5">
+                    <i class="pi pi-check-circle text-[#7EBA00]"></i>
+                    Total c/IVA: <strong class="text-[#3B1E09] dark:text-surface-0">{{ totalConIva() | currency:'ARS':'symbol':'1.0-0' }}</strong>
+                  </span>
+                }
+              </div>
+              <!-- Acciones movidas desde el header para no dejarlo en 2 filas. -->
+              <div class="flex items-center gap-1.5 flex-wrap">
+                @if (cargandoEdicion()) {
+                  <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
+                    <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
+                    Cargando cotización…
+                  </span>
+                }
+                <p-button icon="pi pi-trash" label="Vaciar" ariaLabel="Vaciar"
+                  class="btn-kt-rojo" (onClick)="vaciar()" [disabled]="!hayMonto()"
+                  pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
+                <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
+                  [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                  class="btn-kt-azul" [disabled]="!hayMonto() || generandoPreview()"
+                  [loading]="generandoPreview()" (onClick)="previsualizar()"
+                  [pTooltip]="esModoEdicion()
+                      ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+                      : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva'"
+                  tooltipPosition="bottom" />
+                <p-button icon="pi pi-send"
+                  [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
+                  ariaLabel="Enviar por email"
+                  class="btn-kt-naranja" [disabled]="!hayMonto()"
+                  (onClick)="abrirDialogEnviar()"
+                  pTooltip="Generar y enviar la cotización al cliente" tooltipPosition="bottom" />
+                <p-button icon="pi pi-history" label="Historial"
+                  ariaLabel="Ver historial de cotizaciones" class="btn-kt-marron"
+                  routerLink="/cotizador/historial"
+                  pTooltip="Ver cotizaciones generadas anteriormente" tooltipPosition="bottom" />
+              </div>
             </div>
           </ng-template>
 

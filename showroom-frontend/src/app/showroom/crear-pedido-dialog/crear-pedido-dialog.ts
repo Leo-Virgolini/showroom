@@ -25,6 +25,7 @@ import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 import {
+  CategoriaFiscal,
   ClienteAutocompletar,
   CrearPedidoRequest,
   FormaPago,
@@ -38,10 +39,40 @@ import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { perfilForma, precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
 
+/** Ítem de pedido provisto directamente al modal (flujo showroom, desde el
+ *  carrito). Misma forma que los ítems que el modal deriva de un presupuesto. */
+export interface PedidoItemEntrada {
+  sku: string;
+  cantidad: number;
+  precioConIva: number | null;
+  porcIva: number | null;
+  descuentoPorcentaje: number | null;
+  rubro: string | null;
+  comentarios: string | null;
+}
+
+/** Pre-llenado opcional del formulario de cliente (showroom: datos de la sesión
+ *  de atención + forma de pago elegida en el carrito). */
+export interface PedidoClientePrefill {
+  nombre?: string | null;
+  razonSocial?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+  nroDoc?: number | null;
+  rubro?: string | null;
+  formaPagoId?: number | null;
+}
+
 /**
- * Dialog reusable para transformar un presupuesto comercial en un pedido en
- * DUX. Se usa desde {@code /presupuestos/historial} (acción por fila) y
- * desde {@code /presupuestos/editar/:id} (botón del toolbar en modo edición).
+ * Dialog único de creación de pedido en DUX. Se usa en dos flujos:
+ *   - Desde un presupuesto guardado ({@code /presupuestos/historial} y
+ *     {@code /presupuestos/editar/:id}): se pasa {@link presupuestoId} y el
+ *     modal carga el detalle solo. Al confirmar marca el presupuesto como
+ *     convertido (o regenera si hay {@link pedidoAnteriorId}).
+ *   - Desde el showroom: el padre pasa {@link items} (derivados del carrito) +
+ *     {@link clientePrefill} + {@code origenPresupuesto=false}. El modal no
+ *     carga ningún presupuesto; al confirmar crea el pedido y emite el
+ *     resultado para que el showroom haga sus pasos (vaciar carrito, reseña).
  *
  * <p>Inputs:
  *   - {@link visible}: control bidireccional del dialog.
@@ -105,9 +136,18 @@ export class CrearPedidoDialog {
    *  pedido, y al confirmar se llama al endpoint de regeneración (que anula
    *  el viejo y re-vincula el presupuesto). */
   readonly pedidoAnteriorId = input<number | null>(null);
-  /** Emite cuando se creó/regeneró el pedido OK. El payload trae el id del
-   *  presupuesto y el del pedido nuevo para que el padre actualice su listado. */
-  readonly pedidoCreado = output<{ presupuestoId: number; pedidoLocalId: number }>();
+  /** Ítems del pedido provistos por el padre (flujo showroom). Cuando es no-null
+   *  y no hay {@link presupuestoId}, el modal usa estos ítems en vez de cargar
+   *  un presupuesto. */
+  readonly itemsInput = input<PedidoItemEntrada[] | null>(null, { alias: 'items' });
+  /** Pre-llenado del formulario de cliente (showroom: datos de la sesión). */
+  readonly clientePrefill = input<PedidoClientePrefill | null>(null);
+  /** Marca el origen del pedido para el backend: true (presupuesto) no consume
+   *  la sesión de atención; false (showroom) sí la consume. */
+  readonly origenPresupuesto = input<boolean>(true);
+  /** Emite cuando se creó/regeneró el pedido OK. {@code presupuestoId} es null
+   *  en el flujo showroom (no hay presupuesto que vincular). */
+  readonly pedidoCreado = output<{ presupuestoId: number | null; pedidoLocalId: number }>();
 
   /** True cuando el dialog está en modo regeneración (hay un pedido anterior). */
   readonly esRegeneracion = computed(() => this.pedidoAnteriorId() != null);
@@ -137,7 +177,7 @@ export class CrearPedidoDialog {
   readonly itemsDelPresupuesto = signal<{
     sku: string;
     cantidad: number;
-    precioConIva: number;
+    precioConIva: number | null;
     porcIva: number | null;
     descuentoPorcentaje: number | null;
     /** Rubro del ítem — define el perfil (menaje/maquinaria) con que se calcula
@@ -182,8 +222,15 @@ export class CrearPedidoDialog {
     { label: 'Otros…', value: 'otros' },
   ];
 
-  // Fijo que DUX espera y NO es editable.
-  readonly categoriaFiscalFija = 'CONSUMIDOR_FINAL';
+  // Categoría fiscal del cliente — DUX la exige obligatoria. Editable; el default
+  // CONSUMIDOR_FINAL preserva el comportamiento previo (antes era fija).
+  readonly pedidoCategoriaFiscal = signal<CategoriaFiscal>('CONSUMIDOR_FINAL');
+  readonly opcionesCategoriaFiscal: { label: string; value: CategoriaFiscal }[] = [
+    { label: 'Consumidor Final', value: 'CONSUMIDOR_FINAL' },
+    { label: 'Responsable Inscripto', value: 'RESPONSABLE_INSCRIPTO' },
+    { label: 'Exento', value: 'EXENTO' },
+    { label: 'Monotributista', value: 'MONOTRIBUTISTA' },
+  ];
 
   // ----------- Totales por forma de pago -----------
   /** Total que paga el cliente con una forma — calculado POR ÍTEM con el perfil
@@ -205,7 +252,7 @@ export class CrearPedidoDialog {
   totalParaFormaPago(forma: FormaPago): number {
     return this.itemsDelPresupuesto().reduce((acc, it) => {
       const esMaq = this.precioPerfil.rubroCotizaSinIva(it.rubro);
-      const precioU = precioPorForma(it.precioConIva, it.porcIva, perfilForma(forma, esMaq));
+      const precioU = precioPorForma(it.precioConIva ?? 0, it.porcIva, perfilForma(forma, esMaq));
       const factorDesc = 1 - (it.descuentoPorcentaje ?? 0) / 100;
       return acc + precioU * it.cantidad * factorDesc;
     }, 0);
@@ -248,9 +295,56 @@ export class CrearPedidoDialog {
     effect(() => {
       const v = this.visible();
       const id = this.presupuestoId();
-      if (!v || id == null) return;
-      this.cargarDetalle(id);
+      if (!v) return;
+      if (id != null) {
+        this.cargarDetalle(id);
+        return;
+      }
+      // Flujo showroom: los ítems vienen de un computed del carrito. Los leemos
+      // en untracked para inicializar SOLO al abrir el modal — si trackeáramos
+      // `itemsInput()`, un cambio del carrito (p. ej. por SSE) mientras el modal
+      // está abierto re-dispararía la inicialización y borraría lo que el
+      // operador tipeó en el formulario.
+      const items = untracked(() => this.itemsInput());
+      if (items) {
+        this.inicializarDesdeItems(items, untracked(() => this.clientePrefill()));
+      }
     });
+  }
+
+  /** Inicializa el modal con ítems provistos por el padre (showroom), sin cargar
+   *  ningún presupuesto. Pre-llena el cliente desde {@link clientePrefill} y deja
+   *  el resto de los catálogos como en el flujo de presupuesto. */
+  private inicializarDesdeItems(items: PedidoItemEntrada[], prefill: PedidoClientePrefill | null): void {
+    this.cargandoDetallePresupuesto.set(false);
+    this.cambiosPrecio.set([]);
+    this.pedidoCategoriaFiscal.set('CONSUMIDOR_FINAL');
+    this.clienteExistente.set(false);
+    this.pedidoNombre.set(prefill?.nombre ?? '');
+    this.pedidoRazonSocial.set(prefill?.razonSocial ?? '');
+    this.pedidoTelefono.set(prefill?.telefono ?? '');
+    this.pedidoEmail.set(prefill?.email ?? '');
+    this.pedidoCuit.set(prefill?.nroDoc ?? null);
+    this.pedidoObservaciones.set('');
+    this.pedidoDomicilio.set('');
+    this.pedidoCodigoProvincia.set(null);
+    this.pedidoIdLocalidad.set(null);
+    this.localidadesPedido.set([]);
+    if (prefill?.rubro) {
+      this.aplicarRubroPedido(prefill.rubro);
+    } else {
+      this.pedidoRubro.set(null);
+      this.pedidoRubroOtros.set('');
+    }
+    this.pedidoFormaPagoId.set(prefill?.formaPagoId ?? null);
+    this.itemsDelPresupuesto.set(items.map((it) => ({ ...it })));
+    this.cargarProvinciasSiHaceFalta();
+    this.cargarFormasPagoSiHaceFalta();
+    // Si el prefill trae un CUIT completo, intentamos reconocer al cliente y
+    // completar los campos vacíos (mismo comportamiento que el flujo presupuesto).
+    if (prefill?.nroDoc != null && String(prefill.nroDoc).length === 11) {
+      this.autocompletarDesdeCuit(prefill.nroDoc);
+    }
   }
 
   private cargarDetalle(id: number): void {
@@ -288,6 +382,7 @@ export class CrearPedidoDialog {
         this.pedidoIdLocalidad.set(null);
         this.localidadesPedido.set([]);
         this.pedidoFormaPagoId.set(null);
+        this.pedidoCategoriaFiscal.set('CONSUMIDOR_FINAL');
 
         this.itemsDelPresupuesto.set(det.items.map((it) => ({
           sku: it.sku,
@@ -595,7 +690,8 @@ export class CrearPedidoDialog {
       return;
     }
     const presupuestoId = this.presupuestoId();
-    if (presupuestoId == null) return;
+    // Sin presupuesto Y sin ítems provistos no hay nada que crear.
+    if (presupuestoId == null && this.itemsInput() == null) return;
 
     const cuit = this.pedidoCuit()!;
     const req: CrearPedidoRequest = {
@@ -603,7 +699,7 @@ export class CrearPedidoDialog {
       // `nombre` (opcional): NO se sube a DUX (el backend lo omite); se guarda en
       // la ficha del cliente (columna nombre). Puede ir vacío.
       nombre: this.pedidoNombre().trim() || undefined,
-      categoriaFiscal: 'CONSUMIDOR_FINAL',
+      categoriaFiscal: this.pedidoCategoriaFiscal(),
       tipoDoc: 'CUIT',
       nroDoc: cuit,
       telefono: this.pedidoTelefono().trim(),
@@ -614,13 +710,13 @@ export class CrearPedidoDialog {
       idLocalidad: this.pedidoIdLocalidad() ?? undefined,
       observaciones: this.pedidoObservaciones().trim() || undefined,
       formaPagoId: this.pedidoFormaPagoId() ?? undefined,
-      // Este dialog SIEMPRE transforma un presupuesto → marcamos el origen para
-      // que el backend no consuma la sesión de atención activa del operador.
-      origenPresupuesto: true,
+      // Origen: presupuesto (true) no consume la sesión de atención; showroom
+      // (false) sí la consume. Lo decide el padre vía input.
+      origenPresupuesto: this.origenPresupuesto(),
       items: this.itemsDelPresupuesto().map((it) => ({
         sku: it.sku,
         cantidad: it.cantidad,
-        precioUnitario: it.precioConIva,
+        precioUnitario: it.precioConIva ?? null,
         // Rubro del presupuesto: el backend lo usa (sin caer al cache) para
         // reproducir el perfil (menaje/maquinaria) con que se cotizó cada ítem y
         // resolver el recargo de la forma de pago elegida.
@@ -642,12 +738,28 @@ export class CrearPedidoDialog {
     // Regeneración: el backend crea el nuevo pedido, anula el viejo y re-vincula
     // el presupuesto en una sola operación. Alta normal: crea y luego marcamos.
     const envio$ = esRegen
-      ? this.api.regenerarPedido(presupuestoId, req)
+      ? this.api.regenerarPedido(presupuestoId!, req)
       : this.api.crearPedido(req);
     envio$.subscribe({
       next: (res) => {
         this.enviandoPedido.set(false);
         if (res.estado === 'ENVIADO') {
+          // Flujo showroom: el pedido se creó en DUX y no hay presupuesto que
+          // vincular. NO dependemos de pedidoLocalId (el padre solo vacía el
+          // carrito y muestra la reseña), así que emitimos igual aunque DUX no
+          // haya devuelto el id local — sino el carrito quedaría sin vaciar y se
+          // podría re-enviar/duplicar. Va ANTES del chequeo de pedidoLocalId.
+          if (presupuestoId == null) {
+            this.toast.add({
+              severity: 'success',
+              summary: 'Pedido cargado en DUX',
+              detail: res.mensaje ?? 'El pedido se creó en DUX.',
+              life: 5000,
+            });
+            this.visible.set(false);
+            this.pedidoCreado.emit({ presupuestoId: null, pedidoLocalId: res.pedidoLocalId ?? 0 });
+            return;
+          }
           if (res.pedidoLocalId == null) {
             this.toast.add({
               severity: 'warn',

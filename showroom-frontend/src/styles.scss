@@ -404,6 +404,86 @@ textarea,
   .kt-menu-item-slate   { @include kt-menu-color(#475569, #f1f5f9, #334155); }
 }
 
+// =====================================================
+// Header compartido (app-page-header). Altura mínima fija + centrado para que
+// TODAS las páginas tengan exactamente el mismo alto de header, sin importar el
+// contenido proyectado (botones de 1 o 2 líneas, chips de sesión, etc.).
+// =====================================================
+.kt-page-header.p-toolbar {
+  min-height: 3.5rem;
+}
+
+// =====================================================
+// Menú principal de navegación (app-main-menu → p-menubar).
+// Cada categoría de primer nivel lleva su color de ícono (kt-cat-*) y los
+// sub-ítems del dropdown su color por destino (kt-item-*), mismo criterio que
+// el menú de extras: el operador asocia color→pantalla sin leer el label.
+// El p-menubar NO se appendea a body, así que la clase del host alcanza a los
+// paneles de submenú.
+// =====================================================
+.kt-mainmenu {
+  background: transparent;
+  border: none;
+  padding: 0;
+
+  // El submenú NO se appendea a body: se posiciona dentro del toolbar. Sin
+  // elevar el contexto de apilamiento, el dropdown queda por debajo de la banda
+  // divisoria/gradiente y del contenido siguiente (el splitter/cards crean sus
+  // propios stacking contexts). Posicionamos el menubar con un z-index alto
+  // (debajo de los diálogos de PrimeNG, ~1100+) para que TODO su subtree —
+  // incluido el panel del submenú — pinte por encima del contenido de la página.
+  &.p-menubar {
+    position: relative;
+    z-index: 1000;
+  }
+
+  .p-menubar-submenu {
+    z-index: 1100;
+  }
+
+  // Categorías del primer nivel: label en mayúsculas (como la imagen objetivo).
+  .p-menubar-root-list > .p-menubar-item > .p-menubar-item-content > .p-menubar-item-link {
+    .p-menubar-item-label {
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+  }
+
+  // Color del ícono de cada categoría.
+  .kt-cat-sky     > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #0369a1; }
+  .kt-cat-amber   > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #b45309; }
+  .kt-cat-rose    > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #be123c; }
+  .kt-cat-emerald > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #047857; }
+  .kt-cat-teal    > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #0f766e; }
+  .kt-cat-slate   > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #475569; }
+  .kt-cat-indigo  > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #4338ca; }
+  .kt-cat-orange  > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #ea580c; }
+  .kt-cat-violet  > .p-menubar-item-content > .p-menubar-item-link .p-menubar-item-icon { color: #6d28d9; }
+
+  // Sub-ítems coloreados (dropdown) — mismo set de matices que kt-menu-item-*.
+  @mixin kt-submenu-color($icon, $hover-bg, $hover-icon) {
+    > .p-menubar-item-content {
+      .p-menubar-item-icon { color: $icon; }
+      &:hover {
+        background: $hover-bg;
+        .p-menubar-item-icon { color: $hover-icon; }
+      }
+    }
+  }
+
+  .kt-item-amber   { @include kt-submenu-color(#b45309, #fef3c7, #92400e); }
+  .kt-item-teal    { @include kt-submenu-color(#0f766e, #ccfbf1, #115e59); }
+  .kt-item-violet  { @include kt-submenu-color(#6d28d9, #ede9fe, #5b21b6); }
+  .kt-item-sky     { @include kt-submenu-color(#0369a1, #e0f2fe, #075985); }
+  .kt-item-rose    { @include kt-submenu-color(#be123c, #ffe4e6, #9f1239); }
+  .kt-item-emerald { @include kt-submenu-color(#047857, #d1fae5, #065f46); }
+  .kt-item-indigo  { @include kt-submenu-color(#4338ca, #e0e7ff, #3730a3); }
+  .kt-item-slate   { @include kt-submenu-color(#475569, #f1f5f9, #334155); }
+  .kt-item-orange  { @include kt-submenu-color(#ea580c, #ffedd5, #c2410c); }
+}
+
 // p-overlayBadge no soporta la prop badgeSize (la doc aclara que sólo aplica al
 // p-badge standalone). Achicamos vía CSS vars del badge interno renderizado.
 .kt-badge-xs .p-badge {

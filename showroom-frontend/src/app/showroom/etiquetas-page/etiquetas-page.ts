@@ -9,7 +9,6 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -21,7 +20,6 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { TextareaModule } from 'primeng/textarea';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import Papa from 'papaparse';
 import QRCode from 'qrcode';
@@ -29,7 +27,7 @@ import { CatalogoItem, EtiquetaSeleccionada, PerfilEtiquetas } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 interface EtiquetaImprimible {
   sku: string;
@@ -161,7 +159,6 @@ function guardarPerfilActivoIdLocal(id: number | null): void {
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     DialogModule,
@@ -172,9 +169,8 @@ function guardarPerfilActivoIdLocal(id: number | null): void {
     TagModule,
     TextareaModule,
     ToggleSwitchModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
+    PageHeader,
   ],
   templateUrl: './etiquetas-page.html',
   styleUrl: './etiquetas-page.scss',

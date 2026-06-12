@@ -1,47 +1,7 @@
 <div class="flex flex-col min-h-screen bg-rose-50/60 dark:bg-surface-950">
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
+  <app-page-header title="Clientes" subtitle="Listado único derivado de presupuestos y pedidos"
+    titleIcon="pi pi-users" toolbarClass="!bg-rose-100 dark:!bg-surface-900" />
 
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-rose-100 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-            <i class="pi pi-users text-[#FF861C]"></i> Clientes
-          </span>
-          <span class="text-[0.65rem] text-muted-color">Listado único derivado de presupuestos y pedidos</span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom"
-          [label]="screenLg() ? 'Volver' : ''" class="btn-volver" routerLink="/"
-          pTooltip="Volver al showroom" tooltipPosition="bottom" />
-      </div>
-    </ng-template>
-
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        <p-button icon="pi pi-user-plus" [label]="screenLg() ? 'Nuevo cliente' : ''"
-          ariaLabel="Nuevo cliente" class="btn-kt-marron" (onClick)="abrirDialogNuevo()"
-          pTooltip="Dar de alta un cliente a mano" tooltipPosition="bottom" />
-        @if (seleccionados().length > 0) {
-          <p-button icon="pi pi-trash"
-            [label]="screenLg() ? ('Eliminar (' + seleccionados().length + ')') : ''"
-            [ariaLabel]="'Eliminar ' + seleccionados().length + ' clientes seleccionados'"
-            class="btn-kt-rojo" (onClick)="eliminarSeleccionados()"
-            pTooltip="Ocultar los clientes seleccionados del listado" tooltipPosition="bottom" />
-        }
-        <p-button icon="pi pi-file-export" [label]="screenLg() ? 'Exportar CSV' : ''"
-          ariaLabel="Exportar clientes a CSV" class="btn-kt-verde"
-          [disabled]="cargando() || clientesFiltrados().length === 0"
-          (onClick)="exportarCsv()"
-          pTooltip="Descargar CSV compatible con Marketing Nube (Tiendanube)"
-          tooltipPosition="bottom" />
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
 
   <main class="flex-1 p-3 sm:p-4 lg:p-6">
     <p-card>
@@ -65,6 +25,25 @@
             (onClick)="refrescar()"
             pTooltip="Refrescar listado" tooltipPosition="left"
             ariaLabel="Refrescar listado" />
+        </div>
+        <!-- Acciones movidas desde el header para no dejarlo en 2 filas. -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <p-button icon="pi pi-user-plus" label="Nuevo cliente"
+            ariaLabel="Nuevo cliente" class="btn-kt-verde" (onClick)="abrirDialogNuevo()"
+            pTooltip="Dar de alta un cliente a mano" tooltipPosition="bottom" />
+          @if (seleccionados().length > 0) {
+            <p-button icon="pi pi-trash"
+              [label]="'Eliminar (' + seleccionados().length + ')'"
+              [ariaLabel]="'Eliminar ' + seleccionados().length + ' clientes seleccionados'"
+              class="btn-kt-rojo" (onClick)="eliminarSeleccionados()"
+              pTooltip="Ocultar los clientes seleccionados del listado" tooltipPosition="bottom" />
+          }
+          <p-button icon="pi pi-file-export" label="Exportar CSV"
+            ariaLabel="Exportar clientes a CSV" class="btn-kt-azul"
+            [disabled]="cargando() || clientesFiltrados().length === 0"
+            (onClick)="exportarCsv()"
+            pTooltip="Descargar CSV compatible con Marketing Nube (Tiendanube)"
+            tooltipPosition="bottom" />
         </div>
       </div>
 
@@ -275,11 +254,10 @@
           [ngModel]="editTelefono()" (ngModelChange)="onEditTelefonoChange($event)"
           placeholder="11-12345678" class="w-full" />
         @if (telefonoExistente(); as cli) {
-          <span class="text-[11px] inline-flex items-center gap-1 px-2 py-1 rounded mt-1
+          <span class="text-[11px] flex items-start gap-1.5 px-2 py-1 rounded mt-1
                        bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
-            <i class="pi pi-exclamation-triangle text-[10px]"></i>
-            Ya existe un cliente con este teléfono: <strong>{{ cli.razonSocial || cli.nombre || 'sin nombre' }}</strong>.
-            Editalo desde la lista en vez de crear uno nuevo.
+            <i class="pi pi-exclamation-triangle text-[10px] mt-0.5 shrink-0"></i>
+            <span>Ya existe un cliente con este teléfono: <strong>{{ cli.razonSocial || cli.nombre || 'sin nombre' }}</strong>. Editalo desde la lista en vez de crear uno nuevo.</span>
           </span>
         } @else {
           <span class="text-[0.7rem] text-muted-color">Clave del cliente.</span>

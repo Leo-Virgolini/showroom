@@ -470,11 +470,13 @@ public class PresupuestoComercialService {
         // arriba), independiente del orden de inserción.
         return conMaster.stream()
                 .map(dto -> resolverUbicacion(dto, provinciaPorCodIso, localidadPorId))
-                .sorted((a, b) -> {
-                    if (a.ultimoMovimientoAt() == null) return 1;
-                    if (b.ultimoMovimientoAt() == null) return -1;
-                    return b.ultimoMovimientoAt().compareTo(a.ultimoMovimientoAt());
-                })
+                // Más reciente primero; los de alta manual (sin movimientos →
+                // ultimoMovimientoAt null) van al final. Usamos un Comparator
+                // total (nullsLast + reverseOrder) — un lambda casero null→±1
+                // viola la antisimetría y TimSort tira IllegalArgumentException.
+                .sorted(java.util.Comparator.comparing(
+                        ClientePresupuestosDTO::ultimoMovimientoAt,
+                        java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())))
                 .toList();
     }
 

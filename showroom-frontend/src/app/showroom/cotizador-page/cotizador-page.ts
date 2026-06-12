@@ -23,7 +23,6 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import {
   EnviarCotizacionRequest,
@@ -42,7 +41,7 @@ import { BackendStatusService } from '../backend-status.service';
 import { abrirPdfEnPreview } from '../download.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 /**
  * Pantalla del cotizador de financiación: el operador ingresa un monto base
@@ -64,7 +63,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     AutoCompleteModule,
     ButtonModule,
     CardModule,
@@ -77,10 +75,9 @@ import { TopActions } from '../top-actions/top-actions';
     ProgressSpinnerModule,
     SelectModule,
     TextareaModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
-  ],
+    RouterLink,
+    PageHeader,  ],
   templateUrl: './cotizador-page.html',
   styleUrl: './cotizador-page.scss',
 })

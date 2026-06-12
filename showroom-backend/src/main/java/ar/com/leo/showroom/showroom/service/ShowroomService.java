@@ -430,7 +430,13 @@ public class ShowroomService {
         if (operadorEligioSort) {
             String campo = SORT_PRODUCTOS.get(sortField);
             Sort.Direction dir = "desc".equalsIgnoreCase(sortOrder) ? Sort.Direction.DESC : Sort.Direction.ASC;
-            pageable = PageRequest.of(pageSafe, sizeSafe, Sort.by(dir, campo));
+            // Desempate por SKU para paginación ESTABLE ante valores repetidos
+            // (ej. ordenar por rubro/habilitado) — sin esto los ítems empatados
+            // saltan entre páginas. Si ya se ordena por SKU, no se duplica.
+            Sort sort = "sku".equals(campo)
+                    ? Sort.by(dir, "sku")
+                    : Sort.by(dir, campo).and(Sort.by(Sort.Direction.ASC, "sku"));
+            pageable = PageRequest.of(pageSafe, sizeSafe, sort);
             aplicarRanking = false;
         } else if (!tokens.isEmpty()) {
             pageable = PageRequest.of(pageSafe, sizeSafe);
@@ -1160,34 +1166,6 @@ public class ShowroomService {
 
     private BigDecimal calcularSinIva(BigDecimal conIva, BigDecimal porcIva) {
         return PrecioPerfilCalculator.calcularSinIva(conIva, porcIva);
-    }
-
-    /**
-     * Precio final unitario que paga el cliente, dado el precio base con IVA
-     * del producto, su % de IVA y la forma de pago elegida.
-     *
-     * <p>Fórmula: {@code precio_efectivo / (1 - recargo/100) × (aplicaIva ? (1 + iva/100) : 1)}.
-     * El "precio efectivo" es el precio base sin IVA (lo que cobra el operador
-     * cuando no hay financiación ni IVA agregado). Sobre eso se aplica:
-     *  <ul>
-     *    <li><b>Recargo de financiación</b>: <i>dividir</i> por (1 - recargo/100)
-     *        — convención del cliente. Ej: recargo 10% → divisor 0,9 →
-     *        precio_efectivo / 0,9 ≈ +11,1%, no +10%.</li>
-     *    <li><b>IVA</b>: si la forma {@code aplicaIva}, multiplicar por (1+IVA).
-     *        Si no, el cliente paga sin IVA (caso "transferencia sin IVA":
-     *        DUX igual factura con IVA y el operador absorbe la diferencia).</li>
-     *  </ul>
-     *
-     * <p>Sin formaPago → devuelve {@code precioBaseConIva} sin tocar.
-     */
-    /**
-     * Aplica el recargo/descuento de la forma sobre el precio sin IVA.
-     * Recargo &gt; 0 = financiación (divide por 1-r/100, encarece). Recargo &lt; 0 =
-     * descuento (multiplica por 1+r/100 = 1-|r|/100, ej. Efectivo -13%), coincidiendo
-     * con el precio mostrado en scan/visor/carrito. Recargo 0 = sin cambio.
-     */
-    private BigDecimal aplicarRecargoSinIva(BigDecimal precioBaseSinIva, BigDecimal recargoPorc) {
-        return PrecioPerfilCalculator.aplicarRecargoSinIva(precioBaseSinIva, recargoPorc);
     }
 
     private BigDecimal calcularPrecioFinal(BigDecimal precioBaseConIva, BigDecimal porcIva,

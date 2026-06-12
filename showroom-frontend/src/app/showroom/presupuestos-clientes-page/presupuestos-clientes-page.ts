@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink, Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
@@ -22,13 +22,12 @@ import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
-import { ToolbarModule } from 'primeng/toolbar';
 import { TooltipModule } from 'primeng/tooltip';
 import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Localidad, Provincia } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
-import { TopActions } from '../top-actions/top-actions';
+import { PageHeader } from '../page-header/page-header';
 
 /**
  * Lista de clientes únicos derivada de presupuestos comerciales + pedidos.
@@ -50,7 +49,6 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     AutoCompleteModule,
     ButtonModule,
     CardModule,
@@ -63,9 +61,8 @@ import { TopActions } from '../top-actions/top-actions';
     SelectModule,
     TableModule,
     TextareaModule,
-    ToolbarModule,
     TooltipModule,
-    TopActions,
+    PageHeader,
   ],
   templateUrl: './presupuestos-clientes-page.html',
 })
@@ -73,6 +70,7 @@ export class PresupuestosClientesPage {
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly confirmationService = inject(ConfirmationService);
 
   readonly screenLg = signal(
@@ -194,6 +192,13 @@ export class PresupuestosClientesPage {
   });
 
   constructor() {
+    // Pre-llena la búsqueda con el queryParam `q` cuando se navega desde un
+    // historial ("Ver ficha del cliente" en pedidos/presupuestos). El filtro
+    // client-side `clientesFiltrados` matchea por nombre/email/teléfono/CUIT.
+    const qParam = this.route.snapshot.queryParamMap.get('q');
+    if (qParam) {
+      this.busqueda.set(qParam);
+    }
     this.cargar();
   }
 

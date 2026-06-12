@@ -2,10 +2,10 @@ package ar.com.leo.showroom.cliente.dto;
 
 /**
  * Datos de un cliente para autocompletar el formulario de pedido cuando el
- * operador tipea un CUIT ya conocido. Se resuelve desde el maestro de clientes
- * ({@code ClienteMaster}) o, como fallback, desde el último pedido con ese
- * documento. Todos los campos son opcionales — el frontend completa solo los
- * que están vacíos.
+ * operador tipea un CUIT/razón social ya conocido. Se resuelve SOLO desde el
+ * maestro de clientes ({@code ClienteMaster}) — sin fallback al historial.
+ * Todos los campos son opcionales — el frontend completa solo los que están
+ * vacíos.
  */
 public record ClienteAutocompletarDTO(
         String razonSocial,

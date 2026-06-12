@@ -1,25 +1,6 @@
 <div class="no-print flex flex-col min-h-screen bg-violet-50/60 dark:bg-surface-950">
-  <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-  <p-toolbar class="rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 !bg-violet-100 dark:!bg-surface-900">
-    <ng-template #start>
-      <div class="flex items-center gap-2 sm:gap-3">
-        <a routerLink="/" aria-label="Volver al inicio" pTooltip="Volver al inicio" tooltipPosition="bottom"
-          class="shrink-0 transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-          <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-9 sm:h-10 object-contain" />
-        </a>
-        <div class="hidden sm:flex flex-col leading-tight border-l border-[#FF861C]/40 dark:border-surface-700 pl-2">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">Etiquetas QR</span>
-          <span class="text-[0.6rem] font-semibold text-[#3B1E09]/70 dark:text-muted-color tracking-[0.15em] uppercase">Generador para muestras</span>
-        </div>
-        <p-button icon="pi pi-arrow-left" ariaLabel="Volver al showroom" label="Volver" class="btn-volver" routerLink="/" />
-      </div>
-    </ng-template>
-    <ng-template #end>
-      <div class="inline-flex gap-2 items-center">
-        <app-top-actions />
-      </div>
-    </ng-template>
-  </p-toolbar>
+  <app-page-header title="Imprimir QR" subtitle="Generador de etiquetas para muestras"
+    titleIcon="pi pi-qrcode" toolbarClass="!bg-violet-100 dark:!bg-surface-900" />
 
   <main class="flex-1 grid gap-4 p-3 sm:p-4 lg:p-6 items-start grid-cols-1 lg:grid-cols-[1fr_440px] xl:grid-cols-[1fr_480px]">
     <section class="flex flex-col gap-4">

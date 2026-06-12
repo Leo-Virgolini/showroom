@@ -600,24 +600,6 @@ public class CotizacionFinancieraPdfGenerator {
         return empates > 1 ? -1 : idx;
     }
 
-    /** Descripción comercial — coherente con la lógica del frontend. NO
-     *  mostramos "X% de recargo" porque confunde al cliente (% sobre el
-     *  efectivo no se entiende intuitivamente); sí mostramos cuotas y
-     *  descuentos. */
-    private String descripcionForma(GenerarCotizacionRequestDTO.FormaPagoSnapshot f) {
-        StringBuilder sb = new StringBuilder();
-        BigDecimal recargo = f.recargoPorcentaje();
-        if (recargo != null && recargo.signum() < 0) {
-            sb.append(recargo.abs().stripTrailingZeros().toPlainString()).append("% de descuento");
-        }
-        Integer cuotas = f.cantidadCuotas();
-        if (cuotas != null && cuotas > 1) {
-            if (sb.length() > 0) sb.append(" · ");
-            sb.append(cuotas).append(" cuotas");
-        }
-        return sb.toString();
-    }
-
     private void agregarNotas(Document doc) {
         // Nota final con setKeepTogether para que iText NO la corte entre
         // páginas — si no entra completa en la actual, mueve el bloque
