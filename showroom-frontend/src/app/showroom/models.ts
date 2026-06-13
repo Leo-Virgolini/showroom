@@ -958,6 +958,23 @@ export interface ClientePresupuestos {
   notas?: string | null;
 }
 
+/** Página de clientes para el listado paginado (server-side) de /clientes. */
+export interface ClientesPage {
+  items: ClientePresupuestos[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+/** Parámetros del listado paginado de clientes. */
+export interface ListarClientesParams {
+  q?: string;
+  page?: number;
+  size?: number;
+  sortField?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
 /** Payload del PUT /cliente-master — upsert del maestro editable de clientes.
  *  El teléfono es la clave lógica (se normaliza a solo dígitos en el backend);
  *  el resto de los campos pueden venir null/vacíos: el master los persiste

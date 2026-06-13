@@ -7,6 +7,7 @@ import ar.com.leo.showroom.catalogo.entity.Provincia;
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
+import ar.com.leo.showroom.cliente.event.ClienteMovimientoEvent;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
@@ -16,9 +17,9 @@ import ar.com.leo.showroom.common.util.TextUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
-import ar.com.leo.showroom.pedido.repository.ClienteActividadView;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
 import ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO;
+import ar.com.leo.showroom.presupuesto.dto.ClientesPageDTO;
 import ar.com.leo.showroom.presupuesto.dto.GenerarPresupuestoRequestDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoDetalleDTO;
 import ar.com.leo.showroom.presupuesto.dto.PresupuestoListItemDTO;
@@ -49,8 +50,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.SocketTimeoutException;
 import java.time.Instant;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -97,6 +96,9 @@ public class PresupuestoComercialService {
      *  guardan solo los códigos) al armar la vista de /clientes. */
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
+    /** Publica {@link ClienteMovimientoEvent} para recalcular la actividad del
+     *  cliente en fase AFTER_COMMIT (ver {@code ClienteMasterService}). */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
      * Self-injection para que {@link #enviarPorEmailAsync} (anotado {@code @Async})
@@ -140,7 +142,8 @@ public class PresupuestoComercialService {
             ClienteMasterService clienteMasterService,
             PrecioPerfilCalculator precioPerfilCalculator,
             ProvinciaRepository provinciaRepository,
-            LocalidadRepository localidadRepository) {
+            LocalidadRepository localidadRepository,
+            org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
         this.mailSender = mailSender.getIfAvailable();
@@ -153,6 +156,7 @@ public class PresupuestoComercialService {
         this.precioPerfilCalculator = precioPerfilCalculator;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     /** Resuelve username a usuarioId. Null si el username no existe (caso
@@ -208,6 +212,9 @@ public class PresupuestoComercialService {
             log.warn("No se pudo registrar el cliente del presupuesto {}: {}",
                     p.getId(), e.getMessage());
         }
+        // Recalcular la actividad materializada del cliente tras el commit (el
+        // listener AFTER_COMMIT ve el presupuesto y el master ya persistidos).
+        eventPublisher.publishEvent(new ClienteMovimientoEvent(p.getClienteTelefonoNormalizado()));
     }
 
     /**
@@ -242,10 +249,19 @@ public class PresupuestoComercialService {
     @Transactional
     public Resultado actualizar(Long id, GenerarPresupuestoRequestDTO datos, String username) {
         PresupuestoComercial p = obtener(id);
+        // Teléfono ANTES de pisar los datos: si el operador lo cambió al editar,
+        // el cliente anterior perdió este presupuesto y hay que recalcular su
+        // actividad también (sino le queda el contador inflado / un "último
+        // presupuesto" que ya no es suyo).
+        String telNormAnterior = p.getClienteTelefonoNormalizado();
         aplicarDatos(p, datos);
         p.setModificadoAt(Instant.now());
         p = repository.save(p);
         registrarClienteMaster(p, username);
+        String telNormNuevo = p.getClienteTelefonoNormalizado();
+        if (telNormAnterior != null && !telNormAnterior.equals(telNormNuevo)) {
+            eventPublisher.publishEvent(new ClienteMovimientoEvent(telNormAnterior));
+        }
         byte[] pdf = pdfGenerator.generar(p, datos);
         return new Resultado(p, pdf, pdfGenerator.nombreArchivo(p));
     }
@@ -316,6 +332,9 @@ public class PresupuestoComercialService {
         if (p.getEliminadoAt() != null) return;
         p.setEliminadoAt(Instant.now());
         repository.save(p);
+        // Al borrar un presupuesto baja el contador y puede cambiar el último
+        // movimiento del cliente — recalculamos su actividad tras el commit.
+        eventPublisher.publishEvent(new ClienteMovimientoEvent(p.getClienteTelefonoNormalizado()));
     }
 
     /**
@@ -367,104 +386,73 @@ public class PresupuestoComercialService {
     }
 
     /**
-     * Lista los clientes únicos que aparecen en presupuestos guardados,
-     * agrupados por teléfono normalizado (solo dígitos). El teléfono es la
-     * identidad canónica del cliente — antes era el email, pero como el email
-     * dejó de ser obligatorio en {@code /presupuestos} (mayo 2026), pasamos
-     * a usar teléfono que sí lo es. Presupuestos sin teléfono no se cuentan
-     * en esta vista.
-     *
-     * <p>La normalización quita guiones, espacios y paréntesis del teléfono
-     * antes de comparar — así {@code "11-12345678"} y {@code "1112345678"}
-     * agrupan al mismo cliente aunque el operador haya tipeado distinto
-     * formato en cada presupuesto.
-     *
-     * <p>Toma los datos (nombre, email, rubro) del presupuesto MÁS RECIENTE
-     * como canónicos — si en uno viejo el operador tipeó mal un campo,
-     * prevalece la última versión.
-     *
-     * <p>Devuelve la lista ordenada por último presupuesto descendente
-     * (cliente más reciente primero). No paginamos en SQL: la cantidad de
-     * clientes en /presupuestos es manejable y agrupar en memoria es más
-     * simple que un GROUP BY con subqueries para "último monto" / "último id".
+     * Página de clientes para la vista /clientes, derivada del maestro
+     * ({@link ClienteMaster}) que es la fuente única de la lista. La actividad
+     * (contadores, último movimiento/total, ids de deep-link) está materializada
+     * en el master y se mantiene al día en cada movimiento
+     * ({@code ClienteMasterService.recalcularActividad}), así que esto es un
+     * SELECT paginado directo: soporta buscar por texto y ORDENAR por cualquier
+     * columna sin cruzar presupuestos+pedidos en memoria. El backfill inicial de
+     * los clientes legacy lo hace {@code ClienteActividadBackfillService} al
+     * arrancar la aplicación.
      */
-    @Transactional
-    public List<ClientePresupuestosDTO> listarClientes() {
-        // La LISTA de clientes sale del MAESTRO (ClienteMaster) — fuente única.
-        // El historial (presupuestos + pedidos) se usa SOLO para la actividad
-        // (contadores, último movimiento, montos, deep-links) y, una única vez,
-        // para sembrar el master de clientes legacy (backfill). Los DATOS del
-        // cliente salen SIEMPRE del master, sin fallback al historial. Agrupamos
-        // los movimientos por teléfono para esa actividad/backfill.
-        Map<String, AgregadorCliente> agrupados = new LinkedHashMap<>();
+    private static final Map<String, String> SORT_CLIENTES = Map.ofEntries(
+            Map.entry("nombre", "nombre"),
+            Map.entry("razonSocial", "razonSocial"),
+            Map.entry("email", "email"),
+            // La columna "Teléfono" muestra el normalizado (es lo que guarda el master).
+            Map.entry("telefono", "telefonoNormalizado"),
+            Map.entry("rubro", "rubro"),
+            Map.entry("nroDoc", "nroDoc"),
+            Map.entry("domicilio", "domicilio"),
+            Map.entry("cantidadPresupuestos", "cantidadPresupuestos"),
+            Map.entry("cantidadPedidos", "cantidadPedidos"),
+            Map.entry("ultimoMovimientoAt", "ultimoMovimientoAt"),
+            Map.entry("ultimoTotalSinIva", "ultimoTotalSinIva"));
 
-        // 1. Presupuestos comerciales (excluidos los soft-deleted).
-        for (PresupuestoComercial p : repository.findByEliminadoAtIsNullOrderByCreadoAtDesc()) {
-            String clave = claveTelefono(p.getClienteTelefono());
-            if (clave == null) continue;
-            agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPresupuesto(p);
-        }
+    @Transactional(readOnly = true)
+    public ClientesPageDTO listarClientes(String q, int page, int size,
+                                          String sortField, String sortOrder) {
+        // Default: cliente más reciente arriba. MySQL pone los NULL (alta manual
+        // sin movimientos) al final en DESC, igual que el comportamiento previo.
+        // Desempate por id: sin él, cuando muchos clientes comparten el valor de
+        // orden (p. ej. ultimoMovimientoAt NULL, o cantidadPedidos 0) MySQL no
+        // garantiza orden estable entre páginas → filas repetidas/salteadas.
+        Sort sort = SortUtils.resolver(SORT_CLIENTES, sortField, sortOrder, "ultimoMovimientoAt")
+                .and(Sort.by(Sort.Direction.ASC, "id"));
+        PageRequest pr = PageRequest.of(page, size, sort);
+        org.springframework.data.domain.Page<ClienteMaster> pagina =
+                clienteMasterService.buscarClientes(q, pr);
+        List<ClientePresupuestosDTO> items = mapearConUbicacion(pagina.getContent());
+        return new ClientesPageDTO(items, pagina.getTotalElements(), pagina.getNumber(), pagina.getSize());
+    }
 
-        // 2. Pedidos. NO excluimos anulados — el contador es histórico (el
-        // operador igual quiere ver "este cliente nos compró 3 veces" aunque
-        // alguno haya quedado anulado por error).
-        for (var pedido : pedidoRepository.findActividadParaClientes()) {
-            String clave = claveTelefono(pedido.getTelefono());
-            if (clave == null) continue;
-            agrupados.computeIfAbsent(clave, k -> new AgregadorCliente()).agregarPedido(pedido);
-        }
+    /**
+     * Todos los clientes (no eliminados) que matchean {@code q}, sin paginar —
+     * para el export CSV, que necesita el conjunto completo y no solo la página
+     * visible. Ordena por última actividad descendente (default del listado).
+     */
+    @Transactional(readOnly = true)
+    public List<ClientePresupuestosDTO> listarClientesParaExport(String q) {
+        // Página única amplia: el export es puntual y el universo de clientes es
+        // acotado. Mismo orden por defecto que el listado.
+        PageRequest pr = PageRequest.of(0, 100_000,
+                Sort.by(Sort.Direction.DESC, "ultimoMovimientoAt").and(Sort.by(Sort.Direction.ASC, "id")));
+        return mapearConUbicacion(clienteMasterService.buscarClientes(q, pr).getContent());
+    }
 
-        // Self-heal / backfill lazy: aseguramos un master por cada teléfono con
-        // movimientos. Los presupuestos/pedidos nuevos ya hacen upsert al master,
-        // pero esto cubre los legacy creados antes de la unificación. NO se setea
-        // CUIT/razón social acá (para no chocar el índice único de CUIT con datos
-        // legacy potencialmente duplicados — el CUIT igual se muestra por fallback).
-        Map<String, ClienteMaster> masters = clienteMasterService.cargarTodosIndexados();
-        // CUITs ya asignados a algún master — para no chocar el índice único al
-        // backfillear (varios teléfonos legacy podrían compartir CUIT).
-        Set<Long> cuitsAsignados = masters.values().stream()
-                .map(ClienteMaster::getNroDoc)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(java.util.HashSet::new));
-        for (var e : agrupados.entrySet()) {
-            if (!masters.containsKey(e.getKey())) {
-                AgregadorCliente a = e.getValue();
-                // CUIT solo si no está ya asignado a otro master (add() devuelve
-                // false si ya estaba) — evita la violación del índice único.
-                Long cuit = (a.nroDoc != null && cuitsAsignados.add(a.nroDoc)) ? a.nroDoc : null;
-                try {
-                    ClienteMaster creado = clienteMasterService.ensureClienteBackfill(
-                            e.getKey(), a.nombre, a.email, a.rubro,
-                            a.tipoDoc, cuit, a.domicilio, a.codigoProvincia, a.idLocalidad);
-                    masters.put(e.getKey(), creado);
-                } catch (Exception ex) {
-                    // Colisión rara (carga concurrente) — lo crea la otra request;
-                    // este cliente aparece en la próxima carga. No rompe el listado.
-                    log.warn("No se pudo crear el master del teléfono {}: {}", e.getKey(), ex.getMessage());
-                }
-            }
-        }
-
-        // La LISTA = masters (no eliminados). Cada fila usa los datos del master
-        // (sin fallback al historial) + la actividad calculada arriba. Los
-        // clientes con master eliminado (soft-delete) quedan fuera; los de alta
-        // manual (sin movimientos) aparecen con la actividad en cero.
-        List<ClientePresupuestosDTO> conMaster = masters.values().stream()
-                .filter(m -> m.getEliminadoAt() == null)
-                .map(m -> dtoDesdeMaster(m, agrupados.get(m.getTelefonoNormalizado())))
-                .toList();
-
-        // Resolución de nombres de provincia/localidad de envío. Se hace en
-        // batch para no caer en N+1: una sola lectura de provincias (pocas) y
-        // un findAllById de las localidades referenciadas.
+    /** Mapea masters a DTO resolviendo provincia/localidad en batch (evita N+1):
+     *  una lectura de provincias (pocas) y un findAllById de las localidades de
+     *  la página. */
+    private List<ClientePresupuestosDTO> mapearConUbicacion(List<ClienteMaster> masters) {
         Map<String, String> provinciaPorCodIso = provinciaRepository.findAll().stream()
                 .filter(p -> p.getCodIso() != null && p.getNombre() != null)
                 .collect(Collectors.toMap(
                         p -> p.getCodIso().toLowerCase(),
                         Provincia::getNombre,
                         (a, b) -> a));
-        Set<Long> idsLocalidad = conMaster.stream()
-                .map(ClientePresupuestosDTO::idLocalidad)
+        Set<Long> idsLocalidad = masters.stream()
+                .map(ClienteMaster::getIdLocalidad)
                 .map(PresupuestoComercialService::parseLongOrNull)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -475,43 +463,31 @@ public class PresupuestoComercialService {
                                 Localidad::getId,
                                 Localidad::getNombre,
                                 (a, b) -> a));
-
-        // Ordenamos por última actividad descendente (cliente más reciente
-        // arriba), independiente del orden de inserción.
-        return conMaster.stream()
-                .map(dto -> resolverUbicacion(dto, provinciaPorCodIso, localidadPorId))
-                // Más reciente primero; los de alta manual (sin movimientos →
-                // ultimoMovimientoAt null) van al final. Usamos un Comparator
-                // total (nullsLast + reverseOrder) — un lambda casero null→±1
-                // viola la antisimetría y TimSort tira IllegalArgumentException.
-                .sorted(Comparator.comparing(
-                        ClientePresupuestosDTO::ultimoMovimientoAt,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
+        return masters.stream()
+                .map(m -> resolverUbicacion(dtoDesdeMaster(m), provinciaPorCodIso, localidadPorId))
                 .toList();
     }
 
     /**
-     * Arma el DTO de /clientes con los datos del MASTER ÚNICAMENTE — sin fallback
-     * a presupuestos/pedidos (decisión del usuario: la tabla refleja solo lo que
-     * está en el maestro). Lo ÚNICO que sale del historial es la ACTIVIDAD
-     * (contadores, último movimiento, montos, deep-links); {@code act == null} =
-     * cliente sin movimientos (alta manual) → ceros/nulls. El teléfono se muestra
-     * normalizado (es lo que guarda el maestro). Los datos legacy ya fueron
-     * copiados al maestro por el backfill, así que no hace falta el fallback.
+     * Arma el DTO de /clientes con los datos + la actividad materializada del
+     * MASTER. La actividad la mantiene al día
+     * {@code ClienteMasterService.recalcularActividad} en cada movimiento; acá
+     * solo se lee. provinciaNombre/localidadNombre se resuelven aparte en
+     * {@link #resolverUbicacion}.
      */
-    private ClientePresupuestosDTO dtoDesdeMaster(ClienteMaster m, AgregadorCliente act) {
+    private ClientePresupuestosDTO dtoDesdeMaster(ClienteMaster m) {
         return new ClientePresupuestosDTO(
                 m.getEmail(),
                 m.getTelefonoNormalizado(),
                 m.getNombre(),
                 m.getRubro(),
-                act != null ? act.cantidadPresupuestos : 0,
-                act != null ? act.cantidadPedidos : 0,
-                act != null ? act.primerMovimientoAt : null,
-                act != null ? act.canonicoCreadoAt : null,
-                act != null ? act.ultimoTotalSinIva : null,
-                act != null ? act.ultimoPresupuestoId : null,
-                act != null ? act.ultimoPedidoId : null,
+                m.getCantidadPresupuestos(),
+                m.getCantidadPedidos(),
+                m.getPrimerMovimientoAt(),
+                m.getUltimoMovimientoAt(),
+                m.getUltimoTotalSinIva(),
+                m.getUltimoPresupuestoId(),
+                m.getUltimoPedidoId(),
                 m.getTipoDoc(),
                 m.getNroDoc(),
                 m.getDomicilio(),
@@ -553,101 +529,6 @@ public class PresupuestoComercialService {
             return Long.parseLong(s.trim());
         } catch (NumberFormatException e) {
             return null;
-        }
-    }
-
-    /** Normaliza el teléfono a solo dígitos. Sin esto, "11-12345678" y
-     *  "1112345678" agruparían como clientes distintos. Devuelve null si el
-     *  teléfono está vacío o no tiene ningún dígito — esos movimientos no
-     *  aparecen en la vista de clientes. */
-    private static String claveTelefono(String telefono) {
-        if (!StringUtils.hasText(telefono)) return null;
-        String soloDigitos = telefono.replaceAll("\\D+", "");
-        return soloDigitos.isEmpty() ? null : soloDigitos;
-    }
-
-    /** Agregador mutable usado durante el merge: acumula la ACTIVIDAD del cliente
-     *  (contadores, último movimiento, montos, deep-links) y un snapshot de los
-     *  datos del movimiento más reciente que usa el backfill para sembrar el
-     *  master. El DTO final lo arma {@code dtoDesdeMaster} (la lista sale del
-     *  maestro, no de acá). */
-    private static final class AgregadorCliente {
-        // Snapshot del movimiento más reciente (por creadoAt). Se usa SOLO para
-        // sembrar el master en el backfill; la vista lee del master.
-        private Instant canonicoCreadoAt;
-        private String email;
-        private String nombre;
-        private String rubro;
-        private java.math.BigDecimal ultimoTotalSinIva;
-
-        // Contadores y referencias separadas por tipo.
-        private int cantidadPresupuestos;
-        private int cantidadPedidos;
-        private Long ultimoPresupuestoId;
-        private Long ultimoPedidoId;
-        private Instant ultimoPresupuestoAt;
-        private Instant ultimoPedidoAt;
-        private Instant primerMovimientoAt;
-
-        // Snapshot de facturación/envío del pedido MÁS RECIENTE. Va aparte del
-        // canónico: el CUIT/envío solo existen en pedidos, así que aunque el
-        // último movimiento sea un presupuesto (sin estos datos), mostramos los
-        // del último pedido. Se actualizan en lock-step con ultimoPedidoAt.
-        private String tipoDoc;
-        private Long nroDoc;
-        private String domicilio;
-        private String codigoProvincia;
-        private String idLocalidad;
-
-        void agregarPresupuesto(PresupuestoComercial p) {
-            cantidadPresupuestos++;
-            // Cada presupuesto entrante puede ser el más reciente del cliente
-            // dentro de su tipo — usamos eso para el deep-link a presupuestos.
-            if (ultimoPresupuestoAt == null || p.getCreadoAt().isAfter(ultimoPresupuestoAt)) {
-                ultimoPresupuestoAt = p.getCreadoAt();
-                ultimoPresupuestoId = p.getId();
-            }
-            actualizarCanonicoSiMasNuevo(p.getCreadoAt(),
-                    p.getClienteEmail(), p.getClienteNombre(), p.getRubro(),
-                    p.getSubtotalSinIva());
-            actualizarPrimerMovimiento(p.getCreadoAt());
-        }
-
-        void agregarPedido(ClienteActividadView pedido) {
-            cantidadPedidos++;
-            if (ultimoPedidoAt == null || pedido.getCreadoAt().isAfter(ultimoPedidoAt)) {
-                ultimoPedidoAt = pedido.getCreadoAt();
-                ultimoPedidoId = pedido.getId();
-                // Snapshot de facturación/envío del pedido más reciente.
-                tipoDoc = pedido.getTipoDoc();
-                nroDoc = pedido.getNroDoc();
-                domicilio = pedido.getDomicilio();
-                codigoProvincia = pedido.getCodigoProvincia();
-                idLocalidad = pedido.getIdLocalidad();
-            }
-            // totalSinIva del pedido (no total con recargo) — coherente con
-            // el total mostrado en presupuestos.
-            actualizarCanonicoSiMasNuevo(pedido.getCreadoAt(),
-                    pedido.getEmail(), pedido.getNombre(), pedido.getRubro(),
-                    pedido.getTotalSinIva());
-            actualizarPrimerMovimiento(pedido.getCreadoAt());
-        }
-
-        private void actualizarCanonicoSiMasNuevo(Instant creadoAt, String emailM,
-                                                  String nombreM, String rubroM,
-                                                  java.math.BigDecimal totalM) {
-            if (canonicoCreadoAt != null && !creadoAt.isAfter(canonicoCreadoAt)) return;
-            canonicoCreadoAt = creadoAt;
-            email = emailM;
-            nombre = nombreM;
-            rubro = rubroM;
-            ultimoTotalSinIva = totalM;
-        }
-
-        private void actualizarPrimerMovimiento(Instant creadoAt) {
-            if (primerMovimientoAt == null || creadoAt.isBefore(primerMovimientoAt)) {
-                primerMovimientoAt = creadoAt;
-            }
         }
     }
 
@@ -1055,6 +936,10 @@ public class PresupuestoComercialService {
 
         p.setClienteNombre(TextUtils.blankToNull(datos.clienteNombre()));
         p.setClienteTelefono(TextUtils.blankToNull(datos.clienteTelefono()));
+        // Clave de agrupación por cliente — normalizada a solo dígitos, misma
+        // que usa ClienteMaster. Se re-deriva en cada aplicarDatos (creación o
+        // edición) por si el operador corrigió el teléfono al editar.
+        p.setClienteTelefonoNormalizado(ClienteMasterService.normalizar(datos.clienteTelefono()));
         p.setClienteEmail(TextUtils.blankToNull(datos.clienteEmail()));
         p.setRubro(TextUtils.blankToNull(datos.rubro()));
         p.setObservaciones(TextUtils.blankToNull(datos.observaciones()));

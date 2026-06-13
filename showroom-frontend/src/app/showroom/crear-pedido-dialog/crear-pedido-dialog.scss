@@ -1,0 +1,22 @@
+:host {
+  display: block;
+}
+
+// Forma de pago resaltada: es el dato clave del pedido (define el total que paga
+// el cliente), así que el control lleva el naranja de marca para que destaque
+// entre los inputs blancos del formulario. Solo se estiliza el control cerrado;
+// el panel desplegado va en <body> (appendTo) y conserva el estilo estándar.
+:host ::ng-deep .forma-pago-select.p-select {
+  border-color: #ff861c;
+  background: rgba(255, 134, 28, 0.07);
+
+  &:not(.p-disabled):hover {
+    border-color: #e6740a;
+  }
+
+  // En foco mantenemos el acento naranja en vez del azul por defecto del tema.
+  &:not(.p-disabled).p-focus {
+    border-color: #ff861c;
+    box-shadow: 0 0 0 1px #ff861c;
+  }
+}

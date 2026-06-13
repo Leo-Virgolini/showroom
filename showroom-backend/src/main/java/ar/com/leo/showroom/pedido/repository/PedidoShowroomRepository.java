@@ -6,6 +6,7 @@ import ar.com.leo.showroom.showroom.dto.EstadisticaProductoDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,6 +18,39 @@ import java.util.Optional;
 public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, Long> {
 
     Page<PedidoShowroom> findAllByOrderByCreadoAtDesc(Pageable pageable);
+
+    // ---- Actividad por cliente (vista /clientes, materializada en ClienteMaster) ----
+
+    /** Cantidad de pedidos de un cliente (incluye anulados — contador histórico). */
+    long countByClienteTelefonoNormalizado(String clienteTelefonoNormalizado);
+
+    /** Pedido más reciente del cliente — define el último monto/id y los datos
+     *  de facturación/envío del cliente. */
+    Optional<PedidoShowroom> findFirstByClienteTelefonoNormalizadoOrderByCreadoAtDesc(
+            String clienteTelefonoNormalizado);
+
+    /** Pedido más antiguo del cliente — candidato a primer movimiento. */
+    Optional<PedidoShowroom> findFirstByClienteTelefonoNormalizadoOrderByCreadoAtAsc(
+            String clienteTelefonoNormalizado);
+
+    /** Teléfonos normalizados distintos presentes en pedidos — usado por el
+     *  backfill para sembrar un master por cada cliente con historial. */
+    @Query("select distinct p.clienteTelefonoNormalizado from PedidoShowroom p "
+            + "where p.clienteTelefonoNormalizado is not null")
+    List<String> telefonosNormalizadosDistintos();
+
+    /** Backfill one-shot: deriva {@code cliente_telefono_normalizado} (solo
+     *  dígitos) de {@code telefono} para las filas que aún no lo tienen.
+     *  Idempotente: solo toca filas con al menos un dígito (el {@code <> ''}
+     *  evita re-procesar en cada arranque los teléfonos no numéricos, que quedan
+     *  NULL). Devuelve cuántas filas actualizó. */
+    @Modifying
+    @Query(value = "UPDATE pedido_showroom "
+            + "SET cliente_telefono_normalizado = REGEXP_REPLACE(telefono, '[^0-9]', '') "
+            + "WHERE cliente_telefono_normalizado IS NULL AND telefono IS NOT NULL "
+            + "  AND REGEXP_REPLACE(telefono, '[^0-9]', '') <> ''",
+            nativeQuery = true)
+    int backfillTelefonoNormalizado();
 
     /** Último pedido con un CUIT/documento dado — fallback para autocompletar
      *  los datos del cliente al tipear el CUIT cuando no hay un maestro guardado. */
@@ -49,21 +83,6 @@ public interface PedidoShowroomRepository extends JpaRepository<PedidoShowroom, 
      *  OSIV o sufriría N+1). Una sola query agrupada por pedido_id. */
     @Query("select i.pedido.id, count(i) from PedidoShowroomItem i where i.pedido.id in :ids group by i.pedido.id")
     List<Object[]> contarItemsPorPedidoIds(@Param("ids") Collection<Long> ids);
-
-    /** Proyección liviana de TODOS los pedidos para la vista de clientes
-     *  (/clientes): solo los ~12 campos escalares que necesita el agregador de
-     *  actividad, sin hidratar la entidad ni su colección de items. Reemplaza un
-     *  {@code findAll()} que materializaba entidades completas para leer pocas
-     *  columnas. No filtra anulados: el contador de pedidos es histórico. */
-    @Query("""
-            select p.telefono as telefono, p.creadoAt as creadoAt, p.id as id,
-                   p.tipoDoc as tipoDoc, p.nroDoc as nroDoc, p.domicilio as domicilio,
-                   p.codigoProvincia as codigoProvincia, p.idLocalidad as idLocalidad,
-                   p.email as email, p.nombre as nombre, p.rubro as rubro,
-                   p.totalSinIva as totalSinIva
-            from PedidoShowroom p
-            """)
-    List<ClienteActividadView> findActividadParaClientes();
 
     /**
      * Búsqueda paginada con filtros para la pantalla de listado de pedidos.

@@ -1,0 +1,25 @@
+:host {
+  display: block;
+}
+
+// Layout flex: la card (buscador + tabla) ocupa el alto restante del main; el
+// buscador queda arriba con altura natural y la tabla scrollea solo su cuerpo
+// (scrollHeight="flex"), dejando el header de columnas y el paginador siempre
+// visibles sin scrollear toda la página. Hay que propagar la altura por la
+// estructura interna del p-card, que por defecto no es flex.
+:host ::ng-deep .tabla-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  .p-card,
+  .p-card-body,
+  .p-card-content,
+  p-table {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+}

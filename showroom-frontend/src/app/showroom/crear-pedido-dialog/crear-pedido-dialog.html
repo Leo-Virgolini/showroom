@@ -211,7 +211,7 @@
         <p-select [options]="formasPagoActivas()"
           optionLabel="nombre" optionValue="id"
           [ngModel]="pedidoFormaPagoId()" (ngModelChange)="pedidoFormaPagoId.set($event)"
-          placeholder="Elegí una forma de pago" class="w-full"
+          placeholder="Elegí una forma de pago" class="w-full forma-pago-select"
           scrollHeight="350px" appendTo="body">
           <ng-template let-f #selectedItem>
             @if (f) {

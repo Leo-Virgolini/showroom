@@ -4,27 +4,56 @@ import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface PresupuestoComercialRepository extends JpaRepository<PresupuestoComercial, Long> {
+
+    // ---- Actividad por cliente (vista /clientes, materializada en ClienteMaster) ----
+
+    /** Cantidad de presupuestos activos (no eliminados) de un cliente. */
+    long countByClienteTelefonoNormalizadoAndEliminadoAtIsNull(String clienteTelefonoNormalizado);
+
+    /** Presupuesto activo más reciente del cliente — define el último monto/id. */
+    Optional<PresupuestoComercial> findFirstByClienteTelefonoNormalizadoAndEliminadoAtIsNullOrderByCreadoAtDesc(
+            String clienteTelefonoNormalizado);
+
+    /** Presupuesto activo más antiguo del cliente — define el primer movimiento. */
+    Optional<PresupuestoComercial> findFirstByClienteTelefonoNormalizadoAndEliminadoAtIsNullOrderByCreadoAtAsc(
+            String clienteTelefonoNormalizado);
+
+    /** Teléfonos normalizados distintos presentes en presupuestos activos — usado
+     *  por el backfill para sembrar un master por cada cliente con historial. */
+    @Query("select distinct p.clienteTelefonoNormalizado from PresupuestoComercial p "
+            + "where p.clienteTelefonoNormalizado is not null and p.eliminadoAt is null")
+    List<String> telefonosNormalizadosDistintos();
+
+    /** Backfill one-shot: deriva {@code cliente_telefono_normalizado} (solo
+     *  dígitos) de {@code cliente_telefono} para las filas que aún no lo tienen.
+     *  Idempotente: solo toca filas cuyo teléfono tiene al menos un dígito (el
+     *  {@code <> ''} excluye los teléfonos no numéricos como "consultar", que
+     *  quedarían NULL y, sin esta condición, volverían a "afectarse" en cada
+     *  arranque disparando un recálculo masivo inútil). Devuelve cuántas
+     *  actualizó. */
+    @Modifying
+    @Query(value = "UPDATE presupuesto_comercial "
+            + "SET cliente_telefono_normalizado = REGEXP_REPLACE(cliente_telefono, '[^0-9]', '') "
+            + "WHERE cliente_telefono_normalizado IS NULL AND cliente_telefono IS NOT NULL "
+            + "  AND REGEXP_REPLACE(cliente_telefono, '[^0-9]', '') <> ''",
+            nativeQuery = true)
+    int backfillTelefonoNormalizado();
 
     /** Bulk lookup {@code convertidoEnPedidoId → presupuestoId} para la columna
      *  "Origen" del listado de pedidos. Devuelve [pedidoId, presupuestoId] por
      *  fila; se arma el mapa en memoria en el caller. */
     @Query("SELECT p.convertidoEnPedidoId, p.id FROM PresupuestoComercial p WHERE p.convertidoEnPedidoId IN :pedidoIds")
     List<Object[]> findPresupuestoIdsByPedidoIds(@Param("pedidoIds") Collection<Long> pedidoIds);
-
-    /** Todos los presupuestos activos ordenados por fecha descendente — usado
-     *  para construir la vista agrupada por cliente en /clientes (junto con
-     *  los pedidos — los datos se unen en memoria en {@code listarClientes}).
-     *  La agrupación se hace en memoria (suelen ser cientos, no decenas de
-     *  miles), así que no necesitamos un GROUP BY con subqueries. */
-    List<PresupuestoComercial> findByEliminadoAtIsNullOrderByCreadoAtDesc();
 
     /**
      * Búsqueda paginada con filtros opcionales — usada por la pantalla

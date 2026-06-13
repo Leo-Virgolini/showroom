@@ -10,6 +10,8 @@ import {
   CatalogoItem,
   CatalogoPage,
   ClientePresupuestos,
+  ClientesPage,
+  ListarClientesParams,
   CrearPedidoRequest,
   CrearPedidoResponse,
   EnviarPresupuestoRequest,
@@ -582,15 +584,27 @@ export class ShowroomService {
     return this.http.get<PresupuestoListPage>(`${this.base}/presupuesto-comercial`, { params });
   }
 
-  /** Lista de clientes únicos derivados de presupuestos comerciales + pedidos
-   *  — agrupados por teléfono normalizado (solo dígitos). Movimientos sin
-   *  teléfono no se cuentan. Datos canónicos (nombre, email, rubro) del
-   *  movimiento más reciente sin importar si es presupuesto o pedido.
-   *  Devuelve `cantidadPresupuestos` y `cantidadPedidos` separados para que
-   *  la UI pueda ofrecer "Ver presupuestos" / "Ver pedidos" según corresponda.
-   *  Sin paginar. */
-  listarClientesPresupuestos(): Observable<ClientePresupuestos[]> {
-    return this.http.get<ClientePresupuestos[]>(`${this.base}/presupuesto-comercial/clientes`);
+  /** Listado paginado (server-side) de clientes — agrupados por teléfono
+   *  normalizado. La actividad (contadores, último movimiento/total) está
+   *  materializada en el backend, así que pagina y ordena en SQL. Filtro `q`
+   *  por nombre/razón social/email/teléfono/CUIT. */
+  listarClientesPresupuestos(opts: ListarClientesParams = {}): Observable<ClientesPage> {
+    let params = new HttpParams()
+      .set('page', opts.page ?? 0)
+      .set('size', opts.size ?? 25);
+    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    if (opts.sortField) params = params.set('sortField', opts.sortField);
+    if (opts.sortOrder) params = params.set('sortOrder', opts.sortOrder);
+    return this.http.get<ClientesPage>(`${this.base}/presupuesto-comercial/clientes`, { params });
+  }
+
+  /** Todos los clientes que matchean `q`, sin paginar — para el export CSV, que
+   *  necesita el conjunto completo y no solo la página visible. */
+  exportarClientesPresupuestos(q?: string): Observable<ClientePresupuestos[]> {
+    let params = new HttpParams();
+    if (q && q.trim()) params = params.set('q', q.trim());
+    return this.http.get<ClientePresupuestos[]>(
+      `${this.base}/presupuesto-comercial/clientes/export`, { params });
   }
 
   /** Upsert del maestro de clientes — guarda overrides editables de

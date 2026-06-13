@@ -4,17 +4,23 @@ import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.cliente.dto.ActualizarClienteRequestDTO;
 import ar.com.leo.showroom.cliente.dto.ClienteAutocompletarDTO;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
+import ar.com.leo.showroom.cliente.event.ClienteMovimientoEvent;
 import ar.com.leo.showroom.cliente.repository.ClienteMasterRepository;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
+import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
+import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
+import ar.com.leo.showroom.presupuesto.repository.PresupuestoComercialRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Servicio del maestro de clientes — gestiona la entidad
@@ -26,11 +32,14 @@ import java.util.stream.Collectors;
  * row.
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ClienteMasterService {
 
     private final ClienteMasterRepository repository;
     private final UsuarioRepository usuarioRepository;
+    private final PresupuestoComercialRepository presupuestoRepository;
+    private final PedidoShowroomRepository pedidoRepository;
 
     /** Upsert: si existe master para ese teléfono lo actualiza, sino crea uno.
      *  Si el master estaba marcado como eliminado, al editarlo se reactiva
@@ -119,17 +128,112 @@ public class ClienteMasterService {
         return eliminados;
     }
 
-    /** Devuelve TODOS los masters indexados por teléfono normalizado, para
-     *  hacer el merge en memoria al armar la vista de /clientes. La cantidad
-     *  esperada de clientes es manejable — no paginamos. */
-    public Map<String, ClienteMaster> cargarTodosIndexados() {
-        return repository.findAll().stream()
-                .collect(Collectors.toMap(
-                        ClienteMaster::getTelefonoNormalizado,
-                        m -> m,
-                        // Defensivo: en caso de duplicados por el índice único
-                        // fallando (concurrencia), nos quedamos con el más reciente.
-                        (a, b) -> a.getActualizadoAt().isAfter(b.getActualizadoAt()) ? a : b));
+    /**
+     * Recalcula y persiste la ACTIVIDAD materializada del cliente (contadores,
+     * primer/último movimiento, último total, ids de deep-link) leyendo el
+     * estado real de sus presupuestos activos y pedidos. Idempotente: lee y
+     * pisa, no incrementa — así un backfill o una doble llamada siempre dejan
+     * los valores consistentes.
+     *
+     * <p>Lo invocan los flujos que cambian la actividad de un cliente en la
+     * MISMA transacción que el movimiento (creación de presupuesto/pedido,
+     * soft-delete de presupuesto) para que vea el cambio recién hecho. No-op si
+     * el teléfono está vacío o si todavía no hay un master para ese cliente (el
+     * master lo crean los upsert/backfill; el siguiente recálculo lo completa).
+     */
+    @Transactional
+    public void recalcularActividad(String telefonoNormalizado) {
+        String tel = normalizar(telefonoNormalizado);
+        if (tel == null) return;
+        ClienteMaster master = repository.findByTelefonoNormalizado(tel).orElse(null);
+        if (master == null) return;
+        aplicarActividad(master, tel);
+        repository.save(master);
+    }
+
+    /**
+     * Recalcula la actividad del cliente tras el COMMIT del movimiento que la
+     * cambió ({@link ClienteMovimientoEvent}). Corre en una transacción nueva
+     * ({@code REQUIRES_NEW}) ya finalizada la original: así VE tanto el movimiento
+     * recién persistido como el master (que el upsert crea en su propia
+     * transacción {@code REQUIRES_NEW}), evitando el problema de visibilidad bajo
+     * REPEATABLE READ. Best-effort: un fallo no afecta al movimiento (ya
+     * commiteado) y el backfill del próximo arranque lo deja consistente.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onClienteMovimiento(ClienteMovimientoEvent evento) {
+        try {
+            recalcularActividad(evento.telefonoNormalizado());
+        } catch (Exception e) {
+            log.warn("No se pudo recalcular la actividad del cliente {}: {}",
+                    evento.telefonoNormalizado(), e.getMessage());
+        }
+    }
+
+    /** Setea los campos de actividad del master a partir del historial del
+     *  cliente. No persiste — lo hace el caller (o la unidad de trabajo del
+     *  backfill que guarda en lote). */
+    void aplicarActividad(ClienteMaster master, String tel) {
+        long cantPresup = presupuestoRepository.countByClienteTelefonoNormalizadoAndEliminadoAtIsNull(tel);
+        long cantPedidos = pedidoRepository.countByClienteTelefonoNormalizado(tel);
+
+        PresupuestoComercial ultPresup = presupuestoRepository
+                .findFirstByClienteTelefonoNormalizadoAndEliminadoAtIsNullOrderByCreadoAtDesc(tel).orElse(null);
+        PresupuestoComercial primPresup = presupuestoRepository
+                .findFirstByClienteTelefonoNormalizadoAndEliminadoAtIsNullOrderByCreadoAtAsc(tel).orElse(null);
+        PedidoShowroom ultPedido = pedidoRepository
+                .findFirstByClienteTelefonoNormalizadoOrderByCreadoAtDesc(tel).orElse(null);
+        PedidoShowroom primPedido = pedidoRepository
+                .findFirstByClienteTelefonoNormalizadoOrderByCreadoAtAsc(tel).orElse(null);
+
+        master.setCantidadPresupuestos((int) cantPresup);
+        master.setCantidadPedidos((int) cantPedidos);
+        master.setUltimoPresupuestoId(ultPresup != null ? ultPresup.getId() : null);
+        master.setUltimoPedidoId(ultPedido != null ? ultPedido.getId() : null);
+
+        Instant ultPresupAt = ultPresup != null ? ultPresup.getCreadoAt() : null;
+        Instant ultPedidoAt = ultPedido != null ? ultPedido.getCreadoAt() : null;
+        // El movimiento más reciente entre ambos tipos define último mov + total.
+        // En empate (mismo instante) gana el presupuesto, igual que el agregador
+        // en memoria que reemplazaba el canónico solo si era ESTRICTAMENTE más nuevo.
+        if (ultPedidoAt != null && (ultPresupAt == null || ultPedidoAt.isAfter(ultPresupAt))) {
+            master.setUltimoMovimientoAt(ultPedidoAt);
+            master.setUltimoTotalSinIva(ultPedido.getTotalSinIva());
+        } else if (ultPresupAt != null) {
+            master.setUltimoMovimientoAt(ultPresupAt);
+            master.setUltimoTotalSinIva(ultPresup.getSubtotalSinIva());
+        } else {
+            master.setUltimoMovimientoAt(null);
+            master.setUltimoTotalSinIva(null);
+        }
+
+        master.setPrimerMovimientoAt(minInstant(
+                primPresup != null ? primPresup.getCreadoAt() : null,
+                primPedido != null ? primPedido.getCreadoAt() : null));
+    }
+
+    private static Instant minInstant(Instant a, Instant b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
+    }
+
+    /**
+     * Página de clientes (no eliminados) para la vista /clientes. El filtro
+     * {@code q} se aplica como substring sobre nombre/razón social/email y, si
+     * tiene dígitos, también sobre teléfono y CUIT. El orden lo trae el
+     * {@link Pageable}. Como la actividad está materializada, es un SELECT
+     * directo paginado (sin cruzar movimientos).
+     */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<ClienteMaster> buscarClientes(
+            String q, org.springframework.data.domain.Pageable pageable) {
+        String qNorm = StringUtils.hasText(q) ? q.trim() : null;
+        // Dígitos del query para los matches de teléfono/CUIT (vacío = no aplica
+        // esos OR, así una búsqueda de texto no trae todos por el LIKE '%%').
+        String qDigitos = qNorm == null ? "" : qNorm.replaceAll("\\D+", "");
+        return repository.buscarPaginado(qNorm, qDigitos, pageable);
     }
 
     /**

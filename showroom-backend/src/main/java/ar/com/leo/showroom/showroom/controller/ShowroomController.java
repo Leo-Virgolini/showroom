@@ -856,13 +856,28 @@ public class ShowroomController {
         return presupuestoComercialService.listar(id, q, desde, hasta, page, size, sortField, sortOrder);
     }
 
-    /** Vista agrupada por cliente — un row por persona con email/teléfono/
-     *  nombre, cantidad de presupuestos y fecha del último. La usa la pantalla
-     *  {@code /clientes}. No paginamos: la cantidad de clientes
-     *  es manejable en memoria. */
+    /** Vista paginada agrupada por cliente — un row por persona con sus datos del
+     *  maestro + actividad materializada (cantidad de presupuestos/pedidos, último
+     *  movimiento, etc.). La usa la pantalla {@code /clientes}. Filtro {@code q}
+     *  por texto (nombre/razón social/email/teléfono/CUIT); orden por whitelist;
+     *  default 25 por página, cliente más reciente arriba. */
     @GetMapping("/presupuesto-comercial/clientes")
-    public java.util.List<ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO> listarClientesPresupuestos() {
-        return presupuestoComercialService.listarClientes();
+    public ar.com.leo.showroom.presupuesto.dto.ClientesPageDTO listarClientesPresupuestos(
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "25") int size,
+            @RequestParam(value = "sortField", required = false) String sortField,
+            @RequestParam(value = "sortOrder", required = false) String sortOrder) {
+        return presupuestoComercialService.listarClientes(q, page, size, sortField, sortOrder);
+    }
+
+    /** Todos los clientes (filtrados por {@code q}, sin paginar) — para el export
+     *  CSV de la pantalla /clientes, que necesita el conjunto completo y no solo
+     *  la página visible. */
+    @GetMapping("/presupuesto-comercial/clientes/export")
+    public java.util.List<ar.com.leo.showroom.presupuesto.dto.ClientePresupuestosDTO> exportarClientesPresupuestos(
+            @RequestParam(value = "q", required = false) String q) {
+        return presupuestoComercialService.listarClientesParaExport(q);
     }
 
     /**

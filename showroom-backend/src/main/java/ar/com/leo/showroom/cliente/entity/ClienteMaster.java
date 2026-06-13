@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -107,6 +108,49 @@ public class ClienteMaster {
 
     @Column(name = "actualizado_at", nullable = false)
     private Instant actualizadoAt;
+
+    // ---- Actividad materializada (cache derivada de presupuestos + pedidos) ----
+    // Estos campos NO los edita el operador: los recalcula
+    // ClienteMasterService.recalcularActividad(telefono) cada vez que el cliente
+    // tiene un movimiento nuevo (presupuesto/pedido creado, presupuesto borrado).
+    // Se materializan para que la vista /clientes pueda paginar y ORDENAR en SQL
+    // sin cruzar todos los movimientos en memoria en cada request. El recálculo
+    // es idempotente (lee el estado real, no incrementa), así que un backfill
+    // siempre los deja consistentes.
+
+    /** Fecha del movimiento (presupuesto o pedido) más reciente del cliente.
+     *  Es el orden por defecto del listado (cliente más reciente arriba). Null
+     *  para clientes de alta manual sin movimientos. */
+    @Column(name = "ultimo_movimiento_at")
+    private Instant ultimoMovimientoAt;
+
+    /** Fecha del movimiento más antiguo del cliente. */
+    @Column(name = "primer_movimiento_at")
+    private Instant primerMovimientoAt;
+
+    /** Cantidad de presupuestos comerciales (no eliminados) del cliente. */
+    @Column(name = "cantidad_presupuestos", nullable = false)
+    @Builder.Default
+    private int cantidadPresupuestos = 0;
+
+    /** Cantidad de pedidos del cliente (incluye anulados — contador histórico). */
+    @Column(name = "cantidad_pedidos", nullable = false)
+    @Builder.Default
+    private int cantidadPedidos = 0;
+
+    /** Total sin IVA del movimiento más reciente (presupuesto o pedido). */
+    @Column(name = "ultimo_total_sin_iva", precision = 18, scale = 2)
+    private BigDecimal ultimoTotalSinIva;
+
+    /** Id del presupuesto más reciente — deep-link al historial. Null si el
+     *  cliente solo tiene pedidos. */
+    @Column(name = "ultimo_presupuesto_id")
+    private Long ultimoPresupuestoId;
+
+    /** Id del pedido más reciente — deep-link al listado de pedidos. Null si el
+     *  cliente solo tiene presupuestos. */
+    @Column(name = "ultimo_pedido_id")
+    private Long ultimoPedidoId;
 
     /** Soft-delete: si está seteado, el cliente queda oculto del listado de
      *  /clientes aunque tenga historial. No se toca el historial — los

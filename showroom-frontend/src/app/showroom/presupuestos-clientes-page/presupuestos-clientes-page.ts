@@ -3,13 +3,15 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subject, Subscription, debounceTime } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -21,12 +23,13 @@ import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
-import { TableModule } from 'primeng/table';
+import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
 import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Localidad, Provincia } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
+import { sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { crearTelefonoLookup } from '../telefono-lookup.util';
 import { PageHeader } from '../page-header/page-header';
@@ -67,6 +70,7 @@ import { PageHeader } from '../page-header/page-header';
     PageHeader,
   ],
   templateUrl: './presupuestos-clientes-page.html',
+  styleUrl: './presupuestos-clientes-page.scss',
 })
 export class PresupuestosClientesPage {
   private readonly api = inject(ShowroomService);
@@ -80,6 +84,14 @@ export class PresupuestosClientesPage {
   readonly cargando = signal(false);
   readonly clientes = signal<ClientePresupuestos[]>([]);
   readonly busqueda = signal('');
+
+  // ---- Paginación server-side (lazy) ----
+  readonly total = signal(0);
+  readonly pageSize = signal(25);
+  readonly first = signal(0);
+  /** Campo de orden — coincide con los keys de `SORT_CLIENTES` del backend. */
+  readonly sortField = signal<string>('ultimoMovimientoAt');
+  readonly sortOrder = signal<'asc' | 'desc'>('desc');
 
   /** Filas seleccionadas con el checkbox — para el borrado masivo. */
   readonly seleccionados = signal<ClientePresupuestos[]>([]);
@@ -170,52 +182,79 @@ export class PresupuestosClientesPage {
     { label: 'Otros…', value: 'otros' },
   ];
 
-  /** Filtro client-side: substring case-insensitive sobre nombre/email/
-   *  teléfono. Como el endpoint devuelve todos los clientes sin paginar,
-   *  filtrar en memoria es instantáneo. */
-  readonly clientesFiltrados = computed(() => {
-    const q = this.busqueda().trim().toLowerCase();
-    if (!q) return this.clientes();
-    // Para CUIT comparamos también los dígitos puros del query (así "20-12..."
-    // o "2012..." matchean igual contra el nroDoc numérico).
-    const qDigitos = q.replace(/\D+/g, '');
-    return this.clientes().filter((c) =>
-      (c.razonSocial ?? '').toLowerCase().includes(q) ||
-      (c.nombre ?? '').toLowerCase().includes(q) ||
-      (c.email ?? '').toLowerCase().includes(q) ||
-      (c.telefono ?? '').toLowerCase().includes(q) ||
-      (c.nroDoc != null && qDigitos.length > 0 && String(c.nroDoc).includes(qDigitos)),
-    );
-  });
+  /** Dispara la recarga (reseteando a la primera página) cuando cambia la
+   *  búsqueda. Debounce para que tipear no pegue una request por tecla — la
+   *  búsqueda ahora es server-side. */
+  private readonly filtroTrigger$ = new Subject<void>();
+  /** Salta el primer disparo del effect (los signals ya tienen valor al montar,
+   *  así que el effect corre una vez sin cambio real). Evita el doble request
+   *  inicial junto con onLazyLoad. */
+  private filtrosInicializados = false;
 
   constructor() {
     // Pre-llena la búsqueda con el queryParam `q` cuando se navega desde un
-    // historial ("Ver ficha del cliente" en pedidos/presupuestos). El filtro
-    // client-side `clientesFiltrados` matchea por nombre/email/teléfono/CUIT.
+    // historial ("Ver ficha del cliente" en pedidos/presupuestos). La búsqueda
+    // server-side matchea por nombre/razón social/email/teléfono/CUIT.
     const qParam = this.route.snapshot.queryParamMap.get('q');
     if (qParam) {
       this.busqueda.set(qParam);
     }
-    this.cargar();
+
+    this.filtroTrigger$
+      .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.first.set(0);
+        this.cargar(0, this.pageSize());
+      });
+
+    effect(() => {
+      this.busqueda();
+      if (!this.filtrosInicializados) {
+        this.filtrosInicializados = true;
+        return;
+      }
+      this.filtroTrigger$.next();
+    });
+    // La carga inicial la dispara el (onLazyLoad) de la tabla al montar.
   }
 
-  private cargar(): void {
+  onLazyLoad(event: TableLazyLoadEvent): void {
+    const size = event.rows ?? this.pageSize();
+    const first = event.first ?? 0;
+    this.pageSize.set(size);
+    this.first.set(first);
+    const { sortField, sortOrder } = sortDesdeLazyLoad(event, this.sortField(), this.sortOrder());
+    this.sortField.set(sortField);
+    this.sortOrder.set(sortOrder);
+    this.cargar(Math.floor(first / size), size);
+  }
+
+  private cargar(page: number, size: number): void {
     this.cargando.set(true);
-    this.api.listarClientesPresupuestos().subscribe({
-      next: (lista) => {
-        this.cargando.set(false);
-        this.clientes.set(lista);
-      },
-      error: (err) => {
-        this.cargando.set(false);
-        toastError(this.toast, 'Clientes', err,
-          'No se pudieron cargar los clientes.');
-      },
-    });
+    this.api
+      .listarClientesPresupuestos({
+        q: this.busqueda(),
+        page,
+        size,
+        sortField: this.sortField(),
+        sortOrder: this.sortOrder(),
+      })
+      .subscribe({
+        next: (res) => {
+          this.cargando.set(false);
+          this.clientes.set(res.items);
+          this.total.set(res.total);
+        },
+        error: (err) => {
+          this.cargando.set(false);
+          toastError(this.toast, 'Clientes', err,
+            'No se pudieron cargar los clientes.');
+        },
+      });
   }
 
   refrescar(): void {
-    this.cargar();
+    this.cargar(Math.floor(this.first() / this.pageSize()), this.pageSize());
   }
 
   estaEliminando(telefono: string | null | undefined): boolean {
@@ -259,8 +298,9 @@ export class PresupuestosClientesPage {
           ns.delete(telefono);
           return ns;
         });
-        // Update optimista: lo sacamos del listado local sin pedir refetch.
+        // Update optimista: lo sacamos de la página local y bajamos el total.
         this.clientes.set(this.clientes().filter((x) => x.telefono !== telefono));
+        this.total.update((t) => Math.max(0, t - 1));
         this.toast.add({
           severity: 'success',
           summary: 'Cliente eliminado',
@@ -303,6 +343,7 @@ export class PresupuestosClientesPage {
       next: (res) => {
         const borrados = new Set(telefonos);
         this.clientes.set(this.clientes().filter((x) => !borrados.has(x.telefono ?? '')));
+        this.total.update((t) => Math.max(0, t - res.eliminados));
         this.seleccionados.set([]);
         this.toast.add({
           severity: 'success',
@@ -534,8 +575,9 @@ export class PresupuestosClientesPage {
             : 'Los datos del cliente se guardaron en el maestro.',
           life: 3000,
         });
-        // Refrescamos la tabla para que aparezca el nuevo / se apliquen los cambios.
-        this.cargar();
+        // Refrescamos la página actual para que aparezca el nuevo / se apliquen
+        // los cambios (la lista es server-side ahora).
+        this.refrescar();
       },
       error: (err) => {
         this.guardandoEdicion.set(false);
@@ -545,23 +587,41 @@ export class PresupuestosClientesPage {
     });
   }
 
-  /** Exporta los clientes filtrados como CSV compatible con la importación
-   *  de Marketing Nube (Tiendanube). Las dos primeras columnas son las que
-   *  Marketing Nube reconoce automáticamente ("Correo electrónico", "Nombre");
-   *  el resto son campos extras que el operador puede mapear a custom fields
-   *  al importar o ignorar. UTF-8 con BOM para que Excel detecte bien los
-   *  acentos al abrir el archivo. */
+  /** True mientras se baja el conjunto completo para el export. */
+  readonly exportando = signal(false);
+
+  /** Exporta TODOS los clientes que matchean la búsqueda actual (no solo la
+   *  página visible) como CSV compatible con Marketing Nube (Tiendanube). Como
+   *  la tabla ahora pagina en el servidor, pedimos el set completo a un endpoint
+   *  dedicado antes de generar el archivo. */
   exportarCsv(): void {
-    const clientes = this.clientesFiltrados();
-    if (clientes.length === 0) {
-      this.toast.add({
-        severity: 'warn',
-        summary: 'Sin clientes',
-        detail: 'No hay clientes para exportar.',
-        life: 3000,
-      });
-      return;
-    }
+    if (this.exportando()) return;
+    this.exportando.set(true);
+    this.api.exportarClientesPresupuestos(this.busqueda()).subscribe({
+      next: (clientes) => {
+        this.exportando.set(false);
+        if (clientes.length === 0) {
+          this.toast.add({
+            severity: 'warn',
+            summary: 'Sin clientes',
+            detail: 'No hay clientes para exportar.',
+            life: 3000,
+          });
+          return;
+        }
+        this.generarYDescargarCsv(clientes);
+      },
+      error: (err) => {
+        this.exportando.set(false);
+        toastError(this.toast, 'Exportar CSV', err, 'No se pudo exportar el CSV.');
+      },
+    });
+  }
+
+  /** Construye el CSV (UTF-8 con BOM para que Excel respete los acentos) y lo
+   *  descarga. Las dos primeras columnas son las que Marketing Nube reconoce
+   *  automáticamente ("Correo electrónico", "Nombre"); el resto son extras. */
+  private generarYDescargarCsv(clientes: ClientePresupuestos[]): void {
     const headers = [
       'Correo electrónico',
       'Nombre',

@@ -1,10 +1,10 @@
-<div class="flex flex-col min-h-screen bg-rose-50/60 dark:bg-surface-950">
+<div class="flex flex-col h-screen overflow-hidden bg-rose-50/60 dark:bg-surface-950">
   <app-page-header title="Clientes" subtitle="Listado único derivado de presupuestos y pedidos"
     titleIcon="pi pi-users" toolbarClass="!bg-rose-100 dark:!bg-surface-900" />
 
 
-  <main class="flex-1 p-3 sm:p-4 lg:p-6">
-    <p-card>
+  <main class="flex-1 flex flex-col min-h-0 p-3 sm:p-4 lg:p-6">
+    <p-card class="tabla-card">
       <!-- Buscador + refresh -->
       <div class="flex flex-col md:flex-row gap-3 mb-3 items-stretch md:items-center">
         <div class="flex-1">
@@ -18,7 +18,7 @@
         <div class="flex items-center gap-2 text-sm text-muted-color">
           <span class="inline-flex items-center gap-1">
             <i class="pi pi-users text-[#FF861C]"></i>
-            {{ clientesFiltrados().length }} de {{ clientes().length }}
+            {{ total() }} cliente{{ total() === 1 ? '' : 's' }}
           </span>
           <p-button icon="pi pi-refresh" severity="secondary" [text]="true" [rounded]="true"
             [loading]="cargando()"
@@ -40,21 +40,26 @@
           }
           <p-button icon="pi pi-file-export" label="Exportar CSV"
             ariaLabel="Exportar clientes a CSV" class="btn-kt-azul"
-            [disabled]="cargando() || clientesFiltrados().length === 0"
+            [loading]="exportando()"
+            [disabled]="cargando() || total() === 0"
             (onClick)="exportarCsv()"
-            pTooltip="Descargar CSV compatible con Marketing Nube (Tiendanube)"
+            pTooltip="Descargar CSV de todos los clientes que coinciden con la búsqueda (Marketing Nube)"
             tooltipPosition="bottom" />
         </div>
       </div>
 
-      <!-- Tabla — con 13 columnas no entra a lo ancho en pantallas chicas, así
-           que la envolvemos en scroll horizontal y le damos min-width al table
-           para que las columnas no se aplasten. -->
-      <div class="overflow-x-auto">
-      <p-table [value]="clientesFiltrados()" dataKey="telefono"
+      <!-- Tabla — con 13 columnas no entra a lo ancho en pantallas chicas. El
+           scroll horizontal lo maneja PrimeNG (scrollable) gracias al min-width
+           del table; el div es solo el contenedor flex que le da el alto. -->
+      <div class="flex-1 min-h-0 flex flex-col">
+      <p-table [value]="clientes()" dataKey="telefono"
+        [lazy]="true" (onLazyLoad)="onLazyLoad($event)"
+        [scrollable]="true" scrollHeight="flex"
         [loading]="cargando()"
         [paginator]="true"
-        [rows]="25"
+        [rows]="pageSize()"
+        [totalRecords]="total()"
+        [first]="first()"
         [rowsPerPageOptions]="[25, 50, 100]"
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
         [showCurrentPageReport]="true"
@@ -87,11 +92,13 @@
             <th style="width: 13rem" pSortableColumn="domicilio">
               <i class="pi pi-map-marker text-[#FF861C] mr-1"></i> Domicilio <p-sortIcon field="domicilio" />
             </th>
-            <th style="width: 10rem" pSortableColumn="localidadNombre">
-              <i class="pi pi-building text-[#FF861C] mr-1"></i> Localidad <p-sortIcon field="localidadNombre" />
+            <!-- Localidad/Provincia no son ordenables: se muestran como nombre
+                 resuelto (no es una columna del maestro). -->
+            <th style="width: 10rem">
+              <i class="pi pi-building text-[#FF861C] mr-1"></i> Localidad
             </th>
-            <th style="width: 10rem" pSortableColumn="provinciaNombre">
-              <i class="pi pi-map text-[#FF861C] mr-1"></i> Provincia <p-sortIcon field="provinciaNombre" />
+            <th style="width: 10rem">
+              <i class="pi pi-map text-[#FF861C] mr-1"></i> Provincia
             </th>
             <th class="text-center" style="width: 8rem" pSortableColumn="cantidadPresupuestos">
               <i class="pi pi-file-edit text-[#FF861C] mr-1"></i> Presupuestos <p-sortIcon field="cantidadPresupuestos" />

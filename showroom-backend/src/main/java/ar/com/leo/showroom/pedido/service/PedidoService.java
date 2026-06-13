@@ -7,6 +7,7 @@ import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
 import ar.com.leo.showroom.catalogo.service.CatalogoSyncService;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.cliente.event.ClienteMovimientoEvent;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
 import ar.com.leo.showroom.common.exception.ConflictException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
@@ -139,6 +140,7 @@ public class PedidoService {
     private final DuxClient duxClient;
     private final ObjectMapper objectMapper;
     private final ClienteMasterService clienteMasterService;
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
     private final SesionShowroomService sesionShowroomService;
     private final PdfFollowupOrchestrator pdfFollowupOrchestrator;
     private final PickitExternoService pickitExternoService;
@@ -502,6 +504,7 @@ public class PedidoService {
                 .tipoDoc(request.tipoDoc())
                 .nroDoc(request.nroDoc())
                 .telefono(request.telefono())
+                .clienteTelefonoNormalizado(ClienteMasterService.normalizar(request.telefono()))
                 .email(request.email())
                 .rubro(request.rubro())
                 .domicilio(request.domicilio())
@@ -653,6 +656,10 @@ public class PedidoService {
             log.warn("No se pudo guardar el cliente formal del pedido {}: {}",
                     pedido.getId(), e.getMessage());
         }
+        // Recalcular la actividad materializada del cliente tras el commit (el
+        // listener AFTER_COMMIT ve el pedido y el master ya persistidos) —
+        // actualiza contador, último movimiento, total e id de deep-link.
+        eventPublisher.publishEvent(new ClienteMovimientoEvent(pedido.getClienteTelefonoNormalizado()));
 
         try {
             String body = construirPayloadDux(request, formaPago, caches);

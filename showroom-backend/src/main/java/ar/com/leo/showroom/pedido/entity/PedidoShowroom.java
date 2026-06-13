@@ -17,7 +17,10 @@ import java.util.List;
         @Index(name = "idx_pedido_showroom_nro_doc", columnList = "nro_doc"),
         @Index(name = "idx_pedido_showroom_creado_at", columnList = "creado_at"),
         @Index(name = "idx_pedido_showroom_estado", columnList = "estado"),
-        @Index(name = "idx_pedido_showroom_usuario_id", columnList = "usuario_id")
+        @Index(name = "idx_pedido_showroom_usuario_id", columnList = "usuario_id"),
+        // Clave de agrupación por cliente (vista /clientes). Indexado para que
+        // el recálculo de actividad por cliente sea un lookup directo.
+        @Index(name = "idx_pedido_showroom_tel_norm", columnList = "cliente_telefono_normalizado")
 })
 @Data
 @NoArgsConstructor
@@ -136,6 +139,14 @@ public class PedidoShowroom {
 
     @Column(name = "telefono", length = 50)
     private String telefono;
+
+    /** Teléfono normalizado a solo dígitos — clave de agrupación del cliente en
+     *  la vista /clientes. Se setea una sola vez al crear el pedido (set-once,
+     *  no se desincroniza) y permite consultar la actividad por cliente con un
+     *  índice en vez de normalizar en memoria. Null si el pedido no trae
+     *  teléfono. */
+    @Column(name = "cliente_telefono_normalizado", length = 50)
+    private String clienteTelefonoNormalizado;
 
     @Column(name = "email", length = 150)
     private String email;

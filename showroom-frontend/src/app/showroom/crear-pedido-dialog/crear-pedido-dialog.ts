@@ -116,6 +116,7 @@ export interface PedidoClientePrefill {
     TooltipModule,
   ],
   templateUrl: './crear-pedido-dialog.html',
+  styleUrl: './crear-pedido-dialog.scss',
 })
 export class CrearPedidoDialog {
   private readonly api = inject(ShowroomService);

@@ -23,6 +23,9 @@ import java.time.Instant;
 @Table(name = "presupuesto_comercial", indexes = {
         @Index(name = "idx_presupuesto_comercial_creado_at", columnList = "creado_at"),
         @Index(name = "idx_presupuesto_comercial_usuario_id", columnList = "usuario_id"),
+        // Clave de agrupación por cliente (vista /clientes). Indexado para que
+        // el recálculo de actividad por cliente sea un lookup directo.
+        @Index(name = "idx_presupuesto_comercial_tel_norm", columnList = "cliente_telefono_normalizado"),
 })
 @Data
 @NoArgsConstructor
@@ -57,6 +60,14 @@ public class PresupuestoComercial {
 
     @Column(name = "cliente_telefono", length = 50)
     private String clienteTelefono;
+
+    /** Teléfono normalizado a solo dígitos — clave de agrupación del cliente en
+     *  la vista /clientes. Se setea una sola vez al crear/editar el presupuesto
+     *  (set-once, no se desincroniza) y permite consultar la actividad por
+     *  cliente con un índice en vez de normalizar en memoria. Null si el
+     *  presupuesto no trae teléfono. */
+    @Column(name = "cliente_telefono_normalizado", length = 50)
+    private String clienteTelefonoNormalizado;
 
     @Column(name = "cliente_email", length = 150)
     private String clienteEmail;

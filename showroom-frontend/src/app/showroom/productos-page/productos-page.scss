@@ -16,3 +16,26 @@
     padding-bottom: 0.35rem;
   }
 }
+
+// Layout flex: la card de la tabla ocupa todo el alto restante del main y la
+// tabla scrollea SOLO su cuerpo (scrollHeight="flex"), dejando el header de
+// columnas y el paginador siempre visibles sin scrollear toda la página. Para
+// que "flex" funcione hay que propagar la altura por la estructura interna del
+// p-card (host → .p-card → .p-card-body → .p-card-content), que por defecto no
+// es flex.
+:host ::ng-deep .tabla-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  .p-card,
+  .p-card-body,
+  .p-card-content,
+  p-table {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+}
