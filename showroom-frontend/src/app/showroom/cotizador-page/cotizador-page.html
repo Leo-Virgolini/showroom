@@ -205,45 +205,20 @@
                   placeholder="Aparece en el header del PDF" />
               </p-iconfield>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label for="clienteEmailInput" class="kt-label">
-                  <i class="pi pi-envelope"></i> Email
-                  <span class="text-[10px] font-normal text-muted-color">(solo si vas a enviar por email)</span>
-                </label>
-                <p-iconfield iconPosition="left">
-                  <p-inputicon><i class="pi pi-at"></i></p-inputicon>
-                  <p-autoComplete inputId="clienteEmailInput"
-                    [ngModel]="clienteEmail()" (ngModelChange)="clienteEmail.set($event ?? '')"
-                    [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
-                    [forceSelection]="false" [delay]="0"
-                    placeholder="cliente@gmail.com"
-                    inputStyleClass="w-full pl-10" class="w-full" />
-                </p-iconfield>
-              </div>
-              <div>
-                <label for="clienteTelefonoInput" class="kt-label">
-                  <i class="pi pi-phone"></i> Teléfono
-                </label>
-                <p-inputMask inputId="clienteTelefonoInput" mask="99-99999999" [unmask]="true"
-                  [ngModel]="clienteTelefono()" (ngModelChange)="clienteTelefono.set($event ?? '')"
-                  placeholder="11-12345678" class="w-full" />
-              </div>
-            </div>
             <div>
-              <label for="rubroSelect" class="kt-label">
-                <i class="pi pi-tag"></i> Rubro
+              <label for="clienteEmailInput" class="kt-label">
+                <i class="pi pi-envelope"></i> Email
+                <span class="text-[10px] font-normal text-muted-color">(solo si vas a enviar por email)</span>
               </label>
-              <p-select inputId="rubroSelect" [options]="opcionesRubro"
-                optionLabel="label" optionValue="value"
-                [ngModel]="rubro()" (ngModelChange)="rubro.set($event)"
-                placeholder="Seleccioná un rubro…" class="w-full"
-                [showClear]="true" appendTo="body" />
-              @if (rubro() === 'otros') {
-                <input pInputText type="text" class="w-full mt-2"
-                  [ngModel]="rubroOtros()" (ngModelChange)="rubroOtros.set($event)"
-                  placeholder="Escribí el rubro del cliente" maxlength="100" />
-              }
+              <p-iconfield iconPosition="left">
+                <p-inputicon><i class="pi pi-at"></i></p-inputicon>
+                <p-autoComplete inputId="clienteEmailInput"
+                  [ngModel]="clienteEmail()" (ngModelChange)="clienteEmail.set($event ?? '')"
+                  [suggestions]="sugerenciasEmail()" (completeMethod)="onCompletarEmail($event)"
+                  [forceSelection]="false" [delay]="0"
+                  placeholder="cliente@gmail.com"
+                  inputStyleClass="w-full pl-10" class="w-full" />
+              </p-iconfield>
             </div>
             <div>
               <label for="observacionesInput" class="kt-label">

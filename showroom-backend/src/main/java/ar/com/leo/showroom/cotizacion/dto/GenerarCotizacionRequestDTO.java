@@ -20,10 +20,7 @@ import java.util.List;
  */
 public record GenerarCotizacionRequestDTO(
         String clienteNombre,
-        String clienteTelefono,
         String clienteEmail,
-        /** Rubro comercial del cliente (bar, restaurant, etc.) — string libre. */
-        String rubro,
         String observaciones,
 
         /** Monto base CON IVA principal (el operador lo carga con IVA, igual

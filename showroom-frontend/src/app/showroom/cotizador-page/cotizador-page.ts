@@ -16,7 +16,6 @@ import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
-import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -66,7 +65,6 @@ import { PageHeader } from '../page-header/page-header';
     DialogModule,
     IconFieldModule,
     InputIconModule,
-    InputMaskModule,
     InputNumberModule,
     InputTextModule,
     SelectModule,
@@ -124,22 +122,9 @@ export class CotizadorPage {
   // Datos del cliente (todos opcionales — caso típico: cotización rápida
   // sin tener al cliente registrado todavía).
   readonly clienteNombre = signal('');
-  readonly clienteTelefono = signal('');
   readonly clienteEmail = signal('');
   readonly sugerenciasEmail = signal<string[]>([]);
-  readonly rubro = signal<string | null>(null);
-  readonly rubroOtros = signal('');
   readonly observaciones = signal('');
-
-  readonly opcionesRubro: { label: string; value: string }[] = [
-    { label: 'Bar', value: 'bar' },
-    { label: 'Restaurant', value: 'restaurant' },
-    { label: 'Catering', value: 'catering' },
-    { label: 'Cafetería', value: 'cafeteria' },
-    { label: 'Panadería', value: 'panaderia' },
-    { label: 'Pastelería', value: 'pasteleria' },
-    { label: 'Otros…', value: 'otros' },
-  ];
 
   readonly formasPago = this.precioPerfil.formasPago;
 
@@ -369,9 +354,7 @@ export class CotizadorPage {
     const m2 = this.montoBase2() ?? 0;
     return {
       clienteNombre: this.clienteNombre().trim() || null,
-      clienteTelefono: this.clienteTelefono().trim() || null,
       clienteEmail: this.clienteEmail().trim() || null,
-      rubro: this.rubroFinal(),
       observaciones: this.observaciones().trim() || null,
       montoBaseConIva: this.montoBase() ?? 0,
       porcIva: this.porcIva() ?? 21,
@@ -383,16 +366,6 @@ export class CotizadorPage {
     };
   }
 
-  private rubroFinal(): string | null {
-    const r = this.rubro();
-    if (!r) return null;
-    if (r === 'otros') {
-      const libre = this.rubroOtros().trim();
-      return libre || null;
-    }
-    return r;
-  }
-
   vaciar(): void {
     this.montoBase.set(0);
     // IVA vuelve al default 21 — caso típico, el operador igual lo puede
@@ -401,10 +374,7 @@ export class CotizadorPage {
     this.montoBase2.set(0);
     this.porcIva2.set(10.5);
     this.clienteNombre.set('');
-    this.clienteTelefono.set('');
     this.clienteEmail.set('');
-    this.rubro.set(null);
-    this.rubroOtros.set('');
     this.observaciones.set('');
     this.limpiarPagoParcial();
   }

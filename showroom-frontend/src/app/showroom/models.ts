@@ -1013,9 +1013,7 @@ export interface PresupuestoEmailEvent {
 /** Payload del POST /cotizacion-financiera/preview y /enviar. */
 export interface GenerarCotizacionRequest {
   clienteNombre?: string | null;
-  clienteTelefono?: string | null;
   clienteEmail?: string | null;
-  rubro?: string | null;
   observaciones?: string | null;
   /** Monto base CON IVA principal (el operador lo carga con IVA, igual que en
    *  scan/presupuesto). Puede ser 0 si la cotización usa SOLO el segundo
