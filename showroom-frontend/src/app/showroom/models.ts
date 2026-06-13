@@ -1038,60 +1038,10 @@ export interface EnviarCotizacionRequest {
   cotizacion: GenerarCotizacionRequest;
 }
 
-/** Ítem del listado del historial /cotizador/historial. */
-export interface CotizacionListItem {
-  id: number;
-  creadoAt: string;
-  modificadoAt: string | null;
-  clienteNombre: string | null;
-  clienteTelefono: string | null;
-  clienteEmail: string | null;
-  rubro: string | null;
-  montoBaseConIva: number | null;
-  creadoPor: string | null;
-}
-
-export interface CotizacionListPage {
-  items: CotizacionListItem[];
-  total: number;
-  page: number;
-  size: number;
-}
-
-export interface ListarCotizacionesParams {
-  id?: number;
-  q?: string;
-  desde?: string;
-  hasta?: string;
-  page?: number;
-  size?: number;
-  sortField?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-/** Snapshot completo de una cotización persistida. Para pre-llenar la
- *  pantalla /cotizador/editar/:id. */
-export interface CotizacionDetalle {
-  id: number;
-  creadoAt: string;
-  modificadoAt: string | null;
-  clienteNombre: string | null;
-  clienteTelefono: string | null;
-  clienteEmail: string | null;
-  rubro: string | null;
-  observaciones: string | null;
-  montoBaseConIva: number;
-  porcIva: number | null;
-  montoBaseConIva2?: number | null;
-  porcIva2?: number | null;
-  formasPago: PresupuestoFormaPagoSnapshot[];
-}
-
 export type CotizacionEmailEstado = 'SENT' | 'FAILED' | 'AMBIGUO';
 
 export interface CotizacionEmailEvent {
   estado: CotizacionEmailEstado;
-  cotizacionId: number;
   email: string;
   error?: string | null;
 }

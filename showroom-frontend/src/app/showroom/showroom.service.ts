@@ -29,11 +29,8 @@ import {
   PedidoListPage,
   PerfilEtiquetas,
   PickitConfig,
-  CotizacionDetalle,
-  CotizacionListPage,
   EnviarCotizacionRequest,
   GenerarCotizacionRequest,
-  ListarCotizacionesParams,
   PresupuestoDetalle,
   PresupuestoListPage,
   PresupuestoVisor,
@@ -687,8 +684,8 @@ export class ShowroomService {
   // Cotización financiera — pantalla /cotizador
   // =====================================================
 
-  /** Genera el PDF de cotización (persiste + devuelve blob). El header
-   *  `X-Cotizacion-Id` trae el número asignado. */
+  /** Genera el PDF de cotización al vuelo y devuelve el blob. Instantáneo:
+   *  no persiste ni asigna número de cotización. */
   previewCotizacionFinanciera(req: GenerarCotizacionRequest): Observable<HttpResponse<Blob>> {
     return this.http.post(`${this.base}/cotizacion-financiera/preview`, req, {
       observe: 'response',
@@ -696,60 +693,12 @@ export class ShowroomService {
     });
   }
 
-  /** Genera + persiste + envía PDF por email (async — SSE
+  /** Genera + envía PDF por email (async — SSE
    *  `cotizacion-financiera-email`). */
   enviarCotizacionFinanciera(req: EnviarCotizacionRequest):
-      Observable<{ message: string; cotizacionId: number; email: string }> {
-    return this.http.post<{ message: string; cotizacionId: number; email: string }>(
+      Observable<{ message: string; email: string }> {
+    return this.http.post<{ message: string; email: string }>(
       `${this.base}/cotizacion-financiera/enviar`, req);
-  }
-
-  /** Listado paginado del historial. */
-  listarCotizacionesFinancieras(opts: ListarCotizacionesParams = {}): Observable<CotizacionListPage> {
-    let params = new HttpParams()
-      .set('page', opts.page ?? 0)
-      .set('size', opts.size ?? 50);
-    if (opts.id != null) params = params.set('id', opts.id);
-    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
-    if (opts.desde) params = params.set('desde', opts.desde);
-    if (opts.hasta) params = params.set('hasta', opts.hasta);
-    if (opts.sortField) params = params.set('sortField', opts.sortField);
-    if (opts.sortOrder) params = params.set('sortOrder', opts.sortOrder);
-    return this.http.get<CotizacionListPage>(`${this.base}/cotizacion-financiera`, { params });
-  }
-
-  /** Soft-delete del historial. */
-  eliminarCotizacionFinanciera(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.base}/cotizacion-financiera/${id}`);
-  }
-
-  /** Descarga el PDF regenerado desde el historial. */
-  descargarPdfCotizacionFinanciera(id: number): Observable<HttpResponse<Blob>> {
-    return this.http.get(`${this.base}/cotizacion-financiera/${id}/pdf`, {
-      observe: 'response',
-      responseType: 'blob',
-    });
-  }
-
-  /** Detalle completo para pre-llenar la pantalla de edición. */
-  obtenerDetalleCotizacionFinanciera(id: number): Observable<CotizacionDetalle> {
-    return this.http.get<CotizacionDetalle>(`${this.base}/cotizacion-financiera/${id}/detalle`);
-  }
-
-  /** Actualiza in-place y devuelve el PDF regenerado. */
-  actualizarCotizacionFinanciera(id: number, req: GenerarCotizacionRequest):
-      Observable<HttpResponse<Blob>> {
-    return this.http.put(`${this.base}/cotizacion-financiera/${id}`, req, {
-      observe: 'response',
-      responseType: 'blob',
-    });
-  }
-
-  /** Actualiza + envía por email (async). */
-  actualizarYEnviarCotizacionFinanciera(id: number, req: EnviarCotizacionRequest):
-      Observable<{ message: string; cotizacionId: number; email: string }> {
-    return this.http.put<{ message: string; cotizacionId: number; email: string }>(
-      `${this.base}/cotizacion-financiera/${id}/enviar`, req);
   }
 
   // El stream SSE de /events lo maneja BackendStatusService — su Subject

@@ -82,19 +82,6 @@ export const routes: Routes = [
       import('./showroom/cotizador-page/cotizador-page').then((m) => m.CotizadorPage),
   },
   {
-    path: 'cotizador/editar/:id',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./showroom/cotizador-page/cotizador-page').then((m) => m.CotizadorPage),
-  },
-  {
-    path: 'cotizador/historial',
-    canActivate: [authGuard],
-    loadComponent: () =>
-      import('./showroom/cotizador-historial-page/cotizador-historial-page')
-        .then((m) => m.CotizadorHistorialPage),
-  },
-  {
     // Ruta nueva (mayo 2026): ahora la página unifica clientes de presupuestos
     // y pedidos, así que el path bajo /presupuestos quedaba engañoso. Está en
     // el menú "+" principal del showroom-page.

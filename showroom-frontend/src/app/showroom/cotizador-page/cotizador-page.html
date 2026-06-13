@@ -1,6 +1,6 @@
 <div class="page-container flex flex-col bg-violet-50/60 dark:bg-surface-950 min-h-screen">
   <app-page-header titleIcon="pi pi-calculator" toolbarClass="!bg-violet-100 dark:!bg-surface-900"
-    [title]="esModoEdicion() ? ('Editando cotización #' + cotizacionEditandoId()) : 'Cotizador de financiación'"
+    title="Cotizador de financiación"
     subtitle="Monto + formas de pago, sin productos">
   </app-page-header>
 
@@ -14,8 +14,8 @@
         <!-- Montos a cotizar — soporta DOS montos con tasas de IVA distintas.
              Caso típico: una máquina con 21% + un insumo con 10,5%. Layout
              en 2 columnas (desktop) para aprovechar el ancho horizontal.
-             Cada monto tiene un quick-selector de tasas comunes (21/10,5/27)
-             además del input numérico para tasas custom. Al pie del card se
+             Cada monto tiene las dos tasas fijas (21% naranja / 10,5% azul).
+             Al pie del card se
              muestra el resumen en vivo (total s/IVA + total c/IVA + IVA
              ponderado) para que el operador vea el efecto en el acto. -->
         <p-card class="kt-card">
@@ -33,33 +33,19 @@
               </div>
               <!-- Acciones movidas desde el header para no dejarlo en 2 filas. -->
               <div class="flex items-center gap-1.5 flex-wrap">
-                @if (cargandoEdicion()) {
-                  <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
-                    <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
-                    Cargando cotización…
-                  </span>
-                }
                 <p-button icon="pi pi-trash" label="Vaciar" ariaLabel="Vaciar"
                   class="btn-kt-rojo" (onClick)="vaciar()" [disabled]="!hayMonto()"
                   pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
-                <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
-                  [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                <p-button icon="pi pi-file-pdf" label="Generar PDF"
                   class="btn-kt-azul" [disabled]="!hayMonto() || generandoPreview()"
                   [loading]="generandoPreview()" (onClick)="previsualizar()"
-                  [pTooltip]="esModoEdicion()
-                      ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
-                      : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva'"
+                  pTooltip="Genera el PDF y lo abre en una pestaña nueva"
                   tooltipPosition="bottom" />
-                <p-button icon="pi pi-send"
-                  [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
+                <p-button icon="pi pi-send" label="Enviar"
                   ariaLabel="Enviar por email"
                   class="btn-kt-naranja" [disabled]="!hayMonto()"
                   (onClick)="abrirDialogEnviar()"
                   pTooltip="Generar y enviar la cotización al cliente" tooltipPosition="bottom" />
-                <p-button icon="pi pi-history" label="Historial"
-                  ariaLabel="Ver historial de cotizaciones" class="btn-kt-marron"
-                  routerLink="/cotizador/historial"
-                  pTooltip="Ver cotizaciones generadas anteriormente" tooltipPosition="bottom" />
               </div>
             </div>
           </ng-template>
@@ -101,23 +87,15 @@
                   IVA
                 </span>
                 <div class="flex items-center gap-1">
-                  <!-- Chips de selección rápida de las tasas comunes. -->
+                  <!-- Tasas fijas: 21% y 10,5% (el 10,5% en otro color). -->
                   <button type="button"
                     class="iva-chip"
                     [class.iva-chip--active]="porcIva() === 21"
-                    (click)="porcIva.set(21)">21%</button>
+                    (click)="setPorcIva(21)">21%</button>
                   <button type="button"
-                    class="iva-chip"
+                    class="iva-chip iva-chip--alt"
                     [class.iva-chip--active]="porcIva() === 10.5"
-                    (click)="porcIva.set(10.5)">10,5%</button>
-                  <p-inputNumber inputId="ivaInput"
-                    [ngModel]="porcIva()"
-                    (ngModelChange)="porcIva.set($event ?? 21)"
-                    suffix=" %"
-                    [min]="0" [max]="100"
-                    [maxFractionDigits]="2"
-                    [allowEmpty]="false"
-                    inputStyleClass="!w-20 !text-center !font-bold !py-1 !text-sm" />
+                    (click)="setPorcIva(10.5)">10,5%</button>
                 </div>
               </div>
             </div>
@@ -161,22 +139,15 @@
                   IVA
                 </span>
                 <div class="flex items-center gap-1">
-                  <button type="button"
-                    class="iva-chip"
-                    [class.iva-chip--active]="porcIva2() === 10.5"
-                    (click)="porcIva2.set(10.5)">10,5%</button>
+                  <!-- Tasas fijas: 21% y 10,5% (el 10,5% en otro color). -->
                   <button type="button"
                     class="iva-chip"
                     [class.iva-chip--active]="porcIva2() === 21"
-                    (click)="porcIva2.set(21)">21%</button>
-                  <p-inputNumber inputId="ivaInput2"
-                    [ngModel]="porcIva2()"
-                    (ngModelChange)="porcIva2.set($event ?? 10.5)"
-                    suffix=" %"
-                    [min]="0" [max]="100"
-                    [maxFractionDigits]="2"
-                    [allowEmpty]="false"
-                    inputStyleClass="!w-20 !text-center !font-bold !py-1 !text-sm" />
+                    (click)="setPorcIva2(21)">21%</button>
+                  <button type="button"
+                    class="iva-chip iva-chip--alt"
+                    [class.iva-chip--active]="porcIva2() === 10.5"
+                    (click)="setPorcIva2(10.5)">10,5%</button>
                 </div>
               </div>
             </div>
@@ -490,7 +461,7 @@
     <div class="flex items-start gap-2 p-3 rounded-lg bg-[#FF861C]/10 border border-[#FF861C]/30 text-sm">
       <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
       <span class="text-surface-700 dark:text-surface-200">
-        Se va a generar el PDF y enviar al email del cliente. Se asigna un número de cotización persistente.
+        Se va a generar el PDF y enviar al email del cliente.
       </span>
     </div>
 

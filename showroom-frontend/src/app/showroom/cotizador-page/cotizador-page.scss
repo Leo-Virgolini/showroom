@@ -203,8 +203,8 @@ $kt-marron:  #3B1E09;
   color: var(--p-surface-100);
 }
 
-// Chip de selección rápida de tasa de IVA (21%, 10,5%, etc.).
-// El input numérico al lado queda para tasas custom.
+// Chip de selección de tasa de IVA. Dos tasas fijas por monto: 21% (naranja
+// KT) y 10,5% (variante --alt en azul, para distinguirlas de un vistazo).
 .iva-chip {
   padding: 4px 10px;
   border-radius: 999px;
@@ -237,6 +237,29 @@ $kt-marron:  #3B1E09;
   }
 }
 
+// Variante de la tasa 10,5% — azul, para diferenciarla del 21% (naranja).
+$iva-azul: #2563eb;
+.iva-chip--alt {
+  &:not(.iva-chip--active) {
+    color: $iva-azul;
+    border-color: rgba($iva-azul, 0.4);
+  }
+  &:hover {
+    background: rgba($iva-azul, 0.1);
+    border-color: rgba($iva-azul, 0.5);
+  }
+  &.iva-chip--active {
+    background: $iva-azul;
+    border-color: $iva-azul;
+    box-shadow: 0 2px 6px -1px rgba($iva-azul, 0.4);
+
+    &:hover {
+      background: $iva-azul;
+      color: white;
+    }
+  }
+}
+
 :host-context(.dark) ::ng-deep .iva-chip {
   background: var(--p-surface-900);
   color: var(--p-surface-100);
@@ -244,6 +267,17 @@ $kt-marron:  #3B1E09;
 
   &--active {
     background: $kt-naranja;
+    color: white;
+  }
+}
+
+// La variante azul también en dark (texto más claro inactivo, fondo azul activo).
+:host-context(.dark) ::ng-deep .iva-chip--alt {
+  &:not(.iva-chip--active) {
+    color: #60a5fa;
+  }
+  &.iva-chip--active {
+    background: $iva-azul;
     color: white;
   }
 }

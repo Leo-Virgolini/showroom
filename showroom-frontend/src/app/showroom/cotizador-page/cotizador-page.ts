@@ -9,7 +9,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AutoCompleteCompleteEvent, AutoCompleteModule } from 'primeng/autocomplete';
 import { ButtonModule } from 'primeng/button';
@@ -20,7 +19,6 @@ import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
@@ -52,9 +50,8 @@ import { PageHeader } from '../page-header/page-header';
  * <p>Es una variante "rápida" del presupuestador — no tiene items ni
  * descuentos por línea. Una sola hoja de PDF, una sola tabla de formas.
  *
- * <p>Soporta modo edición igual que /presupuestos: al cargar con
- * {@code :id} en la URL, el form se pre-llena y "Generar" hace PUT en
- * lugar de POST.
+ * <p>Herramienta instantánea: genera el PDF al vuelo (preview) y opcionalmente
+ * lo envía por email. No persiste cotizaciones ni tiene historial/edición.
  */
 @Component({
   selector: 'app-cotizador-page',
@@ -72,11 +69,9 @@ import { PageHeader } from '../page-header/page-header';
     InputMaskModule,
     InputNumberModule,
     InputTextModule,
-    ProgressSpinnerModule,
     SelectModule,
     TextareaModule,
     TooltipModule,
-    RouterLink,
     PageHeader,  ],
   templateUrl: './cotizador-page.html',
   styleUrl: './cotizador-page.scss',
@@ -87,14 +82,7 @@ export class CotizadorPage {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
-
-
-  /** Modo edición: si la URL trae `:id`, lo cargamos y al guardar usamos PUT. */
-  readonly cotizacionEditandoId = signal<number | null>(null);
-  readonly cargandoEdicion = signal(false);
-  readonly esModoEdicion = computed(() => this.cotizacionEditandoId() != null);
 
   // -----------------------------
   // Estado del cotizador
@@ -110,15 +98,28 @@ export class CotizadorPage {
   // -----------------------------
   /** Monto base 1 CON IVA — el operador lo carga con IVA incluido. */
   readonly montoBase = signal<number>(0);
-  /** % de IVA aplicado a las formas que lo incluyen. Default 21 (tasa
-   *  general AR) editable porque varía según el producto: 10.5 para
-   *  esenciales, 27 para servicios públicos. */
+  /** % de IVA del monto 1. Solo dos tasas posibles (21% / 10,5%); cuando se
+   *  usan los dos montos son complementarias (ver {@link setPorcIva}). */
   readonly porcIva = signal<number>(21);
 
   /** Segundo monto base CON IVA, opcional — 0 = no se usa. */
   readonly montoBase2 = signal<number>(0);
-  /** % de IVA del segundo monto. Default 10.5 (productos esenciales). */
+  /** % de IVA del monto 2 — complementario del monto 1 (10,5% por default). */
   readonly porcIva2 = signal<number>(10.5);
+
+  /** Selecciona el IVA del monto 1 y fija el COMPLEMENTARIO en el monto 2:
+   *  solo hay dos tasas (21% / 10,5%) y cotizar con dos montos implica tasas
+   *  DISTINTAS, así que nunca coinciden. */
+  setPorcIva(valor: number): void {
+    this.porcIva.set(valor);
+    this.porcIva2.set(valor === 21 ? 10.5 : 21);
+  }
+
+  /** Ídem desde el monto 2 — fija el complementario en el monto 1. */
+  setPorcIva2(valor: number): void {
+    this.porcIva2.set(valor);
+    this.porcIva.set(valor === 21 ? 10.5 : 21);
+  }
 
   // Datos del cliente (todos opcionales — caso típico: cotización rápida
   // sin tener al cliente registrado todavía).
@@ -343,68 +344,25 @@ export class CotizadorPage {
           this.toast.add({
             severity: 'success',
             summary: 'Cotización enviada',
-            detail: `#${ev.cotizacionId} → ${ev.email}`,
+            detail: `Enviada a ${ev.email}`,
             life: 6000,
           });
         } else if (ev.estado === 'AMBIGUO') {
           this.toast.add({
             severity: 'warn',
             summary: 'Cotización probablemente enviada',
-            detail: `#${ev.cotizacionId} → ${ev.email}: ${ev.error ?? 'Gmail tardó en confirmar.'}`,
+            detail: `${ev.email}: ${ev.error ?? 'Gmail tardó en confirmar.'}`,
             life: 10000,
           });
         } else {
           this.toast.add({
             severity: 'error',
             summary: 'No se pudo enviar la cotización',
-            detail: `#${ev.cotizacionId} — ${ev.error ?? 'Error desconocido'}`,
+            detail: ev.error ?? 'Error desconocido',
             life: 8000,
           });
         }
       });
-
-    // Si llega `:id` en la URL, modo edición.
-    const idParam = this.route.snapshot.paramMap.get('id');
-    if (idParam) {
-      const id = Number(idParam);
-      if (Number.isFinite(id) && id > 0) {
-        this.cargarParaEditar(id);
-      }
-    }
-  }
-
-  private cargarParaEditar(id: number): void {
-    this.cargandoEdicion.set(true);
-    this.api.obtenerDetalleCotizacionFinanciera(id).subscribe({
-      next: (det) => {
-        this.cotizacionEditandoId.set(det.id);
-        this.montoBase.set(det.montoBaseConIva ?? 0);
-        this.porcIva.set(det.porcIva ?? 21);
-        this.montoBase2.set(det.montoBaseConIva2 ?? 0);
-        this.porcIva2.set(det.porcIva2 ?? 10.5);
-        this.clienteNombre.set(det.clienteNombre ?? '');
-        this.clienteTelefono.set(det.clienteTelefono ?? '');
-        this.clienteEmail.set(det.clienteEmail ?? '');
-        this.observaciones.set(det.observaciones ?? '');
-        const rubroGuardado = det.rubro ?? null;
-        if (!rubroGuardado) {
-          this.rubro.set(null);
-          this.rubroOtros.set('');
-        } else if (this.opcionesRubro.some((o) => o.value === rubroGuardado)) {
-          this.rubro.set(rubroGuardado);
-          this.rubroOtros.set('');
-        } else {
-          this.rubro.set('otros');
-          this.rubroOtros.set(rubroGuardado);
-        }
-        this.cargandoEdicion.set(false);
-      },
-      error: (err) => {
-        this.cargandoEdicion.set(false);
-        toastError(this.toast, 'Editar', err,
-          'No se pudo cargar la cotización. Volvé al historial e intentá de nuevo.');
-      },
-    });
   }
 
   private armarPayload(): GenerarCotizacionRequest {
@@ -456,19 +414,14 @@ export class CotizadorPage {
       this.warn('Cargá un monto mayor a cero para cotizar.');
       return;
     }
-    const editandoId = this.cotizacionEditandoId();
-    const header = editandoId != null ? 'Guardar cambios' : 'Generar cotización';
-    const message = editandoId != null
-      ? `Se van a guardar los cambios de la cotización #${editandoId} y se abrirá el PDF actualizado.`
-      : `Se va a generar el PDF de la cotización por ${this.formatear(this.totalConIva())} y quedará registrada en el historial.\n\n¿Continuar?`;
 
     this.confirmationService.confirm({
-      header,
-      message,
-      icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
+      header: 'Generar cotización',
+      message: `Se va a generar el PDF de la cotización por ${this.formatear(this.totalConIva())} y se abrirá en una pestaña nueva.\n\n¿Continuar?`,
+      icon: 'pi pi-file-pdf',
       acceptButtonProps: {
-        label: editandoId != null ? 'Guardar cambios' : 'Generar PDF',
-        icon: editandoId != null ? 'pi pi-save' : 'pi pi-file-pdf',
+        label: 'Generar PDF',
+        icon: 'pi pi-file-pdf',
       },
       rejectButtonProps: {
         label: 'Cancelar',
@@ -482,12 +435,8 @@ export class CotizadorPage {
   private ejecutarPrevisualizar(): void {
     const previewTab = window.open('about:blank', '_blank');
     this.generandoPreview.set(true);
-    const editandoId = this.cotizacionEditandoId();
-    const request$ = editandoId != null
-      ? this.api.actualizarCotizacionFinanciera(editandoId, this.armarPayload())
-      : this.api.previewCotizacionFinanciera(this.armarPayload());
 
-    request$.subscribe({
+    this.api.previewCotizacionFinanciera(this.armarPayload()).subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
         const resultado = abrirPdfEnPreview(res, 'cotizacion.pdf', previewTab);
@@ -495,16 +444,12 @@ export class CotizadorPage {
           this.warn('El backend no devolvió un PDF.');
           return;
         }
-        const detallePreview = editandoId != null
-          ? `Cotización #${editandoId} actualizada — se abrió para previsualizar.`
-          : 'Se abrió para previsualizar. Podés bajar el PDF desde el visor.';
-        const detalleDescarga = editandoId != null
-          ? `Cotización #${editandoId} actualizada — PDF descargado (el browser bloqueó la pestaña preview).`
-          : 'PDF descargado — el browser bloqueó la pestaña preview.';
         this.toast.add({
           severity: 'success',
-          summary: editandoId != null ? 'Cambios guardados' : 'Cotización generada',
-          detail: resultado.previewAbierto ? detallePreview : detalleDescarga,
+          summary: 'Cotización generada',
+          detail: resultado.previewAbierto
+            ? 'Se abrió para previsualizar. Podés bajar el PDF desde el visor.'
+            : 'PDF descargado — el browser bloqueó la pestaña preview.',
           life: 4000,
         });
       },
@@ -533,18 +478,14 @@ export class CotizadorPage {
       cotizacion: this.armarPayload(),
     };
     this.enviandoEmail.set(true);
-    const editandoId = this.cotizacionEditandoId();
-    const request$ = editandoId != null
-      ? this.api.actualizarYEnviarCotizacionFinanciera(editandoId, payload)
-      : this.api.enviarCotizacionFinanciera(payload);
-    request$.subscribe({
+    this.api.enviarCotizacionFinanciera(payload).subscribe({
       next: (res) => {
         this.enviandoEmail.set(false);
         this.mostrarDialogEnviar.set(false);
         this.toast.add({
           severity: 'info',
-          summary: editandoId != null ? 'Cambios guardados — envío encolado' : 'Envío encolado',
-          detail: `Cotización #${res.cotizacionId} → ${res.email}. El toast confirmará cuando salga.`,
+          summary: 'Envío encolado',
+          detail: `Cotización → ${res.email}. El toast confirmará cuando salga.`,
           life: 5000,
         });
       },

@@ -4,7 +4,6 @@ import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
-import ar.com.leo.showroom.cotizacion.entity.CotizacionFinanciera;
 import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.Color;
@@ -38,6 +37,7 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -72,6 +72,10 @@ public class CotizacionFinancieraPdfGenerator {
     private static final Color GRIS_OSCURO = KtPdfColores.GRIS_OSCURO;
     private static final Color GRIS_MEDIO = KtPdfColores.GRIS_MEDIO;
     private static final Color GRIS_LINEA = KtPdfColores.GRIS_LINEA;
+    /** Fondo del banner de montos (durazno claro de marca) + su borde suave,
+     *  reusados para el divisor entre montos y la franja del total. */
+    private static final Color BANNER_FONDO = new DeviceRgb(254, 243, 226);
+    private static final Color NARANJA_SUAVE = new DeviceRgb(235, 190, 140);
 
     /** Mismos colores que las cards de formas de pago en el presupuesto —
      *  sincronizado con .color-1..10 en el frontend. Centralizado en
@@ -81,7 +85,7 @@ public class CotizacionFinancieraPdfGenerator {
     private static final ZoneId TZ_AR = ZoneId.of("America/Argentina/Buenos_Aires");
     private static final DateTimeFormatter FECHA_HORA_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
-    public byte[] generar(CotizacionFinanciera cotizacion, GenerarCotizacionRequestDTO datos) {
+    public byte[] generar(GenerarCotizacionRequestDTO datos, Instant emitidoAt) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
              PdfWriter writer = new PdfWriter(out);
              PdfDocument pdfDoc = new PdfDocument(writer);
@@ -94,8 +98,8 @@ public class CotizacionFinancieraPdfGenerator {
             pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE,
                     new FooterHandler(pdfDoc, logoFooter));
 
-            agregarHeader(doc, cotizacion, logoHeader);
-            agregarCardCliente(doc, cotizacion);
+            agregarHeader(doc, logoHeader);
+            agregarCardCliente(doc, datos, emitidoAt);
             agregarBannerMonto(doc, datos);
             agregarFormasPago(doc, datos.formasPago());
             agregarNotas(doc);
@@ -106,35 +110,31 @@ public class CotizacionFinancieraPdfGenerator {
             doc.close();
             return out.toByteArray();
         } catch (Exception e) {
-            log.error("Error generando PDF de cotización {}: {}",
-                    cotizacion.getId(), e.getMessage(), e);
+            log.error("Error generando PDF de cotización: {}", e.getMessage(), e);
             throw new RuntimeException("Error generando PDF de cotización", e);
         }
     }
 
-    /** Filename: cotizacion-{cliente}-N{id}-ddMMyyyy.pdf. */
-    public String nombreArchivo(CotizacionFinanciera cotizacion) {
-        String cliente = sanitizar(Optional.ofNullable(cotizacion.getClienteNombre()).orElse(""));
-        String fecha = cotizacion.getCreadoAt() != null
-                ? cotizacion.getCreadoAt().atZone(TZ_AR).toLocalDate()
+    /** Filename: cotizacion-{cliente}-ddMMyyyy.pdf. */
+    public String nombreArchivo(GenerarCotizacionRequestDTO datos, Instant emitidoAt) {
+        String cliente = sanitizar(Optional.ofNullable(datos.clienteNombre()).orElse(""));
+        String fecha = emitidoAt != null
+                ? emitidoAt.atZone(TZ_AR).toLocalDate()
                         .format(DateTimeFormatter.ofPattern("ddMMyyyy"))
                 : "";
-        String numero = cotizacion.getId() != null
-                ? "N" + cotizacion.getId()
-                : "borrador";
-        return "cotizacion-" + cliente + "-" + numero
+        return "cotizacion" + (cliente.isEmpty() ? "" : "-" + cliente)
                 + (fecha.isEmpty() ? "" : "-" + fecha) + ".pdf";
     }
 
     // =====================================================
-    // Header marrón con logo + número de cotización
+    // Header marrón con logo + título de cotización
     // =====================================================
-    private void agregarHeader(Document doc, CotizacionFinanciera c, ImageData logoHeader) {
+    private void agregarHeader(Document doc, ImageData logoHeader) {
         Div headerWrapper = new Div()
                 .setBackgroundColor(KT_MARRON)
                 .setBorderRadius(new BorderRadius(10f))
                 .setPadding(12)
-                .setMarginBottom(2);
+                .setMarginBottom(4);
 
         Table grid = new Table(UnitValue.createPercentArray(new float[]{2.2f, 1.5f}))
                 .useAllAvailableWidth()
@@ -163,14 +163,6 @@ public class CotizacionFinancieraPdfGenerator {
                 .setCharacterSpacing(1.5f)
                 .setFontColor(KT_NARANJA)
                 .setMargin(0));
-        if (c.getId() != null) {
-            celdaTitulo.add(new Paragraph("# " + c.getId())
-                    .simulateBold()
-                    .setFontSize(22)
-                    .setFontColor(ColorConstants.WHITE)
-                    .setMarginTop(2)
-                    .setMargin(0));
-        }
         celdaTitulo.add(new Paragraph("Precios sujetos a modificación")
                 .setFontSize(8)
                 .setFontColor(new DeviceRgb(200, 180, 160))
@@ -185,13 +177,13 @@ public class CotizacionFinancieraPdfGenerator {
     // =====================================================
     // Card del cliente
     // =====================================================
-    private void agregarCardCliente(Document doc, CotizacionFinanciera c) {
+    private void agregarCardCliente(Document doc, GenerarCotizacionRequestDTO datos, Instant emitidoAt) {
         Div card = new Div()
-                .setMarginTop(4)
+                .setMarginTop(6)
                 .setBackgroundColor(ColorConstants.WHITE)
                 .setBorder(new SolidBorder(GRIS_LINEA, 1f))
                 .setBorderRadius(new BorderRadius(10f))
-                .setPadding(6);
+                .setPadding(8);
 
         Table grid = new Table(UnitValue.createPercentArray(new float[]{1.8f, 1f}))
                 .useAllAvailableWidth()
@@ -203,35 +195,27 @@ public class CotizacionFinancieraPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(2);
         celdaCliente.add(labelChico("CLIENTE"));
-        celdaCliente.add(new Paragraph(safe(c.getClienteNombre(), "—"))
+        celdaCliente.add(new Paragraph(safe(datos.clienteNombre(), "—"))
                 .simulateBold()
                 .setFontSize(11)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
         grid.addCell(celdaCliente);
 
-        // Columna 2: fecha (con "ACTUALIZADO" si fue editado).
+        // Columna 2: fecha y hora de emisión.
         Cell celdaMeta = new Cell()
                 .setBorder(Border.NO_BORDER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(2);
-        boolean fueEditado = c.getModificadoAt() != null;
-        celdaMeta.add(labelChico(fueEditado ? "ACTUALIZADO" : "FECHA Y HORA"));
-        var fechaPrincipal = fueEditado ? c.getModificadoAt() : c.getCreadoAt();
-        String fechaHora = fechaPrincipal != null
-                ? fechaPrincipal.atZone(TZ_AR).format(FECHA_HORA_FMT)
+        celdaMeta.add(labelChico("FECHA Y HORA"));
+        String fechaHora = emitidoAt != null
+                ? emitidoAt.atZone(TZ_AR).format(FECHA_HORA_FMT)
                 : "";
         celdaMeta.add(new Paragraph(fechaHora)
                 .simulateBold()
                 .setFontSize(11)
                 .setFontColor(GRIS_OSCURO)
                 .setMargin(0));
-        if (fueEditado && c.getCreadoAt() != null) {
-            celdaMeta.add(new Paragraph("Emitido " + c.getCreadoAt().atZone(TZ_AR).format(FECHA_HORA_FMT))
-                    .setFontSize(7.5f)
-                    .setFontColor(GRIS_LINEA)
-                    .setMargin(0));
-        }
         grid.addCell(celdaMeta);
 
         card.add(grid);
@@ -255,70 +239,77 @@ public class CotizacionFinancieraPdfGenerator {
         boolean tiene2 = monto2.signum() > 0;
 
         Div banner = new Div()
-                .setMarginTop(8)
-                .setBackgroundColor(new DeviceRgb(254, 243, 226))
+                .setMarginTop(12)
+                .setBackgroundColor(BANNER_FONDO)
                 .setBorder(new SolidBorder(KT_NARANJA, 1.5f))
                 .setBorderRadius(new BorderRadius(10f))
-                .setPadding(10);
+                .setPadding(16);
 
-        banner.add(new Paragraph(tiene2 ? "MONTOS A COTIZAR" : "MONTO A COTIZAR")
+        Paragraph titulo = new Paragraph(tiene2 ? "MONTOS A COTIZAR" : "MONTO A COTIZAR")
                 .simulateBold()
-                .setFontSize(10)
-                .setCharacterSpacing(1.5f)
+                .setFontSize(9.5f)
+                .setCharacterSpacing(2f)
                 .setFontColor(KT_MARRON)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setMargin(0));
+                .setMargin(0);
+        titulo.setMarginBottom(tiene1 && tiene2 ? 8 : 4);
+        banner.add(titulo);
 
         if (tiene1 && tiene2) {
             Table dosCols = new Table(UnitValue.createPercentArray(new float[]{1f, 1f}))
                     .useAllAvailableWidth()
-                    .setBorder(Border.NO_BORDER)
-                    .setMarginTop(4);
-            dosCols.addCell(celdaMontoIva(monto1, iva1));
+                    .setBorder(Border.NO_BORDER);
+            // Divisor vertical fino entre los dos montos (borde derecho de la
+            // primera celda) para separarlos visualmente con claridad.
+            dosCols.addCell(celdaMontoIva(monto1, iva1)
+                    .setBorderRight(new SolidBorder(NARANJA_SUAVE, 0.75f)));
             dosCols.addCell(celdaMontoIva(monto2, iva2));
             banner.add(dosCols);
 
-            // Mostramos AMBOS totales (sin y con IVA) en una sola línea para
-            // que el cliente vea de un vistazo el precio neto y el facturado.
-            // Sin esto, solo veía "Total sin IVA" y tenía que deducir el con-IVA
-            // mirando la card "Transferencia con IVA" en las formas de pago.
-            // Montos ya CON IVA: el total c/IVA es la suma directa; el neto
-            // se deriva dividiendo cada monto por (1 + su IVA).
+            // Total en una FRANJA blanca destacada (no una línea suelta), para
+            // que el cliente lea de un vistazo el neto y el facturado. Montos ya
+            // CON IVA: el total c/IVA es la suma directa; el neto se deriva
+            // dividiendo cada monto por (1 + su IVA).
             BigDecimal totalConIva = monto1.add(monto2);
             BigDecimal totalSinIva = PrecioPerfilCalculator.calcularSinIva(monto1, iva1)
                     .add(PrecioPerfilCalculator.calcularSinIva(monto2, iva2));
-            banner.add(new Paragraph()
-                    .add(new com.itextpdf.layout.element.Text("Total sin IVA: ").simulateBold())
+            Div franjaTotal = new Div()
+                    .setBackgroundColor(ColorConstants.WHITE)
+                    .setBorder(new SolidBorder(NARANJA_SUAVE, 1f))
+                    .setBorderRadius(new BorderRadius(7f))
+                    .setPadding(8)
+                    .setMarginTop(12);
+            franjaTotal.add(new Paragraph()
+                    .add(new com.itextpdf.layout.element.Text("TOTAL SIN IVA  ")
+                            .setFontSize(8).setCharacterSpacing(0.5f).setFontColor(GRIS_MEDIO))
                     .add(new com.itextpdf.layout.element.Text(PdfFormatoUtils.formatPesos(totalSinIva))
-                            .simulateBold()
-                            .setFontColor(KT_MARRON))
-                    .add(new com.itextpdf.layout.element.Text("    ·    ")
-                            .setFontColor(GRIS_MEDIO))
-                    .add(new com.itextpdf.layout.element.Text("Total con IVA: ").simulateBold())
+                            .simulateBold().setFontSize(12).setFontColor(KT_MARRON))
+                    .add(new com.itextpdf.layout.element.Text("        ")
+                            .setFontColor(NARANJA_SUAVE))
+                    .add(new com.itextpdf.layout.element.Text("TOTAL CON IVA  ")
+                            .setFontSize(8).setCharacterSpacing(0.5f).setFontColor(GRIS_MEDIO))
                     .add(new com.itextpdf.layout.element.Text(PdfFormatoUtils.formatPesos(totalConIva))
-                            .simulateBold()
-                            .setFontColor(KT_NARANJA))
-                    .setFontSize(11)
-                    .setFontColor(KT_MARRON)
+                            .simulateBold().setFontSize(13).setFontColor(KT_NARANJA))
                     .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginTop(6)
                     .setMargin(0));
+            banner.add(franjaTotal);
         } else {
             BigDecimal monto = tiene1 ? monto1 : monto2;
             BigDecimal iva = tiene1 ? iva1 : iva2;
             banner.add(new Paragraph(PdfFormatoUtils.formatPesos(monto))
                     .simulateBold()
-                    .setFontSize(26)
+                    .setFontSize(28)
                     .setFontColor(KT_NARANJA)
                     .setTextAlignment(TextAlignment.CENTER)
-                    .setMarginTop(2)
-                    .setMargin(0));
+                    .setMargin(0)
+                    .setMarginTop(2));
             banner.add(new Paragraph(
                     "precio con IVA · IVA " + iva.stripTrailingZeros().toPlainString() + "%")
                     .setFontSize(9)
                     .setFontColor(GRIS_MEDIO)
                     .setTextAlignment(TextAlignment.CENTER)
-                    .setMargin(0));
+                    .setMargin(0)
+                    .setMarginTop(3));
         }
 
         doc.add(banner);
@@ -364,11 +355,11 @@ public class CotizacionFinancieraPdfGenerator {
         doc.add(new Paragraph("FORMAS DE PAGO DISPONIBLES")
                 .simulateBold()
                 .setFontSize(10)
-                .setCharacterSpacing(1.5f)
+                .setCharacterSpacing(2f)
                 .setFontColor(KT_MARRON)
                 .setMargin(0)
-                .setMarginTop(18)
-                .setMarginBottom(6));
+                .setMarginTop(20)
+                .setMarginBottom(8));
 
         int idxMejor = calcularIndiceMejorPrecio(formas);
 
@@ -448,11 +439,11 @@ public class CotizacionFinancieraPdfGenerator {
         // borde de la card.
         Div barra = new Div()
                 .setBackgroundColor(borde)
-                .setHeight(7)
-                .setBorderRadius(new BorderRadius(6f))
-                .setMarginTop(3)
-                .setMarginLeft(6)
-                .setMarginRight(6);
+                .setHeight(5)
+                .setBorderRadius(new BorderRadius(5f))
+                .setMarginTop(5)
+                .setMarginLeft(8)
+                .setMarginRight(8);
         card.add(barra);
 
         // Header table: nombre + indicador IVA (inline, izq) y badge MEJOR
@@ -479,7 +470,8 @@ public class CotizacionFinancieraPdfGenerator {
                 .setVerticalAlignment(VerticalAlignment.TOP);
         celdaNombre.add(new Paragraph(safe(f.nombre(), "—"))
                 .simulateBold()
-                .setFontSize(9)
+                .setFontSize(10)
+                .setCharacterSpacing(0.2f)
                 .setFontColor(KT_MARRON)
                 .setMargin(0));
         header.addCell(celdaNombre);
@@ -513,7 +505,7 @@ public class CotizacionFinancieraPdfGenerator {
                 .setFontColor(esMejor ? KT_VERDE : KT_MARRON)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
-                .setMarginTop(6)
+                .setMarginTop(10)
                 .setMarginLeft(6)
                 .setMarginRight(6));
 
@@ -531,11 +523,12 @@ public class CotizacionFinancieraPdfGenerator {
             detalleTexto = "pago único";
         }
         Paragraph detalle = new Paragraph(detalleTexto)
-                .setFontSize(7.5f)
+                .simulateItalic()
+                .setFontSize(8)
                 .setFontColor(GRIS_MEDIO)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMargin(0)
-                .setMarginTop(2)
+                .setMarginTop(4)
                 .setMarginLeft(6)
                 .setMarginRight(6);
         card.add(detalle);

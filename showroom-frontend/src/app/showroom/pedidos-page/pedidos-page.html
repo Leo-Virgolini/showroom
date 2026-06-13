@@ -197,7 +197,13 @@
                   <i class="pi pi-desktop text-[0.7rem]"></i> Showroom
                 </a>
               } @else {
-                <span class="text-xs text-muted-color">—</span>
+                <!-- Pedido del showroom (carrito) creado SIN sesión de atención
+                     iniciada (venta directa de mostrador): es del showroom igual,
+                     pero no hay atención que linkear → "Showroom" atenuado, sin link. -->
+                <span class="inline-flex items-center gap-1 text-xs font-medium text-muted-color"
+                      pTooltip="Pedido directo del showroom, sin sesión de atención asociada" tooltipPosition="top">
+                  <i class="pi pi-desktop text-[0.7rem]"></i> Showroom
+                </span>
               }
             </td>
             <td class="text-center tabular-nums">{{ p.cantidadItems }}</td>

@@ -75,8 +75,6 @@ export class MainMenu {
           styleClass: 'kt-item-violet', routerLink: '/etiquetas' },
         { label: 'Cotizador', icon: 'pi pi-calculator',
           styleClass: 'kt-item-violet', routerLink: '/cotizador' },
-        { label: 'Historial de cotizaciones', icon: 'pi pi-history',
-          styleClass: 'kt-item-violet', routerLink: '/cotizador/historial' },
       ],
     },
     {
