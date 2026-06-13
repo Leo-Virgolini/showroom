@@ -283,12 +283,12 @@
                scroll mientras se mantiene apretado. El input permite tipear
                un número directamente y se clampa al rango [1, maxCantidad]. -->
   <div class="flex items-center justify-center gap-2">
-    <button pButton type="button" icon="pi pi-minus" severity="secondary" [outlined]="true" [disabled]="cantidad() <= 1" (pointerdown)="iniciarStep(-1)" (pointerup)="detenerStep()"
-      (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Restar uno"></button>
+    <button pButton type="button" severity="secondary" [outlined]="true" [disabled]="cantidad() <= 1" (pointerdown)="iniciarStep(-1)" (pointerup)="detenerStep()"
+      (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Restar uno"><i class="pi pi-minus"></i></button>
     <p-inputNumber [ngModel]="cantidad()" (ngModelChange)="actualizarCantidad($event)" [min]="1" [max]="maxCantidad()" [allowEmpty]="false" [useGrouping]="false"
       inputStyleClass="!w-20 !h-14 !text-2xl !font-bold !text-center tabular-nums" aria-label="Cantidad" />
-    <button pButton type="button" icon="pi pi-plus" severity="secondary" [outlined]="true" [disabled]="cantidad() >= maxCantidad()" (pointerdown)="iniciarStep(1)"
-      (pointerup)="detenerStep()" (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Sumar uno"></button>
+    <button pButton type="button" severity="secondary" [outlined]="true" [disabled]="cantidad() >= maxCantidad()" (pointerdown)="iniciarStep(1)"
+      (pointerup)="detenerStep()" (pointerleave)="detenerStep()" (pointercancel)="detenerStep()" class="!h-14 !w-14 !rounded-full touch-none" aria-label="Sumar uno"><i class="pi pi-plus"></i></button>
   </div>
   @if (superaStock()) {
   <div class="flex items-center justify-center gap-2 text-amber-700 dark:text-amber-400 text-sm font-medium">
@@ -296,8 +296,8 @@
     <span>La cantidad supera el stock disponible ({{ r.stockTotal }})</span>
   </div>
   }
-  <button pButton type="button" (click)="agregar()" [disabled]="enviandoAgregar()" [loading]="enviandoAgregar()" icon="pi pi-shopping-cart" label="Agregar al carrito"
-    class="!w-full !h-16 !text-lg !font-bold" severity="primary"></button>
+  <button pButton type="button" (click)="agregar()" [disabled]="enviandoAgregar()" [loading]="enviandoAgregar()"
+    class="!w-full !h-16 !text-lg !font-bold" severity="primary"><i class="pi pi-shopping-cart"></i><span>Agregar al carrito</span></button>
 </div>
 }
 </main>

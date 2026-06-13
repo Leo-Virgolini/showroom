@@ -27,7 +27,7 @@ import { TopActions } from '../top-actions/top-actions';
   imports: [RouterModule, ToolbarModule, TooltipModule, TopActions],
   template: `
     <div class="h-1.5 bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00]"></div>
-    <p-toolbar [styleClass]="'kt-page-header rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 ' + toolbarClass()">
+    <p-toolbar [class]="'kt-page-header rounded-none border-x-0 border-t-0 !px-3 sm:!px-6 !py-1 ' + toolbarClass()">
       <ng-template #start>
         <div class="flex items-center gap-2 sm:gap-3">
           <a routerLink="/" aria-label="Ir al inicio" pTooltip="Ir al inicio" tooltipPosition="bottom"
