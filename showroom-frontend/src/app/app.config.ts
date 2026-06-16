@@ -5,7 +5,7 @@ import {
   isDevMode,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withRouterConfig, RouteReuseStrategy } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { registerLocaleData } from '@angular/common';
 import localeEsAr from '@angular/common/locales/es-AR';
@@ -40,6 +40,7 @@ const KTPreset = definePreset(Aura, {
 });
 
 import { routes } from './app.routes';
+import { ReloadSameUrlReuseStrategy } from './reload-same-url-reuse.strategy';
 import { provideServiceWorker } from '@angular/service-worker';
 import { backendStatusInterceptor } from './showroom/backend-status.interceptor';
 import { clientIdInterceptor } from './showroom/client-id.interceptor';
@@ -61,7 +62,13 @@ export const appConfig: ApplicationConfig = {
     // en vez de tener que componer un <p-dialog> por cada caso.
     ConfirmationService,
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes),
+    // onSameUrlNavigation 'reload': sin esto, clickear el link de la pantalla
+    // en la que ya estamos se ignora. Con 'reload' la navegación se procesa y,
+    // junto con ReloadSameUrlReuseStrategy, recrea el componente para que la
+    // pantalla arranque en limpio (formulario/filtros reseteados).
+    provideRouter(routes, withRouterConfig({ onSameUrlNavigation: 'reload' })),
+    ReloadSameUrlReuseStrategy,
+    { provide: RouteReuseStrategy, useExisting: ReloadSameUrlReuseStrategy },
     provideHttpClient(
       withFetch(),
       // CSRF: Spring Security manda la cookie `XSRF-TOKEN` y espera el header

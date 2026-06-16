@@ -1141,6 +1141,8 @@
         <span class="inline-flex items-center px-2 py-1 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-xs font-bold">
           {{ p.sku }}
         </span>
+        <!-- Badge "Máq. Industrial" para rubros sin descuento. El rubro normal
+             NO se muestra acá: ya aparece en su propio chip "Rubro" más abajo. -->
         @if (esRubroSinDescuento(p.rubro)) {
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
                        bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
@@ -1149,10 +1151,6 @@
                 tooltipPosition="top">
             <i class="pi pi-wrench text-[9px]"></i>
             Máq. Industrial
-          </span>
-        } @else if (p.rubro) {
-          <span class="text-[10px] text-muted-color uppercase tracking-wide">
-            {{ p.rubro }}
           </span>
         }
         @if (p.habilitado === false) {

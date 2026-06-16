@@ -63,6 +63,7 @@
         stripedRows>
         <ng-template #header>
           <tr>
+            <th style="width: 3rem"></th>
             <th style="width: 5rem" class="text-center" pSortableColumn="id">
               <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> # <p-sortIcon field="id" />
             </th>
@@ -95,7 +96,14 @@
         </ng-template>
 
         <ng-template #body let-p>
-          <tr>
+          <tr [class.bg-amber-50]="estaExpandido(p.id)" [class.dark:bg-surface-800]="estaExpandido(p.id)">
+            <td class="text-center">
+              <p-button
+                [icon]="estaExpandido(p.id) ? 'pi pi-chevron-down' : 'pi pi-chevron-right'"
+                severity="secondary" [text]="true" [rounded]="true" size="small"
+                (onClick)="toggleRow(p)"
+                ariaLabel="Ver detalle del presupuesto" />
+            </td>
             <td class="text-center font-mono font-bold text-[#FF861C]">
               {{ p.id }}
             </td>
@@ -232,11 +240,162 @@
               </div>
             </td>
           </tr>
+
+          @if (estaExpandido(p.id)) {
+            <tr class="bg-amber-50/60 dark:bg-surface-900">
+              <td colspan="11" class="p-4">
+                @if (estaCargandoDetalle(p.id)) {
+                  <!-- Skeleton con el shape aproximado del detalle (dos columnas
+                       Cliente/Presupuesto + lista de productos). -->
+                  <div class="flex flex-col gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div class="flex flex-col gap-2">
+                        <p-skeleton width="40%" height="0.9rem" />
+                        <p-skeleton width="100%" height="1.4rem" class="!mt-2" />
+                        <p-skeleton width="90%" height="1.4rem" />
+                        <p-skeleton width="80%" height="1.4rem" />
+                      </div>
+                      <div class="flex flex-col gap-2">
+                        <p-skeleton width="40%" height="0.9rem" />
+                        <p-skeleton width="100%" height="1.4rem" class="!mt-2" />
+                        <p-skeleton width="90%" height="1.4rem" />
+                        <p-skeleton width="80%" height="1.4rem" />
+                      </div>
+                    </div>
+                    <p-skeleton width="100%" height="6rem" />
+                  </div>
+                } @else if (detalle(p.id); as det) {
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Cliente</h4>
+                      <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-muted-color">Nombre</dt>
+                        <dd>{{ det.clienteNombre ?? '—' }}</dd>
+                        <dt class="text-muted-color">Email</dt>
+                        <dd class="break-all">{{ det.clienteEmail ?? '—' }}</dd>
+                        <dt class="text-muted-color">Teléfono</dt>
+                        <dd>{{ det.clienteTelefono ?? '—' }}</dd>
+                        <dt class="text-muted-color">Rubro</dt>
+                        <dd class="capitalize">{{ det.rubro ?? '—' }}</dd>
+                      </dl>
+                    </div>
+
+                    <div>
+                      <h4 class="text-xs font-semibold uppercase text-muted-color mb-2">Presupuesto</h4>
+                      <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+                        <dt class="text-muted-color">Creado</dt>
+                        <dd class="tabular-nums">{{ det.creadoAt | date: 'dd/MM/yyyy HH:mm' : undefined : 'es-AR' }}</dd>
+                        @if (det.modificadoAt) {
+                          <dt class="text-muted-color">Última edición</dt>
+                          <dd class="tabular-nums">{{ det.modificadoAt | date: 'dd/MM/yyyy HH:mm' : undefined : 'es-AR' }}</dd>
+                        }
+                        <dt class="text-muted-color">Descuento global</dt>
+                        <dd>
+                          @if (det.descuentoGlobalPorcentaje && det.descuentoGlobalPorcentaje > 0) {
+                            <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
+                              −{{ det.descuentoGlobalPorcentaje | number:'1.0-1' }}%
+                            </span>
+                          } @else { — }
+                        </dd>
+                        <dt class="text-muted-color">Cotización</dt>
+                        <dd>{{ det.cotizacionIndividual ? 'Individual (1 hoja por producto)' : 'Agregada' }}</dd>
+                        @if (det.convertidoEnPedidoId != null) {
+                          <dt class="text-muted-color">Pedido DUX</dt>
+                          <dd>
+                            <button type="button" (click)="irAlPedido(det.convertidoEnPedidoId!)"
+                              class="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer font-semibold"
+                              [pTooltip]="'Ver pedido #' + det.convertidoEnPedidoId + ' en DUX'" tooltipPosition="top">
+                              <i class="pi pi-check-circle text-[0.7rem]"></i> Pedido #{{ det.convertidoEnPedidoId }}
+                            </button>
+                          </dd>
+                        }
+                        <dt class="text-muted-color">Total presupuesto</dt>
+                        <dd class="tabular-nums font-bold text-base text-primary">
+                          {{ totalPresupuesto(det) | currency:'ARS':'symbol':'1.0-0' }}
+                        </dd>
+                      </dl>
+                    </div>
+                  </div>
+
+                  @if (det.observaciones) {
+                    <div class="mt-5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900">
+                      <h4 class="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300 m-0 mb-1 inline-flex items-center gap-2">
+                        <i class="pi pi-pencil"></i> Observaciones
+                      </h4>
+                      <p class="text-sm text-amber-900 dark:text-amber-200 m-0 whitespace-pre-wrap">{{ det.observaciones }}</p>
+                    </div>
+                  }
+
+                  <div class="mt-5">
+                    <h4 class="text-xs font-semibold uppercase text-muted-color m-0 mb-2">
+                      Productos ({{ det.items.length }})
+                    </h4>
+                    <p-table [value]="det.items" class="p-datatable-sm">
+                      <ng-template #header>
+                        <tr>
+                          <th style="width: 9rem">SKU</th>
+                          <th>Producto</th>
+                          <th class="text-center" style="width: 5rem">Cant.</th>
+                          <th class="text-right" style="width: 10rem">Precio</th>
+                          <th class="text-center" style="width: 5rem">Desc.</th>
+                          <th class="text-right" style="width: 10rem">Subtotal</th>
+                        </tr>
+                      </ng-template>
+                      <ng-template #body let-it>
+                        <tr>
+                          <td class="font-mono text-sm">{{ it.sku }}</td>
+                          <td>{{ it.descripcion ?? '—' }}</td>
+                          <td class="text-center tabular-nums">{{ it.cantidad }}</td>
+                          <td class="text-right tabular-nums">
+                            {{ precioItem(it) | currency:'ARS':'symbol':'1.0-0' }}
+                            <span class="ml-1 text-[0.65rem] text-muted-color">{{ ivaItem(it) ? 'c/IVA' : 's/IVA' }}</span>
+                          </td>
+                          <td class="text-center tabular-nums">
+                            @if (it.descuentoPorcentaje && it.descuentoPorcentaje > 0) {
+                              <span class="text-emerald-600 dark:text-emerald-400 font-semibold">
+                                −{{ it.descuentoPorcentaje | number:'1.0-1' }}%
+                              </span>
+                            } @else {
+                              <span class="text-muted-color">—</span>
+                            }
+                          </td>
+                          <td class="text-right tabular-nums font-semibold">
+                            {{ subtotalItem(it) | currency:'ARS':'symbol':'1.0-0' }}
+                          </td>
+                        </tr>
+                      </ng-template>
+                    </p-table>
+                  </div>
+
+                  @if (det.formasPago && det.formasPago.length) {
+                    <div class="mt-5">
+                      <h4 class="text-xs font-semibold uppercase text-muted-color m-0 mb-2">Formas de pago</h4>
+                      <div class="flex flex-wrap gap-2">
+                        @for (fp of det.formasPago; track fp.id ?? fp.nombre) {
+                          <div class="px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-950 text-sm min-w-[10rem]">
+                            <div class="font-medium text-[#3B1E09] dark:text-surface-0">
+                              {{ fp.nombre }}
+                              @if (fp.cantidadCuotas && fp.cantidadCuotas > 1 && !nombreIncluyeCuotas(fp.nombre, fp.cantidadCuotas)) {
+                                <span class="text-muted-color text-xs"> · {{ fp.cantidadCuotas }} cuotas</span>
+                              }
+                            </div>
+                            <div class="tabular-nums font-bold text-primary mt-0.5">
+                              {{ fp.monedaSimbolo || '$' }} {{ fp.precioFinal | number:'1.0-0' }}
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                }
+              </td>
+            </tr>
+          }
         </ng-template>
 
         <ng-template #emptymessage>
           <tr>
-            <td colspan="10">
+            <td colspan="11">
               <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
                 <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>

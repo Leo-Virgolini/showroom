@@ -768,28 +768,48 @@
                 [max]="maxCantidad(it.stockTotal)" decrementButtonIcon="pi pi-minus" incrementButtonIcon="pi pi-plus" inputStyleClass="w-20 text-center text-sm" />
             </div>
 
-            <!-- Descuento manual % por ítem. Si > 0, reemplaza al descuento por
-                 escala para esta línea (y va a DUX como porc_desc). 0 = vuelve a
-                 regir la escala automática. -->
+            <!-- % Desc. por ítem. MUESTRA el % efectivo de la línea (monto o
+                 manual): atenuado/itálica cuando viene del monto automático,
+                 sólido cuando el operador lo fijó a mano. Tipear setea un manual
+                 que reemplaza al de monto; 0 vuelve a regir la escala. -->
             <div class="shrink-0 flex flex-col items-center leading-none">
               <label class="text-[8px] uppercase tracking-wider text-muted-color font-semibold mb-0.5" [attr.for]="'descItem-' + it.itemKey">% Desc.</label>
-              <p-inputNumber [inputId]="'descItem-' + it.itemKey" [ngModel]="descuentoManual(it.itemKey)"
-                (ngModelChange)="setDescuentoManual(it.itemKey, $event)" [min]="0" [max]="100" [step]="1"
-                [maxFractionDigits]="1" suffix="%" inputStyleClass="w-20 text-center text-sm" [allowEmpty]="false"
-                pTooltip="Descuento manual de esta línea (reemplaza el descuento por monto)" tooltipPosition="top" />
+              <p-inputNumber [inputId]="'descItem-' + it.itemKey" [ngModel]="descuentoEfectivoItem(it)"
+                (ngModelChange)="setDescuentoManual(it.itemKey, $event)" (onFocus)="seleccionarAlEnfocar($event)"
+                [min]="0" [max]="100" [step]="1"
+                [maxFractionDigits]="1" suffix="%"
+                [inputStyleClass]="claseInputDescuentoItem(it)"
+                [allowEmpty]="false"
+                [pTooltip]="tooltipDescuentoItem(it)" tooltipPosition="top" />
             </div>
 
             <div class="text-right leading-tight shrink-0 min-w-[5.5rem]">
+              <!-- Subtotal NETO de la línea (lo que paga el cliente). -->
               <div class="tabular-nums font-semibold text-sm">
-                {{ subtotal(it) | currency:'ARS':'symbol':'1.0-0' }}
+                {{ subtotalConDescuentoItem(it) | currency:'ARS':'symbol':'1.0-0' }}
               </div>
-              <div class="tabular-nums text-[11px] text-muted-color">
+              <!-- Precio unitario de lista; tachado cuando la línea tiene
+                   descuento, para que se vea el precio sin descontar contra el
+                   neto de arriba. Se tacha el c/u (no el subtotal) para no
+                   duplicar el mismo número cuando la cantidad es 1. -->
+              <div class="tabular-nums text-[11px] text-muted-color"
+                   [class.line-through]="descuentoEfectivoItem(it) > 0">
                 {{ precioItemForma(it) | currency:'ARS':'symbol':'1.0-0' }} c/u
               </div>
               @if (descuentoEfectivoItem(it) > 0) {
-                <div class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1 justify-end">
-                  <i class="text-[8px]" [class.pi]="true" [class.pi-pencil]="itemTieneDescuentoManual(it)" [class.pi-tag]="!itemTieneDescuentoManual(it)"></i>
-                  −{{ descuentoEfectivoItem(it) }}%
+                <!-- Chip de ORIGEN del descuento — el número ya lo muestra el
+                     input "% Desc.", así que acá solo aclaramos de dónde viene. -->
+                <div class="text-[10px] font-semibold inline-flex items-center gap-1 justify-end"
+                     [class.text-emerald-700]="!itemTieneDescuentoManual(it)"
+                     [class.dark:text-emerald-300]="!itemTieneDescuentoManual(it)"
+                     [class.text-sky-700]="itemTieneDescuentoManual(it)"
+                     [class.dark:text-sky-300]="itemTieneDescuentoManual(it)"
+                     [pTooltip]="tooltipOrigenDescuentoItem(it)" tooltipPosition="top">
+                  @if (itemTieneDescuentoManual(it)) {
+                    <i class="pi pi-pencil text-[8px]"></i> manual
+                  } @else {
+                    <i class="pi pi-tag text-[8px]"></i> por monto
+                  }
                 </div>
               }
             </div>
@@ -817,19 +837,24 @@
             </span>
           </div>
 
-          <!-- Descuento global manual (atajo): al cambiarlo copia el mismo % a
-               TODAS las líneas (reflejo, no aditivo). 0 limpia los manuales y
-               vuelve la escala automática. -->
+          <!-- Descuento global (atajo): MUESTRA el % efectivo del carrito
+               (monto o manual) y al cambiarlo copia el mismo % a TODAS las
+               líneas (reflejo, no aditivo). Atenuado cuando el % viene del
+               monto automático; sólido cuando hay manuales. 0 limpia los
+               manuales y vuelve la escala automática. -->
           <div class="flex items-center justify-between gap-2 text-xs text-muted-color">
             <label for="descGlobalCarrito" class="inline-flex items-center gap-1.5">
               <i class="pi pi-percentage text-[0.65rem]"></i>
               Descuento global
             </label>
             <p-inputNumber inputId="descGlobalCarrito" [ngModel]="descuentoEfectivoPctForma()"
-              (ngModelChange)="aplicarDescuentoGlobal($event)" [min]="0" [max]="100" [step]="1"
-              [maxFractionDigits]="1" suffix="%" inputStyleClass="w-24 text-center text-sm" [allowEmpty]="false"
+              (ngModelChange)="aplicarDescuentoGlobal($event)" (onFocus)="seleccionarAlEnfocar($event)"
+              [min]="0" [max]="100" [step]="1"
+              [maxFractionDigits]="1" suffix="%"
+              [inputStyleClass]="claseInputDescuentoGlobal()"
+              [allowEmpty]="false"
               [disabled]="carrito().length === 0"
-              pTooltip="Aplica el mismo % a todos los ítems (reemplaza el descuento por monto)" tooltipPosition="left" />
+              pTooltip="Aplica el mismo % a todas las líneas (reemplaza el descuento por monto). Poné 0 para volver al automático por monto." tooltipPosition="left" />
           </div>
 
           @if (descuentoAplicado() > 0 && !hayDescuentoManual() && carritoTieneRubroExcluido()) {

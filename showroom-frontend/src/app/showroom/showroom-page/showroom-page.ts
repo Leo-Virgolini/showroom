@@ -256,7 +256,7 @@ export class ShowroomPage implements AfterViewInit {
   readonly mostrarCrearPedidoShowroom = signal(false);
   /** Ítems del carrito mapeados al formato que consume el modal de pedido —
    *  mismo armado que usaba el envío directo (precio c/IVA, descuento efectivo
-   *  por ítem, IVA de genéricos), para no cambiar lo que se factura en DUX. */
+   *  por ítem), para no cambiar lo que se factura en DUX. */
   readonly itemsPedidoShowroom = computed<PedidoItemEntrada[]>(() =>
     this.carrito().map((it) => {
       const d = this.descuentoParaItem(it);
@@ -264,7 +264,13 @@ export class ShowroomPage implements AfterViewInit {
         sku: it.sku,
         cantidad: it.cantidad,
         precioConIva: it.pvpKtGastroConIva,
-        porcIva: it.generico ? (it.porcIva ?? null) : null,
+        // porcIva real SIEMPRE (no solo genéricos): el modal lo necesita para
+        // calcular el preview por forma de pago de los ítems de MAQUINARIA, que
+        // cotizan sin IVA y hay que quitárselo. Sin esto, el preview del modal
+        // infla la maquinaria (la muestra c/IVA) y no coincide con el carrito ni
+        // con lo facturado. No afecta DUX: el backend toma el porcIva de su cache
+        // para productos del catálogo e ignora el del payload (ver PedidoService).
+        porcIva: it.porcIva ?? null,
         descuentoPorcentaje: d > 0 ? d : null,
         rubro: it.rubro ?? null,
         comentarios: it.comentarios ?? null,
@@ -450,12 +456,23 @@ export class ShowroomPage implements AfterViewInit {
     let v = Number(valor);
     if (!Number.isFinite(v) || v < 0) v = 0;
     if (v > 100) v = 100;
+    // El input MUESTRA el % efectivo (un reflejo del promedio). Al enfocar y
+    // desenfocar SIN tipear, p-inputNumber re-emite ese valor redondeado; si lo
+    // aplicáramos, copiaríamos el promedio a cada ítem y aplastaríamos los
+    // descuentos individuales distintos (ej. 3,7% + 5% → 4,4% + 4,4%). Si el
+    // valor entrante coincide (±0,05, la tolerancia del redondeo a 1 decimal que
+    // muestra el input) con el % efectivo actual, no hubo un cambio real del
+    // operador → no tocamos los descuentos por ítem.
+    if (Math.abs(v - this.descuentoEfectivoPctForma()) < 0.05) return;
     const mapa: Record<string, number> = {};
     if (v > 0) {
       for (const it of this.carrito()) mapa[it.itemKey] = v;
     }
     this.descuentosManuales.set(mapa);
-    this.focusInput();
+    // NO devolvemos el foco al buscador acá: este handler corre en cada cambio
+    // del input de descuento global, así que un focusInput() robaría el foco
+    // mientras el operador tipea. El foco vuelve al scan por los otros caminos
+    // (click fuera, scan, etc.), igual que el input de descuento por ítem.
   }
 
   /** % de descuento EFECTIVO que aplica a un ítem individual.
@@ -479,6 +496,63 @@ export class ShowroomPage implements AfterViewInit {
    *  mano (no de la escala) — el template lo usa para diferenciar el badge. */
   itemTieneDescuentoManual(it: CarritoItem): boolean {
     return this.descuentoManual(it.itemKey) > 0;
+  }
+
+  /** Tooltip dinámico del input "% Desc." por línea, según de dónde viene el
+   *  descuento. El input MUESTRA el % efectivo (monto o manual); este texto
+   *  aclara el origen y cómo overridearlo. */
+  tooltipDescuentoItem(it: CarritoItem): string {
+    if (this.itemTieneDescuentoManual(it)) {
+      return 'Descuento manual de esta línea — reemplaza el descuento por monto. '
+        + 'Poné 0 para volver al automático.';
+    }
+    const efectivo = this.descuentoEfectivoItem(it);
+    if (efectivo > 0) {
+      return `Descuento por monto (${efectivo}%) aplicado automáticamente al `
+        + 'superar el importe. Escribí un valor para fijar un descuento manual en esta línea.';
+    }
+    if (this.excluidoDescuentoEscala(it)) {
+      return 'Esta línea no recibe el descuento por monto (maquinaria). '
+        + 'Escribí un valor para fijar un descuento manual.';
+    }
+    return 'Escribí un valor para fijar un descuento manual en esta línea.';
+  }
+
+  /** Tooltip del chip de origen (debajo del precio) — aclara si el descuento de
+   *  la línea es por monto (escala) o cargado a mano. */
+  tooltipOrigenDescuentoItem(it: CarritoItem): string {
+    return this.itemTieneDescuentoManual(it)
+      ? 'Descuento cargado a mano en esta línea.'
+      : 'Descuento por monto, aplicado al superar el importe configurado.';
+  }
+
+  /** Al enfocar un input de descuento, selecciona todo su contenido para que el
+   *  "0%" por defecto (o el valor previo) se REEMPLACE al tipear en vez de
+   *  concatenarse (tipear "5" sobre "0" daba "05"). El setTimeout difiere el
+   *  select un tick: hecho de forma síncrona, el colapso de selección que
+   *  dispara el click del mouse lo pisaría. */
+  seleccionarAlEnfocar(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    if (input) setTimeout(() => input.select());
+  }
+
+  /** Clase del input "% Desc." por línea. El color del número refuerza el origen
+   *  (mismo criterio que el chip de abajo): azul si es manual, verde + itálica si
+   *  es por monto (automático), neutro si la línea no tiene descuento. */
+  claseInputDescuentoItem(it: CarritoItem): string {
+    const base = 'w-20 text-center text-sm font-semibold';
+    if (this.itemTieneDescuentoManual(it)) return `${base} text-sky-600 dark:text-sky-400`;
+    if (this.descuentoEfectivoItem(it) > 0) return `${base} italic text-emerald-600 dark:text-emerald-400`;
+    return 'w-20 text-center text-sm text-muted-color';
+  }
+
+  /** Clase del input "Descuento global" — mismo criterio de color que
+   *  {@link claseInputDescuentoItem} pero a nivel carrito (hay/no hay manuales). */
+  claseInputDescuentoGlobal(): string {
+    const base = 'w-24 text-center text-sm font-semibold';
+    if (this.hayDescuentoManual()) return `${base} text-sky-600 dark:text-sky-400`;
+    if (this.descuentoEfectivoPctForma() > 0) return `${base} italic text-emerald-600 dark:text-emerald-400`;
+    return 'w-24 text-center text-sm text-muted-color';
   }
 
   /** Subtotal del carrito a la FORMA DE PAGO elegida = suma de los subtotales de
@@ -615,11 +689,18 @@ export class ShowroomPage implements AfterViewInit {
     this.carrito().reduce((acc, it) => acc + it.cantidad, 0),
   );
 
-  /** Subtotal de la línea SIN descuento por escala, al precio de la forma de pago
-   *  elegida (mismo precio que se muestra como c/u). El descuento por escala se
-   *  muestra solo a nivel total. */
+  /** Subtotal BRUTO de la línea (sin descuento), al precio de la forma de pago
+   *  elegida × cantidad. Es la base sobre la que se aplica el descuento de la
+   *  línea; se muestra tachado como referencia cuando hay descuento. */
   subtotal(it: CarritoItem): number {
     return this.precioItemForma(it) * it.cantidad;
+  }
+
+  /** Subtotal NETO de la línea = bruto × (1 − descuento efectivo). Es lo que el
+   *  cliente paga por esa línea y coincide con el subtotal por línea del
+   *  historial de pedidos. Sin descuento, es igual a {@link subtotal}. */
+  subtotalConDescuentoItem(it: CarritoItem): number {
+    return this.subtotal(it) * (1 - this.descuentoEfectivoItem(it) / 100);
   }
 
   /** Próximo escalón a alcanzar (umbralMin > subtotal elegible actual), o

@@ -8,7 +8,15 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  Router,
+  RouterOutlet,
+} from '@angular/router';
+import { ReloadSameUrlReuseStrategy } from './reload-same-url-reuse.strategy';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { ProgressBarModule } from 'primeng/progressbar';
@@ -44,6 +52,7 @@ export class App {
   private readonly destroyRef = inject(DestroyRef);
   private readonly router = inject(Router);
   private readonly clientIdService = inject(ClientIdService);
+  private readonly reuseStrategy = inject(ReloadSameUrlReuseStrategy);
 
   /** True cuando la ruta activa es /visor — la pantalla del visor del cliente
    *  no debe mostrar overlays operativos (banner de sync, botón de instalar PWA)
@@ -156,6 +165,25 @@ export class App {
   });
 
   constructor() {
+    // Recargar "en limpio" al clickear el link de la pantalla en la que ya
+    // estamos: prendemos el flag de ReloadSameUrlReuseStrategy solo cuando el
+    // destino de la navegación coincide con la URL actual (misma ruta + mismos
+    // query params), y lo apagamos al terminar. Así un clic en, por ej.,
+    // "Nuevo Presupuesto" estando ya en /presupuestos recrea el componente y
+    // resetea el formulario; las navegaciones que solo cambian query params
+    // (deep-links, limpiar-filtro in-place) no se ven afectadas.
+    this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((e) => {
+      if (e instanceof NavigationStart) {
+        this.reuseStrategy.reloadSameUrl = e.url === this.router.url;
+      } else if (
+        e instanceof NavigationEnd ||
+        e instanceof NavigationCancel ||
+        e instanceof NavigationError
+      ) {
+        this.reuseStrategy.reloadSameUrl = false;
+      }
+    });
+
     // Resolver la sesión inicial al arrancar la app — el guard también lo
     // hace pero precargarlo acá evita el flicker de "no logueado → logueado"
     // cuando el operador abre la app con una sesión ya activa.

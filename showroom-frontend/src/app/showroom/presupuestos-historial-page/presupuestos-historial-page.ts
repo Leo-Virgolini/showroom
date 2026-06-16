@@ -19,10 +19,11 @@ import { DatePickerModule } from 'primeng/datepicker';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
+import { SkeletonModule } from 'primeng/skeleton';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
-import { PresupuestoListItem } from '../models';
+import { PresupuestoDetalle, PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -53,6 +54,7 @@ import { PageHeader } from '../page-header/page-header';
     IconFieldModule,
     InputIconModule,
     InputTextModule,
+    SkeletonModule,
     SplitButtonModule,
     TableModule,
     TooltipModule,
@@ -94,6 +96,15 @@ export class PresupuestosHistorialPage {
   /** IDs de presupuestos que se están eliminando — para deshabilitar el
    *  botón mientras espera el response del backend. */
   readonly eliminandoPdf = signal<Set<number>>(new Set());
+
+  /** Filas expandidas con el detalle inline (mismo patrón que el historial de
+   *  pedidos): id → true. */
+  readonly expanded = signal<Record<number, boolean>>({});
+  /** Cache de detalles ya obtenidos: id → PresupuestoDetalle. Se carga al
+   *  expandir la fila por primera vez y se reusa si se re-expande. */
+  readonly detalles = signal<Record<number, PresupuestoDetalle>>({});
+  /** IDs cuyo detalle se está pidiendo al backend — muestra el skeleton. */
+  readonly cargandoDetalle = signal<Set<number>>(new Set());
 
   readonly hayFiltros = computed(
     () =>
@@ -184,6 +195,9 @@ export class PresupuestosHistorialPage {
           this.menuCache.clear();
           this.presupuestos.set(res.items);
           this.total.set(res.total);
+          // Colapsar las filas expandidas al cambiar de página/filtro — los
+          // detalles ya cacheados siguen sirviendo si el operador re-expande.
+          this.expanded.set({});
         },
         error: (err) => {
           this.cargando.set(false);
@@ -384,6 +398,96 @@ export class PresupuestosHistorialPage {
   /** Botón "Ver pedido" — navega a /pedidos con el id como filtro. */
   irAlPedido(pedidoId: number): void {
     this.router.navigate(['/pedidos'], { queryParams: { id: pedidoId } });
+  }
+
+  // ============================================================
+  // Detalle inline expandible (mismo patrón que el historial de pedidos):
+  // chevron por fila que despliega cliente + ítems + formas de pago, cargando
+  // el detalle on-demand desde GET /presupuesto-comercial/{id}/detalle.
+  // ============================================================
+
+  /** Abre/cierra el detalle de la fila. Carga el detalle del backend la primera
+   *  vez (después queda cacheado). */
+  toggleRow(p: PresupuestoListItem): void {
+    const exp = { ...this.expanded() };
+    if (exp[p.id]) {
+      delete exp[p.id];
+      this.expanded.set(exp);
+      return;
+    }
+    exp[p.id] = true;
+    this.expanded.set(exp);
+    if (!this.detalles()[p.id]) {
+      this.cargarDetalle(p.id);
+    }
+  }
+
+  estaExpandido(id: number): boolean {
+    return !!this.expanded()[id];
+  }
+
+  estaCargandoDetalle(id: number): boolean {
+    return this.cargandoDetalle().has(id);
+  }
+
+  detalle(id: number): PresupuestoDetalle | undefined {
+    return this.detalles()[id];
+  }
+
+  private cargarDetalle(id: number): void {
+    marcarEnSet(this.cargandoDetalle, id, true);
+    this.api.obtenerDetallePresupuestoComercial(id).subscribe({
+      next: (det) => {
+        this.detalles.set({ ...this.detalles(), [id]: det });
+        marcarEnSet(this.cargandoDetalle, id, false);
+      },
+      error: (err) => {
+        marcarEnSet(this.cargandoDetalle, id, false);
+        toastError(this.toast, 'Detalle', err, 'No se pudo cargar el detalle del presupuesto.');
+      },
+    });
+  }
+
+  /** Precio unitario que muestra el presupuesto = precio de referencia (la forma
+   *  marcada como "Precio ref.", ya según rubro: c/IVA menaje, s/IVA maquinaria).
+   *  Cae a {@code precioConIva} en presupuestos viejos sin {@code precioReferencia}. */
+  precioItem(it: { precioReferencia?: number | null; precioConIva: number }): number {
+    return it.precioReferencia ?? it.precioConIva;
+  }
+
+  /** True si el precio mostrado del ítem es CON IVA (menaje). Los presupuestos
+   *  viejos sin {@code precioReferencia} caen a {@code precioConIva}, que es c/IVA. */
+  ivaItem(it: { precioReferencia?: number | null; precioReferenciaConIva?: boolean }): boolean {
+    if (it.precioReferencia == null) return true;
+    return it.precioReferenciaConIva !== false;
+  }
+
+  /** Subtotal de la línea = precio de referencia × cantidad × (1 − desc/100).
+   *  La suma de estos subtotales da el total del presupuesto. */
+  subtotalItem(it: {
+    precioReferencia?: number | null;
+    precioConIva: number;
+    cantidad: number;
+    descuentoPorcentaje: number | null;
+  }): number {
+    return this.precioItem(it) * it.cantidad * (1 - (it.descuentoPorcentaje ?? 0) / 100);
+  }
+
+  /** Total del presupuesto = suma de los subtotales de cada línea (precio de
+   *  referencia con su descuento). Coincide con la base de los totales del PDF. */
+  totalPresupuesto(det: PresupuestoDetalle): number {
+    return det.items.reduce((s, it) => s + this.subtotalItem(it), 0);
+  }
+
+  /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas
+   *  (ej. "6 Cuotas") — evita repetir "· N cuotas" al lado. Mismo criterio que
+   *  el historial de pedidos. */
+  nombreIncluyeCuotas(
+    nombre: string | null | undefined,
+    cuotas: number | null | undefined,
+  ): boolean {
+    if (!nombre || cuotas == null) return false;
+    return new RegExp(`(^|\\D)${cuotas}(\\D|$)`).test(nombre);
   }
 
   /** Filtro para abrir la ficha del cliente: teléfono (últimos 8 dígitos, igual

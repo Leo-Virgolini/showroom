@@ -1792,6 +1792,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     if (valor > 100) valor = 100;
     const actuales = this.items();
     if (actuales.length === 0) return;
+    // El input MUESTRA el % efectivo (un reflejo del promedio). Al enfocar y
+    // desenfocar SIN tipear, p-inputNumber re-emite ese valor; si lo aplicáramos,
+    // copiaríamos el promedio a cada ítem y aplastaríamos los descuentos
+    // individuales distintos (ej. 3,7% + 5% → 4,4% + 4,4%). Si el valor entrante
+    // coincide (±0,005, la tolerancia del redondeo a 2 decimales del input) con
+    // el % efectivo actual, no hubo un cambio real del operador → no tocamos nada.
+    if (Math.abs(valor - this.descuentoGlobal()) < 0.005) return;
     const todosIguales = actuales.every((it) => (it.descuentoPorcentaje ?? 0) === valor);
     if (todosIguales) return;
     for (const it of actuales) it.descuentoPorcentaje = valor;
