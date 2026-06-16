@@ -640,8 +640,9 @@
                   <td class="text-center">
                     <p-inputNumber [ngModel]="it.descuentoPorcentaje"
                       (ngModelChange)="actualizarDescuento(it, $event)"
+                      (onFocus)="seleccionarAlEnfocar($event)"
                       [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
-                      inputStyleClass="w-16 text-center descuento-input" />
+                      [inputStyleClass]="claseInputDescuentoItem(it.descuentoPorcentaje)" />
                   </td>
                   <td class="text-right">
                     <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
@@ -794,9 +795,10 @@
             </label>
             <p-inputNumber inputId="dctoGlobal" [ngModel]="descuentoGlobal()"
               (ngModelChange)="actualizarDescuentoGlobal($event)"
+              (onFocus)="seleccionarAlEnfocar($event)"
               [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
               [maxFractionDigits]="2"
-              inputStyleClass="w-16 text-center descuento-input" />
+              [inputStyleClass]="claseInputDescuentoGlobal()" />
           </div>
         </div>
 

@@ -1807,6 +1807,36 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       `${valor}% sobre ${actuales.length} ${actuales.length === 1 ? 'ítem' : 'ítems'}.`);
   }
 
+  /** Clase del input "% Desc." por línea: azul cuando la línea tiene descuento,
+   *  neutro cuando es 0. Mismo criterio de color que el showroom (allí el azul
+   *  identifica el descuento manual; en el presupuesto todos los descuentos por
+   *  ítem son manuales, no hay escala automática por monto). */
+  claseInputDescuentoItem(descuento: number | null | undefined): string {
+    const base = 'w-16 text-center descuento-input';
+    return (descuento ?? 0) > 0
+      ? `${base} font-semibold text-sky-600 dark:text-sky-400`
+      : `${base} text-muted-color`;
+  }
+
+  /** Clase del input "Descuento global" — mismo criterio de color, a nivel
+   *  presupuesto (según el % efectivo). */
+  claseInputDescuentoGlobal(): string {
+    const base = 'w-16 text-center descuento-input';
+    return this.descuentoGlobal() > 0
+      ? `${base} font-semibold text-sky-600 dark:text-sky-400`
+      : `${base} text-muted-color`;
+  }
+
+  /** Al enfocar un input de descuento, selecciona todo su contenido para que el
+   *  "0%" por defecto (o el valor previo) se REEMPLACE al tipear en vez de
+   *  concatenarse (tipear "5" sobre "0" daba "05"). El setTimeout difiere el
+   *  select un tick: hecho de forma síncrona, el colapso de selección que
+   *  dispara el click del mouse lo pisaría. Mismo helper que el showroom. */
+  seleccionarAlEnfocar(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    if (input) setTimeout(() => input.select());
+  }
+
   /** Construye el payload del backend a partir del estado actual.
    *  En modo agregado: una sola colección de formas globales (itemSku=null)
    *  calculadas sobre el total. En modo cotización individual: una colección
