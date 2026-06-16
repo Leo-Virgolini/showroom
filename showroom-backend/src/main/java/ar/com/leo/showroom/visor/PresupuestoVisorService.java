@@ -47,6 +47,9 @@ public class PresupuestoVisorService {
     /** Snapshot actual del operador para la hidratación inicial del visor, o
      *  uno vacío si todavía no publicó nada. */
     public PresupuestoVisorDTO obtener(String username) {
+        // Guard contra null/blank, consistente con publicar(): si snapshots es un
+        // mapa que no admite claves null, getOrDefault(null, ...) lanzaría NPE.
+        if (username == null || username.isBlank()) return PresupuestoVisorDTO.vacio();
         return snapshots.getOrDefault(username, PresupuestoVisorDTO.vacio());
     }
 }

@@ -17,12 +17,19 @@ public final class SortUtils {
     /**
      * Resuelve un {@link Sort} a partir de params del front: busca
      * {@code sortField} en la whitelist (campo-front → propiedad-entidad); si no
-     * está, usa {@code defaultField}. Dirección: {@code "asc"} → ASC, cualquier
-     * otro valor → DESC.
+     * está —o si {@code sortField} es null porque el front no mandó el param—,
+     * usa {@code defaultField}. Dirección: {@code "asc"} → ASC, cualquier otro
+     * valor → DESC.
+     *
+     * <p>El guard contra null es obligatorio: la whitelist es un {@code Map.of(...)}
+     * inmutable, y {@code getOrDefault(null, ...)} sobre esos mapas lanza
+     * {@link NullPointerException} (no admiten claves null).
      */
     public static Sort resolver(Map<String, String> whitelist, String sortField,
                                 String sortOrder, String defaultField) {
-        String campo = whitelist.getOrDefault(sortField, defaultField);
+        String campo = sortField == null
+                ? defaultField
+                : whitelist.getOrDefault(sortField, defaultField);
         Sort.Direction dir = "asc".equalsIgnoreCase(sortOrder)
                 ? Sort.Direction.ASC : Sort.Direction.DESC;
         return Sort.by(dir, campo);
