@@ -23,7 +23,7 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
-import { PresupuestoDetalle, PresupuestoListItem } from '../models';
+import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -477,6 +477,15 @@ export class PresupuestosHistorialPage {
    *  referencia con su descuento). Coincide con la base de los totales del PDF. */
   totalPresupuesto(det: PresupuestoDetalle): number {
     return det.items.reduce((s, it) => s + this.subtotalItem(it), 0);
+  }
+
+  /** Formas de pago "globales" del presupuesto (modo agregado: itemSku null).
+   *  En cotización individual las formas se guardan POR ítem (cada una con su
+   *  itemSku), así que listarlas planas repetiría los mismos nombres N×M veces;
+   *  por eso el panel filtra a las globales y, si no hay (presupuesto
+   *  individual), muestra un aviso en lugar de las tarjetas. */
+  formasGlobales(det: PresupuestoDetalle): PresupuestoFormaPagoSnapshot[] {
+    return (det.formasPago ?? []).filter((f) => f.itemSku == null);
   }
 
   /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas
