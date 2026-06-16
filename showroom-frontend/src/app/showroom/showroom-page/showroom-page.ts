@@ -48,6 +48,7 @@ import { SesionClienteService } from '../sesion-cliente.service';
 import { ShowroomService } from '../showroom.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { toastError } from '../toast.utils';
+import { seleccionarTextoAlEnfocar } from '../dom.utils';
 import {
   ProductoGenericoData,
   ProductoGenericoDialog,
@@ -526,15 +527,9 @@ export class ShowroomPage implements AfterViewInit {
       : 'Descuento por monto, aplicado al superar el importe configurado.';
   }
 
-  /** Al enfocar un input de descuento, selecciona todo su contenido para que el
-   *  "0%" por defecto (o el valor previo) se REEMPLACE al tipear en vez de
-   *  concatenarse (tipear "5" sobre "0" daba "05"). El setTimeout difiere el
-   *  select un tick: hecho de forma síncrona, el colapso de selección que
-   *  dispara el click del mouse lo pisaría. */
-  seleccionarAlEnfocar(event: Event): void {
-    const input = event.target as HTMLInputElement | null;
-    if (input) setTimeout(() => input.select());
-  }
+  /** Selecciona el contenido del input al enfocarlo (el "0%" no se concatena al
+   *  tipear). Lógica compartida en {@link seleccionarTextoAlEnfocar}. */
+  protected readonly seleccionarAlEnfocar = seleccionarTextoAlEnfocar;
 
   /** Clase del input "% Desc." por línea. El color del número refuerza el origen
    *  (mismo criterio que el chip de abajo): azul si es manual, verde + itálica si

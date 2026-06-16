@@ -196,7 +196,9 @@ $kt-amarillo: #a2ab00;
 // Input compacto del descuento
 // =====================================================
 :host ::ng-deep .descuento-input {
-  width: 4.5rem;
+  // 6rem para que entre cómodo "100%" (individuales) y "12,68%" (global, con 2
+  // decimales) sin que el número quede pegado a los bordes.
+  width: 6rem;
 }
 
 // =====================================================
