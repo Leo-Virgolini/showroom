@@ -123,7 +123,7 @@
             <td class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
               @if (tieneFichaCliente(p)) {
                 <button type="button" (click)="verCliente(p)"
-                  class="text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 hover:underline cursor-pointer text-left font-semibold"
+                  class="text-primary underline decoration-dotted decoration-1 underline-offset-2 hover:decoration-solid cursor-pointer text-left"
                   [pTooltip]="'Ver ficha de ' + (p.clienteNombre || 'este cliente')" tooltipPosition="top">
                   {{ p.clienteNombre || '—' }}
                 </button>

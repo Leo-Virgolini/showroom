@@ -164,7 +164,7 @@
             <td class="text-sm truncate max-w-[12rem]">
               @if (tieneFichaCliente(p)) {
                 <button type="button" (click)="verCliente(p)"
-                  class="text-primary hover:underline cursor-pointer truncate max-w-full text-left"
+                  class="text-primary underline decoration-dotted decoration-1 underline-offset-2 hover:decoration-solid cursor-pointer truncate max-w-full text-left"
                   [pTooltip]="'Ver ficha de ' + (nombreCliente(p) ?? 'este cliente')" tooltipPosition="top">
                   {{ nombreCliente(p) ?? '—' }}
                 </button>
