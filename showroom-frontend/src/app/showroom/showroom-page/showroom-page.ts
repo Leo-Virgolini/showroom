@@ -1890,6 +1890,22 @@ export class ShowroomPage implements AfterViewInit {
     });
   }
 
+  /** Abre el modal de pedido del showroom y dispara la generación del pickit
+   *  externo desde el carrito, en paralelo, para que el .xlsx esté listo
+   *  mientras el operador carga los datos del cliente. La generación es
+   *  fire-and-forget: el resultado (o que el pickit esté deshabilitado) se
+   *  resuelve por el SSE `pickit-externo` (toast + auto-descarga). Un 503
+   *  (pickit no configurado) se ignora en silencio — no es un error operativo.
+   *
+   *  Se llama recién cuando el carrito ya tiene las cantidades finales (después
+   *  del chequeo de stock), no antes, para que el pickit refleje lo que se pide. */
+  private abrirDialogPedidoShowroom(): void {
+    this.mostrarCrearPedidoShowroom.set(true);
+    this.api.generarPickitDesdeCarrito().subscribe({
+      error: (err) => console.warn('[pickit] no se pudo encolar desde el carrito:', err),
+    });
+  }
+
   /** Abre el modal unificado de pedido. Si está activada la verificación de
    *  stock, la corre ANTES como paso previo (gate): refresca contra DUX y, si
    *  hay ítems excedidos, muestra el diálogo de stock; si todo alcanza (o la
@@ -1897,7 +1913,7 @@ export class ShowroomPage implements AfterViewInit {
   abrirConfirmacion(): void {
     if (this.carrito().length === 0) return;
     if (!this.verificarStockAlEnviar()) {
-      this.mostrarCrearPedidoShowroom.set(true);
+      this.abrirDialogPedidoShowroom();
       return;
     }
     const cantidadesPedidas = new Map(this.carrito().map((it) => [it.itemKey, it.cantidad]));
@@ -1929,7 +1945,7 @@ export class ShowroomPage implements AfterViewInit {
           this.mostrarDialogExcedidos.set(true);
           return;
         }
-        this.mostrarCrearPedidoShowroom.set(true);
+        this.abrirDialogPedidoShowroom();
       },
       error: (err) => {
         this.refrescando.set(false);
@@ -1940,7 +1956,7 @@ export class ShowroomPage implements AfterViewInit {
           life: 4000,
         });
         console.warn('[abrirConfirmacion] refresh failed:', err);
-        this.mostrarCrearPedidoShowroom.set(true);
+        this.abrirDialogPedidoShowroom();
       },
     });
   }
@@ -2071,7 +2087,7 @@ export class ShowroomPage implements AfterViewInit {
    *  Cierra el dialog y dispara el envío sin re-validar contra DUX. */
   enviarIgualConExcedidos(): void {
     this.mostrarDialogExcedidos.set(false);
-    this.mostrarCrearPedidoShowroom.set(true);
+    this.abrirDialogPedidoShowroom();
   }
 
 }

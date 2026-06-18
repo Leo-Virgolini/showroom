@@ -405,6 +405,13 @@ export class ShowroomService {
       `${this.base}/pedidos/${id}/pickit-externo`, {});
   }
 
+  /** Genera el pickit externo desde el carrito actual, al abrir el diálogo de
+   *  pedido (antes de que exista un pedido). El resultado llega vía SSE
+   *  pickit-externo (toast + auto-descarga en la PC origen). */
+  generarPickitDesdeCarrito(): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.base}/carrito/pickit-externo`, {});
+  }
+
   /** Descarga el .xlsx pickit generado por el programa externo. El `path` lo
    *  provee el SSE `pickit-externo` con estado GENERATED. El backend valida
    *  que esté dentro del outputDir configurado (anti path-traversal). */

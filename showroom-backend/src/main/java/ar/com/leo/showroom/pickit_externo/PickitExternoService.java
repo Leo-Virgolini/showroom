@@ -5,7 +5,7 @@ import ar.com.leo.showroom.config.service.ConfiguracionService;
 import ar.com.leo.showroom.events.PickitExternoEvent;
 import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
-import ar.com.leo.showroom.pedido.entity.PedidoShowroomItem;
+import ar.com.leo.showroom.showroom.dto.CarritoItemDTO;
 import ar.com.leo.showroom.showroom.dto.PickitConfigDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +27,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
@@ -93,14 +94,48 @@ public class PickitExternoService {
         return Optional.empty();
     }
 
+    /** Una línea del input al CLI del pickit: SKU + cantidad. Es lo único que el
+     *  programa necesita, así que sirve igual para un pedido persistido o para
+     *  el carrito en memoria (generación al abrir el diálogo). */
+    public record LineaInput(String sku, int cantidad) {}
+
     /**
-     * Genera el pickit externo. Sincrónico — el caller decide si lo lanza en
-     * background. Devuelve el path del archivo generado (en {@code outputDir}).
+     * Genera el pickit externo a partir de un pedido persistido. Sincrónico — el
+     * caller decide si lo lanza en background. Devuelve el path del archivo
+     * generado (en {@code outputDir}).
      *
      * @throws PickitExternoException si la config no es válida, el proceso
      *     falla, expira o el output no se encontró.
      */
     public Path generar(PedidoShowroom pedido) throws PickitExternoException {
+        List<LineaInput> lineas = pedido.getItems().stream()
+                .map(it -> new LineaInput(it.getSku(), it.getCantidad() == null ? 0 : it.getCantidad()))
+                .toList();
+        return generarDesdeLineas(lineas, "pedido-" + pedido.getId(), "pedido " + pedido.getId());
+    }
+
+    /**
+     * Genera el pickit externo a partir de los ítems del carrito (generación al
+     * abrir el diálogo de pedido, antes de que exista un pedido persistido).
+     * Mismo SKU+CANTIDAD que tendrá el pedido, así que produce el mismo Excel.
+     */
+    public Path generarDesdeCarrito(List<CarritoItemDTO> items) throws PickitExternoException {
+        List<LineaInput> lineas = items.stream()
+                .map(it -> new LineaInput(it.sku(), it.cantidad()))
+                .toList();
+        return generarDesdeLineas(lineas, "carrito", "carrito");
+    }
+
+    /**
+     * Núcleo compartido: escribe el .xlsx de input con las líneas dadas, invoca
+     * el CLI y devuelve el path del .xlsx generado.
+     *
+     * @param tempPrefix prefijo del archivo temporal de input (se le agrega un
+     *                   timestamp para unicidad entre invocaciones concurrentes).
+     * @param label      etiqueta para los logs (ej. "pedido 42" o "carrito").
+     */
+    private Path generarDesdeLineas(List<LineaInput> lineas, String tempPrefix, String label)
+            throws PickitExternoException {
         Optional<String> motivo = motivoNoConfigurado();
         if (motivo.isPresent()) {
             throw new PickitExternoException(motivo.get());
@@ -109,15 +144,14 @@ public class PickitExternoService {
         Path inputXlsx = null;
         try {
             Files.createDirectories(INPUT_TEMP_DIR);
-            inputXlsx = INPUT_TEMP_DIR.resolve("pedido-" + pedido.getId() + "-" + System.currentTimeMillis() + ".xlsx");
-            escribirInputXlsx(pedido, inputXlsx);
-            log.info("Pickit externo pedido {} — input {} ({} items)",
-                    pedido.getId(), inputXlsx, pedido.getItems().size());
+            inputXlsx = INPUT_TEMP_DIR.resolve(tempPrefix + "-" + System.currentTimeMillis() + ".xlsx");
+            escribirInputXlsx(lineas, inputXlsx);
+            log.info("Pickit externo {} — input {} ({} items)", label, inputXlsx, lineas.size());
             return invocarCli(cfg, inputXlsx);
         } catch (PickitExternoException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Pickit externo pedido {} falló: {}", pedido.getId(), e.getMessage(), e);
+            log.error("Pickit externo {} falló: {}", label, e.getMessage(), e);
             throw new PickitExternoException("Error generando pickit: " + e.getMessage(), e);
         } finally {
             // Borramos el input temp aunque haya fallado — no contamina /tmp del
@@ -182,6 +216,38 @@ public class PickitExternoService {
         }
     }
 
+    /**
+     * Async desde el carrito: genera el pickit al ABRIR el diálogo de pedido (el
+     * pedido todavía no existe) para que esté listo mientras el operador carga
+     * los datos del cliente. Publica el resultado via SSE con {@code pedidoId}
+     * null — el toast lo identifica como "del carrito" y la PC origen
+     * (matcheada por {@code clientId}) auto-descarga el .xlsx.
+     *
+     * <p>Si la integración no está configurada retorna silenciosamente, mismo
+     * patrón que {@link #generarAsync(PedidoShowroom, String, String)}.
+     *
+     * @param items     copia inmutable de los ítems del carrito (el caller pasa
+     *                  {@code carritoService.obtener(...).items()}, ya inmutable).
+     * @param operador  username destinatario del toast SSE.
+     * @param clientId  PC/pestaña origen (header {@code X-Client-Id}) para el
+     *                  auto-descargue; null = nadie auto-descarga.
+     */
+    @Async
+    public void generarDesdeCarritoAsync(List<CarritoItemDTO> items, String operador, String clientId) {
+        if (motivoNoConfigurado().isPresent()) {
+            log.debug("Pickit externo no configurado — carrito de {} no se procesa.", operador);
+            return;
+        }
+        try {
+            Path resultado = generarDesdeCarrito(items);
+            log.info("Pickit externo carrito de {} OK: {}", operador, resultado);
+            publicarEvento(operador, PickitExternoEvent.generated(null, resultado.toString(), clientId));
+        } catch (PickitExternoException e) {
+            log.warn("Pickit externo carrito de {} falló: {}", operador, e.getMessage());
+            publicarEvento(operador, PickitExternoEvent.failed(null, e.getMessage(), clientId));
+        }
+    }
+
     /** Publica al canal del operador o broadcast global como fallback. */
     private void publicarEvento(String operador, Object payload) {
         if (operador != null) {
@@ -197,7 +263,7 @@ public class PickitExternoService {
      * {@code ExcelManager.obtenerProductosManualesDesdeExcel}). El SKU debe
      * ser numérico (regex {@code \d+}) sino el parser lo descarta.
      */
-    private void escribirInputXlsx(PedidoShowroom pedido, Path destino) throws IOException {
+    void escribirInputXlsx(List<LineaInput> lineas, Path destino) throws IOException {
         try (Workbook wb = new XSSFWorkbook()) {
             Sheet sheet = wb.createSheet("Picking");
             CellStyle headerStyle = wb.createCellStyle();
@@ -210,10 +276,10 @@ public class PickitExternoService {
             Cell h2 = header.createCell(1); h2.setCellValue("CANTIDAD"); h2.setCellStyle(headerStyle);
 
             int rowIdx = 1;
-            for (PedidoShowroomItem it : pedido.getItems()) {
+            for (LineaInput it : lineas) {
                 Row row = sheet.createRow(rowIdx++);
-                row.createCell(0).setCellValue(it.getSku() == null ? "" : it.getSku());
-                row.createCell(1).setCellValue(it.getCantidad() == null ? 0 : it.getCantidad());
+                row.createCell(0).setCellValue(it.sku() == null ? "" : it.sku());
+                row.createCell(1).setCellValue(it.cantidad());
             }
             sheet.setColumnWidth(0, 6000);
             sheet.setColumnWidth(1, 4000);

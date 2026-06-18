@@ -447,6 +447,36 @@ public class ShowroomController {
     }
 
     /**
+     * Genera el pickit externo a partir del carrito actual del operador, al
+     * ABRIR el diálogo de pedido (antes de que exista un pedido persistido), para
+     * que el .xlsx esté listo mientras se cargan los datos del cliente. Async —
+     * el resultado llega vía SSE {@code pickit-externo} (con {@code pedidoId}
+     * null) y la PC origen auto-descarga el archivo.
+     *
+     * <p>400 si el carrito está vacío (nada que pickear); 503 si la integración
+     * no está configurada — mismo criterio que la regeneración manual por pedido.
+     */
+    @PostMapping("/carrito/pickit-externo")
+    public ResponseEntity<Map<String, Object>> generarPickitDesdeCarrito(
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId,
+            Authentication auth) {
+        CarritoStateDTO carrito = carritoService.obtener(auth.getName());
+        if (carrito.items().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "El carrito está vacío"));
+        }
+        return pickitExternoService.motivoNoConfigurado()
+                .<ResponseEntity<Map<String, Object>>>map(motivo -> ResponseEntity
+                        .status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(Map.of("error", motivo)))
+                .orElseGet(() -> {
+                    pickitExternoService.generarDesdeCarritoAsync(
+                            carrito.items(), auth.getName(), clientId);
+                    return ResponseEntity.accepted().body(Map.of(
+                            "message", "Pickit externo encolado — el toast confirmará el path generado."));
+                });
+    }
+
+    /**
      * Refresca on-demand stock + precios para una lista de SKUs.
      * Cada SKU consume 1 request DUX (~7s). Recomendado antes de cerrar pedido.
      */

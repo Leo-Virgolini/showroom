@@ -701,7 +701,6 @@ public class PedidoService {
                 // robándole una sesión en curso de otro cliente). Además el PDF de
                 // follow-up ("productos vistos no comprados") sale justamente de
                 // los items escaneados en una sesión, que acá no existen.
-                // El pickit externo SÍ se genera siempre — es un pedido real en DUX.
                 if (!request.origenPresupuesto()) {
                     // Finalizar la sesión de atención asociada (si la hay) y
                     // asociarla al pedido recién creado. Esto deja la sesión
@@ -737,7 +736,16 @@ public class PedidoService {
                         pdfFollowupOrchestrator.enviarTrasPedido(pedido);
                     }
                 }
-                pickitExternoService.generarAsync(pedido, clientId);
+                // Pickit externo: en el flujo showroom ya se generó al ABRIR el
+                // diálogo (desde el carrito), para tenerlo listo mientras se
+                // cargaban los datos del cliente — no se regenera acá. En el flujo
+                // presupuesto los ítems se cargan async al abrir, así que ahí no
+                // hay generación al abrir y se genera post-pedido como siempre.
+                // Si la generación al abrir falló, queda el botón "regenerar
+                // pickit" de la pantalla de pedidos como fallback.
+                if (request.origenPresupuesto()) {
+                    pickitExternoService.generarAsync(pedido, clientId);
+                }
 
                 return new CrearPedidoResponseDTO(
                         pedido.getId(),

@@ -380,7 +380,9 @@ export class App {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((e) => {
         if (this.esVistaVisor()) return;
-        const ref = `pedido #${e.pedidoId}`;
+        // pedidoId null = generación al abrir el diálogo (desde el carrito, aún
+        // sin pedido). El resto de los casos vienen de un pedido ya creado.
+        const ref = e.pedidoId != null ? `pedido #${e.pedidoId}` : 'pickit del carrito';
         const esOrigen = e.clientId != null && e.clientId === this.clientIdService.get();
         if (e.estado === 'GENERATED' && e.outputPath) {
           this.toast.add({
