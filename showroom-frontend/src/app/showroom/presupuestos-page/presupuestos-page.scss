@@ -314,6 +314,14 @@ $kt-amarillo: #a2ab00;
 }
 
 // =====================================================
+// Selector de forma de pago en la toolbar del presupuestador
+// Ancho estable para evitar jitter al cambiar entre opciones
+// =====================================================
+:host ::ng-deep .kt-forma-pago-pdf {
+  min-width: 11rem !important;
+}
+
+// =====================================================
 // Cards de formas de pago — barra superior coloreada,
 // consistente con el PDF generado.
 // =====================================================
