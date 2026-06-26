@@ -841,10 +841,6 @@ public class PresupuestoComercialPdfGenerator {
         return formas.stream().filter(f -> id.equals(f.id())).findFirst().orElse(null);
     }
 
-    static String etiquetaColumnaPrecio(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
-        return elegida == null ? "PRECIO EFECTIVO" : "PRECIO " + elegida.nombre().toUpperCase();
-    }
-
     static String etiquetaSubtotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
         return elegida == null ? "Subtotal efectivo" : "Subtotal " + elegida.nombre();
     }
@@ -2037,8 +2033,8 @@ public class PresupuestoComercialPdfGenerator {
                 .setFontSize(6.5f)
                 .setCharacterSpacing(0.3f)
                 .setFontColor(GRIS_MEDIO)
-                .setMarginTop(1f)
-                .setMargin(0));
+                .setMargin(0)
+                .setMarginTop(1f));
         return c;
     }
 

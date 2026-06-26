@@ -39,7 +39,6 @@ class PresupuestoComercialPdfFormaElegidaTest {
 
     @Test
     void etiquetas_sinForma_usanEfectivo() {
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaColumnaPrecio(null)).isEqualTo("PRECIO EFECTIVO");
         assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(null)).isEqualTo("Subtotal efectivo");
         assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(null)).isEqualTo("Total efectivo");
     }
@@ -47,7 +46,6 @@ class PresupuestoComercialPdfFormaElegidaTest {
     @Test
     void etiquetas_conForma_usanNombre() {
         var f = forma(7L, "Transferencia", BigDecimal.ZERO, true, null, null);
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaColumnaPrecio(f)).isEqualTo("PRECIO TRANSFERENCIA");
         assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(f)).isEqualTo("Subtotal Transferencia");
         assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(f)).isEqualTo("Total Transferencia");
     }

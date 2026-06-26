@@ -150,7 +150,12 @@ export function hayEscalonSuperior(
 export function iconoFormaReferencia(nombre: string | null | undefined): string {
   const n = (nombre ?? '').toLowerCase();
   if (n.includes('efectivo') || n.includes('contado')) return 'pi pi-money-bill';
-  if (n.includes('transfer')) return 'pi pi-arrow-right-arrow-left';
+  if (n.includes('dólar') || n.includes('dolar') || n.includes('usd')) return 'pi pi-dollar';
+  if (n.includes('transfer') || n.includes('depósito') || n.includes('deposito')) {
+    return 'pi pi-arrow-right-arrow-left';
+  }
+  if (n.includes('cheque')) return 'pi pi-receipt';
+  if (n.includes('mercado')) return 'pi pi-shopping-cart';
   if (
     n.includes('tarjeta') ||
     n.includes('crédito') || n.includes('credito') ||
@@ -159,5 +164,6 @@ export function iconoFormaReferencia(nombre: string | null | undefined): string 
   ) {
     return 'pi pi-credit-card';
   }
+  if (n.includes('remito')) return 'pi pi-file';
   return 'pi pi-tag';
 }

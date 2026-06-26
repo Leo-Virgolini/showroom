@@ -75,7 +75,6 @@ export class PresupuestosHistorialPage {
   private readonly router = inject(Router);
   private readonly precioPerfil = inject(PrecioPerfilService);
 
-
   /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
   protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
