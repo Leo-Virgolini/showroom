@@ -501,10 +501,9 @@ $kt-amarillo: #a2ab00;
   min-width: 0;
 }
 
-// Carril de chips en UNA fila, SIN scroll: los chips se reparten el ancho
-// disponible y se encogen para entrar todos. El precio queda siempre visible;
-// el nombre se recorta con "…" solo cuando falta espacio (en pantallas anchas
-// entran completos). El chevron queda fijo a la derecha.
+// Carril de chips: los chips se envuelven a la fila siguiente si no entran
+// todos en una sola fila. El precio queda siempre visible; el nombre se
+// muestra completo. El chevron queda fijo a la derecha.
 .kt-footer-chips {
   display: flex;
   align-items: center;
@@ -512,7 +511,8 @@ $kt-amarillo: #a2ab00;
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
-  overflow: hidden;
+  flex-wrap: wrap;
+  row-gap: 0.3rem;
 }
 
 // Chip compacto de forma de pago — muestra ícono + nombre + precio en 1 línea.
@@ -530,7 +530,7 @@ $kt-amarillo: #a2ab00;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  flex: 0 1 auto; // puede encogerse para que entren todos en una fila
+  flex: 0 0 auto; // no se encoge: el nombre entra completo, los chips envuelven
   min-width: 0;
 
   > i {
@@ -539,12 +539,10 @@ $kt-amarillo: #a2ab00;
     flex-shrink: 0; // los íconos no se deforman
   }
 
-  // Nombre de la forma: se recorta con elipsis cuando el chip se encoge.
+  // Nombre de la forma: se muestra completo (los chips ahora envuelven a otra
+  // fila si no entran, en lugar de recortar con elipsis).
   .kt-forma-chip-nombre {
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
-    min-width: 0;
   }
 }
 

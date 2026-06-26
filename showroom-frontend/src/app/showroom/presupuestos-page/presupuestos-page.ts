@@ -940,6 +940,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           this.rubroOtros.set(rubroGuardado);
         }
         this.cotizacionIndividual.set(Boolean(det.cotizacionIndividual));
+        // Forma de pago elegida del PDF agregado — pre-selecciona el dropdown.
+        this.formaPagoSeleccionadaId.set(det.formaPagoSeleccionadaId ?? null);
 
         const skuGen = this.skuGenerico();
         // Los items genéricos NO se refrescan contra catálogo (su SKU es el
@@ -2143,6 +2145,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     }
     if (!telefono) {
       this.warn('Falta el teléfono del cliente.');
+      return false;
+    }
+    const nombre = this.clienteNombre().trim();
+    if (!nombre) {
+      this.warn('Falta el nombre del cliente.');
       return false;
     }
     return true;
