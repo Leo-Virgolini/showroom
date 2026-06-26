@@ -529,6 +529,48 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return this.cambiosPrecio().get(uid);
   }
 
+  /** Objeto de la forma de pago elegida (null = "Todas"). */
+  readonly formaPagoSeleccionada = computed<FormaPago | null>(() => {
+    const id = this.formaPagoSeleccionadaId();
+    if (id == null) return null;
+    return this.formasPago().find((f) => f.id === id) ?? null;
+  });
+
+  /** Precio unitario a MOSTRAR según la forma elegida; con "Todas" cae al
+   *  precio Efectivo (referencia). Solo visual — el payload sigue usando
+   *  `precioMostrado` (Efectivo). */
+  precioVisualItem(it: {
+    pvpKtGastroConIva: number | null;
+    pvpKtGastroSinIva: number | null;
+    porcIva?: number | null;
+    rubro?: string | null;
+  }): number {
+    const forma = this.formaPagoSeleccionada();
+    if (!forma) return this.precioMostrado(it);
+    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(it.rubro));
+    return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
+  }
+
+  /** Subtotal BRUTO en la forma elegida (sin descuentos individuales). Con
+   *  "Todas" coincide con `subtotalReferencia`. */
+  readonly subtotalVisual = computed(() => {
+    this.itemsTick();
+    return this.items().reduce((acc, it) => acc + this.precioVisualItem(it) * it.cantidad, 0);
+  });
+
+  /** Total NETO en la forma elegida (con los descuentos individuales). Con
+   *  "Todas" coincide con `totalReferencia`. */
+  readonly totalVisual = computed(() => {
+    this.itemsTick();
+    return this.items().reduce(
+      (acc, it) => acc + this.precioVisualItem(it) * it.cantidad * (1 - (it.descuentoPorcentaje ?? 0) / 100),
+      0,
+    );
+  });
+
+  /** Ahorro por descuentos individuales en la forma elegida (bruto − neto). */
+  readonly descuentoVisualMonto = computed(() => this.subtotalVisual() - this.totalVisual());
+
   /** Subtotal BRUTO EFECTIVO (sin ningún descuento) — precio efectivo unitario
    *  (forma primaria, según rubro) por cantidad. Es la base para calcular el
    *  descuento efectivo total. */

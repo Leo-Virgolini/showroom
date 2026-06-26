@@ -652,7 +652,7 @@
                       <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0"
                         [class.line-through]="cambioPrecioDe(it.uid)"
                         [class.text-muted-color]="cambioPrecioDe(it.uid)">
-                        {{ precioMostrado(it) | currency:'ARS':'symbol':'1.0-0' }}
+                        {{ precioVisualItem(it) | currency:'ARS':'symbol':'1.0-0' }}
                       </span>
                       <!-- Pill de precio desactualizado: el catálogo cambió desde
                            que se guardó. Flecha ↑ si subió, ↓ si bajó. El precio
@@ -803,14 +803,14 @@
             </span>
             <div class="flex items-baseline gap-2 flex-wrap">
               <span class="text-xl sm:text-2xl font-bold text-[#3B1E09] dark:text-surface-0">
-                {{ totalReferencia() | currency:'ARS':'symbol':'1.0-0' }}
+                {{ totalVisual() | currency:'ARS':'symbol':'1.0-0' }}
               </span>
-              @if (descuentoTotalMonto() > 0) {
+              @if (descuentoVisualMonto() > 0) {
                 <span class="text-[11px] text-muted-color line-through">
-                  {{ subtotalReferencia() | currency:'ARS':'symbol':'1.0-0' }}
+                  {{ subtotalVisual() | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
                 <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                  −{{ descuentoTotalMonto() | currency:'ARS':'symbol':'1.0-0' }}
+                  −{{ descuentoVisualMonto() | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
               }
             </div>
@@ -1041,7 +1041,7 @@
         <div class="text-right leading-tight">
           <div class="text-[10px] uppercase tracking-wider font-bold text-[#FF861C]">Total</div>
           <span class="font-bold text-[#3B1E09] dark:text-surface-0 text-lg">
-            {{ totalReferencia() | currency:'ARS':'symbol':'1.0-0' }}
+            {{ totalVisual() | currency:'ARS':'symbol':'1.0-0' }}
           </span>
         </div>
       </div>
