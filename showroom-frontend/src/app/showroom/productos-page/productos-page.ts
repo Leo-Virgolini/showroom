@@ -11,6 +11,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, debounceTime } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -60,6 +61,7 @@ export class ProductosPage {
   private readonly toast = inject(MessageService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly syncState = inject(SyncStateService);
+  private readonly route = inject(ActivatedRoute);
 
   /** Estado del sync global (toolbar + última sync visible en el badge). */
   readonly health = this.syncState.health;
@@ -109,6 +111,12 @@ export class ProductosPage {
   );
 
   constructor() {
+    // Deep-link desde el SKU de los historiales (/productos?q=SKU): sembramos
+    // la búsqueda antes de que el p-table dispare su primer onLazyLoad, así la
+    // carga inicial ya filtra por ese SKU. Mismo patrón que pedidos/presupuestos.
+    const q = this.route.snapshot.queryParamMap.get('q');
+    if (q) this.busqueda.set(q);
+
     this.filtroTrigger$
       .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
