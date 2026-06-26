@@ -598,7 +598,7 @@ public class PresupuestoComercialService {
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
                 datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
-                false, datos.items(), formasAgregadas);
+                false, datos.formaPagoSeleccionadaId(), datos.items(), formasAgregadas);
     }
 
     /** Total con IVA de una línea: precio con IVA × (1 − desc%) × cantidad. */
@@ -649,7 +649,9 @@ public class PresupuestoComercialService {
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
                 datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
-                true, datos.items(), formasIndividuales);
+                // En individual el id de forma elegida no aplica (cada ítem
+                // lista sus propias formas) — se descarta.
+                true, null, datos.items(), formasIndividuales);
     }
 
     /** Deduplica formas de pago snapshot: en modo individual el JSON
@@ -696,6 +698,7 @@ public class PresupuestoComercialService {
                 p.getObservaciones(),
                 p.getDescuentoGlobalPorcentaje(),
                 individual,
+                p.getFormaPagoSeleccionadaId(),
                 items == null ? List.of() : items,
                 formas == null ? List.of() : formas);
     }
@@ -944,6 +947,7 @@ public class PresupuestoComercialService {
         p.setRubro(TextUtils.blankToNull(datos.rubro()));
         p.setObservaciones(TextUtils.blankToNull(datos.observaciones()));
         p.setDescuentoGlobalPorcentaje(descGlobal);
+        p.setFormaPagoSeleccionadaId(datos.formaPagoSeleccionadaId());
         p.setSubtotalSinIva(subtotalSinIva.setScale(2, RoundingMode.HALF_UP));
         p.setItemsJson(escribirJson(datos.items()));
         p.setFormasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()));

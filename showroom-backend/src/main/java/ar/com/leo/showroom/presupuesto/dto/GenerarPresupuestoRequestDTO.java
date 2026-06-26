@@ -45,6 +45,14 @@ public record GenerarPresupuestoRequestDTO(
          *  agregado tradicional. */
         Boolean cotizacionIndividual,
 
+        /** Id de la forma de pago elegida para expresar TODO el presupuesto
+         *  agregado en esa forma (precio por ítem + total + etiquetas). Null =
+         *  "Todas": el PDF muestra el precio efectivo por ítem y la sección
+         *  comparativa de formas, como históricamente. Solo aplica al modo
+         *  agregado; en cotización individual se ignora. El backend resuelve el
+         *  snapshot correspondiente desde {@link #formasPago()} por este id. */
+        Long formaPagoSeleccionadaId,
+
         @NotEmpty(message = "El presupuesto debe tener al menos un ítem")
         @Valid
         List<Item> items,

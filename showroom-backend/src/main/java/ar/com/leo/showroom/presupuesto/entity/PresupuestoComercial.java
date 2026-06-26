@@ -92,6 +92,13 @@ public class PresupuestoComercial {
     @Column(name = "descuento_global_porcentaje", precision = 5, scale = 2)
     private BigDecimal descuentoGlobalPorcentaje;
 
+    /** Id de la forma de pago con la que se expresó el presupuesto agregado.
+     *  Null = "Todas" (precio efectivo por ítem + sección comparativa de
+     *  formas, comportamiento histórico). Se persiste para regenerar el PDF
+     *  idéntico desde el historial. No aplica a cotización individual. */
+    @Column(name = "forma_pago_seleccionada_id")
+    private Long formaPagoSeleccionadaId;
+
     /** Items del presupuesto serializados como JSON (sku, descripcion, cantidad,
      *  precioConIva, porcIva, descuentoPorcentaje, imagenSku). */
     @Lob

@@ -794,6 +794,10 @@ export interface GenerarPresupuestoRequest {
    *  produce el formato agregado tradicional (tabla detalle + total +
    *  formas globales). */
   cotizacionIndividual?: boolean;
+  /** Id de la forma de pago elegida para el PDF agregado. null/undefined =
+   *  "Todas" (precio efectivo por ítem + sección de formas comparativas, como
+   *  hoy). Solo aplica al modo agregado; en individual el backend lo ignora. */
+  formaPagoSeleccionadaId?: number | null;
   items: {
     sku: string;
     descripcion?: string | null;
