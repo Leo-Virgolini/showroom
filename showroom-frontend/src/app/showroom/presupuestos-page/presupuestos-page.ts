@@ -47,6 +47,7 @@ import {
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
+  iconoFormaReferencia,
   precioPorForma,
   redondearMoneda,
 } from '../precio-referencia.util';
@@ -2125,21 +2126,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // Helpers de UI
   // ============================================================
 
-  /** Devuelve el ícono PrimeIcons más apropiado para una forma de pago,
-   *  detectando por el nombre (case-insensitive, sin acentos). Si nada
-   *  matchea, cae al ícono genérico de tag. */
+  /** Ícono PrimeNG para una forma de pago (mismo criterio que el showroom). */
   iconoForma(nombre: string | null | undefined): string {
-    const n = (nombre ?? '').toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '');
-    if (n.includes('efectivo')) return 'pi pi-money-bill';
-    if (n.includes('usd') || n.includes('dolar') || n.includes('dólar')) return 'pi pi-dollar';
-    if (n.includes('transferencia') || n.includes('deposito') || n.includes('depósito')) return 'pi pi-arrow-right-arrow-left';
-    if (n.includes('check') || n.includes('cheque')) return 'pi pi-receipt';
-    if (n.includes('mercadopago') || n.includes('mercado pago')) return 'pi pi-shopping-cart';
-    if (n.includes('cuota')) return 'pi pi-calendar';
-    if (n.includes('tarjeta') || n.includes('debito') || n.includes('débito') || n.includes('credito') || n.includes('crédito')) return 'pi pi-credit-card';
-    if (n.includes('remito')) return 'pi pi-file';
-    return 'pi pi-tag';
+    return iconoFormaReferencia(nombre);
   }
 
   /** Descripción comercial de la forma de pago que se muestra en la card del
