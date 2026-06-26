@@ -300,7 +300,8 @@ public class PedidoService {
                         it.getAplicaIva(),
                         it.getDescuentoPorcentaje(),
                         imagenLocalService.urlPublica(it.getSku()),
-                        it.getComentarios()))
+                        it.getComentarios(),
+                        it.getRubro()))
                 .toList();
         String provinciaNombre = p.getCodigoProvincia() != null
                 ? provinciaRepository.findByCodIsoIgnoreCase(p.getCodigoProvincia())
@@ -589,6 +590,7 @@ public class PedidoService {
                     .pedido(pedido)
                     .sku(it.sku())
                     .descripcion(descripcion)
+                    .rubro(it.rubro())
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
                     .porcIva(porcIva)

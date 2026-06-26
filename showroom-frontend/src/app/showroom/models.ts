@@ -659,6 +659,9 @@ export interface PedidoItemDetalle {
    *  Trae la descripción tipeada por el operador para items genéricos; null
    *  en items normales del catálogo. */
   comentarios?: string | null;
+  /** Rubro DUX del producto (snapshot del pedido). Para marcar maquinaria en la
+   *  tabla. Null en pedidos anteriores a esta columna. */
+  rubro?: string | null;
 }
 
 export interface PedidoDetalle {

@@ -32,6 +32,12 @@ public class PedidoShowroomItem {
     @Column(length = 200)
     private String descripcion;
 
+    /** Rubro DUX del producto al momento del pedido (snapshot). Se usa para
+     *  marcar visualmente los ítems de maquinaria (MAQUINAS INDUSTRIALES) en la
+     *  tabla de pedidos. Null en pedidos anteriores a esta columna. */
+    @Column(name = "rubro", length = 150)
+    private String rubro;
+
     @Column(nullable = false)
     private Integer cantidad;
 

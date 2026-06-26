@@ -24,6 +24,9 @@ public record PedidoItemDTO(
         /** Comentarios libres que viajaron como {@code comentarios} de la línea
          *  al payload DUX. Usado para describir productos genéricos cargados
          *  con el SKU comodín. Null en líneas de producto del catálogo. */
-        String comentarios
+        String comentarios,
+        /** Rubro DUX del producto (snapshot del pedido). Para marcar maquinaria
+         *  en la tabla. Null en pedidos anteriores a esta columna. */
+        String rubro
 ) {
 }
