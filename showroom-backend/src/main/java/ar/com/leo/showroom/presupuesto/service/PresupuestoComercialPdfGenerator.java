@@ -807,7 +807,7 @@ public class PresupuestoComercialPdfGenerator {
                 // criterio que la tabla de productos para que cuadren.
                 precioMostrado = PrecioPerfilCalculator.calcularPrecioFinal(
                         precioConIva, porcIva,
-                        recargoDe(formaElegida, esMaq), aplicaIvaDe(formaElegida, esMaq));
+                        formaElegida.recargoPerfil(esMaq), formaElegida.aplicaIvaPerfil(esMaq));
                 if (precioMostrado == null) precioMostrado = BigDecimal.ZERO;
             } else if (it.precioReferencia() != null) {
                 precioMostrado = it.precioReferencia();
@@ -851,22 +851,6 @@ public class PresupuestoComercialPdfGenerator {
 
     static String etiquetaTotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
         return elegida == null ? "Total efectivo" : "Total " + elegida.nombre();
-    }
-
-    /** Recargo % del perfil que corresponde al rubro (maquinaria si esMaq).
-     *  Fallback a 0 — el perfil maquinaria NO hereda del menaje. */
-    static BigDecimal recargoDe(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq) {
-        if (esMaq) {
-            return f.recargoPorcentajeMaquinaria() != null ? f.recargoPorcentajeMaquinaria() : BigDecimal.ZERO;
-        }
-        return f.recargoPorcentaje() != null ? f.recargoPorcentaje() : BigDecimal.ZERO;
-    }
-
-    /** aplicaIva del perfil que corresponde al rubro. Maquinaria: TRUE solo si
-     *  el flag maquinaria es true. Menaje: true salvo que sea explícitamente false. */
-    static boolean aplicaIvaDe(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq) {
-        return esMaq ? Boolean.TRUE.equals(f.aplicaIvaMaquinaria())
-                     : !Boolean.FALSE.equals(f.aplicaIva());
     }
 
     // =====================================================
@@ -1114,13 +1098,12 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
             // Precio mostrado por línea SEGÚN EL RUBRO (misma lógica que el
             // showroom): maquinaria se cotiza SIN IVA; el resto (menaje) CON
-            // IVA. La badge por celda aclara el régimen para que el cliente
-            // sepa si el monto ya incluye IVA. En presupuestos mixtos cada
-            // fila puede llevar régimen distinto.
+            // IVA. En presupuestos mixtos cada fila puede llevar régimen distinto.
             boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
-            // Precio mostrado = PRECIO EFECTIVO (forma primaria), ya según rubro.
-            // Si el presupuesto es viejo y no trae `precioReferencia`, caemos al
-            // precio de lista por rubro (maquinaria s/IVA, resto c/IVA).
+            // Con una forma elegida el precio se expresa en ESA forma (su perfil
+            // de rubro). Sin forma ("Todas") es el PRECIO EFECTIVO (forma
+            // primaria): precioReferencia si viene, o el precio de lista por
+            // rubro (maquinaria s/IVA, resto c/IVA) en presupuestos viejos.
             BigDecimal precio;
             if (formaElegida != null) {
                 // Precio unitario con la forma elegida, según el perfil del rubro
@@ -1128,8 +1111,8 @@ public class PresupuestoComercialPdfGenerator {
                 // calculador que el showroom y las cards de formas.
                 precio = PrecioPerfilCalculator.calcularPrecioFinal(
                         precioConIva, porcIva,
-                        recargoDe(formaElegida, esMaquinaria),
-                        aplicaIvaDe(formaElegida, esMaquinaria));
+                        formaElegida.recargoPerfil(esMaquinaria),
+                        formaElegida.aplicaIvaPerfil(esMaquinaria));
                 if (precio == null) precio = BigDecimal.ZERO;
             } else if (it.precioReferencia() != null) {
                 precio = it.precioReferencia();

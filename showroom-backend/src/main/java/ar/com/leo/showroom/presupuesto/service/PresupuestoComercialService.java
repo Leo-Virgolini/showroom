@@ -618,13 +618,8 @@ public class PresupuestoComercialService {
             GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq,
             GenerarPresupuestoRequestDTO.Item it) {
         BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
-        BigDecimal recargo = esMaq
-                ? (f.recargoPorcentajeMaquinaria() != null ? f.recargoPorcentajeMaquinaria() : BigDecimal.ZERO)
-                : (f.recargoPorcentaje() != null ? f.recargoPorcentaje() : BigDecimal.ZERO);
-        boolean aplicaIva = esMaq
-                ? Boolean.TRUE.equals(f.aplicaIvaMaquinaria())
-                : !Boolean.FALSE.equals(f.aplicaIva());
-        BigDecimal pf = PrecioPerfilCalculator.calcularPrecioFinal(totalLineaConIva(it), porcIva, recargo, aplicaIva);
+        BigDecimal pf = PrecioPerfilCalculator.calcularPrecioFinal(
+                totalLineaConIva(it), porcIva, f.recargoPerfil(esMaq), f.aplicaIvaPerfil(esMaq));
         return pf != null ? pf : BigDecimal.ZERO;
     }
 

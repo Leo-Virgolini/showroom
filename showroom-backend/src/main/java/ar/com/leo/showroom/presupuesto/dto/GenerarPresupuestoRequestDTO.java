@@ -136,5 +136,24 @@ public record GenerarPresupuestoRequestDTO(
             BigDecimal recargoPorcentajeMaquinaria,
             /** aplicaIva del perfil maquinaria (nullable → false). */
             Boolean aplicaIvaMaquinaria
-    ) {}
+    ) {
+        /** Recargo % del perfil que corresponde al rubro (maquinaria si {@code
+         *  esMaquinaria}). El perfil maquinaria NO hereda del menaje: su recargo
+         *  null cae a 0. Fuente única de la resolución por perfil, reusada por el
+         *  generador del PDF agregado y por el cálculo de precio por forma del
+         *  service. */
+        public BigDecimal recargoPerfil(boolean esMaquinaria) {
+            if (esMaquinaria) {
+                return recargoPorcentajeMaquinaria != null ? recargoPorcentajeMaquinaria : BigDecimal.ZERO;
+            }
+            return recargoPorcentaje != null ? recargoPorcentaje : BigDecimal.ZERO;
+        }
+
+        /** aplicaIva del perfil del rubro: maquinaria es true solo si su flag es
+         *  true; menaje es true salvo que sea explícitamente false. */
+        public boolean aplicaIvaPerfil(boolean esMaquinaria) {
+            return esMaquinaria ? Boolean.TRUE.equals(aplicaIvaMaquinaria)
+                                : !Boolean.FALSE.equals(aplicaIva);
+        }
+    }
 }

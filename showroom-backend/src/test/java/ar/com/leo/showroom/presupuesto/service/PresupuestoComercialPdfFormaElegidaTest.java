@@ -55,21 +55,27 @@ class PresupuestoComercialPdfFormaElegidaTest {
     @Test
     void perfilMenaje_usaRecargoYAplicaIvaBase() {
         var f = forma(7L, "Crédito", new BigDecimal("15"), true, new BigDecimal("20"), false);
-        assertThat(PresupuestoComercialPdfGenerator.recargoDe(f, false)).isEqualByComparingTo("15");
-        assertThat(PresupuestoComercialPdfGenerator.aplicaIvaDe(f, false)).isTrue();
+        assertThat(f.recargoPerfil(false)).isEqualByComparingTo("15");
+        assertThat(f.aplicaIvaPerfil(false)).isTrue();
     }
 
     @Test
     void perfilMaquinaria_usaRecargoYAplicaIvaMaquinaria() {
         var f = forma(7L, "Crédito", new BigDecimal("15"), true, new BigDecimal("20"), false);
-        assertThat(PresupuestoComercialPdfGenerator.recargoDe(f, true)).isEqualByComparingTo("20");
-        assertThat(PresupuestoComercialPdfGenerator.aplicaIvaDe(f, true)).isFalse();
+        assertThat(f.recargoPerfil(true)).isEqualByComparingTo("20");
+        assertThat(f.aplicaIvaPerfil(true)).isFalse();
     }
 
     @Test
     void perfilMaquinaria_recargoNull_caeACero() {
         var f = forma(7L, "Crédito", new BigDecimal("15"), true, null, null);
-        assertThat(PresupuestoComercialPdfGenerator.recargoDe(f, true)).isEqualByComparingTo("0");
-        assertThat(PresupuestoComercialPdfGenerator.aplicaIvaDe(f, true)).isFalse();
+        assertThat(f.recargoPerfil(true)).isEqualByComparingTo("0");
+        assertThat(f.aplicaIvaPerfil(true)).isFalse();
+    }
+
+    @Test
+    void perfilMenaje_aplicaIvaNull_esTrue() {
+        var f = forma(7L, "Efectivo", BigDecimal.ZERO, null, null, null);
+        assertThat(f.aplicaIvaPerfil(false)).as("menaje sin flag ⇒ true").isTrue();
     }
 }
