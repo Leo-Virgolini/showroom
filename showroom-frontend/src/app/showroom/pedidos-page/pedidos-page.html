@@ -515,8 +515,21 @@
                               </div>
                             }
                           </td>
-                          <td class="font-mono text-sm">{{ it.sku }}</td>
-                          <td>{{ it.descripcion ?? '—' }}</td>
+                          <td>
+                            <a [routerLink]="['/productos']" [queryParams]="{ q: it.sku }"
+                               target="_blank" rel="noopener"
+                               class="font-mono text-sm text-primary hover:underline"
+                               pTooltip="Ver en el catálogo" tooltipPosition="top">
+                              {{ it.sku }}
+                            </a>
+                          </td>
+                          <td>
+                            @if (esRubroMaquinaria(it.rubro)) {
+                              <i class="pi pi-wrench text-amber-600 dark:text-amber-400 mr-1 text-[0.7rem]"
+                                 pTooltip="Maquinaria · MAQUINAS INDUSTRIALES" tooltipPosition="top"></i>
+                            }
+                            {{ it.descripcion ?? '—' }}
+                          </td>
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
                           <td class="text-right tabular-nums">
                             @if (precioForma(it, det); as p) {

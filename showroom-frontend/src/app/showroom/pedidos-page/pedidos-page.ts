@@ -32,6 +32,7 @@ import {
   EstadoPedido,
   PedidoDetalle,
   PedidoListItem,
+  rubroExcluyeDescuentos,
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
 import { precioSinIva as quitarIva } from '../precio-referencia.util';
@@ -494,6 +495,9 @@ export class PedidosPage {
   }
 
   trackById = (_: number, it: PedidoListItem) => it.id;
+
+  /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
+  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
   estaEnviandoEmail(id: number): boolean {
     return this.enviandoEmail().has(id);
