@@ -811,6 +811,48 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     // =====================================================
+    // Forma de pago elegida (modo agregado) — helpers puros.
+    // Cuando el operador fija una forma, el presupuesto entero se expresa en
+    // ella: precio por ítem, total y etiquetas. null = "Todas" (efectivo).
+    // =====================================================
+
+    /** Snapshot elegido por id dentro de las formas enviadas. null si id es
+     *  null, la lista es null o el id no aparece (→ se trata como "Todas"). */
+    static GenerarPresupuestoRequestDTO.FormaPagoSnapshot resolverFormaElegida(
+            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas, Long id) {
+        if (id == null || formas == null) return null;
+        return formas.stream().filter(f -> id.equals(f.id())).findFirst().orElse(null);
+    }
+
+    static String etiquetaColumnaPrecio(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
+        return elegida == null ? "PRECIO EFECTIVO" : "PRECIO " + elegida.nombre().toUpperCase();
+    }
+
+    static String etiquetaSubtotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
+        return elegida == null ? "Subtotal efectivo" : "Subtotal " + elegida.nombre();
+    }
+
+    static String etiquetaTotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
+        return elegida == null ? "Total efectivo" : "Total " + elegida.nombre();
+    }
+
+    /** Recargo % del perfil que corresponde al rubro (maquinaria si esMaq).
+     *  Fallback a 0 — el perfil maquinaria NO hereda del menaje. */
+    static BigDecimal recargoDe(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq) {
+        if (esMaq) {
+            return f.recargoPorcentajeMaquinaria() != null ? f.recargoPorcentajeMaquinaria() : BigDecimal.ZERO;
+        }
+        return f.recargoPorcentaje() != null ? f.recargoPorcentaje() : BigDecimal.ZERO;
+    }
+
+    /** aplicaIva del perfil que corresponde al rubro. Maquinaria: TRUE solo si
+     *  el flag maquinaria es true. Menaje: true salvo que sea explícitamente false. */
+    static boolean aplicaIvaDe(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f, boolean esMaq) {
+        return esMaq ? Boolean.TRUE.equals(f.aplicaIvaMaquinaria())
+                     : !Boolean.FALSE.equals(f.aplicaIva());
+    }
+
+    // =====================================================
     // Header — letterhead KT GASTRO:
     //   - Banda decorativa con gradient naranja → verde (mismo gradient que
     //     la PWA, simulado con 3 celdas de degradado porque iText no
