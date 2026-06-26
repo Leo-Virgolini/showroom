@@ -37,5 +37,9 @@ public record PresupuestoDetalleDTO(
          *  pedido" solo cuando el presupuesto se editó tras la conversión. */
         Instant convertidoAt,
         List<GenerarPresupuestoRequestDTO.Item> items,
-        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasPago
+        List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasPago,
+        /** Id de la forma de pago elegida para el PDF agregado (null = "Todas").
+         *  Permite que la pantalla de edición la pre-seleccione y que el
+         *  historial muestre solo esa forma. */
+        Long formaPagoSeleccionadaId
 ) {}

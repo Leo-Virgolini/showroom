@@ -1079,7 +1079,7 @@ public class PresupuestoComercialPdfGenerator {
         // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
         // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
         // resto), pero no se muestra el badge para no recargar la fila.
-        tabla.addHeaderCell(celdaHeader(etiquetaColumnaPrecio(formaElegida)).setTextAlignment(TextAlignment.RIGHT));
+        tabla.addHeaderCell(celdaHeaderPrecio(formaElegida));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -2012,6 +2012,34 @@ public class PresupuestoComercialPdfGenerator {
                         .setFontColor(GRIS_MEDIO)
                         .simulateBold()
                         .setMargin(0));
+    }
+
+    /** Celda del header de la columna de precio. Sin forma elegida es el
+     *  header simple ("PRECIO EFECTIVO"). Con forma elegida, da jerarquía:
+     *  "PRECIO" como título + el nombre de la forma como subtítulo más chico y
+     *  gris, para que un nombre largo no se amontone en varias líneas iguales. */
+    private static Cell celdaHeaderPrecio(GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
+        if (formaElegida == null) {
+            return celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT);
+        }
+        Cell c = new Cell()
+                .setBorder(Border.NO_BORDER)
+                .setBorderBottom(new SolidBorder(GRIS_LINEA, 1f))
+                .setPadding(6)
+                .setTextAlignment(TextAlignment.RIGHT);
+        c.add(new Paragraph("PRECIO")
+                .setFontSize(8)
+                .setCharacterSpacing(1.5f)
+                .setFontColor(GRIS_MEDIO)
+                .simulateBold()
+                .setMargin(0));
+        c.add(new Paragraph(formaElegida.nombre())
+                .setFontSize(6.5f)
+                .setCharacterSpacing(0.3f)
+                .setFontColor(GRIS_MEDIO)
+                .setMarginTop(1f)
+                .setMargin(0));
+        return c;
     }
 
     /** Header de dos líneas para una columna de descuento por escalón: el "-X%"

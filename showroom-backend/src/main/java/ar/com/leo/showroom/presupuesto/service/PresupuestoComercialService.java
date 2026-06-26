@@ -306,7 +306,8 @@ public class PresupuestoComercialService {
                 p.getConvertidoEnPedidoId(),
                 p.getConvertidoAt(),
                 datos.items(),
-                datos.formasPago());
+                datos.formasPago(),
+                p.getFormaPagoSeleccionadaId());
     }
 
     public PresupuestoComercial obtener(Long id) {

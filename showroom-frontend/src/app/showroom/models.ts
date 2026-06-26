@@ -883,6 +883,9 @@ export interface PresupuestoDetalle {
    *  presupuesto se editó después (modificadoAt > convertidoAt) se habilita
    *  "Regenerar pedido". */
   convertidoAt?: string | null;
+  /** Id de la forma de pago elegida (null = "Todas"). Lo usa la edición para
+   *  pre-seleccionar el dropdown y el historial para mostrar solo esa forma. */
+  formaPagoSeleccionadaId?: number | null;
   items: {
     sku: string;
     descripcion: string | null;
