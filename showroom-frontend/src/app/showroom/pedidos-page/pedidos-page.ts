@@ -34,6 +34,7 @@ import {
   PedidoListItem,
   rubroExcluyeDescuentos,
 } from '../models';
+import { abrirCatalogoProducto } from '../catalogo-nav.util';
 import { BackendStatusService } from '../backend-status.service';
 import { precioSinIva as quitarIva } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
@@ -498,6 +499,8 @@ export class PedidosPage {
 
   /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
   protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** Abre el catálogo filtrado por el SKU en una pestaña nueva (ver util). */
+  protected readonly abrirCatalogoProducto = abrirCatalogoProducto;
 
   estaEnviandoEmail(id: number): boolean {
     return this.enviandoEmail().has(id);

@@ -24,6 +24,7 @@ import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
 import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem, rubroExcluyeDescuentos } from '../models';
+import { abrirCatalogoProducto } from '../catalogo-nav.util';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -75,6 +76,8 @@ export class PresupuestosHistorialPage {
 
   /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
   protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** Abre el catálogo filtrado por el SKU en una pestaña nueva (ver util). */
+  protected readonly abrirCatalogoProducto = abrirCatalogoProducto;
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
