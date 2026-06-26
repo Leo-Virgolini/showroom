@@ -261,9 +261,17 @@ public class PresupuestoComercialPdfGenerator {
                 agregarHeader(doc, presupuesto, logoHeader, tituloHeader, subtituloHeader, mostrarNumero);
                 agregarCardCliente(doc, presupuesto);
                 if (mostrarTotalesYFormas) {
-                    agregarTablaDetalle(doc, datos.items(), sinImagen);
-                    agregarTotalesAgregado(doc, datos);
-                    agregarFormasPago(doc, datos.formasPago(), datos.items());
+                    // Forma de pago elegida (null = "Todas"): cuando hay una,
+                    // toda la cotización se expresa en ella y la sección
+                    // comparativa de formas se omite (sus precios ya están en la
+                    // tabla). Solo aplica al modo agregado.
+                    GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida =
+                            resolverFormaElegida(datos.formasPago(), datos.formaPagoSeleccionadaId());
+                    agregarTablaDetalle(doc, datos.items(), sinImagen, formaElegida);
+                    agregarTotalesAgregado(doc, datos, formaElegida);
+                    if (formaElegida == null) {
+                        agregarFormasPago(doc, datos.formasPago(), datos.items());
+                    }
                 } else {
                     List<EscalaDescuento> escalones = escalaDescuentoService.listar();
                     agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones);
@@ -782,7 +790,8 @@ public class PresupuestoComercialPdfGenerator {
     // Modo agregado — calcula subtotal bruto + total a partir de los items y
     // delega en la card de totales reutilizable.
     // =====================================================
-    private void agregarTotalesAgregado(Document doc, GenerarPresupuestoRequestDTO datos) {
+    private void agregarTotalesAgregado(Document doc, GenerarPresupuestoRequestDTO datos,
+                                        GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
         java.util.Set<String> rubrosMaq = precioPerfilCalculator.rubrosMaquinariaNormalizados();
         BigDecimal subtotalBruto = BigDecimal.ZERO;
         BigDecimal totalNeto = BigDecimal.ZERO;
@@ -791,15 +800,22 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal precioConIva = it.precioConIva() == null ? BigDecimal.ZERO : it.precioConIva();
             BigDecimal porcIva = it.porcIva() == null ? PrecioPerfilCalculator.IVA_DEFAULT : it.porcIva();
             BigDecimal desc = it.descuentoPorcentaje() == null ? BigDecimal.ZERO : it.descuentoPorcentaje();
-            // Precio EFECTIVO (forma primaria), igual que la tabla de productos.
-            // Fallback presupuestos viejos: precio de lista según rubro
-            // (maquinaria sin IVA, resto con IVA).
             boolean esMaq = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
-            BigDecimal precioMostrado = it.precioReferencia() != null
-                    ? it.precioReferencia()
-                    : (esMaq
+            BigDecimal precioMostrado;
+            if (formaElegida != null) {
+                // Precio unitario con la forma elegida (perfil del rubro). Mismo
+                // criterio que la tabla de productos para que cuadren.
+                precioMostrado = PrecioPerfilCalculator.calcularPrecioFinal(
+                        precioConIva, porcIva,
+                        recargoDe(formaElegida, esMaq), aplicaIvaDe(formaElegida, esMaq));
+                if (precioMostrado == null) precioMostrado = BigDecimal.ZERO;
+            } else if (it.precioReferencia() != null) {
+                precioMostrado = it.precioReferencia();
+            } else {
+                precioMostrado = esMaq
                         ? PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva)
-                        : precioConIva);
+                        : precioConIva;
+            }
             subtotalBruto = subtotalBruto.add(precioMostrado.multiply(cantidad));
             totalNeto = totalNeto.add(precioMostrado
                     .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
@@ -807,7 +823,8 @@ public class PresupuestoComercialPdfGenerator {
         }
         agregarCardTotal(doc,
                 subtotalBruto.setScale(2, RoundingMode.HALF_UP),
-                totalNeto.setScale(2, RoundingMode.HALF_UP));
+                totalNeto.setScale(2, RoundingMode.HALF_UP),
+                formaElegida);
     }
 
     // =====================================================
@@ -1042,7 +1059,8 @@ public class PresupuestoComercialPdfGenerator {
     // =====================================================
     private void agregarTablaDetalle(Document doc,
                                      List<GenerarPresupuestoRequestDTO.Item> items,
-                                     ImageData sinImagen) {
+                                     ImageData sinImagen,
+                                     GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
         Div seccion = new Div()
                 .setMarginTop(12)
                 .setBackgroundColor(ColorConstants.WHITE)
@@ -1077,7 +1095,7 @@ public class PresupuestoComercialPdfGenerator {
         // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
         // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
         // resto), pero no se muestra el badge para no recargar la fila.
-        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
+        tabla.addHeaderCell(celdaHeader(etiquetaColumnaPrecio(formaElegida)).setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -1104,7 +1122,16 @@ public class PresupuestoComercialPdfGenerator {
             // Si el presupuesto es viejo y no trae `precioReferencia`, caemos al
             // precio de lista por rubro (maquinaria s/IVA, resto c/IVA).
             BigDecimal precio;
-            if (it.precioReferencia() != null) {
+            if (formaElegida != null) {
+                // Precio unitario con la forma elegida, según el perfil del rubro
+                // (recargo/IVA propios de menaje o maquinaria). Reusa el mismo
+                // calculador que el showroom y las cards de formas.
+                precio = PrecioPerfilCalculator.calcularPrecioFinal(
+                        precioConIva, porcIva,
+                        recargoDe(formaElegida, esMaquinaria),
+                        aplicaIvaDe(formaElegida, esMaquinaria));
+                if (precio == null) precio = BigDecimal.ZERO;
+            } else if (it.precioReferencia() != null) {
                 precio = it.precioReferencia();
             } else if (esMaquinaria) {
                 precio = PrecioPerfilCalculator.calcularSinIva(precioConIva, porcIva);
@@ -1572,7 +1599,8 @@ public class PresupuestoComercialPdfGenerator {
      * un promedio ponderado cuando difieren.
      */
     private void agregarCardTotal(Document doc, BigDecimal subtotalBrutoArg,
-                                  BigDecimal totalSinIvaArg) {
+                                  BigDecimal totalSinIvaArg,
+                                  GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
         BigDecimal totalSinIva = totalSinIvaArg == null
                 ? BigDecimal.ZERO
                 : totalSinIvaArg;
@@ -1593,7 +1621,7 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal porcEfectivo = ahorro.multiply(BigDecimal.valueOf(100))
                     .divide(subtotalBruto, 2, RoundingMode.HALF_UP);
 
-            card.add(filaDesglose("Subtotal efectivo", formatPesos(subtotalBruto), false, false));
+            card.add(filaDesglose(etiquetaSubtotal(formaElegida), formatPesos(subtotalBruto), false, false));
             card.add(filaDesglose(
                     "Descuento (" + formatPorcentaje(porcEfectivo) + "%)",
                     "-" + formatPesos(ahorro), false, true));
@@ -1605,7 +1633,7 @@ public class PresupuestoComercialPdfGenerator {
         // coherente con la columna "PRECIO EFECTIVO" de la tabla. Sin etiqueta
         // "s/IVA": el monto sigue el régimen de cada producto (maquinaria s/IVA,
         // resto c/IVA), así que ya no es uniformemente sin IVA.
-        card.add(filaDesglose("Total efectivo", formatPesos(totalSinIva), true, false));
+        card.add(filaDesglose(etiquetaTotal(formaElegida), formatPesos(totalSinIva), true, false));
         doc.add(card);
     }
 
