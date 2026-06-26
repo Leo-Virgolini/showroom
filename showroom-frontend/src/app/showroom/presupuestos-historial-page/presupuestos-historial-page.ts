@@ -30,6 +30,8 @@ import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
 import { PageHeader } from '../page-header/page-header';
+import { perfilForma, precioPorForma } from '../precio-referencia.util';
+import { PrecioPerfilService } from '../precio-perfil.service';
 
 /**
  * Listado histórico de presupuestos comerciales guardados.
@@ -71,6 +73,7 @@ export class PresupuestosHistorialPage {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
 
   /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
@@ -451,10 +454,25 @@ export class PresupuestosHistorialPage {
     });
   }
 
-  /** Precio unitario que muestra el presupuesto = precio de referencia (la forma
-   *  marcada como "Precio ref.", ya según rubro: c/IVA menaje, s/IVA maquinaria).
-   *  Cae a {@code precioConIva} en presupuestos viejos sin {@code precioReferencia}. */
-  precioItem(it: { precioReferencia?: number | null; precioConIva: number }): number {
+  /** Precio unitario a mostrar para un ítem en el detalle: en la forma elegida
+   *  del presupuesto si hay una, o el de referencia (Efectivo) si no. */
+  precioItem(
+    it: { precioReferencia?: number | null; precioConIva: number; porcIva?: number | null; rubro?: string | null },
+    det?: PresupuestoDetalle,
+  ): number {
+    const elegida = det ? this.formaSeleccionadaDe(det) : null;
+    if (elegida) {
+      const perfil = perfilForma(
+        {
+          recargoPorcentaje: elegida.recargoPorcentaje,
+          aplicaIva: elegida.aplicaIva,
+          recargoPorcentajeMaquinaria: elegida.recargoPorcentajeMaquinaria ?? null,
+          aplicaIvaMaquinaria: elegida.aplicaIvaMaquinaria ?? null,
+        },
+        this.precioPerfil.rubroCotizaSinIva(it.rubro),
+      );
+      return precioPorForma(it.precioConIva, it.porcIva ?? null, perfil);
+    }
     return it.precioReferencia ?? it.precioConIva;
   }
 
@@ -465,20 +483,27 @@ export class PresupuestosHistorialPage {
     return it.precioReferenciaConIva !== false;
   }
 
-  /** Subtotal de la línea = precio de referencia × cantidad × (1 − desc/100).
-   *  La suma de estos subtotales da el total del presupuesto. */
-  subtotalItem(it: {
-    precioReferencia?: number | null;
-    precioConIva: number;
-    cantidad: number;
-    descuentoPorcentaje: number | null;
-  }): number {
-    return this.precioItem(it) * it.cantidad * (1 - (it.descuentoPorcentaje ?? 0) / 100);
+  /** Subtotal de la línea = precio (en la forma elegida o Efectivo) × cantidad ×
+   *  (1 − desc/100). */
+  subtotalItem(
+    it: {
+      precioReferencia?: number | null;
+      precioConIva: number;
+      porcIva?: number | null;
+      rubro?: string | null;
+      cantidad: number;
+      descuentoPorcentaje: number | null;
+    },
+    det?: PresupuestoDetalle,
+  ): number {
+    return this.precioItem(it, det) * it.cantidad * (1 - (it.descuentoPorcentaje ?? 0) / 100);
   }
 
-  /** Total del presupuesto = suma de los subtotales de cada línea (precio de
-   *  referencia con su descuento). Coincide con la base de los totales del PDF. */
+  /** Total del presupuesto: si hay forma elegida, su `precioFinal` (snapshot ya
+   *  calculado); si no, la suma de los subtotales de referencia (Efectivo). */
   totalPresupuesto(det: PresupuestoDetalle): number {
+    const elegida = this.formaSeleccionadaDe(det);
+    if (elegida) return elegida.precioFinal ?? 0;
     return det.items.reduce((s, it) => s + this.subtotalItem(it), 0);
   }
 
@@ -489,6 +514,21 @@ export class PresupuestosHistorialPage {
    *  individual), muestra un aviso en lugar de las tarjetas. */
   formasGlobales(det: PresupuestoDetalle): PresupuestoFormaPagoSnapshot[] {
     return (det.formasPago ?? []).filter((f) => f.itemSku == null);
+  }
+
+  /** La forma de pago elegida del presupuesto (null = "Todas"), buscada entre
+   *  las formas globales por el id persistido. */
+  formaSeleccionadaDe(det: PresupuestoDetalle): PresupuestoFormaPagoSnapshot | null {
+    const id = det.formaPagoSeleccionadaId;
+    if (id == null) return null;
+    return this.formasGlobales(det).find((f) => f.id === id) ?? null;
+  }
+
+  /** Formas a mostrar en el panel: si hay una elegida, solo esa; si no, todas
+   *  las globales (comportamiento histórico). */
+  formasAMostrar(det: PresupuestoDetalle): PresupuestoFormaPagoSnapshot[] {
+    const elegida = this.formaSeleccionadaDe(det);
+    return elegida ? [elegida] : this.formasGlobales(det);
   }
 
   /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas

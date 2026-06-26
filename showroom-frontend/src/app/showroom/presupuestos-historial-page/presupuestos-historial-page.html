@@ -359,7 +359,7 @@
                           </td>
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
                           <td class="text-right tabular-nums">
-                            {{ precioItem(it) | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ precioItem(it, det) | currency:'ARS':'symbol':'1.0-0' }}
                             <span class="ml-1 text-[0.65rem] text-muted-color">{{ ivaItem(it) ? 'c/IVA' : 's/IVA' }}</span>
                           </td>
                           <td class="text-center tabular-nums">
@@ -372,7 +372,7 @@
                             }
                           </td>
                           <td class="text-right tabular-nums font-semibold">
-                            {{ subtotalItem(it) | currency:'ARS':'symbol':'1.0-0' }}
+                            {{ subtotalItem(it, det) | currency:'ARS':'symbol':'1.0-0' }}
                           </td>
                         </tr>
                       </ng-template>
@@ -387,11 +387,11 @@
                       <i class="pi pi-info-circle mt-0.5"></i>
                       <span>Cotización individual — cada producto tiene sus propias formas de pago (ver el PDF del presupuesto).</span>
                     </div>
-                  } @else if (formasGlobales(det).length) {
+                  } @else if (formasAMostrar(det).length) {
                     <div class="mt-5">
                       <h4 class="text-xs font-semibold uppercase text-muted-color m-0 mb-2">Formas de pago</h4>
                       <div class="flex flex-wrap gap-2">
-                        @for (fp of formasGlobales(det); track fp.id ?? fp.nombre) {
+                        @for (fp of formasAMostrar(det); track fp.id ?? fp.nombre) {
                           <div class="px-3 py-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-950 text-sm min-w-[10rem]">
                             <div class="font-medium text-[#3B1E09] dark:text-surface-0">
                               {{ fp.nombre }}
