@@ -345,7 +345,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // El selectButton no permite deselección porque le seteamos
     // [allowEmpty]="false", pero defensive si llega null lo dejamos en agregado.
     this.cotizacionIndividual.set(value === 'individual');
+    // En individual el selector no aplica; volver a "Todas" deja el estado
+    // coherente y evita mandar un id que el backend ignoraría.
+    if (value === 'individual') this.formaPagoSeleccionadaId.set(null);
   }
+
+  /** Forma de pago elegida para el PDF agregado. null = "Todas" (default):
+   *  precio efectivo por ítem + sección comparativa de formas. Solo aplica en
+   *  modo agregado; al pasar a individual se resetea a "Todas". */
+  readonly formaPagoSeleccionadaId = signal<number | null>(null);
 
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
@@ -1874,6 +1882,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       observaciones: this.observaciones().trim() || null,
       descuentoGlobalPorcentaje: this.descuentoGlobal() || 0,
       cotizacionIndividual: individual,
+      // Solo en agregado: en individual el id no aplica.
+      formaPagoSeleccionadaId: individual ? null : this.formaPagoSeleccionadaId(),
       items,
       formasPago,
     };

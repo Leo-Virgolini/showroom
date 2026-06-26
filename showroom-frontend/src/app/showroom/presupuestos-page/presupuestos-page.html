@@ -435,6 +435,24 @@
               <span class="text-[11px] text-muted-color hidden sm:inline">
                 {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
               </span>
+              <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
+                   efectivo por ítem + sección comparativa de formas. Al elegir
+                   una, todo el presupuesto se expresa en ella. No aplica en
+                   modo individual (cada ítem lista sus formas). -->
+              @if (!cotizacionIndividual()) {
+                <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+                  <i class="pi pi-wallet text-[#FF861C]"></i>
+                  Forma de pago
+                </span>
+                <p-select
+                  [options]="formasPago()"
+                  [ngModel]="formaPagoSeleccionadaId()"
+                  (ngModelChange)="formaPagoSeleccionadaId.set($event)"
+                  optionLabel="nombre" optionValue="id"
+                  [showClear]="true"
+                  placeholder="Todas"
+                  class="kt-forma-pago-pdf text-sm" />
+              }
             </div>
           }
 
