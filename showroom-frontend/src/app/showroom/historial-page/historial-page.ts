@@ -37,7 +37,6 @@ import {
   SesionListItem,
   rubroExcluyeDescuentos,
 } from '../models';
-import { abrirCatalogoProducto } from '../catalogo-nav.util';
 import { precioSinIva } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { dispararDescargaBlob } from '../download.utils';
@@ -443,8 +442,6 @@ export class HistorialPage {
   /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que la tabla
    *  de productos. Se usa para el ícono pi-wrench en la tabla de ítems. */
   protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
-  /** Abre el catálogo filtrado por el SKU en una pestaña nueva (ver util). */
-  protected readonly abrirCatalogoProducto = abrirCatalogoProducto;
 
   /** Precio de REFERENCIA de un ítem del detalle = precio con la forma destacada
    *  del perfil (igual que el scan/visor). Delega en el servicio compartido; el
