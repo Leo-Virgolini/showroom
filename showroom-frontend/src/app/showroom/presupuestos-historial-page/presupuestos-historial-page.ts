@@ -23,7 +23,7 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
-import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem } from '../models';
+import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem, rubroExcluyeDescuentos } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -72,6 +72,9 @@ export class PresupuestosHistorialPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
+
+  /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
+  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
