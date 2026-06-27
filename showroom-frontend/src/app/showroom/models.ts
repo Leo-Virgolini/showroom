@@ -856,6 +856,10 @@ export interface PresupuestoListItem {
    *  presupuesto se editó después (modificadoAt > convertidoAt), se ofrece
    *  "Regenerar pedido". */
   convertidoAt?: string | null;
+  /** Total en la forma de pago elegida (null = "Todas" → mostrar `totalSinIva`). */
+  totalFormaSeleccionada?: number | null;
+  /** Nombre de la forma elegida para el badge de la fila (null = "Todas"). */
+  formaPagoSeleccionadaNombre?: string | null;
 }
 
 /** Snapshot completo de un presupuesto persistido — el frontend lo consume

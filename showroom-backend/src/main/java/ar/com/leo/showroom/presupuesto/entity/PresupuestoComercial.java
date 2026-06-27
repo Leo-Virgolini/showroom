@@ -99,6 +99,18 @@ public class PresupuestoComercial {
     @Column(name = "forma_pago_seleccionada_id")
     private Long formaPagoSeleccionadaId;
 
+    /** Total del presupuesto en la forma de pago elegida (snapshot del
+     *  `precioFinal` de esa forma al guardar). Null = "Todas" → la lista cae a
+     *  `subtotalSinIva` (Efectivo). Se persiste para no deserializar las formas
+     *  por fila en el listado. */
+    @Column(name = "total_forma_seleccionada", precision = 18, scale = 2)
+    private BigDecimal totalFormaSeleccionada;
+
+    /** Nombre de la forma de pago elegida (para el badge de la lista). Null =
+     *  "Todas". */
+    @Column(name = "forma_pago_seleccionada_nombre", length = 100)
+    private String formaPagoSeleccionadaNombre;
+
     /** Items del presupuesto serializados como JSON (sku, descripcion, cantidad,
      *  precioConIva, porcIva, descuentoPorcentaje, imagenSku). */
     @Lob

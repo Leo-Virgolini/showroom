@@ -31,5 +31,9 @@ public record PresupuestoListItemDTO(
         /** Cuándo se (re)generó el pedido. Null si nunca se convirtió. El
          *  frontend compara con {@link #modificadoAt} para ofrecer "Regenerar
          *  pedido" solo cuando el presupuesto se editó tras la conversión. */
-        Instant convertidoAt
+        Instant convertidoAt,
+        /** Total en la forma elegida (null = "Todas" → la lista muestra `totalSinIva`). */
+        BigDecimal totalFormaSeleccionada,
+        /** Nombre de la forma elegida para el badge (null = "Todas"). */
+        String formaPagoSeleccionadaNombre
 ) {}

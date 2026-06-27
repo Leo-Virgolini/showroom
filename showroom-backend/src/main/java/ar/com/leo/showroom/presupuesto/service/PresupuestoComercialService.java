@@ -722,7 +722,9 @@ public class PresupuestoComercialService {
                 p.getDescuentoGlobalPorcentaje(),
                 creadoPor,
                 p.getConvertidoEnPedidoId(),
-                p.getConvertidoAt());
+                p.getConvertidoAt(),
+                p.getTotalFormaSeleccionada(),
+                p.getFormaPagoSeleccionadaNombre());
     }
 
     /**
@@ -944,6 +946,17 @@ public class PresupuestoComercialService {
         p.setObservaciones(TextUtils.blankToNull(datos.observaciones()));
         p.setDescuentoGlobalPorcentaje(descGlobal);
         p.setFormaPagoSeleccionadaId(datos.formaPagoSeleccionadaId());
+        // Total + nombre de la forma elegida (snapshot, para la lista). Se toma
+        // del `precioFinal`/`nombre` que ya manda el front en `formasPago`,
+        // buscando por el id elegido. Null cuando es "Todas".
+        GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaSel =
+                (datos.formaPagoSeleccionadaId() != null && datos.formasPago() != null)
+                        ? datos.formasPago().stream()
+                                .filter(f -> datos.formaPagoSeleccionadaId().equals(f.id()))
+                                .findFirst().orElse(null)
+                        : null;
+        p.setTotalFormaSeleccionada(formaSel != null ? formaSel.precioFinal() : null);
+        p.setFormaPagoSeleccionadaNombre(formaSel != null ? formaSel.nombre() : null);
         p.setSubtotalSinIva(subtotalSinIva.setScale(2, RoundingMode.HALF_UP));
         p.setItemsJson(escribirJson(datos.items()));
         p.setFormasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()));
