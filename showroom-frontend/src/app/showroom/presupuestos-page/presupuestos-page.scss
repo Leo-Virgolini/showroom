@@ -441,8 +441,6 @@ $kt-amarillo: #a2ab00;
 
 .kt-footer-panel-inner {
   padding: 1rem;
-  max-width: 1600px;
-  margin: 0 auto;
 }
 
 // Chevron del botón toggle — rota 180° cuando el panel está expandido.
@@ -461,10 +459,11 @@ $kt-amarillo: #a2ab00;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.5rem 1rem;
+  // Usa todo el ancho disponible (como el <main> de la página, sin max-width):
+  // en pantallas anchas los chips de formas entran en una sola fila en vez de
+  // apilarse. Padding lateral alineado con el contenido (lg:p-6 = 1.5rem).
+  padding: 0.5rem 1.5rem;
   flex-wrap: wrap;
-  max-width: 1600px;
-  margin: 0 auto;
 
   @media (max-width: 640px) {
     padding: 0.5rem 0.75rem;
