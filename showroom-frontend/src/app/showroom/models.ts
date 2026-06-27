@@ -138,6 +138,9 @@ export interface CrearPedidoRequest {
      *  payload DUX. Usado principalmente con el SKU comodín para describir el
      *  producto real que no está en catálogo. */
     comentarios?: string | null;
+    /** Perfil de IVA cotizado (true=menaje c/IVA, false=maquinaria s/IVA). En
+     *  pedidos de presupuesto el backend congela el perfil con este flag. */
+    precioReferenciaConIva?: boolean;
   }[];
 }
 

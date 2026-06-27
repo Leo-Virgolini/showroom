@@ -185,6 +185,9 @@ export class CrearPedidoDialog {
      *  el precio por forma de pago, igual que en scan/visor/presupuestador. */
     rubro: string | null;
     comentarios: string | null;
+    /** Perfil de IVA con que se cotizó el ítem; el backend lo usa para congelar
+     *  el perfil al crear el pedido. */
+    precioReferenciaConIva: boolean | null;
   }[]>([]);
 
   // Datos del cliente — pre-llenados desde el presupuesto, editables.
@@ -338,7 +341,7 @@ export class CrearPedidoDialog {
       this.pedidoRubroOtros.set('');
     }
     this.pedidoFormaPagoId.set(prefill?.formaPagoId ?? null);
-    this.itemsDelPresupuesto.set(items.map((it) => ({ ...it })));
+    this.itemsDelPresupuesto.set(items.map((it) => ({ ...it, precioReferenciaConIva: null })));
     this.cargarProvinciasSiHaceFalta();
     this.cargarFormasPagoSiHaceFalta();
     // Si el prefill trae un CUIT completo, intentamos reconocer al cliente y
@@ -393,6 +396,7 @@ export class CrearPedidoDialog {
           descuentoPorcentaje: it.descuentoPorcentaje,
           rubro: it.rubro ?? null,
           comentarios: it.comentarios ?? null,
+          precioReferenciaConIva: it.precioReferenciaConIva ?? null,
         })));
 
         this.cargarProvinciasSiHaceFalta();
@@ -731,6 +735,7 @@ export class CrearPedidoDialog {
         // payload DUX. Para items normales es null; para genéricos es la
         // descripción tipeada por el operador en el presupuesto.
         comentarios: it.comentarios ?? undefined,
+        precioReferenciaConIva: it.precioReferenciaConIva ?? undefined,
       })),
     };
 
