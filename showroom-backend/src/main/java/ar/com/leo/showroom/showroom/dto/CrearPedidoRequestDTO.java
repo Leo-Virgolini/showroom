@@ -126,7 +126,13 @@ public record CrearPedidoRequestDTO(
              *  pedido. Usado principalmente con el SKU comodín
              *  ({@code dux.sku-producto-generico}) para describir el producto
              *  real que no existe en catálogo. Null/blank cuando no aplica. */
-            String comentarios
+            String comentarios,
+            /** Perfil de IVA con que se cotizó el ítem en el presupuesto
+             *  (true=menaje/con IVA, false=maquinaria/sin IVA). Solo en pedidos
+             *  de presupuesto: el backend CONGELA el perfil con este flag en vez
+             *  de re-derivarlo por rubro. Null = derivar por rubro (showroom o
+             *  presupuesto viejo). */
+            Boolean precioReferenciaConIva
     ) {
     }
 }

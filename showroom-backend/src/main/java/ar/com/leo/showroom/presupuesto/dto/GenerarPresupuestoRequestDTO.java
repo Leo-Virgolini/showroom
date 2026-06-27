@@ -98,11 +98,12 @@ public record GenerarPresupuestoRequestDTO(
             BigDecimal precioReferencia,
             /** True si {@link #precioReferencia} es un valor CON IVA (perfil
              *  menaje), false si es SIN IVA (maquinaria) — snapshot del perfil de
-             *  IVA con que se cotizó el ítem. NOTA: hoy el pedido NO consume este
-             *  flag; {@code PedidoService} re-deriva el perfil por el rubro al
-             *  transformar el presupuesto en pedido. Se conserva como dato
-             *  informativo (y para un eventual congelado del perfil a futuro).
-             *  Null en presupuestos viejos. */
+             *  IVA con que se cotizó el ítem. Al transformar el presupuesto en
+             *  pedido, {@code PedidoService} CONGELA el perfil con este flag
+             *  (esMaq = !precioReferenciaConIva) en vez de re-derivarlo por rubro,
+             *  para que DUX facture con el mismo perfil cotizado aunque la lista
+             *  de rubros sin IVA haya cambiado. Null en presupuestos viejos →
+             *  el pedido cae a derivar por rubro. */
             Boolean precioReferenciaConIva
     ) {}
 

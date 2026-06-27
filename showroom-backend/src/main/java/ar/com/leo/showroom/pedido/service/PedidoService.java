@@ -561,7 +561,8 @@ public class PedidoService {
             String rubroItem = request.origenPresupuesto()
                     ? it.rubro()
                     : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
-            boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
+            boolean esMaq = resolverEsMaq(
+                    request.origenPresupuesto(), it.precioReferenciaConIva(), rubroItem, rubrosMaq);
             BigDecimal recargoItem = recargoPerfil(formaPago, esMaq);
             // El perfil de IVA sale de la forma ELEGIDA (según el rubro del ítem),
             // igual para showroom y para pedidos de presupuesto: el operador elige
@@ -891,7 +892,8 @@ public class PedidoService {
             String rubroItem = request.origenPresupuesto()
                     ? it.rubro()
                     : (it.rubro() != null ? it.rubro() : (pc != null ? pc.getRubro() : null));
-            boolean esMaq = !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
+            boolean esMaq = resolverEsMaq(
+                    request.origenPresupuesto(), it.precioReferenciaConIva(), rubroItem, rubrosMaq);
             // Precio a DUX = EXACTAMENTE el que paga el cliente según el perfil de
             // la forma ELEGIDA: parte del precio de lista (con IVA), aplica el
             // recargo/descuento de la forma y vuelve a sumar IVA SOLO si el perfil
@@ -960,6 +962,20 @@ public class PedidoService {
     /** Normaliza un rubro para comparación robusta (trim, sin acentos, mayúsculas). */
     private static String normalizarRubro(String rubro) {
         return PrecioPerfilCalculator.normalizarRubro(rubro);
+    }
+
+    /** Perfil (maquinaria/menaje) del ítem. En pedidos de presupuesto que traen
+     *  el snapshot {@code precioReferenciaConIva}, CONGELA el perfil con que se
+     *  cotizó ({@code esMaq = !precioReferenciaConIva}), para no re-derivarlo por
+     *  rubro si la lista de rubros sin IVA cambió entre cotizar y convertir. En
+     *  el showroom normal, o si el presupuesto es viejo (flag null), deriva por
+     *  rubro como hasta ahora. */
+    static boolean resolverEsMaq(boolean origenPresupuesto, Boolean precioReferenciaConIva,
+                                 String rubroItem, Set<String> rubrosMaq) {
+        if (origenPresupuesto && precioReferenciaConIva != null) {
+            return !precioReferenciaConIva;
+        }
+        return !rubrosMaq.isEmpty() && rubrosMaq.contains(normalizarRubro(rubroItem));
     }
 
     /** Set normalizado de rubros de maquinaria (configurables; misma lista que
