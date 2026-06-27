@@ -155,7 +155,13 @@
               }
             </td>
             <td class="text-right text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-              {{ (p.totalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
+              {{ (p.totalFormaSeleccionada ?? p.totalSinIva ?? 0) | currency:'ARS':'symbol':'1.0-0' }}
+              @if (p.formaPagoSeleccionadaNombre) {
+                <div class="text-[10px] font-semibold text-[#FF861C] mt-0.5"
+                  [pTooltip]="'Total en ' + p.formaPagoSeleccionadaNombre" tooltipPosition="left">
+                  {{ p.formaPagoSeleccionadaNombre }}
+                </div>
+              }
             </td>
             <td class="text-center">
               @if (p.descuentoGlobalPorcentaje && p.descuentoGlobalPorcentaje > 0) {
@@ -299,6 +305,10 @@
                         </dd>
                         <dt class="text-muted-color">Cotización</dt>
                         <dd>{{ det.cotizacionIndividual ? 'Individual (1 hoja por producto)' : 'Agregada' }}</dd>
+                        @if (formaSeleccionadaDe(det); as fp) {
+                          <dt class="text-muted-color">Forma de pago</dt>
+                          <dd class="font-semibold text-[#3B1E09] dark:text-surface-0">{{ fp.nombre }}</dd>
+                        }
                         @if (det.convertidoEnPedidoId != null) {
                           <dt class="text-muted-color">Pedido DUX</dt>
                           <dd>
