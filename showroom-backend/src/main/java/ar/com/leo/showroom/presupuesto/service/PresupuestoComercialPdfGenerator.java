@@ -1615,7 +1615,7 @@ public class PresupuestoComercialPdfGenerator {
         card.add(filaDesglose(etiquetaTotal(formaElegida), formatPesos(totalSinIva), true, false));
         // Forma en cuotas: mostrar el valor de cada cuota debajo del total para
         // que no se confunda el total con la cuota. Mismo formato "N cuotas de
-        // $X" que las cards de formas de pago (cuota = total / N).
+        // $X" que el desglose de cuotas en modo individual (cuota = total / N).
         if (formaElegida != null && formaElegida.cantidadCuotas() != null
                 && formaElegida.cantidadCuotas() > 1) {
             BigDecimal cuota = totalSinIva.divide(

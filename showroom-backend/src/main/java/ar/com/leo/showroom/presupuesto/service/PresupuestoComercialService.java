@@ -948,11 +948,15 @@ public class PresupuestoComercialService {
         p.setFormaPagoSeleccionadaId(datos.formaPagoSeleccionadaId());
         // Total + nombre de la forma elegida (snapshot, para la lista). Se toma
         // del `precioFinal`/`nombre` que ya manda el front en `formasPago`,
-        // buscando por el id elegido. Null cuando es "Todas".
+        // buscando la forma GLOBAL (itemSku null) por el id elegido. El filtro
+        // `itemSku() == null` evita tomar un snapshot per-ítem en cotización
+        // individual (N×M comparten id); hoy el front ya manda id null en
+        // individual, pero el filtro lo deja robusto. Null cuando es "Todas".
         GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaSel =
                 (datos.formaPagoSeleccionadaId() != null && datos.formasPago() != null)
                         ? datos.formasPago().stream()
-                                .filter(f -> datos.formaPagoSeleccionadaId().equals(f.id()))
+                                .filter(f -> datos.formaPagoSeleccionadaId().equals(f.id())
+                                        && f.itemSku() == null)
                                 .findFirst().orElse(null)
                         : null;
         p.setTotalFormaSeleccionada(formaSel != null ? formaSel.precioFinal() : null);
