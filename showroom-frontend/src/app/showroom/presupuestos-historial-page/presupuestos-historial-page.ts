@@ -461,23 +461,37 @@ export class PresupuestosHistorialPage {
   ): number {
     const elegida = det ? this.formaSeleccionadaDe(det) : null;
     if (elegida) {
-      const perfil = perfilForma(
-        {
-          recargoPorcentaje: elegida.recargoPorcentaje,
-          aplicaIva: elegida.aplicaIva,
-          recargoPorcentajeMaquinaria: elegida.recargoPorcentajeMaquinaria ?? null,
-          aplicaIvaMaquinaria: elegida.aplicaIvaMaquinaria ?? null,
-        },
-        this.precioPerfil.rubroCotizaSinIva(it.rubro),
-      );
+      const perfil = this.perfilFormaItem(elegida, it.rubro);
       return precioPorForma(it.precioConIva, it.porcIva ?? null, perfil);
     }
     return it.precioReferencia ?? it.precioConIva;
   }
 
-  /** True si el precio mostrado del ítem es CON IVA (menaje). Los presupuestos
-   *  viejos sin {@code precioReferencia} caen a {@code precioConIva}, que es c/IVA. */
-  ivaItem(it: { precioReferencia?: number | null; precioReferenciaConIva?: boolean }): boolean {
+  /** Perfil (recargo/IVA) de la forma elegida según el rubro del ítem. Fuente
+   *  única compartida por {@link precioItem} y {@link ivaItem}, para que el
+   *  precio mostrado y el badge c/IVA usen exactamente el mismo perfil. */
+  private perfilFormaItem(elegida: PresupuestoFormaPagoSnapshot, rubro: string | null | undefined) {
+    return perfilForma(
+      {
+        recargoPorcentaje: elegida.recargoPorcentaje,
+        aplicaIva: elegida.aplicaIva,
+        recargoPorcentajeMaquinaria: elegida.recargoPorcentajeMaquinaria ?? null,
+        aplicaIvaMaquinaria: elegida.aplicaIvaMaquinaria ?? null,
+      },
+      this.precioPerfil.rubroCotizaSinIva(rubro),
+    );
+  }
+
+  /** True si el precio mostrado del ítem es CON IVA. Con una forma elegida usa
+   *  el {@code aplicaIva} del perfil de ESA forma según el rubro (puede diferir
+   *  del de referencia, p. ej. una transferencia s/IVA); sin forma, el del
+   *  precio de referencia (Efectivo). Viejos sin {@code precioReferencia} → c/IVA. */
+  ivaItem(
+    it: { precioReferencia?: number | null; precioReferenciaConIva?: boolean; rubro?: string | null },
+    det?: PresupuestoDetalle,
+  ): boolean {
+    const elegida = det ? this.formaSeleccionadaDe(det) : null;
+    if (elegida) return this.perfilFormaItem(elegida, it.rubro).aplicaIva ?? true;
     if (it.precioReferencia == null) return true;
     return it.precioReferenciaConIva !== false;
   }

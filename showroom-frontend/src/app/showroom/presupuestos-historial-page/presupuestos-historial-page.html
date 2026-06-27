@@ -370,7 +370,7 @@
                           <td class="text-center tabular-nums">{{ it.cantidad }}</td>
                           <td class="text-right tabular-nums">
                             {{ precioItem(it, det) | currency:'ARS':'symbol':'1.0-0' }}
-                            <span class="ml-1 text-[0.65rem] text-muted-color">{{ ivaItem(it) ? 'c/IVA' : 's/IVA' }}</span>
+                            <span class="ml-1 text-[0.65rem] text-muted-color">{{ ivaItem(it, det) ? 'c/IVA' : 's/IVA' }}</span>
                           </td>
                           <td class="text-center tabular-nums">
                             @if (it.descuentoPorcentaje && it.descuentoPorcentaje > 0) {
