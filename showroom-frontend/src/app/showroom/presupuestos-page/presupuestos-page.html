@@ -843,9 +843,9 @@
              informativo "Individual · N hojas" y el botón abre el preview
              por producto en el panel. -->
         <div class="kt-footer-formas">
-          <!-- Chips en UNA sola fila con scroll horizontal: nunca envuelven a
-               2 filas. El mejor precio (Efectivo) queda visible a la izquierda;
-               el resto se alcanza scrolleando o con el chevron (panel completo). -->
+          <!-- Chips de formas: usan todo el ancho del footer (envuelven a otra
+               fila solo si no entran). El mejor precio se resalta; cada chip es
+               clickeable y selecciona esa forma. El chevron abre el panel completo. -->
           <div class="kt-footer-chips">
           @if (cotizacionIndividual()) {
             <span class="kt-forma-chip kt-forma-chip-info">
@@ -856,9 +856,9 @@
             </span>
           } @else if (formasPagoFooter().length > 0) {
             @for (f of formasPagoFooter(); track f.id) {
-              <!-- Solo informativo: el presupuesto muestra TODAS las formas en el
-                   PDF, no se elige una. La más barata se resalta (MEJOR PRECIO).
-                   El detalle se abre con el chevron, no tocando el chip. -->
+              <!-- Clickeable: tocar el chip selecciona esa forma (toggle a "Todas").
+                   La más barata se resalta (MEJOR PRECIO); la elegida lleva anillo
+                   naranja. El chevron abre el panel detallado. -->
               <button type="button"
                 (click)="seleccionarForma(f.id)"
                 [pTooltip]="f.id === formaPagoSeleccionadaId() ? 'Forma seleccionada — tocá para volver a Todas' : 'Cotizar todo el presupuesto en esta forma'"
