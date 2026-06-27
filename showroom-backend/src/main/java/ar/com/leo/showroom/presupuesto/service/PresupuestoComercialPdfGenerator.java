@@ -2089,14 +2089,6 @@ public class PresupuestoComercialPdfGenerator {
                 .setMargin(0);
     }
 
-    private static Paragraph valorGrande(String txt) {
-        return new Paragraph(txt)
-                .simulateBold()
-                .setFontSize(13)
-                .setFontColor(GRIS_OSCURO)
-                .setMargin(0);
-    }
-
     /** Punto coloreado decorativo para títulos de sección (bullet circular). */
     private static IBlockElement buntoColor(Color c) {
         return new Paragraph("●")
@@ -2161,21 +2153,6 @@ public class PresupuestoComercialPdfGenerator {
         BigDecimal r = v.setScale(1, RoundingMode.HALF_UP).stripTrailingZeros();
         if (r.scale() < 0) r = r.setScale(0, RoundingMode.UNNECESSARY);
         return r.toPlainString().replace('.', ',');
-    }
-
-    private static int porcMaxDescuento(BigDecimal totalConIva,
-            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas) {
-        if (totalConIva == null || totalConIva.signum() == 0) return 0;
-        BigDecimal min = totalConIva;
-        for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formas) {
-            if (f.precioFinal() != null && f.precioFinal().signum() > 0
-                    && !esTextoValido(f.monedaSimbolo())
-                    && f.precioFinal().compareTo(min) < 0) {
-                min = f.precioFinal();
-            }
-        }
-        BigDecimal ahorro = BigDecimal.ONE.subtract(min.divide(totalConIva, 4, RoundingMode.HALF_UP));
-        return ahorro.multiply(BigDecimal.valueOf(100)).intValue();
     }
 
     private static String sanitizar(String s) {

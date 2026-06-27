@@ -375,14 +375,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  producto y los totales del presupuesto se calculan con esta forma para
    *  coincidir con el scan/visor del showroom. Null si ninguna forma activa
    *  es de referencia (entonces se cae al precio de lista según rubro). */
-  /** Forma destacada/default para el perfil del producto: de las formas marcadas
-   *  como referencia de ese perfil (menaje → `precioReferencia`; maquinaria →
-   *  `precioReferenciaMaquinaria`), la de menor `orden`. Null si ninguna marcada
-   *  (entonces se cae al precio de lista según rubro). */
-  formaDestacada(esMaquinaria: boolean): FormaPago | null {
-    return this.precioPerfil.formaDestacada(esMaquinaria);
-  }
-
   /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA y queda
    *  fuera del descuento por escala). Copiado de showroom-page. */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
@@ -1842,6 +1834,16 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   totalLinea(it: PresupuestoItem): number {
     const desc = it.descuentoPorcentaje ?? 0;
     return this.precioMostrado(it) * (1 - desc / 100) * it.cantidad;
+  }
+
+  /** Subtotal por línea EN LA FORMA elegida (solo visual): precio visual ×
+   *  (1 − desc) × cantidad. Con "Todas" coincide con {@link totalLinea}
+   *  (Efectivo). NO se manda al backend — el payload sigue usando
+   *  `totalLinea` (Efectivo). Mantiene la columna Subtotal coherente con la
+   *  columna Precio y el total del footer cuando hay una forma elegida. */
+  subtotalVisualItem(it: PresupuestoItem): number {
+    const desc = it.descuentoPorcentaje ?? 0;
+    return this.precioVisualItem(it) * (1 - desc / 100) * it.cantidad;
   }
 
   // ============================================================
