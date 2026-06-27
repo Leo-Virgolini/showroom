@@ -1613,6 +1613,20 @@ public class PresupuestoComercialPdfGenerator {
         // "s/IVA": el monto sigue el régimen de cada producto (maquinaria s/IVA,
         // resto c/IVA), así que ya no es uniformemente sin IVA.
         card.add(filaDesglose(etiquetaTotal(formaElegida), formatPesos(totalSinIva), true, false));
+        // Forma en cuotas: mostrar el valor de cada cuota debajo del total para
+        // que no se confunda el total con la cuota. Mismo formato "N cuotas de
+        // $X" que las cards de formas de pago (cuota = total / N).
+        if (formaElegida != null && formaElegida.cantidadCuotas() != null
+                && formaElegida.cantidadCuotas() > 1) {
+            BigDecimal cuota = totalSinIva.divide(
+                    BigDecimal.valueOf(formaElegida.cantidadCuotas()), 2, RoundingMode.HALF_UP);
+            card.add(new Paragraph(formaElegida.cantidadCuotas() + " cuotas de " + formatPesos(cuota))
+                    .setFontSize(9)
+                    .setFontColor(GRIS_MEDIO)
+                    .setTextAlignment(TextAlignment.RIGHT)
+                    .setMargin(0)
+                    .setMarginTop(3));
+        }
         doc.add(card);
     }
 
