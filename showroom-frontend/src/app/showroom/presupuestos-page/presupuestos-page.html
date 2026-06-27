@@ -721,7 +721,9 @@
                        `[class]="'color-N'"` y `[class.es-mejor-precio]` —
                        una única string garantiza que el toggle del verde
                        sobreviva los ciclos de change detection. -->
-                  <div [class]="clasesFormaCard(i)">
+                  <div [class]="clasesFormaCard(i)" (click)="seleccionarForma(f.id)"
+                    [pTooltip]="f.id === formaPagoSeleccionadaId() ? 'Forma seleccionada — tocá para volver a Todas' : 'Cotizar todo el presupuesto en esta forma'"
+                    tooltipPosition="top">
                     @if (i === indiceMejorPrecio()) {
                       <span class="badge-mejor-precio">
                         <i class="pi pi-check-circle text-[10px]"></i> Mejor precio
@@ -857,8 +859,11 @@
               <!-- Solo informativo: el presupuesto muestra TODAS las formas en el
                    PDF, no se elige una. La más barata se resalta (MEJOR PRECIO).
                    El detalle se abre con el chevron, no tocando el chip. -->
-              <span
-                [class]="'kt-forma-chip kt-forma-chip-estatico color-' + ((f.indiceOriginal % 10) + 1) + (f.esMejorPrecio ? ' kt-forma-chip-mejor' : '')">
+              <button type="button"
+                (click)="seleccionarForma(f.id)"
+                [pTooltip]="f.id === formaPagoSeleccionadaId() ? 'Forma seleccionada — tocá para volver a Todas' : 'Cotizar todo el presupuesto en esta forma'"
+                tooltipPosition="top"
+                [class]="'kt-forma-chip color-' + ((f.indiceOriginal % 10) + 1) + (f.esMejorPrecio ? ' kt-forma-chip-mejor' : '') + (f.id === formaPagoSeleccionadaId() ? ' kt-forma-chip-seleccionado' : '')">
                 @if (f.esMejorPrecio) {
                   <i class="pi pi-check-circle text-[10px]"></i>
                 }
@@ -866,7 +871,7 @@
                 <span class="kt-forma-chip-precio">
                   {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
                 </span>
-              </span>
+              </button>
             }
           } @else {
             <span class="text-xs text-muted-color italic">

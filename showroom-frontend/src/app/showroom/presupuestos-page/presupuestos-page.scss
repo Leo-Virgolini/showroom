@@ -333,6 +333,7 @@ $kt-amarillo: #a2ab00;
   border-radius: 10px;
   background: var(--p-surface-50);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
 
   &::before {
     content: '';
@@ -367,6 +368,11 @@ $kt-amarillo: #a2ab00;
       background: $kt-verde !important;
       height: 6px;
     }
+  }
+
+  &.seleccionada {
+    outline: 2.5px solid $kt-naranja;
+    outline-offset: 2px;
   }
 }
 
@@ -519,27 +525,26 @@ $kt-amarillo: #a2ab00;
 :host ::ng-deep .kt-forma-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.3rem 0.55rem;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 999px;
   background: var(--p-surface-50);
   border: 1px solid rgba($kt-naranja, 0.2);
   color: $kt-marron;
-  font-size: 0.7rem;
+  font-size: 0.82rem;
   font-weight: 500;
+  font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
-  flex: 0 0 auto; // no se encoge: el nombre entra completo, los chips envuelven
+  flex: 0 0 auto;
   min-width: 0;
 
   > i {
     color: $kt-naranja;
-    font-size: 0.78rem;
-    flex-shrink: 0; // los íconos no se deforman
+    font-size: 0.9rem;
+    flex-shrink: 0;
   }
 
-  // Nombre de la forma: se muestra completo (los chips ahora envuelven a otra
-  // fila si no entran, en lugar de recortar con elipsis).
   .kt-forma-chip-nombre {
     white-space: nowrap;
   }
@@ -594,6 +599,13 @@ $kt-amarillo: #a2ab00;
     color: white;
     border-left-color: rgba(255, 255, 255, 0.5);
   }
+}
+
+// Forma de pago SELECCIONADA — anillo naranja KT. Coexiste con "mejor precio"
+// (verde): usamos outline en vez de box-shadow para no pisar el halo verde.
+:host ::ng-deep .kt-forma-chip-seleccionado.kt-forma-chip-seleccionado {
+  outline: 2.5px solid $kt-naranja;
+  outline-offset: 1.5px;
 }
 
 // Precio dentro del chip — separador visual con el nombre. No se encoge:

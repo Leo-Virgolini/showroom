@@ -356,6 +356,14 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  modo agregado; al pasar a individual se resetea a "Todas". */
   readonly formaPagoSeleccionadaId = signal<number | null>(null);
 
+  /** Selecciona/deselecciona una forma de pago desde un chip o card del footer.
+   *  Toggle: si ya está seleccionada, vuelve a "Todas" (null). Setea el mismo
+   *  signal que el dropdown de la toolbar, así el precio en vivo y el PDF la
+   *  toman automáticamente. */
+  seleccionarForma(id: number | null): void {
+    this.formaPagoSeleccionadaId.set(this.formaPagoSeleccionadaId() === id ? null : id);
+  }
+
   // ------------------------------------------------------------
   // Formas de pago activas (selector global)
   // ------------------------------------------------------------
@@ -664,7 +672,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   clasesFormaCard(i: number): string {
     const colorClass = `color-${(i % 10) + 1}`;
     const mejorClass = i === this.indiceMejorPrecio() ? ' es-mejor-precio' : '';
-    return `forma-pago-card ${colorClass}${mejorClass}`;
+    const sel = this.formasPagoCalculadas()[i]?.id === this.formaPagoSeleccionadaId()
+      ? ' seleccionada'
+      : '';
+    return `forma-pago-card ${colorClass}${mejorClass}${sel}`;
   }
 
   /** Chips de TODAS las formas de pago para el footer sticky. Orden:
