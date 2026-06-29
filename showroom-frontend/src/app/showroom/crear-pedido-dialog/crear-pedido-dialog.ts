@@ -381,12 +381,15 @@ export class CrearPedidoDialog {
           this.pedidoRubro.set('otros');
           this.pedidoRubroOtros.set(rubroGuardado);
         }
+        // Forma de pago: preseleccionamos la que tenía guardada el presupuesto
+        // (null si era "Todas"). Si quedó null o la forma fue desactivada,
+        // cargarFormasPagoSiHaceFalta() (más abajo) cae a la primera activa.
+        this.pedidoFormaPagoId.set(det.formaPagoSeleccionadaId ?? null);
         // Defaults no derivados del presupuesto
         this.pedidoDomicilio.set('');
         this.pedidoCodigoProvincia.set(null);
         this.pedidoIdLocalidad.set(null);
         this.localidadesPedido.set([]);
-        this.pedidoFormaPagoId.set(null);
         this.pedidoCategoriaFiscal.set('CONSUMIDOR_FINAL');
 
         this.itemsDelPresupuesto.set(det.items.map((it) => ({
@@ -507,13 +510,16 @@ export class CrearPedidoDialog {
     });
   }
 
-  /** Setea la forma de pago por defecto (primera de las activas) si todavía no
-   *  hay ninguna elegida. Las formas las provee el servicio compartido (ya
-   *  cargadas en el constructor); este método cubre el caso de re-apertura del
-   *  dialog tras un reset de {@code pedidoFormaPagoId}. */
+  /** Asegura una forma de pago válida elegida. Cae a la primera de las activas
+   *  cuando no hay ninguna elegida O cuando la elegida no figura entre las
+   *  activas (p. ej. la forma que tenía un presupuesto viejo fue desactivada y
+   *  el select —que sólo lista activas— no podría mostrarla). Las formas las
+   *  provee el servicio compartido (ya cargadas en el constructor). */
   private cargarFormasPagoSiHaceFalta(): void {
     const lista = this.formasPagoActivas();
-    if (lista.length > 0 && this.pedidoFormaPagoId() == null) {
+    if (lista.length === 0) return;
+    const id = this.pedidoFormaPagoId();
+    if (id == null || !lista.some((f) => f.id === id)) {
       this.pedidoFormaPagoId.set(lista[0].id);
     }
   }
