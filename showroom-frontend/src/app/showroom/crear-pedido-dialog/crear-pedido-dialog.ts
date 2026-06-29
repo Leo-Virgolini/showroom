@@ -282,15 +282,15 @@ export class CrearPedidoDialog {
 
   // ----------- Lifecycle: cargar detalle al abrir -----------
   constructor() {
-    // Formas de pago activas — fuente compartida. Se cargan una vez; el default
-    // (primera forma) se setea cuando llegan, respetando la guarda de "solo si
-    // no hay una elegida todavía".
+    // Formas de pago activas — fuente compartida. Se cargan una vez; cuando
+    // llegan (o cambian) re-evaluamos la forma elegida con el MISMO criterio que
+    // cargarFormasPagoSiHaceFalta (primera activa si no hay elegida o si la
+    // elegida ya no está activa). Leemos pedidoFormaPagoId en untracked para no
+    // re-correr cuando el operador cambia la forma a mano.
     this.precioPerfil.cargar();
     effect(() => {
-      const lista = this.precioPerfil.formasPago();
-      if (lista.length > 0 && untracked(() => this.pedidoFormaPagoId()) == null) {
-        this.pedidoFormaPagoId.set(lista[0].id);
-      }
+      this.formasPagoActivas();
+      untracked(() => this.cargarFormasPagoSiHaceFalta());
     });
 
     // Cuando `visible` pasa a true con un `presupuestoId` válido, carga el
