@@ -35,7 +35,6 @@ import {
   EstadisticasHistorial,
   SesionDetalle,
   SesionListItem,
-  rubroExcluyeDescuentos,
 } from '../models';
 import { precioSinIva } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
@@ -439,9 +438,11 @@ export class HistorialPage {
    *  pedidos. Alias de la función pura compartida del util. */
   protected readonly precioSinIva = precioSinIva;
 
-  /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que la tabla
-   *  de productos. Se usa para el ícono pi-wrench en la tabla de ítems. */
-  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** Marca de maquinaria (rubro de la lista configurable que cotiza sin IVA) —
+   *  mismo criterio que la tabla de productos. Se usa para el ícono pi-wrench. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
 
   /** Precio de REFERENCIA de un ítem del detalle = precio con la forma destacada
    *  del perfil (igual que el scan/visor). Delega en el servicio compartido; el

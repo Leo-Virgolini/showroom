@@ -25,8 +25,9 @@ import { SelectModule } from 'primeng/select';
 import { TagModule } from 'primeng/tag';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
-import { ProductoListItem, rubroExcluyeDescuentos } from '../models';
+import { ProductoListItem } from '../models';
 import { ShowroomService } from '../showroom.service';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { SyncStateService } from '../sync-state.service';
 import { marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
 import { toastError } from '../toast.utils';
@@ -62,6 +63,7 @@ export class ProductosPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly syncState = inject(SyncStateService);
   private readonly route = inject(ActivatedRoute);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   /** Estado del sync global (toolbar + última sync visible en el badge). */
   readonly health = this.syncState.health;
@@ -111,6 +113,9 @@ export class ProductosPage {
   );
 
   constructor() {
+    // Carga la lista de rubros sin IVA (perfil maquinaria) para el marcador.
+    this.precioPerfil.cargar();
+
     // Deep-link desde el SKU de los historiales (/productos?q=SKU): sembramos
     // la búsqueda antes de que el p-table dispare su primer onLazyLoad, así la
     // carga inicial ya filtra por ese SKU. Mismo patrón que pedidos/presupuestos.
@@ -244,10 +249,12 @@ export class ProductosPage {
     return this.refrescando().has(sku);
   }
 
-  /** True si el producto es de maquinaria (`MAQUINAS INDUSTRIALES`) — marca la
-   *  fila con un badge ámbar. Criterio único (`rubroExcluyeDescuentos`)
-   *  compartido por todas las tablas de la app. */
-  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** True si el producto es de maquinaria (rubro de la lista configurable que
+   *  cotiza sin IVA) — marca la fila con un badge ámbar. Mismo criterio
+   *  configurable que el cálculo y el backend. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
 
   trackBySku = (_: number, it: ProductoListItem) => it.sku;
 

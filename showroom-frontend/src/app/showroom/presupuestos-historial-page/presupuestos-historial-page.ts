@@ -23,7 +23,7 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { SplitButtonModule } from 'primeng/splitbutton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
-import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem, rubroExcluyeDescuentos } from '../models';
+import { PresupuestoDetalle, PresupuestoFormaPagoSnapshot, PresupuestoListItem } from '../models';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { abrirPdfEnPreview } from '../download.utils';
 import { ShowroomService } from '../showroom.service';
@@ -75,8 +75,11 @@ export class PresupuestosHistorialPage {
   private readonly router = inject(Router);
   private readonly precioPerfil = inject(PrecioPerfilService);
 
-  /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
-  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** Marca de maquinaria (rubro de la lista configurable que cotiza sin IVA) —
+   *  mismo criterio que productos. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
 
   readonly busqueda = signal('');
   readonly desde = signal<Date | null>(null);
@@ -129,6 +132,9 @@ export class PresupuestosHistorialPage {
   private filtrosInicializados = false;
 
   constructor() {
+    // Carga la lista de rubros sin IVA (perfil maquinaria) para el marcador.
+    this.precioPerfil.cargar();
+
     // Pre-llena la búsqueda con el queryParam `q` cuando se navega desde la
     // página de Clientes ("Ver presupuestos de este cliente").
     const qParam = this.route.snapshot.queryParamMap.get('q');

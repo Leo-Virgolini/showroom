@@ -45,7 +45,6 @@ import {
   PresupuestoVisor,
   ScanResult,
   OPCIONES_RUBRO_CLIENTE,
-  rubroExcluyeDescuentos,
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
@@ -1492,10 +1491,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return 9999;
   }
 
-  /** True si el producto es de maquinaria (`MAQUINAS INDUSTRIALES`) — marca las
-   *  filas con un badge/resaltado. Criterio único (`rubroExcluyeDescuentos`)
-   *  compartido por todas las tablas de la app. */
-  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** True si el producto es de maquinaria (rubro de la lista configurable que
+   *  cotiza sin IVA) — marca las filas con un badge/resaltado. Mismo criterio
+   *  configurable que el cálculo y el backend. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
 
   /** Precio de REFERENCIA unitario a mostrar para un producto en la lista/detalle:
    *  el precio con la forma de pago destacada según el rubro del ítem — mismo
@@ -1608,7 +1609,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // SIEMPRE c/IVA en el dialog. La descripción se duplica como comentarios
     // para que viaje al DUX cuando el presupuesto se transforme en pedido.
     // El rubro se setea a MAQUINAS INDUSTRIALES solo si el operador marcó
-    // "Es maquinaria" — eso hace que la helper `rubroExcluyeDescuentos` lo
+    // "Es maquinaria" — eso hace que la helper `rubroCotizaSinIva` lo
     // saque automáticamente del descuento por escala, lo mismo que pasa con
     // las máquinas reales del catálogo.
     const sinIva = data.precioConIva / (1 + data.porcIva / 100);

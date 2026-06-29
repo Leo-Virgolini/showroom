@@ -32,9 +32,9 @@ import {
   EstadoPedido,
   PedidoDetalle,
   PedidoListItem,
-  rubroExcluyeDescuentos,
 } from '../models';
 import { BackendStatusService } from '../backend-status.service';
+import { PrecioPerfilService } from '../precio-perfil.service';
 import { precioSinIva as quitarIva } from '../precio-referencia.util';
 import { ShowroomService } from '../showroom.service';
 import { finDelDia, marcarEnSet, sortDesdeLazyLoad } from '../tabla.utils';
@@ -75,6 +75,7 @@ export class PedidosPage {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly backendStatus = inject(BackendStatusService);
+  private readonly precioPerfil = inject(PrecioPerfilService);
 
   readonly busqueda = signal('');
   readonly estado = signal<EstadoPedido | null>(null);
@@ -136,6 +137,9 @@ export class PedidosPage {
   private readonly filtroTrigger$ = new Subject<void>();
 
   constructor() {
+    // Carga la lista de rubros sin IVA (perfil maquinaria) para el marcador.
+    this.precioPerfil.cargar();
+
     this.filtroTrigger$
       .pipe(debounceTime(300), takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -496,8 +500,11 @@ export class PedidosPage {
 
   trackById = (_: number, it: PedidoListItem) => it.id;
 
-  /** Marca de maquinaria (MAQUINAS INDUSTRIALES) — mismo criterio que productos. */
-  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
+  /** Marca de maquinaria (rubro de la lista configurable que cotiza sin IVA) —
+   *  mismo criterio que productos. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
 
   estaEnviandoEmail(id: number): boolean {
     return this.enviandoEmail().has(id);
