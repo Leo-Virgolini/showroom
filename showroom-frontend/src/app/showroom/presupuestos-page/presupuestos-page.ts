@@ -44,6 +44,7 @@ import {
   PresupuestoItem,
   PresupuestoVisor,
   ScanResult,
+  OPCIONES_RUBRO_CLIENTE,
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
@@ -307,17 +308,8 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   readonly rubroOtros = signal('');
   readonly observaciones = signal('');
 
-  /** Opciones del dropdown de rubro. La opción 'otros' habilita un input
-   *  libre para tipear el rubro a medida. */
-  readonly opcionesRubro: { label: string; value: string }[] = [
-    { label: 'Bar', value: 'bar' },
-    { label: 'Restaurant', value: 'restaurant' },
-    { label: 'Catering', value: 'catering' },
-    { label: 'Cafetería', value: 'cafeteria' },
-    { label: 'Panadería', value: 'panaderia' },
-    { label: 'Pastelería', value: 'pasteleria' },
-    { label: 'Otros…', value: 'otros' },
-  ];
+  /** Opciones del dropdown de rubro (constante compartida con crear-pedido). */
+  readonly opcionesRubro = OPCIONES_RUBRO_CLIENTE;
 
   // ------------------------------------------------------------
   // Modo "Cotización individual" — toggle único. Cuando está ON, el PDF
@@ -369,12 +361,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   // ------------------------------------------------------------
   readonly formasPago = this.precioPerfil.formasPago;
 
-  /** Forma de pago PRIMARIA = la primera de las activas que son precio de
-   *  referencia (`precioReferencia === true`), ordenadas por `orden` asc.
-   *  Es la forma "Efectivo" en la tabla típica. El precio mostrado por
-   *  producto y los totales del presupuesto se calculan con esta forma para
-   *  coincidir con el scan/visor del showroom. Null si ninguna forma activa
-   *  es de referencia (entonces se cae al precio de lista según rubro). */
   /** True si el rubro cotiza sin IVA (su precio base es el PVP sin IVA y queda
    *  fuera del descuento por escala). Copiado de showroom-page. */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
@@ -384,7 +370,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Recargo + aplicaIva del perfil (Normal o Maquinaria) de una forma según el
    *  rubro del ítem. Maquinaria: recargo null → 0 (no hereda del normal);
    *  aplicaIva null → false. Misma lógica que showroom-page.perfilForma. */
-  perfilForma(
+  private perfilForma(
     forma: FormaPago,
     esMaquinaria: boolean,
   ): { recargoPorcentaje: number | null; aplicaIva: boolean | null } {
@@ -643,7 +629,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         cantidadCuotas: f.cantidadCuotas,
         aplicaIva: f.aplicaIva ?? true,
         precioFinal: redondearMoneda(total),
-        descripcion: this.descripcionForma(f),
+        descripcion: null,
         recargoPorcentajeMaquinaria: f.recargoPorcentajeMaquinaria,
         aplicaIvaMaquinaria: f.aplicaIvaMaquinaria,
       };
@@ -722,7 +708,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           cantidadCuotas: f.cantidadCuotas,
           aplicaIva: perfil.aplicaIva ?? true,
           precioFinal,
-          descripcion: this.descripcionForma(f),
+          descripcion: null,
           itemSku: it.sku,
           recargoPorcentajeMaquinaria: f.recargoPorcentajeMaquinaria,
           aplicaIvaMaquinaria: f.aplicaIvaMaquinaria,
@@ -2193,23 +2179,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return iconoFormaReferencia(nombre);
   }
 
-  /** Descripción comercial de la forma de pago que se muestra en la card del
-   *  cliente (PDF + frontend). NO incluye "X% de recargo" — ese % está
-   *  configurado en el sistema sobre el precio CON IVA u s/IVA según la forma,
-   *  no contra el "Mejor precio". Mostrárselo al cliente confunde: ve "10%
-   *  de recargo" cuando en realidad la diferencia vs efectivo es ~33%.
-   *
-   *  Sí mantenemos "X% de descuento" cuando aplica — los descuentos suelen
-   *  ser chicos y se entienden directamente, y son información valiosa
-   *  ("esta forma te da un 5% off"). */
-  private descripcionForma(_f: FormaPago): string {
-    // No derivamos descripción para la forma: el nombre ya es descriptivo
-    // ("Efectivo", "2 cuotas"…), el detalle de cuotas se muestra aparte
-    // ("N cuotas de $X") y el "% de descuento" depende del perfil del producto
-    // (sería engañoso a nivel forma). Repetir "N cuotas" como descripción era
-    // redundante con el nombre.
-    return '';
-  }
 }
 
 /** En modo cotización individual: un ítem + sus formas de pago calculadas

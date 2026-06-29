@@ -21,6 +21,19 @@ export interface ScanResult {
  *  ({@code PresupuestoComercialPdfGenerator}). */
 export const RUBROS_SIN_DESCUENTO_ESCALA = new Set(['MAQUINAS INDUSTRIALES']);
 
+/** Opciones del dropdown de rubro comercial del cliente — compartidas por la
+ *  pantalla de presupuestos y el diálogo de crear pedido (eran idénticas en
+ *  ambos). La opción 'otros' habilita un input libre para tipear el rubro. */
+export const OPCIONES_RUBRO_CLIENTE: { label: string; value: string }[] = [
+  { label: 'Bar', value: 'bar' },
+  { label: 'Restaurant', value: 'restaurant' },
+  { label: 'Catering', value: 'catering' },
+  { label: 'Cafetería', value: 'cafeteria' },
+  { label: 'Panadería', value: 'panaderia' },
+  { label: 'Pastelería', value: 'pasteleria' },
+  { label: 'Otros…', value: 'otros' },
+];
+
 /** True si el rubro está excluido de los descuentos generales por escala.
  *  Tolera null/whitespace/casing/diacríticos — DUX a veces devuelve
  *  "Máquinas Industriales" con tilde o lowercase, lo aceptamos igual. */

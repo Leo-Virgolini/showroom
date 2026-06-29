@@ -31,6 +31,7 @@ import {
   FormaPago,
   Localidad,
   Provincia,
+  OPCIONES_RUBRO_CLIENTE,
 } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
@@ -216,15 +217,8 @@ export class CrearPedidoDialog {
   readonly formasPagoActivas = this.precioPerfil.formasPago;
   private localidadesSub: Subscription | null = null;
 
-  readonly opcionesRubroPedido: { label: string; value: string }[] = [
-    { label: 'Bar', value: 'bar' },
-    { label: 'Restaurant', value: 'restaurant' },
-    { label: 'Catering', value: 'catering' },
-    { label: 'Cafetería', value: 'cafeteria' },
-    { label: 'Panadería', value: 'panaderia' },
-    { label: 'Pastelería', value: 'pasteleria' },
-    { label: 'Otros…', value: 'otros' },
-  ];
+  /** Opciones del dropdown de rubro (constante compartida con presupuestos). */
+  readonly opcionesRubroPedido = OPCIONES_RUBRO_CLIENTE;
 
   // Categoría fiscal del cliente — DUX la exige obligatoria. Editable; el default
   // CONSUMIDOR_FINAL preserva el comportamiento previo (antes era fija).
