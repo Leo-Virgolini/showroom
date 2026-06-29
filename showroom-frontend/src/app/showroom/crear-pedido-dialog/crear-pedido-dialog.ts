@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -10,6 +11,7 @@ import {
   output,
   signal,
   untracked,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -219,6 +221,11 @@ export class CrearPedidoDialog {
 
   /** Opciones del dropdown de rubro (constante compartida con presupuestos). */
   readonly opcionesRubroPedido = OPCIONES_RUBRO_CLIENTE;
+
+  /** Input de texto libre que aparece al elegir "Otros…" — para enfocarlo
+   *  automáticamente cuando el usuario selecciona esa opción en el dropdown. */
+  private readonly rubroOtrosInput =
+    viewChild<ElementRef<HTMLInputElement>>('rubroOtrosInput');
 
   // Categoría fiscal del cliente — DUX la exige obligatoria. Editable; el default
   // CONSUMIDOR_FINAL preserva el comportamiento previo (antes era fija).
@@ -624,6 +631,18 @@ export class CrearPedidoDialog {
       }
     } else {
       this.pedidoRazonSocial.set(value ?? '');
+    }
+  }
+
+  /** Handler del dropdown de rubro. Setea el signal y, cuando el usuario elige
+   *  "Otros…" manualmente, enfoca el input de texto libre que recién se monta
+   *  (esperamos un tick a que el `@if` lo renderice). Solo corre por interacción
+   *  del usuario; el prefill/hidratación setea el signal por código y no dispara
+   *  este handler, así que no le roba el foco. */
+  onRubroPedidoSelect(rubro: string | null): void {
+    this.pedidoRubro.set(rubro);
+    if (rubro === 'otros') {
+      setTimeout(() => this.rubroOtrosInput()?.nativeElement.focus(), 0);
     }
   }
 

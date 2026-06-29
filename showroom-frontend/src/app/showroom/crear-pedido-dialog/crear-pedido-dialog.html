@@ -152,11 +152,11 @@
         </label>
         <p-select [options]="opcionesRubroPedido"
           optionLabel="label" optionValue="value"
-          [ngModel]="pedidoRubro()" (ngModelChange)="pedidoRubro.set($event)"
+          [ngModel]="pedidoRubro()" (ngModelChange)="onRubroPedidoSelect($event)"
           placeholder="Seleccioná un rubro…" class="w-full"
           [showClear]="true" appendTo="body" />
         @if (pedidoRubro() === 'otros') {
-          <input pInputText type="text" class="w-full mt-2"
+          <input #rubroOtrosInput pInputText type="text" class="w-full mt-2"
             [ngModel]="pedidoRubroOtros()" (ngModelChange)="pedidoRubroOtros.set($event)"
             placeholder="Escribí el rubro del cliente" maxlength="100" />
         }
