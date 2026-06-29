@@ -14,13 +14,6 @@ export interface ScanResult {
   sincronizadoAt: string | null;
 }
 
-/** Nombre del rubro DUX que está excluido de los descuentos generales por
- *  escala. La comparación se hace case-insensitive y trimeada para tolerar
- *  variaciones de casing en DUX. Mantener sincronizado con la lista
- *  {@code RUBROS_SIN_DESCUENTO_ESCALA} del backend
- *  ({@code PresupuestoComercialPdfGenerator}). */
-export const RUBROS_SIN_DESCUENTO_ESCALA = new Set(['MAQUINAS INDUSTRIALES']);
-
 /** Opciones del dropdown de rubro comercial del cliente — compartidas por la
  *  pantalla de presupuestos y el diálogo de crear pedido (eran idénticas en
  *  ambos). La opción 'otros' habilita un input libre para tipear el rubro. */
@@ -33,14 +26,6 @@ export const OPCIONES_RUBRO_CLIENTE: { label: string; value: string }[] = [
   { label: 'Pastelería', value: 'pasteleria' },
   { label: 'Otros…', value: 'otros' },
 ];
-
-/** True si el rubro está excluido de los descuentos generales por escala.
- *  Tolera null/whitespace/casing/diacríticos — DUX a veces devuelve
- *  "Máquinas Industriales" con tilde o lowercase, lo aceptamos igual. */
-export function rubroExcluyeDescuentos(rubro: string | null | undefined): boolean {
-  const n = normalizarRubro(rubro);
-  return n !== '' && RUBROS_SIN_DESCUENTO_ESCALA.has(n);
-}
 
 /** Normaliza un rubro para comparaciones robustas: trim, sin acentos, mayúsculas.
  *  DUX a veces devuelve el mismo rubro con tilde o lowercase; esto los unifica.
