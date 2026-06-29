@@ -168,7 +168,7 @@
             <td class="font-mono text-sm">{{ it.sku }}</td>
             <td>{{ it.descripcion ?? '—' }}</td>
             <td class="text-xs">
-              @if (esRubroSinDescuento(it.rubro)) {
+              @if (esRubroMaquinaria(it.rubro)) {
                 <!-- Badge ámbar destacado: el operador identifica de un vistazo
                      los productos a los que NO se les aplican los descuentos
                      generales por escala. -->

@@ -244,12 +244,10 @@ export class ProductosPage {
     return this.refrescando().has(sku);
   }
 
-  /** True si el rubro está excluido de los descuentos generales por escala.
-   *  La tabla lo usa para destacar visualmente la fila — MAQUINAS
-   *  INDUSTRIALES tiene un badge ámbar en lugar del nombre del rubro plano. */
-  esRubroSinDescuento(rubro: string | null): boolean {
-    return rubroExcluyeDescuentos(rubro);
-  }
+  /** True si el producto es de maquinaria (`MAQUINAS INDUSTRIALES`) — marca la
+   *  fila con un badge ámbar. Criterio único (`rubroExcluyeDescuentos`)
+   *  compartido por todas las tablas de la app. */
+  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
   trackBySku = (_: number, it: ProductoListItem) => it.sku;
 

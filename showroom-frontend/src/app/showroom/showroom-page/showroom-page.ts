@@ -37,7 +37,7 @@ import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
-import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, ScanResult } from '../models';
+import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, rubroExcluyeDescuentos, ScanResult } from '../models';
 import {
   hayEscalonSuperior,
   iconoFormaReferencia,
@@ -636,13 +636,10 @@ export class ShowroomPage implements AfterViewInit {
     () => this.rubroCotizaSinIva(this.ultimoScan()?.rubro),
   );
 
-  /** True si el ítem (resultado de búsqueda o ítem de carrito) es de un
-   *  rubro excluido. El template lo usa para mostrar el badge "MÁQUINA
-   *  INDUSTRIAL" en cada fila — el operador identifica de un vistazo qué
-   *  productos no califican para descuentos por escala. */
-  esRubroSinDescuento(rubro: string | null | undefined): boolean {
-    return this.rubroCotizaSinIva(rubro);
-  }
+  /** True si el ítem es de maquinaria (`MAQUINAS INDUSTRIALES`) — el template
+   *  muestra el badge "MÁQUINA INDUSTRIAL" en la fila. Criterio único
+   *  (`rubroExcluyeDescuentos`) compartido por todas las tablas de la app. */
+  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
   /** True si en el carrito hay AL MENOS un ítem de rubro excluido. El UI lo
    *  usa para aclarar que el descuento mostrado no se aplica a todos los

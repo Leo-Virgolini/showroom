@@ -143,12 +143,12 @@
                        llevan un borde izquierdo ámbar grueso + tinte de fondo
                        para identificarlas en listas largas. -->
                   <div class="w-full flex items-center gap-3 px-3 py-2 transition-colors"
-                       [class.bg-amber-50]="esRubroSinDescuento(r.rubro)"
-                       [class.dark:bg-amber-950/20]="esRubroSinDescuento(r.rubro)"
-                       [class.border-l-4]="esRubroSinDescuento(r.rubro)"
-                       [class.border-amber-400]="esRubroSinDescuento(r.rubro)"
-                       [class.dark:border-amber-600]="esRubroSinDescuento(r.rubro)"
-                       [class.hover:bg-[#FF861C]/5]="!esRubroSinDescuento(r.rubro)">
+                       [class.bg-amber-50]="esRubroMaquinaria(r.rubro)"
+                       [class.dark:bg-amber-950/20]="esRubroMaquinaria(r.rubro)"
+                       [class.border-l-4]="esRubroMaquinaria(r.rubro)"
+                       [class.border-amber-400]="esRubroMaquinaria(r.rubro)"
+                       [class.dark:border-amber-600]="esRubroMaquinaria(r.rubro)"
+                       [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(r.rubro)">
                     <!-- Imagen más chica (48×48) que en el detalle (56×56) para
                          reforzar visualmente que la lista es "secundaria/exploratoria". -->
                     @if (r.imagenUrl) {
@@ -170,7 +170,7 @@
                         <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-[10px] font-bold">
                           {{ r.sku }}
                         </span>
-                        @if (esRubroSinDescuento(r.rubro)) {
+                        @if (esRubroMaquinaria(r.rubro)) {
                           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
                                        bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
                                        font-bold text-[9px] uppercase tracking-wide"
@@ -561,7 +561,7 @@
                      fondo ámbar suave para que el operador no se sorprenda
                      al ver que el descuento global no afecta a esa línea
                      (lo aclaramos también con badge "Máq. Industrial"). -->
-                <tr [class.item-maquina-industrial]="esRubroSinDescuento(it.rubro)">
+                <tr [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)">
                   <td>
                     @if (it.imagenUrl) {
                       <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
@@ -588,7 +588,7 @@
                             Genérico
                           </span>
                         }
-                        @if (esRubroSinDescuento(it.rubro)) {
+                        @if (esRubroMaquinaria(it.rubro)) {
                           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
                                        bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
                                        font-bold text-[10px] uppercase tracking-wide"
@@ -1181,7 +1181,7 @@
         </span>
         <!-- Badge "Máq. Industrial" para rubros sin descuento. El rubro normal
              NO se muestra acá: ya aparece en su propio chip "Rubro" más abajo. -->
-        @if (esRubroSinDescuento(p.rubro)) {
+        @if (esRubroMaquinaria(p.rubro)) {
           <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
                        bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
                        font-bold text-[10px] uppercase tracking-wide"

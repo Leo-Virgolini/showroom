@@ -45,6 +45,7 @@ import {
   PresupuestoVisor,
   ScanResult,
   OPCIONES_RUBRO_CLIENTE,
+  rubroExcluyeDescuentos,
 } from '../models';
 import {
   calcularIndiceMejorPrecio,
@@ -1491,13 +1492,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return 9999;
   }
 
-  /** True si el producto es de un rubro excluido de los descuentos por
-   *  escala (MAQUINAS INDUSTRIALES). El template lo usa para marcar las
-   *  filas — tanto en los resultados de búsqueda como en la tabla del
-   *  detalle del presupuesto — con un badge visible. */
-  esRubroSinDescuento(rubro: string | null | undefined): boolean {
-    return this.rubroCotizaSinIva(rubro);
-  }
+  /** True si el producto es de maquinaria (`MAQUINAS INDUSTRIALES`) — marca las
+   *  filas con un badge/resaltado. Criterio único (`rubroExcluyeDescuentos`)
+   *  compartido por todas las tablas de la app. */
+  protected readonly esRubroMaquinaria = rubroExcluyeDescuentos;
 
   /** Precio de REFERENCIA unitario a mostrar para un producto en la lista/detalle:
    *  el precio con la forma de pago destacada según el rubro del ítem — mismo

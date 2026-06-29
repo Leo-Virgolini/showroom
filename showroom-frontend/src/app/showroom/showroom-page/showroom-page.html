@@ -459,16 +459,16 @@
                  excluido de descuentos por escala) usamos un borde izquierdo
                  ámbar grueso como diferenciador visual a primera vista. -->
             <li class="px-3 py-2.5 rounded-lg border bg-white dark:bg-surface-900/40 transition-colors flex flex-wrap items-center gap-3"
-                [class.border-amber-400]="esRubroSinDescuento(it.rubro)"
-                [class.dark:border-amber-600]="esRubroSinDescuento(it.rubro)"
-                [class.border-l-4]="esRubroSinDescuento(it.rubro)"
-                [class.bg-amber-50/40]="esRubroSinDescuento(it.rubro)"
-                [class.dark:bg-amber-950/20]="esRubroSinDescuento(it.rubro)"
-                [class.border-surface-200]="!esRubroSinDescuento(it.rubro)"
-                [class.dark:border-surface-700]="!esRubroSinDescuento(it.rubro)"
-                [class.hover:border-[#FF861C]/50]="!esRubroSinDescuento(it.rubro)"
-                [class.hover:bg-[#FF861C]/5]="!esRubroSinDescuento(it.rubro)"
-                [class.dark:hover:bg-surface-800/40]="!esRubroSinDescuento(it.rubro)"
+                [class.border-amber-400]="esRubroMaquinaria(it.rubro)"
+                [class.dark:border-amber-600]="esRubroMaquinaria(it.rubro)"
+                [class.border-l-4]="esRubroMaquinaria(it.rubro)"
+                [class.bg-amber-50/40]="esRubroMaquinaria(it.rubro)"
+                [class.dark:bg-amber-950/20]="esRubroMaquinaria(it.rubro)"
+                [class.border-surface-200]="!esRubroMaquinaria(it.rubro)"
+                [class.dark:border-surface-700]="!esRubroMaquinaria(it.rubro)"
+                [class.hover:border-[#FF861C]/50]="!esRubroMaquinaria(it.rubro)"
+                [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(it.rubro)"
+                [class.dark:hover:bg-surface-800/40]="!esRubroMaquinaria(it.rubro)"
                 [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva">
               <div class="flex-1 flex items-center gap-3 text-left min-w-0">
                 @if (it.imagenUrl) {
@@ -486,7 +486,7 @@
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-surface-300 dark:border-surface-600 text-surface-600 dark:text-surface-300 font-mono text-[10px] font-bold">
                       {{ it.sku }}
                     </span>
-                    @if (esRubroSinDescuento(it.rubro)) {
+                    @if (esRubroMaquinaria(it.rubro)) {
                       <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full
                                    bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
                                    font-bold text-[9px] uppercase tracking-wide"
@@ -711,7 +711,7 @@
                cuenta como contenido fuera de los bordes del <ul>). -->
           <li class="py-2 px-2 rounded-md flex items-center gap-2 min-w-[20rem]"
               [class.item-excedido]="excedeStock(it)"
-              [class.item-maquina-industrial]="esRubroSinDescuento(it.rubro)"
+              [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)"
               [attr.data-sku]="it.sku"
               [attr.data-itemkey]="it.itemKey">
             @if (it.imagenUrl) {
@@ -736,7 +736,7 @@
                     <i class="pi pi-pencil text-[8px]"></i> Genérico
                   </span>
                 }
-                @if (esRubroSinDescuento(it.rubro)) {
+                @if (esRubroMaquinaria(it.rubro)) {
                   <span class="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1 shrink-0
                                bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200"
                         pTooltip="Máquina industrial — no aplican los descuentos por monto"
