@@ -26,7 +26,7 @@ import { SelectModule } from 'primeng/select';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { TooltipModule } from 'primeng/tooltip';
-import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Localidad, Provincia } from '../models';
+import { ActualizarClienteRequest, ClienteAutocompletar, ClientePresupuestos, Localidad, OPCIONES_RUBRO_CLIENTE, Provincia } from '../models';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
 import { ShowroomService } from '../showroom.service';
 import { sortDesdeLazyLoad } from '../tabla.utils';
@@ -169,18 +169,10 @@ export class PresupuestosClientesPage {
   private localidadesSub: Subscription | null = null;
 
 
-  /** Opciones del dropdown de rubro — mismo set que /presupuestos y el modal
-   *  de pedidos para que un mismo cliente caiga al mismo rubro en cualquier
-   *  flujo. "Otros…" habilita un input libre. */
-  readonly opcionesRubro: { label: string; value: string }[] = [
-    { label: 'Bar', value: 'bar' },
-    { label: 'Restaurant', value: 'restaurant' },
-    { label: 'Catering', value: 'catering' },
-    { label: 'Cafetería', value: 'cafeteria' },
-    { label: 'Panadería', value: 'panaderia' },
-    { label: 'Pastelería', value: 'pasteleria' },
-    { label: 'Otros…', value: 'otros' },
-  ];
+  /** Opciones del dropdown de rubro — constante compartida con /presupuestos y
+   *  el modal de pedidos, para que un mismo cliente caiga al mismo rubro en
+   *  cualquier flujo. */
+  readonly opcionesRubro = OPCIONES_RUBRO_CLIENTE;
 
   /** Dispara la recarga (reseteando a la primera página) cuando cambia la
    *  búsqueda. Debounce para que tipear no pegue una request por tecla — la

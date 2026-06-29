@@ -176,7 +176,7 @@ export class CotizadorPage {
         cantidadCuotas: f.cantidadCuotas,
         aplicaIva: f.aplicaIva ?? true,
         precioFinal: redondearMoneda(p1 + p2),
-        descripcion: this.descripcionForma(f),
+        descripcion: null,
       };
     });
   });
@@ -503,14 +503,6 @@ export class CotizadorPage {
     if (n.includes('tarjeta') || n.includes('debito') || n.includes('credito')) return 'pi pi-credit-card';
     if (n.includes('remito')) return 'pi pi-file';
     return 'pi pi-tag';
-  }
-
-  private descripcionForma(_f: FormaPago): string {
-    // No derivamos descripción para la forma: el "% de descuento" depende del
-    // perfil (menaje/maquinaria) de cada monto —según su tasa de IVA—, así que
-    // sería engañoso mostrar uno solo a nivel forma. El detalle de cuotas
-    // ("N × $") se muestra aparte y el nombre ya dice "N cuotas".
-    return '';
   }
 
   private formatear(n: number): string {
