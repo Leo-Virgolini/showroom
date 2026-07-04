@@ -117,7 +117,7 @@ services:
       # caching_sha2_password — sin SSL el driver no puede bajar la public key
       # del server para encriptar el password sin permiso explícito. En red
       # interna de Docker (no expuesta) el riesgo de MITM es nulo.
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/showroom?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/showroom?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&rewriteBatchedStatements=true
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
 

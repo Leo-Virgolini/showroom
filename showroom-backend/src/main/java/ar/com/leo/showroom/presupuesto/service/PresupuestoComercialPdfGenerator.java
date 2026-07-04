@@ -3,6 +3,7 @@ package ar.com.leo.showroom.presupuesto.service;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
+import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
 import ar.com.leo.showroom.config.entity.FormaPago;
@@ -25,6 +26,7 @@ import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.WriterProperties;
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEvent;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEventHandler;
@@ -201,22 +203,26 @@ public class PresupuestoComercialPdfGenerator {
                              boolean mostrarNumero,
                              boolean mostrarTotalesYFormas) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-             PdfWriter writer = new PdfWriter(out);
+             PdfWriter writer = new PdfWriter(out, new WriterProperties()
+                     .setFullCompressionMode(true).setCompressionLevel(9));
              PdfDocument pdfDoc = new PdfDocument(writer);
              Document doc = new Document(pdfDoc, PageSize.A4)) {
 
             doc.setMargins(30, 30, 40, 30);
 
-            ImageData bgInterior = cargarRecurso("/images/backgroundwhiteKT.png");
+            // Fondo/logo/placeholder reutilizables: cada uno se incrusta UNA sola vez
+            // y se reusa en cada página/celda (antes se re-incrustaban por uso; el logo
+            // del footer, ~1MB, se multiplicaba por la cantidad de hojas del PDF).
+            PdfImagenReutilizable bgInterior = PdfImagenReutilizable.of(cargarRecurso("/images/backgroundwhiteKT.png"));
             // Header: logo completo "KITCHENTOOLS GASTRO" (3.42:1, 640×187),
             // el mismo .webp del frontend convertido a PNG porque iText no lee
             // WebP. Footer: ícono compacto (solo la K en círculo), que se ve
             // bien en 30×25pt.
             ImageData logoHeader = cargarRecurso("/images/kt-gastro-logo.png");
-            ImageData logoFooter = cargarRecurso("/images/logoKT.png");
+            PdfImagenReutilizable logoFooter = PdfImagenReutilizable.of(cargarRecurso("/images/logoKT.png"));
             // Fallback que se usa cuando un producto no tiene foto en la
             // carpeta local — evita celdas vacías en la tabla.
-            ImageData sinImagen = cargarRecurso("/images/SINIMAGEN.jpg");
+            PdfImagenReutilizable sinImagen = PdfImagenReutilizable.of(cargarRecurso("/images/SINIMAGEN.jpg"));
             pdfDoc.addEventHandler(PdfDocumentEvent.START_PAGE,
                     new BackgroundHandler(bgInterior));
             pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE,
@@ -436,7 +442,7 @@ public class PresupuestoComercialPdfGenerator {
                                  int idx,
                                  int total,
                                  List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> todasFormas,
-                                 ImageData sinImagen) {
+                                 PdfImagenReutilizable sinImagen) {
         // Sub-título "Producto N de M". `setKeepWithNext(true)` lo "pega" al
         // card del producto que viene abajo: si el card (que tiene
         // setKeepTogether) no entra en el espacio remaining de la página
@@ -595,7 +601,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setTextAlignment(TextAlignment.CENTER);
         Image img = cargarImagenProducto(item.sku(), 260f);
         if (img == null && sinImagen != null) {
-            img = new Image(sinImagen);
+            img = sinImagen.nuevaImagen();
         }
         if (img != null) {
             img.setAutoScale(false);
@@ -1039,7 +1045,7 @@ public class PresupuestoComercialPdfGenerator {
     // =====================================================
     private void agregarTablaDetalle(Document doc,
                                      List<GenerarPresupuestoRequestDTO.Item> items,
-                                     ImageData sinImagen,
+                                     PdfImagenReutilizable sinImagen,
                                      GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
         Div seccion = new Div()
                 .setMarginTop(12)
@@ -1132,7 +1138,7 @@ public class PresupuestoComercialPdfGenerator {
             // Si no hay foto local, mostramos el placeholder genérico para
             // que la columna no quede vacía y la fila luzca completa.
             if (img == null && sinImagen != null) {
-                img = new Image(sinImagen);
+                img = sinImagen.nuevaImagen();
             }
             if (img != null) {
                 img.setAutoScale(false);
@@ -1272,7 +1278,7 @@ public class PresupuestoComercialPdfGenerator {
      */
     private void agregarTablaItemsInteres(Document doc,
                                           List<GenerarPresupuestoRequestDTO.Item> items,
-                                          ImageData sinImagen,
+                                          PdfImagenReutilizable sinImagen,
                                           List<EscalaDescuento> escalones) {
         Div seccion = new Div()
                 .setMarginTop(12)
@@ -1370,7 +1376,7 @@ public class PresupuestoComercialPdfGenerator {
                     .setHorizontalAlignment(HorizontalAlignment.CENTER);
             Image img = cargarImagenProducto(it.sku(), 48f);
             if (img == null && sinImagen != null) {
-                img = new Image(sinImagen);
+                img = sinImagen.nuevaImagen();
             }
             if (img != null) {
                 img.setAutoScale(false);
@@ -2172,8 +2178,8 @@ public class PresupuestoComercialPdfGenerator {
     // Background & footer (mismas piezas que el PDF de pedidos)
     // =====================================================
     private static class BackgroundHandler extends AbstractPdfDocumentEventHandler {
-        private final ImageData bg;
-        BackgroundHandler(ImageData bg) { this.bg = bg; }
+        private final PdfImagenReutilizable bg;
+        BackgroundHandler(PdfImagenReutilizable bg) { this.bg = bg; }
 
         @Override
         protected void onAcceptedEvent(AbstractPdfDocumentEvent event) {
@@ -2183,7 +2189,7 @@ public class PresupuestoComercialPdfGenerator {
                 Rectangle area = page.getPageSize();
                 PdfCanvas canvas = new PdfCanvas(
                         page.newContentStreamBefore(), page.getResources(), page.getDocument());
-                canvas.addImageFittedIntoRectangle(bg, area, false);
+                canvas.addXObjectFittedIntoRectangle(bg.xObject(), area);
             } catch (Exception ignored) {
                 // background decorativo — si falla, el PDF sigue siendo válido
             }
@@ -2192,8 +2198,8 @@ public class PresupuestoComercialPdfGenerator {
 
     private static class FooterHandler extends AbstractPdfDocumentEventHandler {
         private final PdfDocument pdfDoc;
-        private final ImageData logo;
-        FooterHandler(PdfDocument pdfDoc, ImageData logo) { this.pdfDoc = pdfDoc; this.logo = logo; }
+        private final PdfImagenReutilizable logo;
+        FooterHandler(PdfDocument pdfDoc, PdfImagenReutilizable logo) { this.pdfDoc = pdfDoc; this.logo = logo; }
 
         @Override
         protected void onAcceptedEvent(AbstractPdfDocumentEvent event) {
@@ -2212,7 +2218,7 @@ public class PresupuestoComercialPdfGenerator {
 
                 if (logo != null) {
                     Rectangle logoRect = new Rectangle(logoX, y - logoH / 2f, logoW, logoH);
-                    pdfCanvas.addImageFittedIntoRectangle(logo, logoRect, false);
+                    pdfCanvas.addXObjectFittedIntoRectangle(logo.xObject(), logoRect);
                 }
 
                 Rectangle textArea = new Rectangle(textX, y - 4f, pageWidth / 2f - 20f, 14f);

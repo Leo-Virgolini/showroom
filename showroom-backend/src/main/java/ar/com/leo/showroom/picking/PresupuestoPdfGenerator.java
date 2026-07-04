@@ -3,6 +3,7 @@ package ar.com.leo.showroom.picking;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
+import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.FormaPago;
 import ar.com.leo.showroom.config.service.FormaPagoService;
@@ -21,6 +22,7 @@ import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.kernel.pdf.WriterProperties;
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEvent;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEventHandler;
@@ -127,20 +129,23 @@ public class PresupuestoPdfGenerator {
     /** Pipeline común: portada con datos del pedido + N páginas con los items. */
     private byte[] generarConItems(PedidoShowroom pedido, List<ItemView> items) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream();
-             PdfWriter writer = new PdfWriter(out);
+             PdfWriter writer = new PdfWriter(out, new WriterProperties()
+                     .setFullCompressionMode(true).setCompressionLevel(9));
              PdfDocument pdfDoc = new PdfDocument(writer);
              Document doc = new Document(pdfDoc, PageSize.A4)) {
 
             doc.setMargins(40, 40, 40, 40);
 
-            // Background images: carátula primera página + interior en el resto.
-            ImageData bgPortada = cargarRecurso("/images/backgroundKT.png");
-            ImageData bgInterior = cargarRecurso("/images/backgroundwhiteKT.png");
-            ImageData logoKT = cargarRecurso("/images/logoKT.png");
+            // Fondo/logo/placeholder reutilizables: cada uno se incrusta UNA sola vez
+            // y se reusa en todas las páginas (antes se re-incrustaban por página; con
+            // logoKT.png el peso se multiplicaba por la cantidad de hojas del pedido).
+            PdfImagenReutilizable bgPortada = PdfImagenReutilizable.of(cargarRecurso("/images/backgroundKT.png"));
+            PdfImagenReutilizable bgInterior = PdfImagenReutilizable.of(cargarRecurso("/images/backgroundwhiteKT.png"));
+            PdfImagenReutilizable logoKT = PdfImagenReutilizable.of(cargarRecurso("/images/logoKT.png"));
             pdfDoc.addEventHandler(PdfDocumentEvent.START_PAGE, new BackgroundHandler(pdfDoc, bgPortada, bgInterior));
             pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE, new FooterHandler(pdfDoc, logoKT));
 
-            ImageData sinImagen = cargarRecurso("/images/SINIMAGEN.jpg");
+            PdfImagenReutilizable sinImagen = PdfImagenReutilizable.of(cargarRecurso("/images/SINIMAGEN.jpg"));
 
             // PORTADA
             agregarPortada(doc, pedido, logoKT);
@@ -198,11 +203,11 @@ public class PresupuestoPdfGenerator {
     // PORTADA
     // =====================================================
 
-    private void agregarPortada(Document doc, PedidoShowroom pedido, ImageData logo) {
+    private void agregarPortada(Document doc, PedidoShowroom pedido, PdfImagenReutilizable logo) {
         // Logo grande KT (con olla + "KITCHENTOOLS"), igual al catalog generator.
         Image logoImg = null;
         if (logo != null) {
-            logoImg = new Image(logo);
+            logoImg = logo.nuevaImagen();
             logoImg.setWidth(300);
             logoImg.setHorizontalAlignment(HorizontalAlignment.CENTER);
             logoImg.setMarginBottom(20);
@@ -284,7 +289,7 @@ public class PresupuestoPdfGenerator {
     // PRODUCTOS — 4 por página
     // =====================================================
 
-    private void agregarPaginasProductos(Document doc, List<ItemView> items, ImageData sinImagen) {
+    private void agregarPaginasProductos(Document doc, List<ItemView> items, PdfImagenReutilizable sinImagen) {
         // Calcular la altura de cada bloque para que entren PRODUCTOS_POR_PAGINA
         // bien distribuidos en el alto útil de la página. Margen extra de ~60pt
         // para separadores entre items y el footer (logo + número de página).
@@ -320,7 +325,7 @@ public class PresupuestoPdfGenerator {
         }
     }
 
-    private Table buildItemBlock(ItemView it, ImageData sinImagenData,
+    private Table buildItemBlock(ItemView it, PdfImagenReutilizable sinImagenData,
                                  boolean imagenIzquierda, float bloqueHeight) {
         // Layout horizontal 50/50: imagen y card alternan lado según el índice.
         // setHeight fija el alto del bloque para que entren PRODUCTOS_POR_PAGINA
@@ -431,7 +436,7 @@ public class PresupuestoPdfGenerator {
 
     /** Carga la imagen del producto preprocesada (recorte + resize + JPEG)
      *  vía {@link PdfImagenUtils}. Si no hay imagen local cae al fallback. */
-    private Image cargarImagenProducto(String sku, ImageData fallback, float displaySizePt) {
+    private Image cargarImagenProducto(String sku, PdfImagenReutilizable fallback, float displaySizePt) {
         File archivo = imagenLocalService.buscar(sku).orElse(null);
         return PdfImagenUtils.cargarImagenProducto(archivo, fallback, displaySizePt);
     }
@@ -462,9 +467,9 @@ public class PresupuestoPdfGenerator {
      */
     private static class FooterHandler extends AbstractPdfDocumentEventHandler {
         private final PdfDocument pdfDoc;
-        private final ImageData logo;
+        private final PdfImagenReutilizable logo;
 
-        FooterHandler(PdfDocument pdfDoc, ImageData logo) {
+        FooterHandler(PdfDocument pdfDoc, PdfImagenReutilizable logo) {
             this.pdfDoc = pdfDoc;
             this.logo = logo;
         }
@@ -491,7 +496,7 @@ public class PresupuestoPdfGenerator {
                 // Logo a la izquierda del texto, centrado verticalmente con éste.
                 if (logo != null) {
                     Rectangle logoRect = new Rectangle(logoX, y - logoH / 2f, logoW, logoH);
-                    pdfCanvas.addImageFittedIntoRectangle(logo, logoRect, false);
+                    pdfCanvas.addXObjectFittedIntoRectangle(logo.xObject(), logoRect);
                 }
 
                 // Texto comienza en textX (centro de la página) y se extiende a la derecha.
@@ -511,10 +516,10 @@ public class PresupuestoPdfGenerator {
 
     private static class BackgroundHandler extends AbstractPdfDocumentEventHandler {
         private final PdfDocument pdfDoc;
-        private final ImageData portada;
-        private final ImageData interior;
+        private final PdfImagenReutilizable portada;
+        private final PdfImagenReutilizable interior;
 
-        BackgroundHandler(PdfDocument pdfDoc, ImageData portada, ImageData interior) {
+        BackgroundHandler(PdfDocument pdfDoc, PdfImagenReutilizable portada, PdfImagenReutilizable interior) {
             this.pdfDoc = pdfDoc;
             this.portada = portada;
             this.interior = interior;
@@ -526,11 +531,11 @@ public class PresupuestoPdfGenerator {
                 PdfDocumentEvent docEvent = (PdfDocumentEvent) event;
                 PdfPage page = docEvent.getPage();
                 int pageNum = pdfDoc.getPageNumber(page);
-                ImageData bg = pageNum == 1 ? portada : interior;
+                PdfImagenReutilizable bg = pageNum == 1 ? portada : interior;
                 if (bg == null) return;
                 Rectangle area = page.getPageSize();
                 PdfCanvas canvas = new PdfCanvas(page.newContentStreamBefore(), page.getResources(), pdfDoc);
-                canvas.addImageFittedIntoRectangle(bg, area, false);
+                canvas.addXObjectFittedIntoRectangle(bg.xObject(), area);
             } catch (Exception ignored) {
                 // El background es decorativo — si falla, el PDF sigue siendo válido.
             }

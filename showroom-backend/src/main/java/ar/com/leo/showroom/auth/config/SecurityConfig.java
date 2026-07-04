@@ -20,7 +20,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 /**
  * Spring Security:
  *  <ul>
- *    <li>Sesiones via cookie {@code JSESSIONID} (HttpOnly), persistidas en
+ *    <li>Sesiones via cookie {@code SESSION} de Spring Session (HttpOnly), persistidas en
  *        MySQL via Spring Session JDBC con timeout configurado en
  *        {@code application.properties} (30 días por default). La auto-config
  *        del starter {@code spring-boot-starter-session-jdbc} aplica
@@ -103,7 +103,9 @@ public class SecurityConfig {
                         .logoutUrl("/api/auth/logout")
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT))
                         .invalidateHttpSession(true)
-                        .deleteCookies("JSESSIONID"))
+                        // Spring Session usa la cookie "SESSION" (no JSESSIONID);
+                        // borrarla del browser tras el logout evita dejarla huérfana.
+                        .deleteCookies("SESSION"))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
                             res.setStatus(HttpStatus.UNAUTHORIZED.value());

@@ -1,6 +1,5 @@
 package ar.com.leo.showroom.common.pdf;
 
-import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.layout.element.Image;
 import org.slf4j.Logger;
@@ -60,14 +59,15 @@ public final class PdfImagenUtils {
      * fallback.
      *
      * @param archivo       archivo de la imagen original, puede ser {@code null}.
-     * @param fallback      ImageData a usar si no hay archivo o el procesado
-     *                      falla. Puede ser {@code null}.
+     * @param fallback      placeholder reutilizable a usar si no hay archivo o el
+     *                      procesado falla. Puede ser {@code null}. Se dibuja
+     *                      reusando un único XObject (se incrusta una sola vez).
      * @param displaySizePt tamaño máximo de visualización en puntos PDF
      *                      (define el target en px vía {@link #TARGET_DPI}).
      */
-    public static Image cargarImagenProducto(File archivo, ImageData fallback, float displaySizePt) {
+    public static Image cargarImagenProducto(File archivo, PdfImagenReutilizable fallback, float displaySizePt) {
         if (archivo == null || !archivo.exists()) {
-            return fallback != null ? new Image(fallback) : null;
+            return fallback != null ? fallback.nuevaImagen() : null;
         }
         try {
             BufferedImage original = ImageIO.read(archivo);
@@ -78,7 +78,7 @@ public final class PdfImagenUtils {
             BufferedImage recortada = recortarBordesBlancos(original);
             if (recortada == null) {
                 log.warn("Imagen sin contenido visible (toda blanca): {}", archivo.getName());
-                return fallback != null ? new Image(fallback) : null;
+                return fallback != null ? fallback.nuevaImagen() : null;
             }
             int targetPx = Math.max(1, Math.round(displaySizePt * TARGET_DPI / 72f));
             BufferedImage preparada = redimensionarParaJpeg(recortada, targetPx);
@@ -86,7 +86,7 @@ public final class PdfImagenUtils {
             return new Image(ImageDataFactory.create(jpeg));
         } catch (Exception e) {
             log.warn("Error procesando imagen {}: {}", archivo.getName(), e.getMessage());
-            return fallback != null ? new Image(fallback) : null;
+            return fallback != null ? fallback.nuevaImagen() : null;
         }
     }
 
