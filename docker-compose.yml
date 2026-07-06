@@ -26,7 +26,7 @@ services:
     container_name: showroom-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
       MYSQL_DATABASE: showroom
       TZ: America/Argentina/Buenos_Aires
     command: >
@@ -40,7 +40,7 @@ services:
     networks:
       - showroom-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-showroom}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -58,7 +58,7 @@ services:
   #
   # - Los dumps van a ./backups del host (gzip). Restore:
   #     gunzip < backups/showroom-XXXX.sql.gz | \
-  #       docker compose exec -T mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" showroom
+  #       docker compose exec -T mysql mysql -uroot -p"$DB_PASSWORD" showroom
   # - Retención: conserva los 7 dumps más recientes (los anteriores se borran).
   # - Solo corre mientras el stack está levantado: si la PC está apagada a las
   #   02:00, ese día se saltea (no hay catch-up).
@@ -77,7 +77,7 @@ services:
         condition: service_healthy
     environment:
       # mysqldump lee el password de MYSQL_PWD — evita exponerlo en la cmdline.
-      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD:-showroom}
+      MYSQL_PWD: ${DB_PASSWORD}
       TZ: America/Argentina/Buenos_Aires
     volumes:
       - ./backups:/backups
@@ -124,8 +124,8 @@ services:
       # del server para encriptar el password sin permiso explícito. En red
       # interna de Docker (no expuesta) el riesgo de MITM es nulo.
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/showroom?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&rewriteBatchedStatements=true
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
+      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-root}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
 
       # ---- Seguridad HTTPS (producción detrás del proxy TLS de Coolify) ----
       # Traefik termina el TLS y reenvía HTTP interno al stack. Con estas dos
@@ -140,12 +140,16 @@ services:
       # que la app funciona igual; el comodín público NO es seguro).
       SHOWROOM_CORS_ALLOWED_ORIGINS: ${SHOWROOM_CORS_ALLOWED_ORIGINS:-}
 
-      # ---- DUX (datos de empresa, definir en .env) ----
+      # ---- DUX ----
+      # Carpeta (montada :ro) con dux_tokens.json — ver volumen abajo.
       APP_SECRETS_DIR: /app/secrets
-      DUX_EMPRESA_ID: ${DUX_EMPRESA_ID}
-      DUX_EMPRESA_ID_SUCURSAL: ${DUX_EMPRESA_ID_SUCURSAL}
-      DUX_EMPRESA_ID_DEPOSITO: ${DUX_EMPRESA_ID_DEPOSITO:-0}
-      DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT: ${DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT:-CONSUMIDOR_FINAL}
+      # Los IDs de empresa/sucursal/depósito son CONFIG FIJA (no secretos) y
+      # viven en application.properties (dux.empresa.*). No hace falta cargarlos
+      # en Coolify. Descomentá alguno acá solo si necesitás pisarlo por entorno.
+      # DUX_EMPRESA_ID: ${DUX_EMPRESA_ID}
+      # DUX_EMPRESA_ID_SUCURSAL: ${DUX_EMPRESA_ID_SUCURSAL}
+      # DUX_EMPRESA_ID_DEPOSITO: ${DUX_EMPRESA_ID_DEPOSITO:-0}
+      # DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT: ${DUX_EMPRESA_CATEGORIA_FISCAL_DEFAULT:-CONSUMIDOR_FINAL}
 
       # ---- Imágenes de productos ----
       SHOWROOM_PRESUPUESTO_IMAGENES_FOLDER: /app/imagenes
