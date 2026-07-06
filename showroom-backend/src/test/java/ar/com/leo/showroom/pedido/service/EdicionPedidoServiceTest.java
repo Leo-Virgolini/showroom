@@ -80,11 +80,17 @@ class EdicionPedidoServiceTest {
         when(pedidoRepository.findById(10L)).thenReturn(Optional.of(viejo));
         when(pedidoService.crearPedido(any(), any(), any(), eq(true)))
                 .thenReturn(new CrearPedidoResponseDTO(20L, EstadoPedido.ENVIADO, Instant.now(), "ok"));
-        when(presupuestoRepository.findByConvertidoEnPedidoId(10L)).thenReturn(Optional.empty());
-        when(sesionRepository.findByPedidoIdWithItems(10L)).thenReturn(Optional.empty());
+
+        PresupuestoComercial presu = mock(PresupuestoComercial.class);
+        when(presupuestoRepository.findByConvertidoEnPedidoId(10L)).thenReturn(Optional.of(presu));
+        SesionShowroom sesion = mock(SesionShowroom.class);
+        when(sesionRepository.findByPedidoIdWithItems(10L)).thenReturn(Optional.of(sesion));
 
         service.regenerarPedido(10L, request, "cli", "leo");
 
+        // Viejo ANULADO: no se re-anula, PERO los vínculos igual se trasladan al nuevo.
         verify(pedidoService, never()).anularPedido(any(), any());
+        verify(presu).setConvertidoEnPedidoId(20L);
+        verify(sesion).setPedidoId(20L);
     }
 }
