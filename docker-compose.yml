@@ -23,7 +23,7 @@ services:
     # Misma versión que el super-master para coherencia entre stacks. LTS hasta
     # abril 2032. Evitamos `latest` para que el rebuild sea reproducible.
     image: mysql:8.4
-    container_name: showroom-mysql
+    container_name: showroom-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -70,7 +70,7 @@ services:
   # `$` de bash van duplicados como `$$` (Compose los colapsa a `$` al pasarlos).
   mysql-backup:
     image: mysql:8.4
-    container_name: showroom-mysql-backup
+    container_name: showroom-db-backup
     restart: unless-stopped
     depends_on:
       mysql:
