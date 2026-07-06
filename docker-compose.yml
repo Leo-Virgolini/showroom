@@ -8,9 +8,12 @@
 #
 # Antes del primer arranque copiar .env.example → .env y ajustar las variables.
 #
-# URLs:
-#  - Frontend (sucursal):  http://<ip-servidor>:4200
-#  - Backend (debug/api):  http://<ip-servidor>:8081/api/showroom/health
+# EN COOLIFY: se le asigna un DOMINIO solo al servicio `frontend` (su nginx
+# proxea /api al backend por la red interna). El backend y MySQL NO se publican.
+# Las variables sensibles se cargan en Environment Variables de Coolify.
+#
+# Acceso (Coolify):  https://<tu-dominio>            (todo entra por el frontend)
+# Healthcheck:       https://<tu-dominio>/api/showroom/health
 # =============================================================================
 
 name: showroom
@@ -41,10 +44,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    # Acceso desde el host con DBeaver/MySQL Workbench: puerto 3307 (no 3306
-    # para no chocar con otro MySQL que pueda estar corriendo en el host).
-    ports:
-      - "3307:3306"
+    # NO exponer el puerto de MySQL en un servidor público (Hetzner): sería un
+    # ataque directo a la BD. Queda solo en la red interna de Docker; el backend
+    # la alcanza por el hostname `mysql`. Para debug puntual desde tu máquina,
+    # usá un túnel SSH:  ssh -L 3307:localhost:3306 usuario@servidor  y luego
+    # entrás con DBeaver a localhost:3307 (docker exec expone 3306 dentro del host).
+    # ports:
+    #   - "127.0.0.1:3307:3306"   # <- solo si necesitás acceso local vía túnel
 
   # Backup diario de la BD. Sidecar que reutiliza la imagen mysql:8.4 (así
   # `mysqldump` coincide exacto con la versión del server) y corre un loop bash
@@ -121,6 +127,19 @@ services:
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD:-showroom}
 
+      # ---- Seguridad HTTPS (producción detrás del proxy TLS de Coolify) ----
+      # Traefik termina el TLS y reenvía HTTP interno al stack. Con estas dos
+      # vars Spring reconoce que el request original fue HTTPS (X-Forwarded-Proto)
+      # y marca la cookie de sesión como Secure. En dev local (Windows, HTTP)
+      # estas vars no existen y application.properties cae a false/none.
+      SERVER_COOKIE_SECURE: ${SERVER_COOKIE_SECURE:-true}
+      SERVER_FORWARD_HEADERS_STRATEGY: ${SERVER_FORWARD_HEADERS_STRATEGY:-framework}
+      # Orígenes CORS permitidos (separados por coma). Completar en .env con el
+      # dominio real, ej. https://showroom.tudominio.com. Vacío = solo
+      # same-origin (el frontend y /api viven en el mismo dominio vía nginx, así
+      # que la app funciona igual; el comodín público NO es seguro).
+      SHOWROOM_CORS_ALLOWED_ORIGINS: ${SHOWROOM_CORS_ALLOWED_ORIGINS:-}
+
       # ---- DUX (datos de empresa, definir en .env) ----
       APP_SECRETS_DIR: /app/secrets
       DUX_EMPRESA_ID: ${DUX_EMPRESA_ID}
@@ -182,9 +201,14 @@ services:
       # (paths del container, no del host). Si no usás la integración, comentá
       # esta línea Y borrá `PICKIT_HOST_PATH` del .env — sino docker compose up
       # falla con "required variable PICKIT_HOST_PATH is missing".
-      - "${PICKIT_HOST_PATH}:/app/pickit"
-    ports:
-      - "8081:8081"
+      # DESHABILITADO en el server: Pickit es un .jar de escritorio Windows, no
+      # aplica en Linux. Si algún día lo usás, descomentá y seteá PICKIT_HOST_PATH.
+      # - "${PICKIT_HOST_PATH}:/app/pickit"
+    # Solo `expose`: el puerto queda visible en la red interna de Docker (para
+    # que el nginx del frontend lo proxee) pero NO se publica al host. En un
+    # servidor público exponerlo sería superficie de ataque innecesaria.
+    expose:
+      - "8081"
     networks:
       - showroom-net
     healthcheck:
@@ -195,6 +219,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    # El backend NO necesita puerto público: el nginx del frontend lo proxea por
+    # la red interna de Docker (proxy_pass http://backend:8081). Exponerlo en un
+    # servidor público sería una superficie de ataque innecesaria (CORS, /api sin
+    # el nginx delante). Para debug local usá `docker compose exec backend ...` o
+    # un túnel SSH.
+    # ports:
+    #   - "127.0.0.1:8081:8081"
 
   frontend:
     build:
@@ -204,8 +235,15 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
-    ports:
-      - "4200:80"
+    # En Coolify NO se publica el puerto: se le asigna un DOMINIO al servicio y
+    # su proxy (Traefik) rutea el tráfico + gestiona el certificado Let's Encrypt.
+    # Coolify detecta el puerto interno del container (80) automáticamente.
+    # Dejá esta línea comentada en el server; descomentala solo para un deploy
+    # sin Coolify (docker compose "pelado") donde quieras publicar el puerto.
+    # ports:
+    #   - "4200:80"
+    expose:
+      - "80"
     networks:
       - showroom-net
 

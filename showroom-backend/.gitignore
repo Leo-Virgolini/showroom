@@ -28,9 +28,10 @@ release.properties
 # ---- Spring Boot ----
 HELP.md
 spring-shell.log
-# application.properties contiene credenciales reales (DB password + Gmail
-# app password). No va al repo.
-src/main/resources/application.properties
+# application.properties SÍ va al repo (sin secretos): usa placeholders
+# ${ENV_VAR} para las credenciales, que en prod (Coolify) entran por env var.
+# Los secretos reales de DEV viven en application-local.properties, que
+# pisa esos valores y NUNCA se commitea (ver abajo).
 application-local.properties
 application-*-local.properties
 *.local.properties
