@@ -38,6 +38,10 @@ logs/
 tmp/
 .tmp/
 
+# ---- Superpowers (planes/specs de trabajo, no forman parte del deploy) ----
+.superpowers/
+docs/superpowers/
+
 # ---- Backups accidentales ----
 *.bak
 *.backup
