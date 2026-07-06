@@ -163,37 +163,26 @@ services:
       # resuelva placeholders custom — y entonces el FileAppender no se crea.
       LOGGING_FILE_NAME: /app/logs/showroom-backend.log
 
-      # ---- Email picking (opcional, dejar vacío para deshabilitar) ----
-      # El destinatario (email-to) se configura desde la pantalla /configuracion
-      # y vive en la tabla `configuracion`, NO se setea acá.
-      SHOWROOM_PICKING_EMAIL_ENABLED: ${SHOWROOM_PICKING_EMAIL_ENABLED:-false}
-      SHOWROOM_PICKING_EMAIL_FROM: ${SHOWROOM_PICKING_EMAIL_FROM:-}
-      # host/port viven en application.properties (smtp.gmail.com:587). Descomentá
-      # solo si necesitás otro servidor SMTP sin rebuildear la imagen.
-      # SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
-      # SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      # ---- Email (credenciales SMTP) ----
+      # Solo las credenciales. Todo lo demás (host/port, email-enabled, email-from,
+      # el auto-send) vive en application.properties o se controla desde
+      # /configuracion. Si email-from queda vacío, usa el username como remitente.
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
-
-      # ---- WhatsApp Business (Meta Cloud API, opcional) ----
-      # Free-form dentro de la ventana de 24hs del cliente — no requiere template.
-      SHOWROOM_WHATSAPP_ENABLED: ${SHOWROOM_WHATSAPP_ENABLED:-false}
-      SHOWROOM_WHATSAPP_PHONE_NUMBER_ID: ${SHOWROOM_WHATSAPP_PHONE_NUMBER_ID:-}
-      SHOWROOM_WHATSAPP_ACCESS_TOKEN: ${SHOWROOM_WHATSAPP_ACCESS_TOKEN:-}
-
-      # ---- Pickit externo (DESHABILITADO en el server) ----
-      # Es un .jar de escritorio Windows, N/A en Linux; el volumen /app/pickit está
-      # comentado abajo. Esta var es solo informativa (la muestra /configuracion),
-      # así que sin la integración no aporta nada. Descomentá si algún día la usás.
-      # SHOWROOM_PICKIT_HOST_PATH: ${PICKIT_HOST_PATH:-}
+      # WhatsApp y Pickit: deshabilitados por default en application.properties.
+      # No van acá. Si algún día activás WhatsApp, agregá SHOWROOM_WHATSAPP_ENABLED,
+      # SHOWROOM_WHATSAPP_PHONE_NUMBER_ID y SHOWROOM_WHATSAPP_ACCESS_TOKEN.
 
       TZ: America/Argentina/Buenos_Aires
     volumes:
-      # Tokens DUX — ruta del HOST configurable en .env (ej. el dir del super-master).
-      - "${DUX_SECRETS_PATH}:/app/secrets:ro"
-      # Carpeta con imágenes de productos {sku}.{jpg|png|webp...} — read-only,
-      # el operador la mantiene desde fuera (FTP, sync manual, etc.).
-      - "${SHOWROOM_IMAGENES_PATH}:/app/imagenes:ro"
+      # Tokens DUX e imágenes — BIND MOUNTS a carpetas del host (compartidas con
+      # SuperMaster), read-only. Van con ruta LITERAL (no `${VAR}`): Coolify solo
+      # trata como bind mount los paths que empiezan con `/` o `.`; un `${VAR}`
+      # lo convierte en un volumen nombrado VACÍO (y montaría /app/secrets e
+      # /app/imagenes sin el dux_tokens.json ni las fotos). Las carpetas del
+      # server las mantiene SuperMaster; acá solo se leen.
+      - "/data/supermaster/secrets:/app/secrets:ro"
+      - "/data/supermaster/imagenes:/app/imagenes:ro"
       # Logs persistentes en el host. Sobrevive a `docker compose down`. Útil
       # para diagnosticar incidentes pasados ("se cayó el sync ayer a la noche")
       # sin tener que entrar al contenedor.
