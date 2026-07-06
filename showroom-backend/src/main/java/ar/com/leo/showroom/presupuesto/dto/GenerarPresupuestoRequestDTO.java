@@ -104,7 +104,15 @@ public record GenerarPresupuestoRequestDTO(
              *  para que DUX facture con el mismo perfil cotizado aunque la lista
              *  de rubros sin IVA haya cambiado. Null en presupuestos viejos →
              *  el pedido cae a derivar por rubro. */
-            Boolean precioReferenciaConIva
+            Boolean precioReferenciaConIva,
+            /** URL pública de la miniatura del producto ({@code
+             *  /api/showroom/productos/{sku}/imagen}) o null si no hay archivo
+             *  para ese SKU. SOLO de salida: el backend la resuelve por SKU en
+             *  {@code PresupuestoComercialService.obtenerDetalle} para el
+             *  historial (mismo patrón que pedidos/atención). Viaja null tanto
+             *  en el request de entrada como en el JSON persistido — no se
+             *  hornea, se recalcula en cada lectura. */
+            String imagenUrl
     ) {}
 
     public record FormaPagoSnapshot(

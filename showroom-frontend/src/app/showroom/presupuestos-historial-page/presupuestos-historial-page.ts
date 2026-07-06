@@ -17,6 +17,7 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DatePickerModule } from 'primeng/datepicker';
 import { IconFieldModule } from 'primeng/iconfield';
+import { ImageModule } from 'primeng/image';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputTextModule } from 'primeng/inputtext';
 import { SkeletonModule } from 'primeng/skeleton';
@@ -54,6 +55,7 @@ import { PrecioPerfilService } from '../precio-perfil.service';
     CardModule,
     DatePickerModule,
     IconFieldModule,
+    ImageModule,
     InputIconModule,
     InputTextModule,
     SkeletonModule,

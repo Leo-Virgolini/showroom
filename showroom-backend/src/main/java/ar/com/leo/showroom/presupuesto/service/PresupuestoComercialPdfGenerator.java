@@ -397,7 +397,8 @@ public class PresupuestoComercialPdfGenerator {
                     BigDecimal.ZERO,
                     null,
                     precioReferencia,
-                    conIvaRef));
+                    conIvaRef,
+                    null));
         }
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(

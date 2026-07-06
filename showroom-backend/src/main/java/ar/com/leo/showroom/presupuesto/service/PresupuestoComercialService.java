@@ -6,6 +6,7 @@ import ar.com.leo.showroom.catalogo.entity.Localidad;
 import ar.com.leo.showroom.catalogo.entity.Provincia;
 import ar.com.leo.showroom.catalogo.repository.LocalidadRepository;
 import ar.com.leo.showroom.catalogo.repository.ProvinciaRepository;
+import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.cliente.entity.ClienteMaster;
 import ar.com.leo.showroom.cliente.event.ClienteMovimientoEvent;
 import ar.com.leo.showroom.cliente.service.ClienteMasterService;
@@ -96,6 +97,9 @@ public class PresupuestoComercialService {
      *  guardan solo los códigos) al armar la vista de /clientes. */
     private final ProvinciaRepository provinciaRepository;
     private final LocalidadRepository localidadRepository;
+    /** Resuelve la URL de la miniatura por SKU al armar el detalle del
+     *  historial — mismo patrón centralizado que usa {@code PedidoService}. */
+    private final ImagenLocalService imagenLocalService;
     /** Publica {@link ClienteMovimientoEvent} para recalcular la actividad del
      *  cliente en fase AFTER_COMMIT (ver {@code ClienteMasterService}). */
     private final org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -143,6 +147,7 @@ public class PresupuestoComercialService {
             PrecioPerfilCalculator precioPerfilCalculator,
             ProvinciaRepository provinciaRepository,
             LocalidadRepository localidadRepository,
+            ImagenLocalService imagenLocalService,
             org.springframework.context.ApplicationEventPublisher eventPublisher) {
         this.repository = repository;
         this.pdfGenerator = pdfGenerator;
@@ -156,6 +161,7 @@ public class PresupuestoComercialService {
         this.precioPerfilCalculator = precioPerfilCalculator;
         this.provinciaRepository = provinciaRepository;
         this.localidadRepository = localidadRepository;
+        this.imagenLocalService = imagenLocalService;
         this.eventPublisher = eventPublisher;
     }
 
@@ -305,9 +311,42 @@ public class PresupuestoComercialService {
                 datos.cotizacionIndividual(),
                 p.getConvertidoEnPedidoId(),
                 p.getConvertidoAt(),
-                datos.items(),
+                conImagenUrl(datos.items()),
                 datos.formasPago(),
                 p.getFormaPagoSeleccionadaId());
+    }
+
+    /** Rehidrata cada ítem con la URL de su miniatura resuelta por SKU (null si
+     *  no hay archivo), para que el historial muestre la imagen igual que
+     *  pedidos/atención. La URL no se persiste: se recalcula en cada lectura. */
+    private List<GenerarPresupuestoRequestDTO.Item> conImagenUrl(List<GenerarPresupuestoRequestDTO.Item> items) {
+        if (items == null) return List.of();
+        return items.stream()
+                .map(it -> withImagenUrl(it, imagenLocalService.urlPublica(it.sku())))
+                .toList();
+    }
+
+    /** Devuelve los ítems con {@code imagenUrl} en null — usado antes de
+     *  persistir para no hornear la URL derivada en el JSON. */
+    private List<GenerarPresupuestoRequestDTO.Item> sinImagenUrl(List<GenerarPresupuestoRequestDTO.Item> items) {
+        if (items == null) return List.of();
+        return items.stream().map(it -> withImagenUrl(it, null)).toList();
+    }
+
+    /** Copia el ítem cambiando solo {@code imagenUrl}. */
+    private GenerarPresupuestoRequestDTO.Item withImagenUrl(GenerarPresupuestoRequestDTO.Item it, String imagenUrl) {
+        return new GenerarPresupuestoRequestDTO.Item(
+                it.sku(),
+                it.descripcion(),
+                it.rubro(),
+                it.cantidad(),
+                it.precioConIva(),
+                it.porcIva(),
+                it.descuentoPorcentaje(),
+                it.comentarios(),
+                it.precioReferencia(),
+                it.precioReferenciaConIva(),
+                imagenUrl);
     }
 
     public PresupuestoComercial obtener(Long id) {
@@ -962,7 +1001,10 @@ public class PresupuestoComercialService {
         p.setTotalFormaSeleccionada(formaSel != null ? formaSel.precioFinal() : null);
         p.setFormaPagoSeleccionadaNombre(formaSel != null ? formaSel.nombre() : null);
         p.setSubtotalSinIva(subtotalSinIva.setScale(2, RoundingMode.HALF_UP));
-        p.setItemsJson(escribirJson(datos.items()));
+        // imagenUrl es solo de salida (se recalcula por SKU en obtenerDetalle);
+        // se normaliza a null antes de persistir para no hornear una URL en el
+        // JSON si el front la reenvía al editar.
+        p.setItemsJson(escribirJson(sinImagenUrl(datos.items())));
         p.setFormasPagoJson(datos.formasPago() == null ? "[]" : escribirJson(datos.formasPago()));
     }
 

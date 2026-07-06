@@ -911,6 +911,10 @@ export interface PresupuestoDetalle {
     /** Comentarios libres persistidos junto al item — para items genéricos
      *  trae la descripción tipeada por el operador. Null en items normales. */
     comentarios?: string | null;
+    /** URL de la miniatura del producto, resuelta por SKU en el backend al
+     *  armar el detalle (null si no hay imagen). Solo la usa el historial para
+     *  mostrar la foto; no se persiste. */
+    imagenUrl?: string | null;
   }[];
   formasPago: PresupuestoFormaPagoSnapshot[];
 }
