@@ -168,8 +168,10 @@ services:
       # y vive en la tabla `configuracion`, NO se setea acá.
       SHOWROOM_PICKING_EMAIL_ENABLED: ${SHOWROOM_PICKING_EMAIL_ENABLED:-false}
       SHOWROOM_PICKING_EMAIL_FROM: ${SHOWROOM_PICKING_EMAIL_FROM:-}
-      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
-      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
+      # host/port viven en application.properties (smtp.gmail.com:587). Descomentá
+      # solo si necesitás otro servidor SMTP sin rebuildear la imagen.
+      # SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-smtp.gmail.com}
+      # SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-587}
       SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
       SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
 
@@ -179,11 +181,11 @@ services:
       SHOWROOM_WHATSAPP_PHONE_NUMBER_ID: ${SHOWROOM_WHATSAPP_PHONE_NUMBER_ID:-}
       SHOWROOM_WHATSAPP_ACCESS_TOKEN: ${SHOWROOM_WHATSAPP_ACCESS_TOKEN:-}
 
-      # ---- Pickit externo ----
-      # Path del host mapeado al volumen /app/pickit. Solo informativo: la pantalla
-      # /configuracion lo muestra para que el operador sepa a qué carpeta del host
-      # equivale el path del container que ingresa.
-      SHOWROOM_PICKIT_HOST_PATH: ${PICKIT_HOST_PATH:-}
+      # ---- Pickit externo (DESHABILITADO en el server) ----
+      # Es un .jar de escritorio Windows, N/A en Linux; el volumen /app/pickit está
+      # comentado abajo. Esta var es solo informativa (la muestra /configuracion),
+      # así que sin la integración no aporta nada. Descomentá si algún día la usás.
+      # SHOWROOM_PICKIT_HOST_PATH: ${PICKIT_HOST_PATH:-}
 
       TZ: America/Argentina/Buenos_Aires
     volumes:
