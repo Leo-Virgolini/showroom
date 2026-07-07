@@ -60,16 +60,15 @@ export class VisorPage {
   private readonly toast = inject(MessageService);
   private readonly precioPerfil = inject(PrecioPerfilService);
 
-  /** Username del operador al que está ligado este visor — viene del path
-   *  {@code /visor/:username}. Determina a qué canal SSE nos conectamos y a
-   *  qué carrito agrega items el botón "Agregar al carrito". */
-  readonly operadorUsername = this.route.snapshot.paramMap.get('username') ?? '';
+  /** Token de la sesión de atención — viene del path {@code /visor/:token}.
+   *  Determina el canal SSE y el carrito al que agrega el botón. */
+  readonly visorToken = this.route.snapshot.paramMap.get('token') ?? '';
 
-  /** True cuando el username del path está vacío, malformado o no corresponde
-   *  a un operador activo (el backend devuelve 404). Muestra un overlay
+  /** True cuando el token del path está vacío, malformado o no corresponde
+   *  a una sesión activa (el backend devuelve 404/410). Muestra un overlay
    *  explicativo en lugar de la pantalla normal — sin esto, el visor quedaría
    *  pegado en "esperando…" sin que el cliente sepa por qué nunca recibe
-   *  scans (típico: QR mal generado, operador deshabilitado en la consola). */
+   *  scans (típico: QR mal generado, atención finalizada). */
   readonly operadorInvalido = signal(false);
 
   /** Producto actualmente mostrado. {@code null} = pantalla "esperando…". */
@@ -197,26 +196,28 @@ export class VisorPage {
   });
 
   constructor() {
-    // Username faltante en la URL (típico: alguien tipeó /visor/ a mano).
+    // Token faltante en la URL (típico: alguien tipeó /visor/ a mano).
     // No intentamos conectar — el SSE quedaría con doble barra y daría 404.
-    if (!this.operadorUsername) {
+    if (!this.visorToken) {
       this.operadorInvalido.set(true);
       return;
     }
-    // Engancha el SSE del BackendStatusService al canal personal del operador
-    // — sin esto este celular recibiría solo eventos globales (ningún scan).
-    this.backendStatus.conectarComoVisor(this.operadorUsername);
+    // Engancha el SSE del BackendStatusService al canal de la sesión — sin
+    // esto este celular recibiría solo eventos globales (ningún scan).
+    this.backendStatus.conectarComoVisor(this.visorToken);
 
-    this.api.obtenerEscalasDescuento().subscribe({
-      next: (lista) => this.escalas.set(lista),
-      error: () => {
-        /* sin escalas, sólo no se muestran los tiles de descuento */
+    // Formas/escalas/rubros vienen en una sola llamada token-scoped (los
+    // endpoints globales ahora requieren login). Sin esto el visor no puede
+    // mostrar precios.
+    this.api.visorBootstrap(this.visorToken).subscribe({
+      next: (b) => {
+        this.escalas.set(b.escalasDescuento ?? []);
+        this.precioPerfil.setDatos(b.formasPago ?? [], b.rubrosSinIva ?? []);
+      },
+      error: (err) => {
+        if (err?.status === 404 || err?.status === 410) this.operadorInvalido.set(true);
       },
     });
-
-    // Formas de pago activas + rubros sin IVA — sin formas el visor cae al
-    // precio lista; sin rubros, todos cotizan con IVA.
-    this.precioPerfil.cargar();
 
     this.backendStatus.scanVisorEvents$
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -239,16 +240,16 @@ export class VisorPage {
 
     // Hidratación inicial del nombre del cliente (sesión activa) + SSE para
     // que el visor se actualice cuando el operador inicia/cancela sesión.
-    // Usamos el endpoint público por operador — el visor no está autenticado.
-    // El error 404 acá significa que el username del path no corresponde a
-    // un operador activo → mostramos el overlay de "URL inválida".
-    this.api.visorObtenerSesionActiva(this.operadorUsername).subscribe({
+    // Usamos el endpoint token-scoped — el visor no está autenticado. El
+    // error 404/410 acá significa que el token del path no corresponde a
+    // una sesión activa → mostramos el overlay de "código inválido".
+    this.api.visorObtenerSesion(this.visorToken).subscribe({
       next: (s) => {
         this.nombreCliente.set(s.id != null ? s.nombre : null);
         this.previousSesionId = s.id ?? null;
       },
       error: (err) => {
-        if (err?.status === 404) {
+        if (err?.status === 404 || err?.status === 410) {
           this.operadorInvalido.set(true);
         }
         // Otros errores (500, network): queda en null y muestra header genérico.
@@ -342,8 +343,8 @@ export class VisorPage {
   }
 
   /** Disparado por el botón "Agregar al carrito". Envía sku + cantidad al
-   *  backend pasando el username del operador propietario del visor; el
-   *  backend muta el carrito server-side de ESE operador y emite SSE
+   *  backend pasando el token de la sesión de atención; el backend muta el
+   *  carrito server-side del operador dueño de esa sesión y emite SSE
    *  `carrito-updated` en su canal personal. El response trae cuánto se
    *  sumó realmente — si fue menor a lo pedido (carrito ya al tope),
    *  mostramos warning al cliente con la cantidad real. */
@@ -357,7 +358,7 @@ export class VisorPage {
     const forzar = r.stockTotal == null || r.stockTotal <= 0 || cant > r.stockTotal;
 
     this.enviandoAgregar.set(true);
-    this.api.visorAgregarAlCarrito(this.operadorUsername, r.sku, cant, forzar).subscribe({
+    this.api.visorAgregarAlCarrito(this.visorToken, r.sku, cant, forzar).subscribe({
       next: (res) => {
         this.enviandoAgregar.set(false);
         if (res.cantidadAgregada === 0) {
