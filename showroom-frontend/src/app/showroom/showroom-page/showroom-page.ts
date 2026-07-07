@@ -35,7 +35,6 @@ import { SelectModule } from 'primeng/select';
 import { SplitterModule } from 'primeng/splitter';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
-import { AuthService } from '../../auth/auth.service';
 import { BackendStatusService } from '../backend-status.service';
 import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, ScanResult } from '../models';
 import {
@@ -98,7 +97,6 @@ import {
 })
 export class ShowroomPage implements AfterViewInit {
   private readonly api = inject(ShowroomService);
-  private readonly auth = inject(AuthService);
   private readonly toast = inject(MessageService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly destroyRef = inject(DestroyRef);
@@ -1098,11 +1096,12 @@ export class ShowroomPage implements AfterViewInit {
       });
   }
 
-  /** QR (data URL) del visor del operador logueado — se genera al abrir el
-   *  dialog. Apunta a {@code /visor/{username}} sobre la base configurada en
-   *  /configuracion (o el host actual si no hay ninguna), así cada operador
-   *  tiene un QR único que enlaza a su canal personal del visor. Si el QR aún
-   *  no se generó (dialog nunca abierto), queda null. */
+  /** QR (data URL) del visor de la sesión de atención activa — se genera al
+   *  abrir el dialog. Apunta a {@code /visor/{token}} sobre la base
+   *  configurada en /configuracion (o el host actual si no hay ninguna), con
+   *  el token de la sesión activa (requiere haber iniciado "Nuevo cliente").
+   *  Si el QR aún no se generó (dialog nunca abierto) o no hay sesión activa,
+   *  queda null. */
   readonly qrVisorDataUrl = signal<string | null>(null);
 
   /** True mientras se está generando el QR del visor. Permite distinguir en el
@@ -1117,10 +1116,16 @@ export class ShowroomPage implements AfterViewInit {
    *  al abrir el dialog. */
   private readonly visorBaseConfig = signal('');
 
+  /** Token de la sesión de atención activa, traído al abrir el dialog del QR.
+   *  Null si todavía no se pidió o si no hay sesión activa. */
+  readonly visorToken = signal<string | null>(null);
+
   /**
    * Abre el dialog "QR para celular" y genera (perezosamente) el QR del visor
    * del operador logueado. La URL usa la base configurada en /configuracion
    * (campo "Dirección del visor"); si no hay ninguna, cae al host actual.
+   * Requiere una sesión de atención activa: sin ella no hay token y no se
+   * puede armar la URL del visor.
    *
    * <p>El QR y la base se refrescan en cada apertura para que, si el operador
    * cambia de cuenta (logout + login), si se editó la dirección configurada, o
@@ -1129,12 +1134,21 @@ export class ShowroomPage implements AfterViewInit {
    */
   async abrirDialogVisor(): Promise<void> {
     this.mostrarDialogVisor.set(true);
-    const username = this.auth.currentUser()?.username;
-    if (!username || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
       this.qrVisorDataUrl.set(null);
       return;
     }
     this.qrVisorGenerando.set(true);
+    const tk = await firstValueFrom(this.api.obtenerVisorToken());
+    if (!tk.token) {
+      this.visorToken.set(null);
+      this.qrVisorDataUrl.set(null);
+      this.qrVisorGenerando.set(false);
+      toastError(this.toast, 'Visor', null, 'Iniciá una atención (Nuevo cliente) para mostrar el visor.');
+      this.mostrarDialogVisor.set(false);
+      return;
+    }
+    this.visorToken.set(tk.token);
     // Refrescamos la base configurada en /configuracion (puede haber cambiado).
     // Si falla la lectura, caemos al origin del navegador.
     try {
@@ -1147,12 +1161,13 @@ export class ShowroomPage implements AfterViewInit {
     this.qrVisorGenerando.set(false);
   }
 
-  /** URL completa del visor del operador — para mostrar como texto debajo del QR.
-   *  Usa la base configurada en /configuracion si existe, sino el origin actual. */
+  /** URL completa del visor con el token de la sesión activa — para mostrar
+   *  como texto debajo del QR. Usa la base configurada en /configuracion si
+   *  existe, sino el origin actual. Vacío si todavía no hay token. */
   readonly visorUrl = computed(() => {
-    const username = this.auth.currentUser()?.username;
-    if (!username) return '';
-    return construirVisorUrl(this.visorBaseConfig(), username, 'visor');
+    const token = this.visorToken();
+    if (!token) return '';
+    return construirVisorUrl(this.visorBaseConfig(), token, 'visor');
   });
 
   /**

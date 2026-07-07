@@ -123,8 +123,10 @@
                   pTooltip="Iniciar sesión para registrar los scans del cliente" tooltipPosition="bottom" />
               }
               <p-button icon="pi pi-mobile" label="QR" ariaLabel="Abrir visor en celular" class="btn-kt-marron"
+                [disabled]="!haySesionActiva()"
                 (onClick)="abrirDialogVisor()"
-                pTooltip="Mostrar QR para abrir el visor en un celular (vendedor o cliente)" tooltipPosition="bottom" />
+                [pTooltip]="haySesionActiva() ? 'Mostrar QR para abrir el visor en un celular (vendedor o cliente)' : 'Iniciá una atención para mostrar el visor'"
+                tooltipPosition="bottom" />
             </div>
           </div>
         </ng-template>

@@ -57,8 +57,9 @@
                 }
                 <p-button icon="pi pi-mobile" label="QR"
                   ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
+                  [disabled]="!haySesionActiva()"
                   (onClick)="abrirDialogVisor()"
-                  pTooltip="Mostrar el QR para que el cliente vea el presupuesto en su celular"
+                  [pTooltip]="haySesionActiva() ? 'Mostrar el QR para que el cliente vea el presupuesto en su celular' : 'Iniciá una atención para mostrar el visor'"
                   tooltipPosition="bottom" />
               </div>
             </div>

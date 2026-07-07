@@ -55,7 +55,6 @@ import {
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
-import { AuthService } from '../../auth/auth.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
@@ -129,7 +128,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
-  private readonly auth = inject(AuthService);
   private readonly sesionService = inject(SesionClienteService);
 
   /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
@@ -472,11 +470,15 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   readonly qrVisorDataUrl = signal<string | null>(null);
   readonly qrVisorGenerando = signal(false);
   readonly visorBaseConfig = signal('');
-  /** URL del visor de presupuesto del operador logueado para el QR/fallback. */
+  /** Token de la sesión de atención activa, traído al abrir el dialog del QR.
+   *  Null si todavía no se pidió o si no hay sesión activa. */
+  readonly visorToken = signal<string | null>(null);
+  /** URL del visor de presupuesto con el token de la sesión activa. Vacío si
+   *  todavía no hay token (sin sesión o dialog no abierto). */
   readonly visorUrl = computed(() => {
-    const username = this.auth.currentUser()?.username;
-    if (!username) return '';
-    return construirVisorUrl(this.visorBaseConfig(), username, 'visor-presupuesto');
+    const token = this.visorToken();
+    if (!token) return '';
+    return construirVisorUrl(this.visorBaseConfig(), token, 'visor-presupuesto');
   });
   /** Coalesce los cambios del armado antes de publicarlos al visor (debounce). */
   private readonly visorPublish$ = new Subject<void>();
@@ -1767,12 +1769,21 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  showroom) para resolver el host accesible desde el celular. */
   async abrirDialogVisor(): Promise<void> {
     this.mostrarDialogVisor.set(true);
-    const username = this.auth.currentUser()?.username;
-    if (!username || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
       this.qrVisorDataUrl.set(null);
       return;
     }
     this.qrVisorGenerando.set(true);
+    const tk = await firstValueFrom(this.api.obtenerVisorToken());
+    if (!tk.token) {
+      this.visorToken.set(null);
+      this.qrVisorDataUrl.set(null);
+      this.qrVisorGenerando.set(false);
+      toastError(this.toast, 'Visor', null, 'Iniciá una atención (Nuevo cliente) para mostrar el visor.');
+      this.mostrarDialogVisor.set(false);
+      return;
+    }
+    this.visorToken.set(tk.token);
     try {
       const cfg = await firstValueFrom(this.api.obtenerVisorConfig());
       this.visorBaseConfig.set(cfg.baseUrl ?? '');
