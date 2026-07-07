@@ -19,7 +19,7 @@
 name: showroom
 
 services:
-  mysql:
+  showroom-db:
     # Misma versión que el super-master para coherencia entre stacks. LTS hasta
     # abril 2032. Evitamos `latest` para que el rebuild sea reproducible.
     image: mysql:8.4
@@ -58,22 +58,22 @@ services:
   #
   # - Los dumps van a ./backups del host (gzip). Restore:
   #     gunzip < backups/showroom-XXXX.sql.gz | \
-  #       docker compose exec -T mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" showroom
+  #       docker compose exec -T showroom-db mysql -uroot -p"$MYSQL_ROOT_PASSWORD" showroom
   # - Retención: conserva los 7 dumps más recientes (los anteriores se borran).
   # - Solo corre mientras el stack está levantado: si la PC está apagada a las
   #   02:00, ese día se saltea (no hay catch-up).
   # - Backup on-demand: docker compose exec mysql-backup \
-  #     bash -c 'mysqldump -h mysql -uroot --single-transaction --routines \
+  #     bash -c 'mysqldump -h showroom-db -uroot --single-transaction --routines \
   #       --triggers --events --no-tablespaces showroom | gzip > /backups/manual-$(date +%Y%m%d-%H%M%S).sql.gz'
   #
   # OJO con el escaping: dentro de `command`, Compose interpola `$`, así que los
   # `$` de bash van duplicados como `$$` (Compose los colapsa a `$` al pasarlos).
-  mysql-backup:
+  showroom-db-backup:
     image: mysql:8.4
     container_name: showroom-db-backup
     restart: unless-stopped
     depends_on:
-      mysql:
+      showroom-db:
         condition: service_healthy
     environment:
       # mysqldump lee el password de MYSQL_PWD — evita exponerlo en la cmdline.
@@ -97,7 +97,7 @@ services:
           sleep $$((next-now))
           file=/backups/showroom-$$(date +%Y%m%d-%H%M%S).sql.gz
           echo "[backup] generando $$file"
-          if mysqldump -h mysql -u root --single-transaction --routines \
+          if mysqldump -h showroom-db -u root --single-transaction --routines \
                --triggers --events --no-tablespaces showroom | gzip > "$$file" \
                && [ -s "$$file" ]; then
             echo "[backup] OK ($$(du -h "$$file" | cut -f1))"
@@ -115,7 +115,7 @@ services:
     container_name: showroom-backend
     restart: unless-stopped
     depends_on:
-      mysql:
+      showroom-db:
         condition: service_healthy
     environment:
       # ---- BD ----
@@ -123,7 +123,7 @@ services:
       # caching_sha2_password — sin SSL el driver no puede bajar la public key
       # del server para encriptar el password sin permiso explícito. En red
       # interna de Docker (no expuesta) el riesgo de MITM es nulo.
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/showroom?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&rewriteBatchedStatements=true
+      SPRING_DATASOURCE_URL: jdbc:mysql://showroom-db:3306/showroom?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&rewriteBatchedStatements=true
       SPRING_DATASOURCE_USERNAME: ${DB_USERNAME:-root}
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
 
