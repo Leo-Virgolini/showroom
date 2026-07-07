@@ -33,7 +33,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * Cada operador tiene su propio carrito (identificado por username); ni el
  * operador A ve el de B ni se contaminan entre sí. El visor del cliente
  * (pantalla espejo en celular) se liga al canal de un operador específico
- * vía {@code /visor/{username}} y opera sobre el carrito de ese operador.
+ * vía {@code /visor/t/{token}} y opera sobre el carrito de ese operador.
  *
  * <p><b>Persistencia:</b> ninguna. Restart del backend ⇒ todos los carritos
  * vacíos. Aceptable porque el carrito es ephemeral (vida útil ~minutos).

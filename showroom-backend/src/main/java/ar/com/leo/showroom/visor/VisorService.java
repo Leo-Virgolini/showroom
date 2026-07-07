@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
  * pantalla principal del showroom.
  *
  * <p>Cada operador tiene su propio canal de visor. Los celulares se conectan a
- * {@code /visor/{username}} y reciben solo los scans del operador
+ * {@code /visor/t/{token}} y reciben solo los scans del operador
  * correspondiente — sin esto, todos los celulares verían los scans de todos
  * los operadores mezclados.
  *

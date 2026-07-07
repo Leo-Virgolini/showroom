@@ -96,7 +96,6 @@ public class ShowroomController {
     private final ShowroomService service;
     private final PedidoService pedidoService;
     private final CarritoService carritoService;
-    private final ar.com.leo.showroom.auth.repository.UsuarioRepository usuarioRepository;
     private final CatalogoSyncService catalogoSync;
     private final DuxClient duxClient;
     private final SyncEventService eventService;
@@ -252,7 +251,9 @@ public class ShowroomController {
                         .contentType(mediaTypeFor(file.getName()))
                         .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic())
                         .body(new FileSystemResource(file)))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound()
+                        .cacheControl(CacheControl.maxAge(Duration.ofMinutes(5)).cachePublic())
+                        .build());
     }
 
     /** El cliente agregó un producto al carrito desde el celular. Rechaza con

@@ -74,7 +74,7 @@ export class BackendStatusService {
    *  el precio mostrado con esa forma y mantiene el último valor (sticky). */
   readonly visorFormaEvents$ = new Subject<VisorFormaEvent>();
   /** Snapshot del armado del presupuesto, para el visor read-only de
-   *  presupuestos (pantalla `/visor-presupuesto/:username`). El backend lo
+   *  presupuestos (pantalla `/visor-presupuesto/:token`). El backend lo
    *  emite ante cada cambio publicado por `presupuestos-page`. */
   readonly presupuestoVisorEvents$ = new Subject<PresupuestoVisor>();
   /** Estado completo del carrito tras cualquier mutación (operador o visor).
@@ -97,7 +97,7 @@ export class BackendStatusService {
   private readonly auth = inject(AuthService);
   private source: EventSource | null = null;
   /** Cuando el componente {@code VisorPage} se monta, llama a
-   *  {@link conectarComoVisor} con el username del operador (del path) y este
+   *  {@link conectarComoVisor} con el token de la sesión (del path) y este
    *  servicio reconfigura el EventSource para enchufarse al canal personal de
    *  ese operador. Null = modo operador (usa /events con la cookie de sesión). */
   private visorToken: string | null = null;

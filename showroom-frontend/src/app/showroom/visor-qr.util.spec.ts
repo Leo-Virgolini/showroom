@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { construirVisorUrl } from './visor-qr.util';
 
 describe('construirVisorUrl', () => {
@@ -6,6 +6,8 @@ describe('construirVisorUrl', () => {
     // Mock window para el test (por defecto es undefined en Node)
     vi.stubGlobal('window', { location: { origin: 'http://fallback' } });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('arma base/segmento/token con el token escapado', () => {
     const url = construirVisorUrl('http://192.168.1.50:4200', 'abc-123', 'visor');

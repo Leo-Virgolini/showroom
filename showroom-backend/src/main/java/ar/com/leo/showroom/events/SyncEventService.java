@@ -24,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *
  * <p>Un suscriptor se asocia a un username vía {@link #subscribe(String)}; un
  * suscriptor sin username (anonymous) NO recibe eventos per-user — solo los
- * globales. Esto le permite a la pantalla {@code /visor/{username}} ligarse
+ * globales. Esto le permite a la pantalla {@code /visor/t/{token}} ligarse
  * al canal del operador con solo pasar el path param.
  */
 @Slf4j
