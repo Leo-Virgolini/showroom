@@ -1,12 +1,14 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -70,6 +72,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly toast = inject(MessageService);
+  private readonly destroyRef = inject(DestroyRef);
 
   /** Id del pedido a editar (parseado del `:id` de la ruta). Null solo en el
    *  instante antes de validar la URL (nunca llega a renderizarse: si el
@@ -198,7 +201,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
 
   private cargarPedido(id: number): void {
     this.cargando.set(true);
-    this.api.obtenerPedido(id).subscribe({
+    this.api.obtenerPedido(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (det) => {
         this.pedido.set(det);
         this.items.set(pedidoItemsAPresupuestoItems(det.items, this.backendStatus.skuProductoGenerico()));
@@ -237,7 +240,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
         catchError(() => of(null)),
       ),
     );
-    forkJoin(requests).subscribe((resultados) => {
+    forkJoin(requests).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((resultados) => {
       let recotizo = false;
       this.items.update((arr) =>
         arr.map((item) => {

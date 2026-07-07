@@ -63,4 +63,12 @@ describe('pedidoItemsAPresupuestoItems', () => {
     }]);
     expect(r.pvpKtGastroConIva).toBe(1089);
   });
+
+  it('maquinaria (aplicaIva=false) con precioListaConIva presente: ya es con IVA', () => {
+    const [r] = pedidoItemsAPresupuestoItems([{
+      ...base, precioListaConIva: 1210, aplicaIva: false, precioUnitario: 1000, porcIva: 21,
+    }]);
+    expect(r.pvpKtGastroConIva).toBe(1210);
+    expect(r.pvpKtGastroSinIva).toBeCloseTo(1000, 6);
+  });
 });
