@@ -686,6 +686,21 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // Proveedores para el dropdown del filtro de búsqueda.
     this.cargarProveedores();
 
+    // Purga el map de "cambios de precio" cuando un ítem se quita del
+    // detalle (por `carrito-editor.eliminarItem`/`vaciar`, que ya NO tocan
+    // este map directamente — el componente ni siquiera tiene acceso de
+    // escritura, solo lee el map vía su input `cambiosPrecio`). Sin este
+    // effect, el contador del banner "precios cambiaron" quedaría inflado
+    // con uids que ya no están en el detalle.
+    effect(() => {
+      const vivos = new Set(this.items().map((i) => i.uid));
+      const m = this.cambiosPrecio();
+      if ([...m.keys()].some((k) => !vivos.has(k))) {
+        const nm = new Map([...m].filter(([k]) => vivos.has(k)));
+        this.cambiosPrecio.set(nm);
+      }
+    });
+
     // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
     // edición: cargamos el detalle del presupuesto y poblamos el form.
     const idParam = this.route.snapshot.paramMap.get('id');
