@@ -1,0 +1,91 @@
+<div class="page-container flex flex-col bg-sky-50/60 dark:bg-surface-950 min-h-screen">
+  <app-page-header titleIcon="pi pi-file-edit" toolbarClass="!bg-sky-100 dark:!bg-surface-900"
+    [title]="'Editar pedido #' + pedidoId()"
+    subtitle="Modificá productos, cantidades o la forma de pago">
+    <div header-start class="ml-1">
+      <p-button icon="pi pi-arrow-left" label="Volver" ariaLabel="Volver al listado de pedidos"
+        [text]="true" (onClick)="volver()" />
+    </div>
+  </app-page-header>
+
+  <main class="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col gap-4">
+
+    @if (cargando()) {
+      <div class="flex items-center gap-2 text-sm text-muted-color">
+        <p-progressSpinner class="!w-5 !h-5" strokeWidth="4" />
+        Cargando pedido…
+      </div>
+    }
+
+    @if (pedido()?.estado === 'ENVIADO') {
+      <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+        <i class="pi pi-exclamation-triangle mt-0.5"></i>
+        <span>Al guardar se creará un pedido nuevo y este quedará anulado; cancelá el comprobante en DUX a mano.</span>
+      </div>
+    }
+
+    <!-- ============= Forma de pago + total en vivo =============
+         El pedido ya tiene una forma de pago congelada (`formaPagoId`); acá el
+         operador puede cambiarla para ver el total con otra forma (mismo
+         criterio que el selector de presupuestos-page). El total refleja los
+         ítems editables de abajo, no el total original persistido. -->
+    <p-card>
+      <ng-template #title>
+        <div class="flex items-center gap-2 text-sm font-semibold">
+          <i class="pi pi-dollar text-primary"></i>
+          <span>Forma de pago</span>
+        </div>
+      </ng-template>
+      <div class="flex items-center gap-3 flex-wrap">
+        <p-select [options]="formasPago()" optionLabel="nombre"
+          [ngModel]="formaPagoSeleccionada()" (ngModelChange)="formaPagoSeleccionada.set($event)"
+          placeholder="Elegí una forma de pago" appendTo="body" class="min-w-[14rem]" />
+        <span class="text-sm text-muted-color">Total</span>
+        <span class="text-lg font-bold text-primary tabular-nums">
+          {{ total() | currency:'ARS':'symbol':'1.0-0' }}
+        </span>
+      </div>
+    </p-card>
+
+    <!-- ============= Detalle editable ============= -->
+    <p-card>
+      <ng-template #title>
+        <div class="flex items-center gap-2 text-sm font-semibold">
+          <i class="pi pi-shopping-cart text-primary"></i>
+          <span>Ítems del pedido</span>
+        </div>
+      </ng-template>
+
+      <app-carrito-editor
+        [(items)]="items"
+        [formaPagoSeleccionada]="formaPagoSeleccionada()"
+        (mutacion)="onCarritoMutacion($event)"
+        (dialogCerrado)="carrito()?.focusScanInput()" />
+    </p-card>
+
+    <div class="flex items-center justify-end gap-2">
+      @if (hayCambiosSinGuardar()) {
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse">
+          <i class="pi pi-exclamation-circle"></i>
+          <span class="hidden sm:inline">Sin guardar</span>
+        </span>
+      }
+      <p-button icon="pi pi-save" label="Guardar cambios" ariaLabel="Guardar cambios"
+        class="btn-kt-azul" [disabled]="items().length === 0" (onClick)="abrirGuardar()"
+        pTooltip="Crea un pedido nuevo en DUX con estos ítems y anula el pedido actual"
+        tooltipPosition="top" />
+    </div>
+
+  </main>
+</div>
+
+<!-- ============= DIALOG CREAR PEDIDO EN DUX (REUSABLE, modo "editar pedido") =============
+     Sin presupuesto detrás ([presupuestoId]="null"): usa la variante que
+     confirma contra `regenerarPedidoDesdePedido`. `pedidoAnteriorId` prellena
+     CUIT/domicilio/provincia/localidad/forma desde ESTE MISMO pedido. -->
+<app-crear-pedido-dialog
+  [(visible)]="mostrarDialog"
+  [pedidoAnteriorId]="pedidoId()"
+  [items]="itemsParaDialog()"
+  [presupuestoId]="null"
+  (pedidoCreado)="onPedidoCreado($event)" />

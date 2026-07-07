@@ -50,6 +50,17 @@ export const routes: Routes = [
       import('./showroom/pedidos-page/pedidos-page').then((m) => m.PedidosPage),
   },
   {
+    // Edita un pedido ya cargado en DUX: hidrata el carrito-editor con sus
+    // ítems (precios congelados) y, al guardar, crea un pedido NUEVO en DUX
+    // + anula el viejo (DUX no permite editar un comprobante in-place). Mismo
+    // guard que `presupuestos/editar/:id` para no perder cambios sin guardar.
+    path: 'pedidos/editar/:id',
+    canActivate: [authGuard],
+    canDeactivate: [unsavedChangesGuard],
+    loadComponent: () =>
+      import('./showroom/editar-pedido-page/editar-pedido-page').then((m) => m.EditarPedidoPage),
+  },
+  {
     path: 'presupuestos',
     canActivate: [authGuard],
     loadComponent: () =>
