@@ -54,21 +54,38 @@
       </div>
     </p-card>
 
-    <!-- ============= Detalle editable ============= -->
-    <p-card>
-      <ng-template #title>
-        <div class="flex items-center gap-2 text-sm font-semibold">
-          <i class="pi pi-shopping-cart text-primary"></i>
-          <span>Ítems del pedido</span>
-        </div>
-      </ng-template>
+    <!-- ============= Detalle editable: buscador (izq) + tabla (der) =============
+         El scan/búsqueda y la tabla de ítems se separaron en dos componentes
+         (`carrito-buscador` + `carrito-tabla`) que comparten el mismo `items`.
+         En lg+ van lado a lado; en mobile se apilan (buscador arriba). -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <p-card>
+        <ng-template #title>
+          <div class="flex items-center gap-2 text-sm font-semibold">
+            <i class="pi pi-search text-primary"></i>
+            <span>Buscar productos</span>
+          </div>
+        </ng-template>
+        <app-carrito-buscador
+          [(items)]="items"
+          (mutacion)="onCarritoMutacion($event)"
+          (dialogCerrado)="buscador()?.focusScanInput()" />
+      </p-card>
 
-      <app-carrito-editor
-        [(items)]="items"
-        [formaPagoSeleccionada]="formaPagoSeleccionada()"
-        (mutacion)="onCarritoMutacion($event)"
-        (dialogCerrado)="carrito()?.focusScanInput()" />
-    </p-card>
+      <p-card>
+        <ng-template #title>
+          <div class="flex items-center gap-2 text-sm font-semibold">
+            <i class="pi pi-shopping-cart text-primary"></i>
+            <span>Ítems del pedido</span>
+          </div>
+        </ng-template>
+        <app-carrito-tabla
+          [(items)]="items"
+          [formaPagoSeleccionada]="formaPagoSeleccionada()"
+          (mutacion)="onCarritoMutacion($event)"
+          (vaciado)="buscador()?.focusScanInput()" />
+      </p-card>
+    </div>
 
     <div class="flex items-center justify-end gap-2">
       @if (hayCambiosSinGuardar()) {

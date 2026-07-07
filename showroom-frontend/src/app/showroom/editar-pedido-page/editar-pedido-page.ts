@@ -24,7 +24,9 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import { pedidoItemsAPresupuestoItems } from '../pedido-a-carrito.util';
-import { CarritoEditor, CarritoMutacion } from '../carrito-editor/carrito-editor';
+import { CarritoBuscador } from '../carrito-buscador/carrito-buscador';
+import { CarritoTabla } from '../carrito-tabla/carrito-tabla';
+import { CarritoMutacion } from '../models';
 import {
   CrearPedidoDialog,
   PedidoClientePrefill,
@@ -59,7 +61,8 @@ import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
     ProgressSpinnerModule,
     SelectModule,
     TooltipModule,
-    CarritoEditor,
+    CarritoBuscador,
+    CarritoTabla,
     CrearPedidoDialog,
     PageHeader,
   ],
@@ -116,9 +119,9 @@ export class EditarPedidoPage implements HasUnsavedChanges {
    *  de reemplazar el array `items` (mismo patrón que presupuestos-page). */
   private readonly itemsTick = signal(0);
 
-  /** Ref al `carrito-editor` — para refocar el scan input tras cargar el
+  /** Ref al `carrito-buscador` — para refocar el scan input tras cargar el
    *  pedido y tras cerrar sus propios diálogos. */
-  readonly carrito = viewChild(CarritoEditor);
+  readonly buscador = viewChild(CarritoBuscador);
 
   /** Total en vivo con la forma de pago elegida — mismo cálculo que el
    *  footer de presupuestos-page ({@link PrecioPerfilService.precioVisualItem}
@@ -207,7 +210,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
         this.items.set(pedidoItemsAPresupuestoItems(det.items, this.backendStatus.skuProductoGenerico()));
         this.cargando.set(false);
         this.hayCambiosSinGuardar.set(false);
-        this.carrito()?.focusScanInput();
+        this.buscador()?.focusScanInput();
         this.recotizarItemsViejos(det);
       },
       error: (err) => {

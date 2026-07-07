@@ -785,6 +785,16 @@ export interface CambioPrecio {
   precioActual: number;
 }
 
+/** Emitido por `carrito-buscador`/`carrito-tabla` tras cada mutación del detalle
+ *  (agregar, modificar cantidad/descuento, quitar, vaciar, genérico). El host lo
+ *  usa para marcar "cambios sin guardar" y mostrar su propio toast — cada
+ *  componente emite la MISMA data, así ninguno necesita conocer al otro. */
+export interface CarritoMutacion {
+  severity: 'success' | 'info' | 'warn';
+  summary: string;
+  detail: string;
+}
+
 /** Snapshot de una forma de pago precalculada en el frontend. Se manda al
  *  backend tal cual para que el PDF muestre el precio final sin doble cálculo. */
 export interface PresupuestoFormaPagoSnapshot {

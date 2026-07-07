@@ -55,7 +55,9 @@ import { BackendStatusService } from '../backend-status.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
-import { CarritoEditor, CarritoMutacion } from '../carrito-editor/carrito-editor';
+import { CarritoBuscador } from '../carrito-buscador/carrito-buscador';
+import { CarritoTabla } from '../carrito-tabla/carrito-tabla';
+import { CarritoMutacion } from '../models';
 import { abrirPdfEnPreview } from '../download.utils';
 import { crearTelefonoLookup } from '../telefono-lookup.util';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
@@ -103,7 +105,8 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
     SelectButtonModule,
     TooltipModule,
     CrearPedidoDialog,
-    CarritoEditor,
+    CarritoBuscador,
+    CarritoTabla,
     PageHeader,
     QrCelularDialog,
     SyncButton,
@@ -137,10 +140,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  guardar/generar con éxito y al cargar inicial el detalle en edición. */
   readonly hayCambiosSinGuardar = signal(false);
 
-  /** Ref al `carrito-editor` — el scan/búsqueda y su input viven ahora ahí;
-   *  el host lo usa para refocar el scan tras cerrar SUS PROPIOS diálogos
-   *  (QR, nuevo cliente, sync). */
-  readonly carrito = viewChild(CarritoEditor);
+  /** Ref al `carrito-buscador` — el scan/búsqueda y su input viven ahí; el
+   *  host lo usa para refocar el scan tras cerrar SUS PROPIOS diálogos
+   *  (QR, nuevo cliente, sync) y tras vaciar la tabla. */
+  readonly buscador = viewChild(CarritoBuscador);
   /** Referencia al footer sticky para medir su alto real (cambia cuando los
    *  chips de formas de pago se wrappean a 2+ líneas). El padding-bottom
    *  del main se ajusta a este alto para que los últimos ítems del detalle
@@ -629,7 +632,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   });
 
   ngAfterViewInit(): void {
-    this.carrito()?.focusScanInput();
+    this.buscador()?.focusScanInput();
   }
 
   constructor() {
@@ -714,7 +717,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
             // El operador está editando un campo (cantidad, descuento,
             // observaciones): respetamos su foco.
             if (this.esCampoEditable(document.activeElement)) return;
-            this.carrito()?.focusScanInput();
+            this.buscador()?.focusScanInput();
           }, 0);
         };
         document.addEventListener('click', refocusOnClick);
@@ -902,7 +905,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         this.pedidoIdConvertido.set(det.convertidoEnPedidoId ?? null);
         this.convertidoAtPresupuesto.set(det.convertidoAt ?? null);
         this.modificadoAtPresupuesto.set(det.modificadoAt ?? null);
-        this.carrito()?.focusScanInput();
+        this.buscador()?.focusScanInput();
 
         // Lookup contra el cache local (no toca DUX) para traer imagen,
         // stock, descripción y flag habilitado. Antes usábamos `refreshStock`
@@ -1120,7 +1123,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           detail: partes.join(', ') + '.',
           life: 5000,
         });
-        this.carrito()?.focusScanInput();
+        this.buscador()?.focusScanInput();
       },
       error: (err) => {
         this.actualizandoPrecios.set(false);
@@ -1149,7 +1152,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  alimentar el input también en tablets. */
   private focusInputAuto(): void {
     if (this.esTactil) return;
-    this.carrito()?.focusScanInput();
+    this.buscador()?.focusScanInput();
   }
 
   /** True si hay algún dialog/overlay PROPIO DEL HOST abierto. En ese caso no

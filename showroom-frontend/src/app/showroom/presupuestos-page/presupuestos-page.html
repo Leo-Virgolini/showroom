@@ -3,33 +3,35 @@
     [title]="esModoEdicion() ? ('Editando presupuesto #' + presupuestoEditandoId()) : 'Presupuestos'"
     [subtitle]="esModoEdicion() ? 'Modificá productos, cantidades o datos del cliente' : 'Armar y enviar al cliente'">
     <div header-end class="inline-flex gap-1.5 items-center">
-      <app-sync-button (dialogClosed)="carrito()?.focusScanInput()" />
+      <app-sync-button (dialogClosed)="buscador()?.focusScanInput()" />
     </div>
   </app-page-header>
 
   <!-- ============= CONTENIDO =============
-       Layout split 50/50 en lg+: izquierda los bloques del HOST (atención,
+       Layout split 50/50 en lg+ (vía `order`): IZQUIERDA el buscador de
+       productos (`carrito-buscador`); DERECHA los bloques del HOST (atención,
        acciones de guardar/enviar/crear pedido, datos del cliente, modo de
-       cotización/forma de pago, banner de precios); derecha `carrito-editor`
-       (scan + tabla). En md y menores, vuelve a 1 columna apilada. El
-       padding-bottom se calcula dinámicamente con el alto real del footer
-       sticky (medido con ResizeObserver) + 16px de aire visual, así el
-       footer nunca tapa los últimos ítems aunque los chips de formas hagan
-       flex-wrap a 2 o más líneas. -->
+       cotización/forma de pago, banner de precios) + la tabla del detalle
+       (`carrito-tabla`). El scan/búsqueda y la tabla se separaron en dos
+       componentes que comparten el mismo `items`. En md y menores, vuelve a 1
+       columna apilada. El padding-bottom se calcula dinámicamente con el alto
+       real del footer sticky (medido con ResizeObserver) + 16px de aire
+       visual, así el footer nunca tapa los últimos ítems aunque los chips de
+       formas hagan flex-wrap a 2 o más líneas. -->
   <main class="flex-1 p-3 sm:p-4 lg:p-6"
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ===== Bloques del host: Atención + Acciones =====
-           En DESKTOP (lg+) van a la DERECHA vía `order` (el buscador+tabla
-           quedan a la izquierda, como el layout previo a editar-pedido); en
-           mobile van primero (order-1). Atención (sesión + QR) + Acciones
-           (guardar/enviar/crear pedido, chip "Datos del cliente", modo de
-           cotización/forma de pago del PDF y el banner de "precios
-           desactualizados"). Sticky en lg+ para que quede siempre a la vista
-           mientras el operador scrollea la tabla del carrito (que además
-           tiene SU PROPIO buscador sticky, ver `carrito-editor`). -->
-      <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start order-1 lg:order-2">
+      <!-- ===== Bloques del host + tabla del detalle =====
+           En DESKTOP (lg+) esta columna va a la DERECHA vía `order` (el
+           buscador queda a la izquierda, como el layout previo a
+           editar-pedido); en mobile va primero (order-1). Contiene: Atención
+           (sesión + QR) + Acciones (guardar/enviar/crear pedido, chip "Datos
+           del cliente", modo de cotización/forma de pago del PDF y el banner
+           de "precios desactualizados") + la card "Detalle del presupuesto"
+           con la tabla (`carrito-tabla`). El buscador de la izquierda tiene su
+           propio sticky interno (ver `carrito-buscador`). -->
+      <div class="flex flex-col gap-4 order-1 lg:order-2">
 
         <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
              de `carrito-editor` (con su propia tabla, en la columna derecha).
@@ -274,17 +276,10 @@
           </div>
         </p-card>
 
-      </div>
-
-      <!-- ============= COLUMNA DERECHA: carrito-editor =============
-           Scan/búsqueda (sticky dentro del propio componente) + tabla
-           editable de ítems — todo vive en `app-carrito-editor`, autónomo. -->
-      <div class="flex flex-col gap-4 order-2 lg:order-1">
-
-        <!-- Tabla de items — card destacada con borde izquierdo verde KT
-             para diferenciarla visualmente del resto de las cards del host
-             (naranja, a la izquierda). El verde refuerza que estos productos
-             ya están "comprometidos" en el presupuesto. -->
+        <!-- Detalle del presupuesto: la TABLA de ítems agregados. El
+             scan/búsqueda vive en la columna IZQUIERDA (`carrito-buscador`).
+             Borde izquierdo verde KT para diferenciarla de las cards naranjas
+             del host. -->
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
             <div class="kt-card-title kt-card-title-detalle">
@@ -325,14 +320,33 @@
             </div>
           </ng-template>
 
-          <app-carrito-editor
+          <app-carrito-tabla
             [(items)]="items"
             [formaPagoSeleccionada]="formaPagoSeleccionada()"
             [cambiosPrecio]="cambiosPrecio()"
             (mutacion)="onCarritoMutacion($event)"
-            (dialogCerrado)="onCarritoDialogCerrado()" />
+            (vaciado)="buscador()?.focusScanInput()" />
         </p-card>
 
+      </div>
+
+      <!-- ============= COLUMNA IZQUIERDA (desktop): buscador =============
+           Scan/búsqueda de productos (sticky interno, ver `carrito-buscador`).
+           Va a la IZQUIERDA en lg+ vía `order`; en mobile queda después de los
+           bloques del host (Atención/Acciones/Detalle). -->
+      <div class="flex flex-col gap-4 order-2 lg:order-1">
+        <p-card class="kt-card">
+          <ng-template #title>
+            <div class="kt-card-title">
+              <i class="pi pi-search"></i>
+              <span>Buscar productos</span>
+            </div>
+          </ng-template>
+          <app-carrito-buscador
+            [(items)]="items"
+            (mutacion)="onCarritoMutacion($event)"
+            (dialogCerrado)="onCarritoDialogCerrado()" />
+        </p-card>
       </div>
     </div>
   </main>
@@ -735,7 +749,7 @@
      prellena el campo del presupuesto; es opcional armar sin cliente. -->
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="carrito()?.focusScanInput()">
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="buscador()?.focusScanInput()">
   <div class="flex flex-col gap-3">
     @if (haySesionActiva()) {
     <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
@@ -774,7 +788,7 @@
      el del presupuesto (no el producto-a-producto del showroom). -->
 <app-qr-celular-dialog [(visible)]="mostrarDialogVisor" [visorUrl]="visorUrl()"
   [qrDataUrl]="qrVisorDataUrl()" [generando]="qrVisorGenerando()"
-  visorTitulo="Ver el presupuesto" (dialogClosed)="carrito()?.focusScanInput()" />
+  visorTitulo="Ver el presupuesto" (dialogClosed)="buscador()?.focusScanInput()" />
 
 <!-- El dialog "Ver producto" (preview de un resultado de búsqueda) ahora
      vive dentro de `app-carrito-editor`, junto con el scan/búsqueda. -->

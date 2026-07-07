@@ -3,10 +3,8 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  computed,
   effect,
   inject,
-  input,
   model,
   output,
   signal,
@@ -25,9 +23,8 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
-import { CambioPrecio, CatalogoItem, FormaPago, PresupuestoItem, ScanResult } from '../models';
+import { CarritoMutacion, CatalogoItem, PresupuestoItem, ScanResult } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
@@ -35,45 +32,25 @@ import {
   ProductoGenericoData,
   ProductoGenericoDialog,
 } from '../producto-generico-dialog/producto-generico-dialog';
-import { seleccionarTextoAlEnfocar } from '../dom.utils';
 import { etiquetaItem } from '../item-etiqueta.util';
 import { toastError } from '../toast.utils';
 
-/** Emitido tras cada mutación de {@link CarritoEditor.items} (agregar,
- *  modificar cantidad/descuento, quitar, vaciar, genérico). El host lo usa
- *  para marcar "cambios sin guardar" y mostrar su propio toast — el
- *  componente muestra el suyo con la MISMA data, así ninguno de los dos
- *  necesita conocer al otro (solo el evento). */
-export interface CarritoMutacion {
-  severity: 'success' | 'info' | 'warn';
-  summary: string;
-  detail: string;
-}
-
 /**
- * Editor autónomo del detalle de un presupuesto/pedido: scan + búsqueda de
- * catálogo (con resultados paginados/ordenables/filtrables por proveedor),
- * tabla editable de ítems (cantidad/descuento in-place, quitar, vaciar,
- * orden) y alta de "producto genérico" (SKU comodín de DUX para líneas que
- * no están en catálogo). El host solo aporta la lista de ítems (two-way),
- * la forma de pago elegida y el mapa de cambios de precio — todo lo demás
- * (agregar por scan/búsqueda, editar, quitar) vive acá.
+ * Scan + búsqueda de catálogo para armar el detalle de un presupuesto/pedido:
+ * input de código/descripción/EAN, resultados paginados/ordenables/filtrables
+ * por proveedor, preview "Ver producto" y alta de "producto genérico" (SKU
+ * comodín de DUX). Es la mitad "búsqueda" del viejo `carrito-editor` (la otra
+ * mitad, la tabla editable, vive en `carrito-tabla`).
  *
- * <p>{@link items} es un `model` two-way: el host la posee (la usa para
- * totales, formas de pago, payload y visor); este componente la muta
- * (agregar/quitar/vaciar reemplazan el array, cantidad/descuento mutan
- * in-place para no robarle el foco a `p-inputNumber`). Cada mutación además
- * emite {@link mutacion} para que el host marque "cambios sin guardar" y
- * replique el toast con su propio {@code MessageService}.
- *
- * <p>{@link formaPagoSeleccionada} y {@link cambiosPrecio} son inputs de solo
- * lectura que el host sigue poseyendo (selector global de forma de pago y
- * banner de precios desactualizados) — el componente los necesita para
- * pintar la columna "Precio"/"Subtotal" en la forma elegida y el pill de
- * precio desactualizado por fila.
+ * <p>{@link items} es un `model` two-way que POSEE el host y comparte con
+ * `carrito-tabla`: este componente AGREGA (por scan/búsqueda/genérico), la tabla
+ * edita/quita. Cada alta emite {@link mutacion} para que el host marque "cambios
+ * sin guardar" y muestre el toast. Los dialogs propios ("Producto genérico" y
+ * "Ver producto") emiten {@link dialogCerrado} al cerrarse para que el host
+ * devuelva el foco con su guard táctil.
  */
 @Component({
-  selector: 'app-carrito-editor',
+  selector: 'app-carrito-buscador',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
@@ -88,47 +65,30 @@ export interface CarritoMutacion {
     InputTextModule,
     ProgressSpinnerModule,
     SelectModule,
-    TableModule,
     TooltipModule,
     ProductoGenericoDialog,
   ],
-  templateUrl: './carrito-editor.html',
+  templateUrl: './carrito-buscador.html',
 })
-export class CarritoEditor {
+export class CarritoBuscador {
   private readonly toast = inject(MessageService);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly api = inject(ShowroomService);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Lista de ítems — two-way con el host. Solo se reemplaza el array al
-   *  AGREGAR o ELIMINAR ítems; cantidad/descuento mutan el objeto in-place (el
-   *  propio evento de input dispara la CD del componente y refresca la fila —
-   *  no hace falta un tick propio; el host sí tiene el suyo para sus
-   *  `computed` de totales). */
+  /** Lista de ítems — two-way con el host, compartida con `carrito-tabla`.
+   *  Este componente solo AGREGA (reemplaza el array); la tabla edita/quita. */
   readonly items = model<PresupuestoItem[]>([]);
 
-  /** Forma de pago elegida en el toolbar del host (null = "Todas" / precio de
-   *  referencia). Determina la columna "Precio"/"Subtotal" de la tabla. */
-  readonly formaPagoSeleccionada = input<FormaPago | null>(null);
-
-  /** Cambios de precio detectados por el host al cargar un presupuesto en
-   *  edición (uid → {precioGuardado, precioActual}). Alimenta el pill "precio
-   *  desactualizado" por fila. Vacío = todo al día (o modo creación). */
-  readonly cambiosPrecio = input<ReadonlyMap<string, CambioPrecio>>(new Map());
-
-  /** Emitido tras cada mutación de {@link items}, para que el host marque
-   *  "cambios sin guardar" y replique el toast. */
+  /** Emitido tras cada alta al detalle, para que el host marque "cambios sin
+   *  guardar" y replique el toast. */
   readonly mutacion = output<CarritoMutacion>();
 
-  /** Emitido cuando un dialog/overlay PROPIO del componente ("Producto
-   *  genérico" o "Ver producto") pasa de abierto a cerrado, por cualquier
-   *  camino (confirmar, cancelar, ESC). El componente ya se refoca a sí
-   *  mismo para todo lo que puede resolver solo (scan, agregar, vaciar);
-   *  este evento existe porque el guard "no robar foco en táctil"
-   *  ({@code esTactil}) vive en el host (aplica por igual a SUS propios
-   *  dialogs — cliente, crear pedido) y no tiene sentido duplicarlo acá. El
-   *  host refoca con su `focusInputAuto()` (respeta ese guard) al recibirlo. */
+  /** Emitido cuando un dialog/overlay PROPIO ("Producto genérico" o "Ver
+   *  producto") pasa de abierto a cerrado. El componente ya se refoca a sí
+   *  mismo para lo que resuelve solo (scan, agregar); este evento existe porque
+   *  el guard "no robar foco en táctil" vive en el host. */
   readonly dialogCerrado = output<void>();
 
   /** SKU comodín de DUX para "Producto genérico" — expuesto por el backend
@@ -139,14 +99,11 @@ export class CarritoEditor {
   // Scan / búsqueda
   //
   // SIEMPRE busca en el catálogo local cacheado — nunca dispara una llamada
-  // directa a DUX. El presupuestador/carrito asume catálogo sincronizado: el
-  // operador arma sobre productos KT GASTRO conocidos, no necesita la
-  // freshness real-time de DUX (que paga 7s de rate limit por miss).
+  // directa a DUX. El presupuestador/carrito asume catálogo sincronizado.
   //
   // Flujo:
   //   - 0 resultados → toast "Sin resultados".
-  //   - 1 resultado único → cargar via /scan/{sku} (rápido — está en cache,
-  //     no toca DUX) para traer pvpConIva + porcIva que /catalogo no expone.
+  //   - 1 resultado único → cargar via /scan/{sku} (rápido — está en cache).
   //   - N resultados → mostrar lista clickable.
   //
   // `scanSeq` evita race conditions cuando se dispara una nueva búsqueda
@@ -208,17 +165,35 @@ export class CarritoEditor {
    *  directamente (sin refetch) — los datos visibles son los mismos. */
   readonly productoPreview = signal<CatalogoItem | null>(null);
 
+  /** Producto genérico — alta a mano de una línea con el SKU comodín de DUX. */
+  readonly mostrarDialogGenerico = signal(false);
+
+  constructor() {
+    // Proveedores para el dropdown del filtro de búsqueda.
+    this.cargarProveedores();
+
+    // Detecta la transición abierto→cerrado de CUALQUIERA de los dos
+    // dialogs/overlays propios ("Producto genérico" y "Ver producto") y
+    // emite `dialogCerrado` para que el host refoque el scan input con su
+    // guard táctil.
+    let habiaDialogAbierto = false;
+    effect(() => {
+      const abierto = this.mostrarDialogGenerico() || this.productoPreview() != null;
+      if (habiaDialogAbierto && !abierto) {
+        this.dialogCerrado.emit();
+      }
+      habiaDialogAbierto = abierto;
+    });
+  }
+
   onScanEnter(): void {
     const query = this.skuInput().trim();
     if (!query) return;
     this.skuInput.set('');
     this.resultadosBusqueda.set([]);
-    // Reset de cantidades tipeadas — corresponden a la búsqueda anterior y
-    // no deberían sobrevivir a una nueva query.
+    // Reset de cantidades tipeadas — corresponden a la búsqueda anterior.
     this.cantidadesResultados.set({});
-    // Cada búsqueda NUEVA arranca sin el filtro de proveedor anterior (sino
-    // quedaba "pegado"). Los re-search por cambio de filtro/orden no pasan por
-    // acá, así que se preservan.
+    // Cada búsqueda NUEVA arranca sin el filtro de proveedor anterior.
     this.proveedorFiltro.set(null);
     // El dropdown de proveedores se acota a lo buscado.
     this.cargarProveedores(query);
@@ -288,8 +263,6 @@ export class CarritoEditor {
         this.cargandoScan.set(false);
         this.reordenando.set(false);
         if (page.items.length === 0) {
-          // Posible producto fuera del catálogo cacheado o catálogo desactualizado.
-          // Mostramos un mensaje útil para que el operador sepa qué chequear.
           this.toast.add({
             severity: 'warn',
             summary: 'Sin resultados',
@@ -300,9 +273,6 @@ export class CarritoEditor {
           this.totalResultadosBusqueda.set(0);
         } else if (autoAgregarSiUnico && page.items.length === 1 && page.total === 1) {
           // Único resultado en todo el catálogo — lo agregamos directo.
-          // Solo en la búsqueda inicial (el operador tipeó una query): al
-          // refinar filtro/orden NO auto-agregamos, sino el cambio de filtro
-          // metía el producto al detalle (o le sumaba cantidad si ya estaba).
           this.totalResultadosBusqueda.set(1);
           this.seleccionarResultado(page.items[0].sku);
           return;
@@ -349,8 +319,7 @@ export class CarritoEditor {
   }
 
   /** Cierra la lista de resultados (botón ✕) y devuelve el foco al input.
-   *  Limpia también las cantidades tipeadas — si el operador busca otra cosa
-   *  después, los inputs arrancan en el default sin sorpresas heredadas. */
+   *  Limpia también las cantidades tipeadas. */
   cerrarResultadosBusqueda(): void {
     this.resultadosBusqueda.set([]);
     this.cantidadesResultados.set({});
@@ -359,14 +328,7 @@ export class CarritoEditor {
 
   /** El operador eligió un item de la lista de resultados — lo cargamos via
    *  `/scan/{sku}` para traer todos los datos (precios c/IVA + s/IVA, stock,
-   *  imagen) y lo agregamos al detalle. Acepta `cantidad` opcional para que
-   *  el botón "Agregar" inline de cada fila pueda mandar varias unidades de
-   *  una sola vez.
-   *
-   *  <p>La lista de resultados queda ABIERTA tras agregar — el operador
-   *  puede sumar varios productos del mismo set de resultados sin tener que
-   *  volver a buscar. La cantidad del item recién agregado se resetea a 1
-   *  para que un siguiente click no duplique la cantidad anterior. */
+   *  imagen) y lo agregamos al detalle. La lista queda ABIERTA tras agregar. */
   seleccionarResultado(sku: string, cantidad: number = 1): void {
     this.cargandoScan.set(true);
     const seq = ++this.scanSeq;
@@ -379,9 +341,7 @@ export class CarritoEditor {
         if (seq !== this.scanSeq) return;
         this.cargandoScan.set(false);
         this.agregarItem(res, cant);
-        // Reset de la cantidad del sku recién agregado — sin esto, si el
-        // operador apreta "Agregar" 3 veces con cantidad=5, agregaría 5
-        // primero y luego cada click pondría 5 más (el input no se limpia).
+        // Reset de la cantidad del sku recién agregado.
         this.cantidadesResultados.update((m) => {
           const nm = { ...m };
           delete nm[sku];
@@ -411,9 +371,7 @@ export class CarritoEditor {
   }
 
   /** Tope de cantidad para el input de la lista de resultados. NO se topea al
-   *  stock: el presupuesto no descuenta stock, así que el operador puede cargar
-   *  la cantidad que quiera; el detalle muestra un pill amarillo "excede stock"
-   *  si la cantidad supera el disponible. Cap alto solo para evitar absurdos. */
+   *  stock: el presupuesto no descuenta stock. Cap alto solo para evitar absurdos. */
   cantidadMaximaResultado(_r: CatalogoItem): number {
     return 9999;
   }
@@ -423,10 +381,7 @@ export class CarritoEditor {
     this.seleccionarResultado(sku, cant);
   }
 
-  /** Abre el diálogo de preview con la foto grande + datos del producto.
-   *  El operador puede ver mejor el producto antes de decidir si lo agrega
-   *  al detalle. El botón "Agregar" del diálogo respeta la cantidad
-   *  tipeada en la fila de la lista. */
+  /** Abre el diálogo de preview con la foto grande + datos del producto. */
   verResultado(r: CatalogoItem): void {
     this.productoPreview.set(r);
   }
@@ -448,10 +403,7 @@ export class CarritoEditor {
 
   /** Agrega un ítem escaneado/buscado al detalle. Si el SKU ya existe, le
    *  suma la cantidad (merge, típico al re-escanear); si no, crea una línea
-   *  nueva. Rechaza el SKU comodín de "producto genérico" (se carga por el
-   *  dialog dedicado, no por scan directo — sino la descripción genérica de
-   *  DUX pisaría la tipeada, y el merge por SKU mezclaría cantidades de
-   *  genéricos distintos, que todos comparten el mismo SKU). */
+   *  nueva. Rechaza el SKU comodín de "producto genérico". */
   private agregarItem(res: ScanResult, cantidad: number = 1): void {
     const cant = cantidad > 0 ? cantidad : 1;
     if (this.skuGenerico() && res.sku === this.skuGenerico()) {
@@ -459,7 +411,6 @@ export class CarritoEditor {
       return;
     }
     const actuales = this.items();
-    // Si ya existe el SKU, sumarle cantidad (caso típico: re-escanear).
     const existente = actuales.find((it) => it.sku === res.sku);
     if (existente) {
       const nuevaCantidad = existente.cantidad + cant;
@@ -479,178 +430,6 @@ export class CarritoEditor {
     this.items.set([...actuales, nuevo]);
     this.emitirMutacion('success', 'Producto agregado',
       `${etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
-  }
-
-  /** Orden de visualización del detalle. `null` = orden de carga. Solo afecta
-   *  el render — no depende de la mutación in-place a propósito: editar
-   *  cantidad/descuento no debe reordenar la grilla en vivo. */
-  readonly ordenItems = signal<{ campo: 'producto' | 'precio'; dir: 'asc' | 'desc' } | null>(null);
-
-  /** Detalle ordenado para el render. Copia ordenada por descripción
-   *  (producto) o por el precio de referencia mostrado. */
-  readonly itemsOrdenados = computed<PresupuestoItem[]>(() => {
-    const lista = this.items();
-    const orden = this.ordenItems();
-    if (!orden) return lista;
-    const factor = orden.dir === 'asc' ? 1 : -1;
-    return [...lista].sort((a, b) => {
-      if (orden.campo === 'producto') {
-        return (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor;
-      }
-      return (this.precioMostrado(a) - this.precioMostrado(b)) * factor;
-    });
-  });
-
-  /** Cicla el orden del detalle para un campo: asc → desc → sin orden (carga). */
-  ordenarItemsPor(campo: 'producto' | 'precio'): void {
-    const actual = this.ordenItems();
-    if (!actual || actual.campo !== campo) {
-      this.ordenItems.set({ campo, dir: 'asc' });
-    } else if (actual.dir === 'asc') {
-      this.ordenItems.set({ campo, dir: 'desc' });
-    } else {
-      this.ordenItems.set(null);
-    }
-  }
-
-  /** Ícono del encabezado de orden de un campo: flecha según dirección, o neutro. */
-  iconoOrdenItems(campo: 'producto' | 'precio'): string {
-    const o = this.ordenItems();
-    if (!o || o.campo !== campo) return 'pi pi-sort-alt';
-    return o.dir === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down';
-  }
-
-  /** True si el producto es de maquinaria (rubro configurable que cotiza sin
-   *  IVA) — marca la fila con un badge/resaltado. */
-  esRubroMaquinaria(rubro: string | null | undefined): boolean {
-    return this.precioPerfil.rubroCotizaSinIva(rubro);
-  }
-
-  /** Precio de REFERENCIA unitario de un producto (forma destacada según el
-   *  perfil de su rubro) — mismo criterio que scan/visor/showroom. Delega en
-   *  el servicio compartido (única fuente, ver {@link PrecioPerfilService.precioMostrado}). */
-  precioMostrado(
-    r: {
-      pvpKtGastroConIva: number | null;
-      pvpKtGastroSinIva: number | null;
-      porcIva?: number | null;
-      rubro?: string | null;
-    },
-  ): number {
-    return this.precioPerfil.precioMostrado(r);
-  }
-
-  /** Precio unitario a MOSTRAR según la forma elegida en el host; con "Todas"
-   *  cae al precio de referencia ({@link precioMostrado}). Solo visual. Delega
-   *  en el servicio compartido (única fuente, ver
-   *  {@link PrecioPerfilService.precioVisualItem}). */
-  precioVisualItem(it: {
-    pvpKtGastroConIva: number | null;
-    pvpKtGastroSinIva: number | null;
-    porcIva?: number | null;
-    rubro?: string | null;
-  }): number {
-    return this.precioPerfil.precioVisualItem(it, this.formaPagoSeleccionada());
-  }
-
-  /** Subtotal por línea EN LA FORMA elegida (solo visual): precio visual ×
-   *  (1 − desc) × cantidad. Con "Todas" coincide con el total efectivo. */
-  subtotalVisualItem(it: PresupuestoItem): number {
-    const desc = it.descuentoPorcentaje ?? 0;
-    return this.precioVisualItem(it) * (1 - desc / 100) * it.cantidad;
-  }
-
-  /** Cambio de precio detectado para un ítem (por uid), o undefined si su
-   *  precio sigue igual al guardado. Pinta el pill "precio desactualizado". */
-  cambioPrecioDe(uid: string): CambioPrecio | undefined {
-    return this.cambiosPrecio().get(uid);
-  }
-
-  /** Clase del input "% Desc." por línea: azul cuando la línea tiene
-   *  descuento, neutro cuando es 0. */
-  claseInputDescuentoItem(descuento: number | null | undefined): string {
-    const base = 'text-center descuento-input';
-    return (descuento ?? 0) > 0
-      ? `${base} font-semibold text-sky-600 dark:text-sky-400`
-      : `${base} text-muted-color`;
-  }
-
-  /** Selecciona el contenido del input al enfocarlo (el "0%" no se concatena
-   *  al tipear). Lógica compartida en {@link seleccionarTextoAlEnfocar}. */
-  protected readonly seleccionarAlEnfocar = seleccionarTextoAlEnfocar;
-
-  /** Tope de cantidad para el input. NO se topea al stock: el operador puede
-   *  cargar la cantidad que quiera; un pill amarillo avisa si excede el
-   *  disponible. Cap alto solo para evitar cantidades absurdas. */
-  cantidadMaximaDe(_it: PresupuestoItem): number {
-    return 9999;
-  }
-
-  actualizarCantidad(it: PresupuestoItem, valor: number): void {
-    if (!Number.isFinite(valor) || valor <= 0) valor = 1;
-    if (it.cantidad === valor) return;
-    const prev = it.cantidad;
-    it.cantidad = valor;
-    this.emitirMutacion('info', 'Cantidad actualizada',
-      `${etiquetaItem(it)}: ${prev}u → ${valor}u`);
-  }
-
-  actualizarDescuento(it: PresupuestoItem, valor: number): void {
-    if (!Number.isFinite(valor) || valor < 0) valor = 0;
-    if (valor > 100) valor = 100;
-    if ((it.descuentoPorcentaje ?? 0) === valor) return;
-    it.descuentoPorcentaje = valor;
-    this.emitirMutacion('info', 'Descuento actualizado',
-      `${etiquetaItem(it)}: ${valor}%`);
-  }
-
-  /** Quita un ítem del detalle. NO toca el map de "cambios de precio" del
-   *  host — el host lo purga solo (por uid vivo) vía un `effect`. */
-  eliminarItem(uid: string): void {
-    const it = this.items().find((x) => x.uid === uid);
-    this.items.set(this.items().filter((x) => x.uid !== uid));
-    if (it) {
-      this.emitirMutacion('warn', 'Producto quitado', etiquetaItem(it));
-    }
-  }
-
-  /** Vacía todo el detalle. Igual que {@link eliminarItem}, no toca el map de
-   *  "cambios de precio" del host (se purga solo). Devuelve el foco al scan
-   *  input de forma incondicional (mismo comportamiento que el `vaciar()`
-   *  original, que llamaba `focusInput()` directo). */
-  vaciar(): void {
-    const cantidad = this.items().length;
-    this.items.set([]);
-    this.focusScanInput();
-    if (cantidad > 0) {
-      this.emitirMutacion('warn', 'Detalle vaciado',
-        `Se quitaron ${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}.`);
-    }
-  }
-
-  // ============================================================
-  // Producto genérico — alta a mano de una línea con el SKU comodín de DUX.
-  // ============================================================
-  readonly mostrarDialogGenerico = signal(false);
-
-  constructor() {
-    // Proveedores para el dropdown del filtro de búsqueda.
-    this.cargarProveedores();
-
-    // Detecta la transición abierto→cerrado de CUALQUIERA de los dos
-    // dialogs/overlays propios ("Producto genérico" y "Ver producto") y
-    // emite `dialogCerrado` para que el host refoque el scan input con su
-    // guard táctil — réplica acotada del effect unificado que tenía el host
-    // sobre `algunDialogAbierto()` antes de este refactor (ese effect incluía
-    // estos mismos dos, junto con los propios del host).
-    let habiaDialogAbierto = false;
-    effect(() => {
-      const abierto = this.mostrarDialogGenerico() || this.productoPreview() != null;
-      if (habiaDialogAbierto && !abierto) {
-        this.dialogCerrado.emit();
-      }
-      habiaDialogAbierto = abierto;
-    });
   }
 
   abrirGenerico(): void {
@@ -692,10 +471,29 @@ export class CarritoEditor {
       `${etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
   }
 
+  /** True si el producto es de maquinaria (rubro configurable que cotiza sin
+   *  IVA) — marca la fila con un badge/resaltado. */
+  esRubroMaquinaria(rubro: string | null | undefined): boolean {
+    return this.precioPerfil.rubroCotizaSinIva(rubro);
+  }
+
+  /** Precio de REFERENCIA unitario de un producto (forma destacada según el
+   *  perfil de su rubro) — mismo criterio que scan/visor/showroom. */
+  precioMostrado(
+    r: {
+      pvpKtGastroConIva: number | null;
+      pvpKtGastroSinIva: number | null;
+      porcIva?: number | null;
+      rubro?: string | null;
+    },
+  ): number {
+    return this.precioPerfil.precioMostrado(r);
+  }
+
   /** Devuelve el foco al input de scan — incondicional (sin guard táctil): la
    *  pistola QR debe seguir alimentando el input aunque el dispositivo sea
-   *  táctil. Lo usa el propio componente (tras agregar/buscar/vaciar) y el
-   *  host (tras cerrar SUS propios diálogos), vía la ref `#carrito`. */
+   *  táctil. Lo usa el propio componente (tras agregar/buscar) y el host (tras
+   *  cerrar SUS propios diálogos y tras vaciar la tabla), vía la ref. */
   focusScanInput(): void {
     setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
   }
@@ -705,10 +503,8 @@ export class CarritoEditor {
   }
 
   /** Notifica al host una mutación. NO muestra un toast propio acá: el
-   *  `MessageService` de esta app es un singleton único (provisto una sola
-   *  vez en `app.ts`, ningún componente lo re-provee) — mostrar un toast acá
-   *  Y otro en el host (`notificarMutacion`) duplicaría cada aviso en
-   *  pantalla. El host es la única fuente del toast + `hayCambiosSinGuardar`. */
+   *  `MessageService` es un singleton único — el host es la única fuente del
+   *  toast + `hayCambiosSinGuardar`. */
   private emitirMutacion(severity: 'success' | 'info' | 'warn', summary: string, detail: string): void {
     this.mutacion.emit({ severity, summary, detail });
   }
