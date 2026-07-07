@@ -292,10 +292,6 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     this.router.navigate(['/pedidos']);
   }
 
-  volver(): void {
-    this.router.navigate(['/pedidos']);
-  }
-
   /** Implementa {@link HasUnsavedChanges} para el `unsavedChangesGuard`. */
   hasUnsavedChanges(): boolean {
     return this.hayCambiosSinGuardar();
