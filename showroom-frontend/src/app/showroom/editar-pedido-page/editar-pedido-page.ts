@@ -22,7 +22,11 @@ import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import { pedidoItemsAPresupuestoItems } from '../pedido-a-carrito.util';
 import { CarritoEditor, CarritoMutacion } from '../carrito-editor/carrito-editor';
-import { CrearPedidoDialog, PedidoItemEntrada } from '../crear-pedido-dialog/crear-pedido-dialog';
+import {
+  CrearPedidoDialog,
+  PedidoClientePrefill,
+  PedidoItemEntrada,
+} from '../crear-pedido-dialog/crear-pedido-dialog';
 import { PageHeader } from '../page-header/page-header';
 import { toastError } from '../toast.utils';
 import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
@@ -119,6 +123,24 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     }, 0);
   });
 
+  /** Pre-llenado del formulario de cliente del dialog con los datos ya
+   *  cargados en ESTE pedido — evita que el operador tenga que retipearlos
+   *  de memoria (son obligatorios) y arriesgar un dato distinto al que ya
+   *  tiene DUX. `rubro` queda afuera: {@link PedidoDetalle} no lo guarda a
+   *  nivel cliente; lo resuelve el autocompletado por CUIT del dialog. */
+  readonly clientePrefill = computed<PedidoClientePrefill | null>(() => {
+    const p = this.pedido();
+    if (!p) return null;
+    return {
+      nombre: p.nombre ?? undefined,
+      razonSocial: p.apellidoRazonSocial ?? undefined,
+      telefono: p.telefono ?? undefined,
+      email: p.email ?? undefined,
+      nroDoc: p.nroDoc ?? undefined,
+      formaPagoId: p.formaPagoId ?? undefined,
+    };
+  });
+
   /** Ítems mapeados al shape que espera `crear-pedido-dialog` en su modo
    *  "editar pedido" (sin presupuesto detrás). */
   readonly itemsParaDialog = computed<PedidoItemEntrada[]>(() => {
@@ -204,12 +226,13 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   onPedidoCreado(ev: { presupuestoId: number | null; pedidoLocalId: number }): void {
     this.hayCambiosSinGuardar.set(false);
     const anteriorId = this.pedidoId();
+    const idNuevo = ev.pedidoLocalId ? ` #${ev.pedidoLocalId}` : '';
     this.toast.add({
       severity: 'success',
       summary: 'Pedido actualizado',
       detail: anteriorId != null
-        ? `Se creó el pedido #${ev.pedidoLocalId}; el pedido #${anteriorId} anterior quedó anulado.`
-        : `Se creó el pedido #${ev.pedidoLocalId}.`,
+        ? `Se creó el pedido nuevo${idNuevo}; el pedido #${anteriorId} anterior quedó anulado.`
+        : `Se creó el pedido nuevo${idNuevo}.`,
       life: 8000,
     });
     this.router.navigate(['/pedidos']);
