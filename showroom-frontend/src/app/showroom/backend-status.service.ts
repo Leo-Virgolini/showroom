@@ -100,7 +100,7 @@ export class BackendStatusService {
    *  {@link conectarComoVisor} con el username del operador (del path) y este
    *  servicio reconfigura el EventSource para enchufarse al canal personal de
    *  ese operador. Null = modo operador (usa /events con la cookie de sesión). */
-  private visorUsername: string | null = null;
+  private visorToken: string | null = null;
   private healthPoll: ReturnType<typeof setInterval> | null = null;
   /** Último bootTime visto del backend — comparamos contra el de cada /health
    *  para detectar reinicio. Null hasta el primer health response exitoso. */
@@ -138,9 +138,9 @@ export class BackendStatusService {
     // operador escuche su propio canal personal en lugar del de A. Sin esto,
     // B vería los toasts/carrito del último canal usado o no recibiría nada.
     //
-    // visorUsername (set por VisorPage) tiene prioridad — si la app está
-    // corriendo en modo visor (URL /visor/:username), el SSE se mantiene
-    // ligado a ese username independientemente del estado de auth.
+    // visorToken (set por VisorPage) tiene prioridad — si la app está
+    // corriendo en modo visor (URL /visor/:token), el SSE se mantiene
+    // ligado a ese token independientemente del estado de auth.
     effect(() => {
       const u = this.auth.currentUser();
       if (u === undefined) return; // primera resolución de /me, aún no sabemos
@@ -151,7 +151,7 @@ export class BackendStatusService {
       this.ultimoUsernameAutenticado = usernameNuevo;
 
       // En modo visor, el canal lo decide el path — no tocamos el SSE.
-      if (this.visorUsername) return;
+      if (this.visorToken) return;
 
       // Cambio real de operador (logout, login distinto, login tras logout).
       // Limpiamos estado local efímero para que B no vea datos de A, y
@@ -260,10 +260,10 @@ export class BackendStatusService {
     });
 
     // 2. Sesión activa. Operador: usa /sesion/activa (autenticado). Visor:
-    //    usa /visor/{username}/sesion/activa (público) — sin esto el visor
+    //    usa /visor/t/{token}/sesion (público) — sin esto el visor
     //    no se enteraría del cliente en curso tras una reconexión.
-    const sesionUrl = this.visorUsername
-      ? `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/sesion/activa`
+    const sesionUrl = this.visorToken
+      ? `/api/showroom/visor/t/${encodeURIComponent(this.visorToken)}/sesion`
       : '/api/showroom/sesion/activa';
     this.http.get<SesionShowroom>(sesionUrl).subscribe({
       next: (s) => this.sesionEvents$.next(s),
@@ -272,7 +272,7 @@ export class BackendStatusService {
 
     // 3. Carrito (autenticado — solo si hay sesión de operador). El visor no
     //    necesita rehidratar el carrito: opera write-only via SSE.
-    if (!this.visorUsername && this.auth.currentUser()) {
+    if (!this.visorToken && this.auth.currentUser()) {
       this.http.get<CarritoState>('/api/showroom/carrito').subscribe({
         next: (c) => this.carritoEvents$.next(c),
         error: () => { /* silencioso, el interceptor maneja 401 */ },
@@ -283,25 +283,21 @@ export class BackendStatusService {
     //    visor de presupuesto es read-only y, tras una reconexión, necesita el
     //    último armado para no quedar con datos viejos. La VisorPage del
     //    showroom ignora este Subject, así que el fetch extra es inocuo.
-    if (this.visorUsername) {
+    if (this.visorToken) {
       this.http.get<PresupuestoVisor>(
-        `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/presupuesto`).subscribe({
+        `/api/showroom/visor/t/${encodeURIComponent(this.visorToken)}/presupuesto`).subscribe({
         next: (p) => this.presupuestoVisorEvents$.next(p),
-        error: () => { /* silencioso (404 si el username no es operador válido) */ },
+        error: () => { /* silencioso (404/410 si el token no es válido) */ },
       });
     }
   }
 
-  /**
-   * Reconfigura el SSE para que escuche el canal personal del operador
-   * {@code username}. Lo invoca {@code VisorPage} en su constructor con el
-   * param del path. Si el SSE ya estaba apuntando al mismo username, es
-   * no-op; si apuntaba a otro lugar (operador autenticado o un username
-   * distinto) lo cerramos y reabrimos. Idempotente.
-   */
-  conectarComoVisor(username: string): void {
-    if (this.visorUsername === username && this.source) return;
-    this.visorUsername = username;
+  /** Reconfigura el SSE para escuchar el canal del visor identificado por
+   *  {@code token} (sesión de atención activa). Lo invocan las páginas de visor
+   *  con el param del path. Idempotente. */
+  conectarComoVisor(token: string): void {
+    if (this.visorToken === token && this.source) return;
+    this.visorToken = token;
     this.cerrarSSE();
     this.iniciarSSE();
   }
@@ -321,8 +317,8 @@ export class BackendStatusService {
     // Si el componente VisorPage nos enchufó al canal de un operador, usamos
     // el endpoint público de ese operador; sino, el endpoint default que
     // toma el username de la sesión HTTP.
-    const url = this.visorUsername
-      ? `/api/showroom/visor/${encodeURIComponent(this.visorUsername)}/events`
+    const url = this.visorToken
+      ? `/api/showroom/visor/t/${encodeURIComponent(this.visorToken)}/events`
       : '/api/showroom/events';
     const src = new EventSource(url);
     this.source = src;
