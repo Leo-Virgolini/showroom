@@ -46,6 +46,14 @@ public class PedidoShowroomItem {
     @Column(name = "precio_unitario", precision = 18, scale = 4)
     private BigDecimal precioUnitario;
 
+    /** PVP de lista CON IVA, ANTES de aplicar la forma de pago (a diferencia de
+     *  {@link #precioUnitario}, que es el precio final post-forma). Es la base que
+     *  el flujo de EDICIÓN de pedido necesita para no re-aplicar el recargo de la
+     *  forma. Null en pedidos creados antes de este campo (la edición los re-cotiza
+     *  a lista actual). */
+    @Column(name = "precio_lista_con_iva", precision = 18, scale = 4)
+    private BigDecimal precioListaConIva;
+
     /** Porcentaje de IVA del producto al momento de crear el pedido — necesario para
      *  reconstruir el desglose sin-IVA en la pantalla /pedidos sin depender del
      *  catálogo (que puede haber cambiado). */

@@ -8,6 +8,11 @@ public record PedidoItemDTO(
         Integer cantidad,
         /** Precio unitario CON IVA — el que se envió a DUX. */
         BigDecimal precioUnitario,
+        /** PVP de lista CON IVA, ANTES de aplicar la forma de pago (a diferencia de
+         *  {@code precioUnitario}, que es el precio final post-forma). Lo necesita
+         *  el flujo de edición de pedido para no re-aplicar el recargo de la forma.
+         *  Null en pedidos anteriores a esta columna. */
+        BigDecimal precioListaConIva,
         /** % de IVA aplicado en el momento del pedido. Null para pedidos viejos. */
         BigDecimal porcIva,
         /** Si el {@code precioUnitario} lleva IVA (lo decide el perfil del rubro

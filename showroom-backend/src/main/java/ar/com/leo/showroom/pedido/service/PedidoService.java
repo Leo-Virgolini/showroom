@@ -296,6 +296,7 @@ public class PedidoService {
                         it.getDescripcion(),
                         it.getCantidad(),
                         it.getPrecioUnitario(),
+                        it.getPrecioListaConIva(),
                         it.getPorcIva(),
                         it.getAplicaIva(),
                         it.getDescuentoPorcentaje(),
@@ -611,6 +612,7 @@ public class PedidoService {
                     .rubro(it.rubro())
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
+                    .precioListaConIva(precioBaseConIva)
                     .porcIva(porcIva)
                     .aplicaIva(aplicaIvaItem)
                     .descuentoPorcentaje(descItem.signum() > 0 ? descItem : null)
