@@ -18,7 +18,8 @@ export interface Usuario {
 /**
  * Cliente del API de autenticación + estado del usuario logueado.
  *
- * <p>Usa cookie de sesión (JSESSIONID) — no manejamos tokens en localStorage.
+ * <p>Usa cookie de sesión (SESSION, de Spring Session) — no manejamos tokens
+ * en localStorage.
  * Spring Security hace el resto. El frontend sólo:
  *  - Llama a /api/auth/login con username+password.
  *  - Lee /api/auth/me al iniciar para saber si ya hay sesión.

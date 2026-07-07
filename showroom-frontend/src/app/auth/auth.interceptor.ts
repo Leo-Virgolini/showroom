@@ -30,9 +30,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         const esEndpointAuth = url.endsWith('/api/auth/login') || url.endsWith('/api/auth/me');
         if (!esEndpointAuth) {
           auth.currentUser.set(null);
-          // Sólo redirigir si todavía no estamos en /login o /visor (rutas públicas).
+          // Sólo redirigir si todavía no estamos en una ruta pública (/login o
+          // cualquier visor: /visor/:username, /visor-presupuesto/:username).
           const ruta = router.url.split('?')[0];
-          if (ruta !== '/login' && ruta !== '/visor') {
+          if (ruta !== '/login' && !ruta.startsWith('/visor')) {
             router.navigate(['/login'], {
               queryParams: { redirect: ruta },
             });
