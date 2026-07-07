@@ -8,26 +8,29 @@
   </app-page-header>
 
   <!-- ============= CONTENIDO =============
-       Layout split 50/50 en lg+: izquierda buscador, derecha presupuesto
-       armado + datos cliente. En md y menores, vuelve a 1 columna apilada.
-       El padding-bottom se calcula dinámicamente con el alto real del
-       footer sticky (medido con ResizeObserver) + 16px de aire visual, así
-       el footer nunca tapa los últimos ítems aunque los chips de formas
-       hagan flex-wrap a 2 o más líneas. -->
+       Layout split 50/50 en lg+: izquierda los bloques del HOST (atención,
+       acciones de guardar/enviar/crear pedido, datos del cliente, modo de
+       cotización/forma de pago, banner de precios); derecha `carrito-editor`
+       (scan + tabla). En md y menores, vuelve a 1 columna apilada. El
+       padding-bottom se calcula dinámicamente con el alto real del footer
+       sticky (medido con ResizeObserver) + 16px de aire visual, así el
+       footer nunca tapa los últimos ítems aunque los chips de formas hagan
+       flex-wrap a 2 o más líneas. -->
   <main class="flex-1 p-3 sm:p-4 lg:p-6"
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ============= COLUMNA IZQUIERDA: scan + búsqueda =============
-           Sticky en lg+ para que el buscador esté siempre a la vista
-           mientras el operador arma el detalle a la derecha. No usamos
-           overflow-y-auto en la columna (provoca scrolls anidados con la
-           lista interna); la lista de resultados maneja su propio scroll
-           hasta el viewport disponible. -->
+      <!-- ============= COLUMNA IZQUIERDA: bloques del host =============
+           Atención (sesión + QR) + Acciones (guardar/enviar/crear pedido,
+           chip "Datos del cliente", modo de cotización/forma de pago del PDF
+           y el banner de "precios desactualizados"). Sticky en lg+ para que
+           quede siempre a la vista mientras el operador scrollea la tabla
+           del carrito a la derecha (que además tiene SU PROPIO buscador
+           sticky, ver `carrito-editor`). -->
       <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start">
 
         <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
-             de `carrito-editor` (arriba de su tabla, en la columna derecha).
+             de `carrito-editor` (con su propia tabla, en la columna derecha).
              Esta card queda solo con el contexto de la atención — sesión
              compartida con el showroom + QR del visor de presupuesto — que
              es un asunto del host, no del carrito. -->
@@ -67,242 +70,257 @@
           </ng-template>
         </p-card>
 
-      </div>
-
-      <!-- ============= COLUMNA DERECHA: detalle + datos cliente ============= -->
-      <div class="flex flex-col gap-4">
-
-        <!-- Tabla de items — card destacada con borde izquierdo verde KT
-             para diferenciarla visualmente del card naranja de búsqueda
-             (a la izquierda). El verde refuerza que estos productos ya
-             están "comprometidos" en el presupuesto. -->
-        <p-card class="kt-card kt-card-detalle">
+        <!-- Card "Acciones": estado de guardado + botones (generar/guardar,
+             enviar, crear pedido), el chip "Datos del cliente" (abre el
+             dialog unificado), el selector de modo de cotización/forma de
+             pago del PDF y el banner de "precios desactualizados" en
+             edición. Todo esto es del HOST — la tabla + scan viven en
+             `carrito-editor`, a la derecha. -->
+        <p-card class="kt-card">
           <ng-template #title>
-            <div class="flex flex-col gap-2.5">
-              <div class="kt-card-title kt-card-title-detalle">
-                <i class="pi pi-shopping-cart"></i>
-                <span>Detalle del presupuesto</span>
-                @if (items().length > 0) {
-                  <span class="kt-chip">
-                    <i class="pi pi-check-circle text-[#7EBA00]"></i>
-                    {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
-                  </span>
-                }
-                <!-- Actualizar precios: solo en edición. Trae los precios
-                     actuales del catálogo local (cache en BD, sin tocar DUX) y
-                     los pisa conservando cantidades y descuentos. Estilo pill
-                     verde KT coherente con el header del detalle. -->
-                @if (esModoEdicion() && hayItemsCatalogo()) {
-                  <button type="button"
-                    class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
-                           text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00]
-                           border border-[#FF6A00]/40 shadow-md ring-1 ring-[#FF861C]/30
-                           hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg hover:-translate-y-px
-                           active:translate-y-0 active:shadow-md
-                           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
-                           disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0
-                           transition-all duration-150"
-                    [disabled]="actualizandoPrecios()"
-                    (click)="actualizarPreciosDesdeCatalogo()"
-                    pTooltip="Trae los precios actuales del catálogo (no toca DUX). Conserva cantidades y descuentos."
-                    tooltipPosition="bottom"
-                    aria-label="Actualizar precios desde el catálogo">
-                    <i class="pi text-[0.7rem] transition-transform group-hover:rotate-180"
-                      [class.pi-refresh]="!actualizandoPrecios()"
-                      [class.pi-spinner]="actualizandoPrecios()"
-                      [class.pi-spin]="actualizandoPrecios()"></i>
-                    <span>{{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}</span>
-                  </button>
-                }
-              </div>
-              <div class="flex items-center gap-2 flex-wrap pt-2.5 border-t border-[#7EBA00]/25 dark:border-[#7EBA00]/15">
-                <!-- Acciones del presupuesto — en su propia fila (barra de
-                     acciones) separada del título con un divisor, para que los
-                     botones tengan aire y no queden apretados al envolverse. -->
-                @if (cargandoEdicion()) {
-                  <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
-                    <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
-                    Cargando presupuesto…
-                  </span>
-                }
-                @if (esModoEdicion() && hayCambiosSinGuardar()) {
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
-                    pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
-                    tooltipPosition="bottom" role="status" aria-live="polite">
-                    <i class="pi pi-exclamation-circle"></i>
-                    <span class="hidden sm:inline">Sin guardar</span>
-                  </span>
-                }
-                <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
-                  [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
-                  [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
-                  class="btn-kt-azul" [disabled]="!hayItems() || generandoPreview()"
-                  [loading]="generandoPreview()" (onClick)="previsualizar()"
-                  [pTooltip]="esModoEdicion()
-                      ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
-                      : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
-                  tooltipPosition="bottom" />
-                <p-button icon="pi pi-send"
-                  [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
-                  ariaLabel="Enviar por email"
-                  class="btn-kt-naranja" [disabled]="!hayItems()"
-                  (onClick)="abrirDialogEnviar()"
-                  [pTooltip]="esModoEdicion()
-                      ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
-                      : 'Generar y enviar el presupuesto al cliente'"
-                  tooltipPosition="bottom" />
-                @if (pedidoIdConvertido() != null) {
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
-                    [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
-                    tooltipPosition="bottom">
-                    <i class="pi pi-check-circle"></i>
-                    <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
-                  </span>
-                  @if (editadoTrasConvertir()) {
-                    <p-button icon="pi pi-refresh" label="Regenerar"
-                      ariaLabel="Regenerar el pedido en DUX con los cambios"
-                      severity="warn" [disabled]="hayCambiosSinGuardar()"
-                      (onClick)="abrirRegenerarPedido()"
-                      [pTooltip]="hayCambiosSinGuardar()
-                          ? 'Guardá los cambios antes de regenerar el pedido'
-                          : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
-                      tooltipPosition="bottom" />
-                  }
-                } @else {
-                  <p-button icon="pi pi-cart-arrow-down" label="Crear pedido"
-                    ariaLabel="Crear pedido en DUX a partir de este presupuesto"
-                    class="btn-kt-naranja-oscuro"
-                    [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
-                    (onClick)="abrirCrearPedido()"
-                    [pTooltip]="!esModoEdicion()
-                        ? 'Generá el presupuesto primero para poder crear el pedido'
-                        : (hayCambiosSinGuardar()
-                            ? 'Guardá los cambios antes de generar el pedido'
-                            : 'Crear pedido en DUX a partir de este presupuesto')"
-                    tooltipPosition="bottom" />
-                }
-
-                <!-- Chip "Datos del cliente" — empujado a la derecha de la
-                     barra (identidad, separada de las acciones). -->
-                <button type="button" class="kt-cliente-chip sm:ml-auto"
-                  (click)="abrirDialogCliente(null)"
-                  [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
-                  <i class="pi pi-user"></i>
-                  @if (clienteNombre().trim() || clienteTelefono().trim()) {
-                    <span class="truncate max-w-[12rem]">
-                      {{ clienteNombre().trim() || clienteTelefono() }}
-                    </span>
-                  } @else {
-                    <span>Sin datos del cliente</span>
-                  }
-                  <i class="pi pi-pencil text-[10px] opacity-70"></i>
-                </button>
-              </div>
+            <div class="kt-card-title">
+              <i class="pi pi-bolt"></i>
+              <span>Acciones</span>
             </div>
           </ng-template>
 
-          <!-- Selector "Modo de cotización" — solo visible si hay items.
-               Agregado = formato tabla detalle + total + formas globales.
-               Individual = 1 hoja del PDF por producto, con foto y formas
-               de pago calculadas sobre el precio de ESE ítem. -->
-          @if (items().length > 0) {
-            <div class="mb-3 p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center gap-3 flex-wrap">
-              <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                <i class="pi pi-file-pdf text-[#FF861C]"></i>
-                Modo de cotización
-              </span>
-              <p-selectButton
-                [options]="modoCotizacionOpciones"
-                [ngModel]="modoCotizacionValue()"
-                (ngModelChange)="setModoCotizacion($event)"
-                optionLabel="label" optionValue="value"
-                [allowEmpty]="false"
-                ariaLabelledBy="modo-cotizacion-label"
-                class="kt-modo-cotizacion">
-                <ng-template let-opt #item>
-                  <span class="flex items-center gap-1.5 px-1 font-bold">
-                    <i [class]="opt.icon"></i>
-                    <span>{{ opt.label }}</span>
-                  </span>
-                </ng-template>
-              </p-selectButton>
-              <span class="text-[11px] text-muted-color hidden sm:inline">
-                {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
-              </span>
-              <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
-                   efectivo por ítem + sección comparativa de formas. Al elegir
-                   una, todo el presupuesto se expresa en ella. No aplica en
-                   modo individual (cada ítem lista sus formas). -->
-              @if (!cotizacionIndividual()) {
-                <div class="inline-flex items-center gap-1.5">
-                  <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 shrink-0">
-                    <i class="pi pi-wallet text-[#FF861C]"></i>
-                    Forma de pago
-                  </span>
-                  <p-select
-                    [options]="formasPago()"
-                    [ngModel]="formaPagoSeleccionadaId()"
-                    (ngModelChange)="formaPagoSeleccionadaId.set($event)"
-                    optionLabel="nombre" optionValue="id"
-                    [showClear]="true"
-                    placeholder="Todas"
-                    appendTo="body"
-                    class="kt-forma-pago-pdf text-sm">
-                    <ng-template let-fp #selectedItem>
-                      <span class="inline-flex items-center gap-2">
-                        <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
-                        {{ fp.nombre }}
-                      </span>
-                    </ng-template>
-                    <ng-template let-fp #item>
-                      <span class="inline-flex items-center gap-2">
-                        <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
-                        {{ fp.nombre }}
-                      </span>
-                    </ng-template>
-                  </p-select>
-                </div>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              @if (cargandoEdicion()) {
+                <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
+                  <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
+                  Cargando presupuesto…
+                </span>
               }
-            </div>
-          }
+              @if (esModoEdicion() && hayCambiosSinGuardar()) {
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
+                  pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
+                  tooltipPosition="bottom" role="status" aria-live="polite">
+                  <i class="pi pi-exclamation-circle"></i>
+                  <span class="hidden sm:inline">Sin guardar</span>
+                </span>
+              }
+              <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
+                [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                class="btn-kt-azul" [disabled]="!hayItems() || generandoPreview()"
+                [loading]="generandoPreview()" (onClick)="previsualizar()"
+                [pTooltip]="esModoEdicion()
+                    ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+                    : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
+                tooltipPosition="bottom" />
+              <p-button icon="pi pi-send"
+                [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
+                ariaLabel="Enviar por email"
+                class="btn-kt-naranja" [disabled]="!hayItems()"
+                (onClick)="abrirDialogEnviar()"
+                [pTooltip]="esModoEdicion()
+                    ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
+                    : 'Generar y enviar el presupuesto al cliente'"
+                tooltipPosition="bottom" />
+              @if (pedidoIdConvertido() != null) {
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
+                  [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
+                  tooltipPosition="bottom">
+                  <i class="pi pi-check-circle"></i>
+                  <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
+                </span>
+                @if (editadoTrasConvertir()) {
+                  <p-button icon="pi pi-refresh" label="Regenerar"
+                    ariaLabel="Regenerar el pedido en DUX con los cambios"
+                    severity="warn" [disabled]="hayCambiosSinGuardar()"
+                    (onClick)="abrirRegenerarPedido()"
+                    [pTooltip]="hayCambiosSinGuardar()
+                        ? 'Guardá los cambios antes de regenerar el pedido'
+                        : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
+                    tooltipPosition="bottom" />
+                }
+              } @else {
+                <p-button icon="pi pi-cart-arrow-down" label="Crear pedido"
+                  ariaLabel="Crear pedido en DUX a partir de este presupuesto"
+                  class="btn-kt-naranja-oscuro"
+                  [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
+                  (onClick)="abrirCrearPedido()"
+                  [pTooltip]="!esModoEdicion()
+                      ? 'Generá el presupuesto primero para poder crear el pedido'
+                      : (hayCambiosSinGuardar()
+                          ? 'Guardá los cambios antes de generar el pedido'
+                          : 'Crear pedido en DUX a partir de este presupuesto')"
+                  tooltipPosition="bottom" />
+              }
 
-          <!-- Banner "precios desactualizados" — solo en edición, cuando al
-               abrir se detectó que el catálogo cambió respecto a lo guardado.
-               Reúne el conteo + CTA para traer los precios actuales. Las filas
-               afectadas llevan además un pill con el precio actual. -->
-          @if (esModoEdicion() && cantidadPreciosCambiados() > 0) {
-            <div class="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50
-                        dark:bg-amber-900/20 dark:border-amber-700/50
-                        flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
-              <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
-              <div class="flex-1 min-w-[12rem]">
-                <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
-                  {{ cantidadPreciosCambiados() }}
-                  {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
-                  en el catálogo desde que se guardó este presupuesto
-                </p>
-                <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
-                  Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
-                  conservando cantidades y descuentos.
-                </p>
-              </div>
-              <button type="button"
-                class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
-                       text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00] shadow-md
-                       hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg
-                       focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
-                       disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
-                [disabled]="actualizandoPrecios()"
-                (click)="actualizarPreciosDesdeCatalogo()"
-                aria-label="Actualizar precios desde el catálogo">
-                <i class="pi"
-                  [class.pi-refresh]="!actualizandoPrecios()"
-                  [class.pi-spinner]="actualizandoPrecios()"
-                  [class.pi-spin]="actualizandoPrecios()"></i>
-                {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
+              <!-- Chip "Datos del cliente" — empujado a la derecha de la
+                   barra (identidad, separada de las acciones). -->
+              <button type="button" class="kt-cliente-chip sm:ml-auto"
+                (click)="abrirDialogCliente(null)"
+                [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
+                <i class="pi pi-user"></i>
+                @if (clienteNombre().trim() || clienteTelefono().trim()) {
+                  <span class="truncate max-w-[12rem]">
+                    {{ clienteNombre().trim() || clienteTelefono() }}
+                  </span>
+                } @else {
+                  <span>Sin datos del cliente</span>
+                }
+                <i class="pi pi-pencil text-[10px] opacity-70"></i>
               </button>
             </div>
-          }
+
+            <!-- Selector "Modo de cotización" — solo visible si hay items.
+                 Agregado = formato tabla detalle + total + formas globales.
+                 Individual = 1 hoja del PDF por producto, con foto y formas
+                 de pago calculadas sobre el precio de ESE ítem. -->
+            @if (items().length > 0) {
+              <div class="p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center gap-3 flex-wrap">
+                <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+                  <i class="pi pi-file-pdf text-[#FF861C]"></i>
+                  Modo de cotización
+                </span>
+                <p-selectButton
+                  [options]="modoCotizacionOpciones"
+                  [ngModel]="modoCotizacionValue()"
+                  (ngModelChange)="setModoCotizacion($event)"
+                  optionLabel="label" optionValue="value"
+                  [allowEmpty]="false"
+                  ariaLabelledBy="modo-cotizacion-label"
+                  class="kt-modo-cotizacion">
+                  <ng-template let-opt #item>
+                    <span class="flex items-center gap-1.5 px-1 font-bold">
+                      <i [class]="opt.icon"></i>
+                      <span>{{ opt.label }}</span>
+                    </span>
+                  </ng-template>
+                </p-selectButton>
+                <span class="text-[11px] text-muted-color hidden sm:inline">
+                  {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
+                </span>
+                <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
+                     efectivo por ítem + sección comparativa de formas. Al elegir
+                     una, todo el presupuesto se expresa en ella. No aplica en
+                     modo individual (cada ítem lista sus formas). -->
+                @if (!cotizacionIndividual()) {
+                  <div class="inline-flex items-center gap-1.5">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 shrink-0">
+                      <i class="pi pi-wallet text-[#FF861C]"></i>
+                      Forma de pago
+                    </span>
+                    <p-select
+                      [options]="formasPago()"
+                      [ngModel]="formaPagoSeleccionadaId()"
+                      (ngModelChange)="formaPagoSeleccionadaId.set($event)"
+                      optionLabel="nombre" optionValue="id"
+                      [showClear]="true"
+                      placeholder="Todas"
+                      appendTo="body"
+                      class="kt-forma-pago-pdf text-sm">
+                      <ng-template let-fp #selectedItem>
+                        <span class="inline-flex items-center gap-2">
+                          <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
+                          {{ fp.nombre }}
+                        </span>
+                      </ng-template>
+                      <ng-template let-fp #item>
+                        <span class="inline-flex items-center gap-2">
+                          <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
+                          {{ fp.nombre }}
+                        </span>
+                      </ng-template>
+                    </p-select>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Banner "precios desactualizados" — solo en edición, cuando al
+                 abrir se detectó que el catálogo cambió respecto a lo guardado.
+                 Reúne el conteo + CTA para traer los precios actuales. Las filas
+                 afectadas llevan además un pill con el precio actual. -->
+            @if (esModoEdicion() && cantidadPreciosCambiados() > 0) {
+              <div class="p-3 rounded-lg border border-amber-300 bg-amber-50
+                          dark:bg-amber-900/20 dark:border-amber-700/50
+                          flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
+                <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
+                <div class="flex-1 min-w-[12rem]">
+                  <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
+                    {{ cantidadPreciosCambiados() }}
+                    {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
+                    en el catálogo desde que se guardó este presupuesto
+                  </p>
+                  <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
+                    Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
+                    conservando cantidades y descuentos.
+                  </p>
+                </div>
+                <button type="button"
+                  class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                         text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00] shadow-md
+                         hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg
+                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                         disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
+                  [disabled]="actualizandoPrecios()"
+                  (click)="actualizarPreciosDesdeCatalogo()"
+                  aria-label="Actualizar precios desde el catálogo">
+                  <i class="pi"
+                    [class.pi-refresh]="!actualizandoPrecios()"
+                    [class.pi-spinner]="actualizandoPrecios()"
+                    [class.pi-spin]="actualizandoPrecios()"></i>
+                  {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
+                </button>
+              </div>
+            }
+          </div>
+        </p-card>
+
+      </div>
+
+      <!-- ============= COLUMNA DERECHA: carrito-editor =============
+           Scan/búsqueda (sticky dentro del propio componente) + tabla
+           editable de ítems — todo vive en `app-carrito-editor`, autónomo. -->
+      <div class="flex flex-col gap-4">
+
+        <!-- Tabla de items — card destacada con borde izquierdo verde KT
+             para diferenciarla visualmente del resto de las cards del host
+             (naranja, a la izquierda). El verde refuerza que estos productos
+             ya están "comprometidos" en el presupuesto. -->
+        <p-card class="kt-card kt-card-detalle">
+          <ng-template #title>
+            <div class="kt-card-title kt-card-title-detalle">
+              <i class="pi pi-shopping-cart"></i>
+              <span>Detalle del presupuesto</span>
+              @if (items().length > 0) {
+                <span class="kt-chip">
+                  <i class="pi pi-check-circle text-[#7EBA00]"></i>
+                  {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
+                </span>
+              }
+              <!-- Actualizar precios: solo en edición. Trae los precios
+                   actuales del catálogo local (cache en BD, sin tocar DUX) y
+                   los pisa conservando cantidades y descuentos. Estilo pill
+                   verde KT coherente con el header del detalle. -->
+              @if (esModoEdicion() && hayItemsCatalogo()) {
+                <button type="button"
+                  class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                         text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00]
+                         border border-[#FF6A00]/40 shadow-md ring-1 ring-[#FF861C]/30
+                         hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg hover:-translate-y-px
+                         active:translate-y-0 active:shadow-md
+                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                         disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0
+                         transition-all duration-150"
+                  [disabled]="actualizandoPrecios()"
+                  (click)="actualizarPreciosDesdeCatalogo()"
+                  pTooltip="Trae los precios actuales del catálogo (no toca DUX). Conserva cantidades y descuentos."
+                  tooltipPosition="bottom"
+                  aria-label="Actualizar precios desde el catálogo">
+                  <i class="pi text-[0.7rem] transition-transform group-hover:rotate-180"
+                    [class.pi-refresh]="!actualizandoPrecios()"
+                    [class.pi-spinner]="actualizandoPrecios()"
+                    [class.pi-spin]="actualizandoPrecios()"></i>
+                  <span>{{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}</span>
+                </button>
+              }
+            </div>
+          </ng-template>
 
           <app-carrito-editor
             [(items)]="items"

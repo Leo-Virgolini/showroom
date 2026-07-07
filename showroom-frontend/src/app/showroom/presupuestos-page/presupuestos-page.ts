@@ -22,7 +22,6 @@ import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { DialogModule } from 'primeng/dialog';
 import { IconFieldModule } from 'primeng/iconfield';
-import { ImageModule } from 'primeng/image';
 import { InputIconModule } from 'primeng/inputicon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -95,7 +94,6 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
     CardModule,
     DialogModule,
     IconFieldModule,
-    ImageModule,
     InputIconModule,
     InputMaskModule,
     InputNumberModule,
@@ -439,10 +437,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     porcIva?: number | null;
     rubro?: string | null;
   }): number {
-    const forma = this.formaPagoSeleccionada();
-    if (!forma) return this.precioMostrado(it);
-    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(it.rubro));
-    return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
+    return this.precioPerfil.precioVisualItem(it, this.formaPagoSeleccionada());
   }
 
   /** Subtotal BRUTO en la forma elegida (sin descuentos individuales). Con
@@ -1179,16 +1174,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return (el as HTMLElement).isContentEditable === true;
   }
 
-  /** True si el producto es de maquinaria (rubro de la lista configurable que
-   *  cotiza sin IVA) — marca las filas con un badge/resaltado. Mismo criterio
-   *  configurable que el cálculo y el backend. */
-  esRubroMaquinaria(rubro: string | null | undefined): boolean {
-    return this.precioPerfil.rubroCotizaSinIva(rubro);
-  }
-
   /** Precio de REFERENCIA unitario a mostrar para un producto en la lista/detalle:
    *  el precio con la forma de pago destacada según el rubro del ítem — mismo
-   *  criterio que el scan/visor del showroom. Delega en el servicio compartido. */
+   *  criterio que el scan/visor del showroom. Delega en el servicio compartido
+   *  (única fuente, ver {@link PrecioPerfilService.precioMostrado}). */
   precioMostrado(
     r: {
       pvpKtGastroConIva: number | null;
@@ -1197,12 +1186,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       rubro?: string | null;
     },
   ): number {
-    return this.precioPerfil.precioReferencia({
-      pvpKtGastroConIva: r.pvpKtGastroConIva,
-      pvpKtGastroSinIva: r.pvpKtGastroSinIva,
-      porcIva: r.porcIva ?? null,
-      rubro: r.rubro,
-    });
+    return this.precioPerfil.precioMostrado(r);
   }
 
   // ============================================================
@@ -1613,14 +1597,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private notificarMutacion(severity: 'success' | 'info' | 'warn', summary: string, detail: string): void {
     this.toast.add({ severity, summary, detail, life: 1000 });
     this.hayCambiosSinGuardar.set(true);
-  }
-
-  /** Etiqueta corta del ítem para usar en los toasts: descripción truncada o
-   *  el SKU como fallback. Mantiene los toasts legibles sin desbordar. */
-  private etiquetaItem(it: { descripcion?: string | null; sku: string }): string {
-    const desc = (it.descripcion ?? '').trim();
-    if (!desc) return it.sku;
-    return desc.length > 40 ? `${desc.slice(0, 40)}…` : desc;
   }
 
   /** Sugerencias del autocomplete del email — delega en el helper

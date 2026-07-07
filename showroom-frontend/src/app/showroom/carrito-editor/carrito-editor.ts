@@ -29,7 +29,6 @@ import { TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
 import { CambioPrecio, CatalogoItem, FormaPago, PresupuestoItem, ScanResult } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
-import { precioPorForma } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import {
@@ -37,6 +36,7 @@ import {
   ProductoGenericoDialog,
 } from '../producto-generico-dialog/producto-generico-dialog';
 import { seleccionarTextoAlEnfocar } from '../dom.utils';
+import { etiquetaItem } from '../item-etiqueta.util';
 import { toastError } from '../toast.utils';
 
 /** Emitido tras cada mutación de {@link CarritoEditor.items} (agregar,
@@ -102,8 +102,10 @@ export class CarritoEditor {
   private readonly destroyRef = inject(DestroyRef);
 
   /** Lista de ítems — two-way con el host. Solo se reemplaza el array al
-   *  AGREGAR o ELIMINAR ítems; cantidad/descuento mutan el objeto in-place
-   *  (ver {@link itemsTick}). */
+   *  AGREGAR o ELIMINAR ítems; cantidad/descuento mutan el objeto in-place (el
+   *  propio evento de input dispara la CD del componente y refresca la fila —
+   *  no hace falta un tick propio; el host sí tiene el suyo para sus
+   *  `computed` de totales). */
   readonly items = model<PresupuestoItem[]>([]);
 
   /** Forma de pago elegida en el toolbar del host (null = "Todas" / precio de
@@ -464,7 +466,7 @@ export class CarritoEditor {
       this.items.set(actuales.map((it) =>
         it.sku === res.sku ? { ...it, cantidad: nuevaCantidad } : it));
       this.emitirMutacion('info', 'Cantidad actualizada',
-        `${this.etiquetaItem(existente)}: ${existente.cantidad}u → ${nuevaCantidad}u`);
+        `${etiquetaItem(existente)}: ${existente.cantidad}u → ${nuevaCantidad}u`);
       return;
     }
     const uid = `${res.sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -476,17 +478,11 @@ export class CarritoEditor {
     };
     this.items.set([...actuales, nuevo]);
     this.emitirMutacion('success', 'Producto agregado',
-      `${this.etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
+      `${etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
   }
 
-  /** Contador que se incrementa cuando un ítem se muta in-place (no cambia la
-   *  referencia del array {@link items}). Uso interno del componente — el
-   *  host tiene su PROPIO tick, independiente, que bumpea al recibir
-   *  {@link mutacion}. */
-  private readonly itemsTick = signal(0);
-
   /** Orden de visualización del detalle. `null` = orden de carga. Solo afecta
-   *  el render — no depende de {@link itemsTick} a propósito: editar
+   *  el render — no depende de la mutación in-place a propósito: editar
    *  cantidad/descuento no debe reordenar la grilla en vivo. */
   readonly ordenItems = signal<{ campo: 'producto' | 'precio'; dir: 'asc' | 'desc' } | null>(null);
 
@@ -531,7 +527,8 @@ export class CarritoEditor {
   }
 
   /** Precio de REFERENCIA unitario de un producto (forma destacada según el
-   *  perfil de su rubro) — mismo criterio que scan/visor/showroom. */
+   *  perfil de su rubro) — mismo criterio que scan/visor/showroom. Delega en
+   *  el servicio compartido (única fuente, ver {@link PrecioPerfilService.precioMostrado}). */
   precioMostrado(
     r: {
       pvpKtGastroConIva: number | null;
@@ -540,26 +537,20 @@ export class CarritoEditor {
       rubro?: string | null;
     },
   ): number {
-    return this.precioPerfil.precioReferencia({
-      pvpKtGastroConIva: r.pvpKtGastroConIva,
-      pvpKtGastroSinIva: r.pvpKtGastroSinIva,
-      porcIva: r.porcIva ?? null,
-      rubro: r.rubro,
-    });
+    return this.precioPerfil.precioMostrado(r);
   }
 
   /** Precio unitario a MOSTRAR según la forma elegida en el host; con "Todas"
-   *  cae al precio de referencia ({@link precioMostrado}). Solo visual. */
+   *  cae al precio de referencia ({@link precioMostrado}). Solo visual. Delega
+   *  en el servicio compartido (única fuente, ver
+   *  {@link PrecioPerfilService.precioVisualItem}). */
   precioVisualItem(it: {
     pvpKtGastroConIva: number | null;
     pvpKtGastroSinIva: number | null;
     porcIva?: number | null;
     rubro?: string | null;
   }): number {
-    const forma = this.formaPagoSeleccionada();
-    if (!forma) return this.precioMostrado(it);
-    const perfil = this.precioPerfil.perfilForma(forma, this.esRubroMaquinaria(it.rubro));
-    return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
+    return this.precioPerfil.precioVisualItem(it, this.formaPagoSeleccionada());
   }
 
   /** Subtotal por línea EN LA FORMA elegida (solo visual): precio visual ×
@@ -600,9 +591,8 @@ export class CarritoEditor {
     if (it.cantidad === valor) return;
     const prev = it.cantidad;
     it.cantidad = valor;
-    this.itemsTick.update((v) => v + 1);
     this.emitirMutacion('info', 'Cantidad actualizada',
-      `${this.etiquetaItem(it)}: ${prev}u → ${valor}u`);
+      `${etiquetaItem(it)}: ${prev}u → ${valor}u`);
   }
 
   actualizarDescuento(it: PresupuestoItem, valor: number): void {
@@ -610,9 +600,8 @@ export class CarritoEditor {
     if (valor > 100) valor = 100;
     if ((it.descuentoPorcentaje ?? 0) === valor) return;
     it.descuentoPorcentaje = valor;
-    this.itemsTick.update((v) => v + 1);
     this.emitirMutacion('info', 'Descuento actualizado',
-      `${this.etiquetaItem(it)}: ${valor}%`);
+      `${etiquetaItem(it)}: ${valor}%`);
   }
 
   /** Quita un ítem del detalle. NO toca el map de "cambios de precio" del
@@ -621,7 +610,7 @@ export class CarritoEditor {
     const it = this.items().find((x) => x.uid === uid);
     this.items.set(this.items().filter((x) => x.uid !== uid));
     if (it) {
-      this.emitirMutacion('warn', 'Producto quitado', this.etiquetaItem(it));
+      this.emitirMutacion('warn', 'Producto quitado', etiquetaItem(it));
     }
   }
 
@@ -700,7 +689,7 @@ export class CarritoEditor {
     this.items.set([...this.items(), nuevo]);
     this.mostrarDialogGenerico.set(false);
     this.emitirMutacion('success', 'Producto genérico agregado',
-      `${this.etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
+      `${etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
   }
 
   /** Devuelve el foco al input de scan — incondicional (sin guard táctil): la
@@ -722,13 +711,5 @@ export class CarritoEditor {
    *  pantalla. El host es la única fuente del toast + `hayCambiosSinGuardar`. */
   private emitirMutacion(severity: 'success' | 'info' | 'warn', summary: string, detail: string): void {
     this.mutacion.emit({ severity, summary, detail });
-  }
-
-  /** Etiqueta corta del ítem para los toasts: descripción truncada o el SKU
-   *  como fallback. */
-  private etiquetaItem(it: { descripcion?: string | null; sku: string }): string {
-    const desc = (it.descripcion ?? '').trim();
-    if (!desc) return it.sku;
-    return desc.length > 40 ? `${desc.slice(0, 40)}…` : desc;
   }
 }
