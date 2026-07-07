@@ -38,4 +38,10 @@ describe('pedidoItemsAPresupuestoItems', () => {
     const [r] = pedidoItemsAPresupuestoItems([{ ...base, sku: '9999990' }], '9999990');
     expect(r.generico).toBe(true);
   });
+
+  it('aplicaIva=false: precioUnitario ya es sin IVA, reconstruye el con IVA', () => {
+    const [r] = pedidoItemsAPresupuestoItems([{ ...base, aplicaIva: false, precioUnitario: 1000, porcIva: 21 }]);
+    expect(r.pvpKtGastroSinIva).toBeCloseTo(1000, 6);
+    expect(r.pvpKtGastroConIva).toBeCloseTo(1210, 6);
+  });
 });

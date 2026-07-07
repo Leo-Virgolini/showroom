@@ -2,19 +2,25 @@ import { PedidoItemDetalle, PresupuestoItem } from './models';
 
 /**
  * Hidrata los ítems de un pedido (`PedidoItemDetalle`) como `PresupuestoItem`
- * para el `carrito-editor`. Congela el precio del pedido: `precioUnitario`
- * (con IVA) → `pvpKtGastroConIva`, y deriva `pvpKtGastroSinIva` desde `porcIva`.
- * Los campos de catálogo que el pedido no guarda (`stockTotal`, `habilitado`,
- * `sincronizadoAt`) se defaultean; el `uid` es único por índice+sku.
+ * para el `carrito-editor`. Congela el precio del pedido: `precioUnitario` es
+ * CON IVA salvo cuando `aplicaIva === false` (perfil sin IVA, p.ej. maquinaria),
+ * donde el valor persistido YA es sin IVA; en ese caso se reconstruye el
+ * con-IVA multiplicando por el factor de `porcIva`. Los campos de catálogo que
+ * el pedido no guarda (`stockTotal`, `habilitado`, `sincronizadoAt`) se
+ * defaultean; el `uid` es único por índice+sku.
  */
 export function pedidoItemsAPresupuestoItems(
   items: PedidoItemDetalle[],
   skuGenerico?: string | null,
 ): PresupuestoItem[] {
   return items.map((it, i) => {
-    const conIva = it.precioUnitario ?? 0;
     const porcIva = it.porcIva;
-    const sinIva = porcIva != null && porcIva > 0 ? conIva / (1 + porcIva / 100) : conIva;
+    const factor = porcIva != null && porcIva > 0 ? 1 + porcIva / 100 : 1;
+    const precio = it.precioUnitario ?? 0;
+    // `precioUnitario` es CON IVA salvo cuando aplicaIva === false (perfil sin IVA,
+    // p.ej. maquinaria): ahí el valor persistido YA es sin IVA y se reconstruye el con-IVA.
+    const conIva = it.aplicaIva === false ? precio * factor : precio;
+    const sinIva = it.aplicaIva === false ? precio : precio / factor;
     return {
       sku: it.sku,
       descripcion: it.descripcion,
