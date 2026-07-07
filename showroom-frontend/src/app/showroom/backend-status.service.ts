@@ -311,7 +311,9 @@ export class BackendStatusService {
   }
 
   private iniciarSSE(): void {
-    if (typeof window === 'undefined') return; // SSR safety
+    // SSR o entornos sin soporte de SSE (p. ej. el runner de tests con jsdom,
+    // que provee `window` pero no `EventSource`): no intentamos abrir el stream.
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
     if (this.source) return;
 
     // Si el componente VisorPage nos enchufó al canal de un operador, usamos
