@@ -29,11 +29,11 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { TextareaModule } from 'primeng/textarea';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TooltipModule } from 'primeng/tooltip';
 import {
+  CambioPrecio,
   CatalogoItem,
   ClienteAutocompletar,
   EnviarPresupuestoRequest,
@@ -59,10 +59,7 @@ import { AuthService } from '../../auth/auth.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
 import { CrearPedidoDialog } from '../crear-pedido-dialog/crear-pedido-dialog';
-import {
-  ProductoGenericoData,
-  ProductoGenericoDialog,
-} from '../producto-generico-dialog/producto-generico-dialog';
+import { CarritoEditor, CarritoMutacion } from '../carrito-editor/carrito-editor';
 import { abrirPdfEnPreview } from '../download.utils';
 import { crearTelefonoLookup } from '../telefono-lookup.util';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
@@ -107,12 +104,11 @@ import { HasUnsavedChanges } from './unsaved-changes.guard';
     InputTextModule,
     ProgressSpinnerModule,
     SelectModule,
-    TableModule,
     TextareaModule,
     SelectButtonModule,
     TooltipModule,
     CrearPedidoDialog,
-    ProductoGenericoDialog,
+    CarritoEditor,
     PageHeader,
     QrCelularDialog,
     SyncButton,
@@ -225,50 +221,13 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  el foco con cada keystroke al recibir un writeValue desde afuera. */
   readonly items = signal<PresupuestoItem[]>([]);
   /** Contador que se incrementa cuando un ítem se muta in-place (no cambia la
-   *  referencia del array {@link items}). Los {@link computed} que dependen
-   *  de propiedades de los ítems (totales) leen este signal para forzar el
-   *  recompute sin necesidad de reemplazar el array. */
+   *  referencia del array {@link items}) — bumpeado desde {@link onCarritoMutacion}
+   *  cuando `carrito-editor` muta cantidad/descuento in-place. Los
+   *  {@link computed} que dependen de propiedades de los ítems (totales) leen
+   *  este signal para forzar el recompute sin necesidad de reemplazar el
+   *  array. Independiente del tick interno de `carrito-editor` (cada uno CD
+   *  su propio árbol). */
   private readonly itemsTick = signal(0);
-
-  /** Orden de visualización del detalle. {@code null} = orden de carga. Solo
-   *  afecta el render; el presupuesto generado usa {@link items} en su orden
-   *  original. NO depende de {@link itemsTick} a propósito: editar cantidad/
-   *  descuento no debe reordenar la grilla en vivo (robaría el foco del input). */
-  readonly ordenItems = signal<{ campo: 'producto' | 'precio'; dir: 'asc' | 'desc' } | null>(null);
-
-  /** Detalle ordenado para el render. Copia ordenada por descripción (producto)
-   *  o por el precio de referencia mostrado (con el perfil del rubro). */
-  readonly itemsOrdenados = computed<PresupuestoItem[]>(() => {
-    const lista = this.items();
-    const orden = this.ordenItems();
-    if (!orden) return lista;
-    const factor = orden.dir === 'asc' ? 1 : -1;
-    return [...lista].sort((a, b) => {
-      if (orden.campo === 'producto') {
-        return (a.descripcion ?? '').localeCompare(b.descripcion ?? '', 'es', { sensitivity: 'base' }) * factor;
-      }
-      return (this.precioMostrado(a) - this.precioMostrado(b)) * factor;
-    });
-  });
-
-  /** Cicla el orden del detalle para un campo: asc → desc → sin orden (carga). */
-  ordenarItemsPor(campo: 'producto' | 'precio'): void {
-    const actual = this.ordenItems();
-    if (!actual || actual.campo !== campo) {
-      this.ordenItems.set({ campo, dir: 'asc' });
-    } else if (actual.dir === 'asc') {
-      this.ordenItems.set({ campo, dir: 'desc' });
-    } else {
-      this.ordenItems.set(null);
-    }
-  }
-
-  /** Ícono del encabezado de orden de un campo: flecha según dirección, o neutro. */
-  iconoOrdenItems(campo: 'producto' | 'precio'): string {
-    const o = this.ordenItems();
-    if (!o || o.campo !== campo) return 'pi pi-sort-alt';
-    return o.dir === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down';
-  }
 
   // ------------------------------------------------------------
   // Datos del cliente / observaciones
@@ -404,13 +363,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  componente solo mantiene la visibilidad. */
   readonly mostrarDialogCrearPedido = signal(false);
 
-  /** Estado del dialog de "+ Producto genérico" — para cargar líneas que no
-   *  están en el catálogo (SKU comodín de DUX). El SKU concreto lo expone el
-   *  backend en /health (ver {@link BackendStatusService.skuProductoGenerico}).
-   *  Si está null, el botón en la UI queda oculto. */
-  readonly mostrarDialogGenerico = signal(false);
-  /** SKU comodín derivado del estado del backend. El template lo usa para
-   *  mostrar/ocultar el botón "+ Producto genérico". */
+  /** SKU comodín derivado del estado del backend — usado acá SOLO para el
+   *  guard de {@link agregarItem} (rechazar el escaneo directo del comodín).
+   *  El botón "+ Producto genérico" y su dialog viven ahora en
+   *  `carrito-editor`, que lee el mismo signal por su cuenta (inyecta
+   *  {@link BackendStatusService} directo). */
   readonly skuGenerico = this.backendStatus.skuProductoGenerico;
 
   /** Id del pedido DUX al que se convirtió este presupuesto durante la
@@ -507,13 +464,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   /** Cantidad de ítems cuyo precio/IVA cambió respecto al guardado — el
    *  banner de aviso se muestra solo cuando es > 0 en modo edición. */
   readonly cantidadPreciosCambiados = computed(() => this.cambiosPrecio().size);
-
-  /** Cambio de precio detectado para un ítem (por uid), o undefined si su
-   *  precio sigue igual al guardado. El template lo usa para pintar el pill
-   *  "precio desactualizado" en la fila. */
-  cambioPrecioDe(uid: string): CambioPrecio | undefined {
-    return this.cambiosPrecio().get(uid);
-  }
 
   /** Objeto de la forma de pago elegida (null = "Todas"). */
   readonly formaPagoSeleccionada = computed<FormaPago | null>(() => {
@@ -1253,12 +1203,14 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   /** True si hay algún dialog/overlay propio abierto. En ese caso no robamos
    *  el foco hacia el scan que está detrás del overlay (el operador está
-   *  trabajando dentro del dialog). */
+   *  trabajando dentro del dialog). El dialog "Producto genérico" ya NO se
+   *  chequea acá — vive dentro de `carrito-editor`, que emite su propio
+   *  output {@code dialogCerrado} cuando se cierra (ver
+   *  {@link onCarritoDialogCerrado}). */
   private algunDialogAbierto(): boolean {
     return (
       this.mostrarDialogCliente() ||
       this.mostrarDialogCrearPedido() ||
-      this.mostrarDialogGenerico() ||
       this.productoPreview() != null
     );
   }
@@ -1585,123 +1537,31 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   }
 
   // ============================================================
-  // Producto genérico — alta a mano de una línea con el SKU comodín de DUX.
-  // A diferencia del flujo normal, no consulta el catálogo: el operador
-  // tipea descripción + precio + IVA + cantidad, y cada confirmación crea
-  // una línea NUEVA (no se mergea con otros genéricos aunque compartan SKU).
+  // carrito-editor — tabla editable + "Producto genérico" (agregar/editar/
+  // quitar/vaciar). Este host solo reacciona a lo que el componente emite;
+  // la mutación real de `items` la hace el componente (two-way model).
   // ============================================================
-  abrirGenerico(): void {
-    if (!this.skuGenerico()) {
-      this.warn('El SKU comodín no está configurado en el backend.');
-      return;
-    }
-    this.mostrarDialogGenerico.set(true);
-  }
-
-  onAgregarGenerico(data: ProductoGenericoData): void {
-    const sku = this.skuGenerico();
-    if (!sku) {
-      this.warn('El SKU comodín no está configurado en el backend.');
-      return;
-    }
-    const uid = `gen-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    // El precioConIva s/IVA se calcula sobre la marcha — el operador tipea
-    // SIEMPRE c/IVA en el dialog. La descripción se duplica como comentarios
-    // para que viaje al DUX cuando el presupuesto se transforme en pedido.
-    // El rubro se setea a MAQUINAS INDUSTRIALES solo si el operador marcó
-    // "Es maquinaria" — eso hace que la helper `rubroCotizaSinIva` lo
-    // saque automáticamente del descuento por escala, lo mismo que pasa con
-    // las máquinas reales del catálogo.
-    const sinIva = data.precioConIva / (1 + data.porcIva / 100);
-    const nuevo: PresupuestoItem = {
-      sku,
-      descripcion: data.descripcion,
-      rubro: data.maquinaria ? 'MAQUINAS INDUSTRIALES' : null,
-      pvpKtGastroConIva: data.precioConIva,
-      pvpKtGastroSinIva: sinIva,
-      porcIva: data.porcIva,
-      stockTotal: null,
-      habilitado: true,
-      imagenUrl: null,
-      sincronizadoAt: new Date().toISOString(),
-      uid,
-      cantidad: data.cantidad,
-      descuentoPorcentaje: 0,
-      generico: true,
-      comentarios: data.descripcion,
-    };
-    this.items.set([...this.items(), nuevo]);
-    this.mostrarDialogGenerico.set(false);
-    this.notificarMutacion('success', 'Producto genérico agregado',
-      `${this.etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
-    // El refoco al cerrar el dialog lo dispara el effect unificado del
-    // constructor (respetando el guard táctil), no hace falta llamarlo acá.
-  }
-
-  // ============================================================
-  // Mutaciones de items
-  //
-  // Las ediciones inline (cantidad/descuento) MUTAN el objeto in-place y
-  // disparan `itemsTick` para que los totales se recalculen sin reemplazar
-  // el array. Si reemplazamos el array, p-table recrea el binding de cada
-  // fila y p-inputNumber pierde el foco con cada keystroke.
-  // ============================================================
-  actualizarCantidad(it: PresupuestoItem, valor: number): void {
-    if (!Number.isFinite(valor) || valor <= 0) valor = 1;
-    // No se topea al stock: el presupuesto no descuenta stock. Si la cantidad
-    // supera el disponible, el detalle muestra un pill amarillo informativo.
-    if (it.cantidad === valor) return;
-    const prev = it.cantidad;
-    it.cantidad = valor;
+  /** Bumpea el tick propio (recalcula totales/formas) y replica el toast +
+   *  `hayCambiosSinGuardar` con la MISMA data que ya usó el componente para
+   *  su propio toast interno (no se re-emite acá para no duplicar avisos:
+   *  el `MessageService` de esta app es un singleton compartido). */
+  onCarritoMutacion(ev: CarritoMutacion): void {
     this.itemsTick.update((v) => v + 1);
-    this.notificarMutacion('info', 'Cantidad actualizada',
-      `${this.etiquetaItem(it)}: ${prev}u → ${valor}u`);
+    this.notificarMutacion(ev.severity, ev.summary, ev.detail);
   }
 
-  /** Tope de cantidad para el input. NO se topea al stock: el presupuesto no
-   *  descuenta stock, así que el operador puede cargar la cantidad que quiera y
-   *  un pill amarillo le avisa cuando excede el disponible. Cap alto solo para
-   *  evitar cantidades absurdas. */
-  cantidadMaximaDe(_it: PresupuestoItem): number {
-    return 9999;
-  }
-
-  actualizarDescuento(it: PresupuestoItem, valor: number): void {
-    if (!Number.isFinite(valor) || valor < 0) valor = 0;
-    if (valor > 100) valor = 100;
-    if ((it.descuentoPorcentaje ?? 0) === valor) return;
-    it.descuentoPorcentaje = valor;
-    this.itemsTick.update((v) => v + 1);
-    this.notificarMutacion('info', 'Descuento actualizado',
-      `${this.etiquetaItem(it)}: ${valor}%`);
-  }
-
-  eliminarItem(uid: string): void {
-    const it = this.items().find((x) => x.uid === uid);
-    this.items.set(this.items().filter((x) => x.uid !== uid));
-    // Si la fila tenía un aviso de precio desactualizado, lo sacamos del map
-    // para que el contador del banner no quede inflado.
-    if (this.cambiosPrecio().has(uid)) {
-      const m = new Map(this.cambiosPrecio());
-      m.delete(uid);
-      this.cambiosPrecio.set(m);
-    }
-    if (it) {
-      this.notificarMutacion('warn', 'Producto quitado', this.etiquetaItem(it));
-    }
-  }
-
-  vaciar(): void {
-    const cantidad = this.items().length;
-    this.items.set([]);
-    this.cambiosPrecio.set(new Map());
+  /** `vaciar()` del carrito ya no puede refocar el scan input él mismo (el
+   *  input sigue viviendo acá, no en el componente) — replica el
+   *  `focusInput()` incondicional que hacía el `vaciar()` original. */
+  onCarritoVaciado(): void {
     this.focusInput();
-    if (cantidad > 0) {
-      this.notificarMutacion('warn', 'Detalle vaciado',
-        `Se quitaron ${cantidad} ${cantidad === 1 ? 'producto' : 'productos'}.`);
-    }
-    // El visor se limpia solo: vaciar items dispara el effect de publicación
-    // con un snapshot sin ítems.
+  }
+
+  /** El dialog "Producto genérico" (ahora dentro de `carrito-editor`) se
+   *  cerró por cualquier camino — replica el refoco que antes disparaba el
+   *  effect unificado sobre `algunDialogAbierto()` (respeta el guard táctil). */
+  onCarritoDialogCerrado(): void {
+    this.focusInputAuto();
   }
 
   // ============================================================
@@ -1821,16 +1681,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     return this.precioMostrado(it) * (1 - desc / 100) * it.cantidad;
   }
 
-  /** Subtotal por línea EN LA FORMA elegida (solo visual): precio visual ×
-   *  (1 − desc) × cantidad. Con "Todas" coincide con {@link totalLinea}
-   *  (Efectivo). NO se manda al backend — el payload sigue usando
-   *  `totalLinea` (Efectivo). Mantiene la columna Subtotal coherente con la
-   *  columna Precio y el total del footer cuando hay una forma elegida. */
-  subtotalVisualItem(it: PresupuestoItem): number {
-    const desc = it.descuentoPorcentaje ?? 0;
-    return this.precioVisualItem(it) * (1 - desc / 100) * it.cantidad;
-  }
-
   // ============================================================
   // Generar / enviar
   // ============================================================
@@ -1857,17 +1707,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.itemsTick.update((v) => v + 1);
     this.notificarMutacion('info', 'Descuento global aplicado',
       `${valor}% sobre ${actuales.length} ${actuales.length === 1 ? 'ítem' : 'ítems'}.`);
-  }
-
-  /** Clase del input "% Desc." por línea: azul cuando la línea tiene descuento,
-   *  neutro cuando es 0. Mismo criterio de color que el showroom (allí el azul
-   *  identifica el descuento manual; en el presupuesto todos los descuentos por
-   *  ítem son manuales, no hay escala automática por monto). */
-  claseInputDescuentoItem(descuento: number | null | undefined): string {
-    const base = 'text-center descuento-input';
-    return (descuento ?? 0) > 0
-      ? `${base} font-semibold text-sky-600 dark:text-sky-400`
-      : `${base} text-muted-color`;
   }
 
   /** Clase del input "Descuento global" — mismo criterio de color, a nivel
@@ -2199,15 +2038,4 @@ interface GrupoItem {
 interface FormaPagoFooter extends PresupuestoFormaPagoSnapshot {
   indiceOriginal: number;
   esMejorPrecio: boolean;
-}
-
-/** Diferencia detectada al abrir un presupuesto en edición entre el precio
- *  guardado y el del catálogo actual. Alimenta el banner "precios
- *  desactualizados" y el pill por fila. Ambos precios son el precio de
- *  REFERENCIA (la columna "Precio" del detalle), ya según el rubro del ítem. */
-interface CambioPrecio {
-  /** Precio de referencia con el que se guardó el presupuesto. */
-  precioGuardado: number;
-  /** Precio de referencia actual según el catálogo local. */
-  precioActual: number;
 }
