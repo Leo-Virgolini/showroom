@@ -760,6 +760,18 @@ export interface PresupuestoItem extends ScanResult {
   comentarios?: string | null;
 }
 
+/** Diferencia detectada al abrir un presupuesto en edición entre el precio
+ *  guardado y el del catálogo actual. Alimenta el banner "precios
+ *  desactualizados" (host) y el pill por fila (carrito-editor). Ambos precios
+ *  son el precio de REFERENCIA (la columna "Precio" del detalle), ya según el
+ *  rubro del ítem. */
+export interface CambioPrecio {
+  /** Precio de referencia con el que se guardó el presupuesto. */
+  precioGuardado: number;
+  /** Precio de referencia actual según el catálogo local. */
+  precioActual: number;
+}
+
 /** Snapshot de una forma de pago precalculada en el frontend. Se manda al
  *  backend tal cual para que el PDF muestre el precio final sin doble cálculo. */
 export interface PresupuestoFormaPagoSnapshot {
