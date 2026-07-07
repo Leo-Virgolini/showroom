@@ -192,6 +192,12 @@ export class ShowroomService {
       `${this.base}/presupuesto-comercial/${presupuestoId}/regenerar-pedido`, request);
   }
 
+  /** Edita un pedido: crea uno nuevo en DUX con los datos editados y anula el viejo
+   *  (endpoint de Fase 1). Mismo body que `/pedido-dux`. */
+  regenerarPedidoDesdePedido(pedidoId: number, request: CrearPedidoRequest): Observable<CrearPedidoResponse> {
+    return this.http.post<CrearPedidoResponse>(`${this.base}/pedidos/${pedidoId}/regenerar`, request);
+  }
+
   syncCatalogo(force = false): Observable<{ message: string }> {
     let params = new HttpParams();
     if (force) params = params.set('force', 'true');

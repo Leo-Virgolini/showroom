@@ -12,6 +12,7 @@ import ar.com.leo.showroom.events.SyncEventService;
 import ar.com.leo.showroom.pedido.entity.EstadoPedido;
 import ar.com.leo.showroom.pedido.entity.PedidoShowroom;
 import ar.com.leo.showroom.pedido.repository.PedidoShowroomRepository;
+import ar.com.leo.showroom.pedido.service.EdicionPedidoService;
 import ar.com.leo.showroom.pedido.service.PedidoService;
 import ar.com.leo.showroom.config.service.FormaPagoService;
 import ar.com.leo.showroom.config.service.PerfilEtiquetasService;
@@ -115,6 +116,7 @@ public class ShowroomController {
     private final SesionShowroomRepository sesionRepository;
     private final PresupuestoComercialService presupuestoComercialService;
     private final CotizacionFinancieraService cotizacionFinancieraService;
+    private final EdicionPedidoService edicionPedidoService;
 
     private static final MediaType XLSX = MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -1071,6 +1073,25 @@ public class ShowroomController {
             @RequestHeader(value = "X-Client-Id", required = false) String clientId,
             Authentication auth) {
         CrearPedidoResponseDTO response = presupuestoComercialService.regenerarPedido(
+                id, request, clientId, auth.getName());
+        HttpStatus status = response.estado() == EstadoPedido.ENVIADO
+                ? HttpStatus.CREATED
+                : HttpStatus.ACCEPTED;
+        return ResponseEntity.status(status).body(response);
+    }
+
+    /**
+     * Edita un pedido: crea uno nuevo en DUX con los datos editados y anula el viejo
+     * localmente (DUX no permite editar/anular comprobantes). Mismo contrato que
+     * /pedido-dux; el re-vínculo de presupuesto/sesión lo hace EdicionPedidoService.
+     */
+    @PostMapping("/pedidos/{id}/regenerar")
+    public ResponseEntity<CrearPedidoResponseDTO> regenerarPedidoDesdePedido(
+            @PathVariable Long id,
+            @RequestBody @Valid CrearPedidoRequestDTO request,
+            @RequestHeader(value = "X-Client-Id", required = false) String clientId,
+            Authentication auth) {
+        CrearPedidoResponseDTO response = edicionPedidoService.regenerarPedido(
                 id, request, clientId, auth.getName());
         HttpStatus status = response.estado() == EstadoPedido.ENVIADO
                 ? HttpStatus.CREATED

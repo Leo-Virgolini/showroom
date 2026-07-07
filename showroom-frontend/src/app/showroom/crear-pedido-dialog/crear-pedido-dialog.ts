@@ -313,6 +313,12 @@ export class CrearPedidoDialog {
       const items = untracked(() => this.itemsInput());
       if (items) {
         this.inicializarDesdeItems(items, untracked(() => this.clientePrefill()));
+        // Editar pedido (sin presupuesto): completar CUIT/dirección/forma con
+        // los datos del pedido que se está editando — igual que en el flujo de
+        // regeneración desde presupuesto (cargarDetalle), pero acá no hay
+        // presupuesto del que faltarían esos datos: viajan directo del pedido.
+        const anteriorId = untracked(() => this.pedidoAnteriorId());
+        if (anteriorId != null) this.prellenarDesdePedidoAnterior(anteriorId);
       }
     });
   }
@@ -759,12 +765,20 @@ export class CrearPedidoDialog {
     };
 
     const esRegen = this.esRegeneracion();
+    const pedidoEditarId = this.pedidoAnteriorId();
     this.enviandoPedido.set(true);
-    // Regeneración: el backend crea el nuevo pedido, anula el viejo y re-vincula
-    // el presupuesto en una sola operación. Alta normal: crea y luego marcamos.
-    const envio$ = esRegen
-      ? this.api.regenerarPedido(presupuestoId!, req)
-      : this.api.crearPedido(req);
+    // Tres variantes:
+    //  - Regen desde presupuesto: el backend crea el nuevo pedido, anula el
+    //    viejo y re-vincula el presupuesto en una sola operación.
+    //  - Editar pedido (sin presupuesto): mismo mecanismo de regeneración pero
+    //    contra el pedido directamente, sin presupuesto que re-vincular.
+    //  - Alta normal: crea y luego marcamos (si viene de un presupuesto).
+    const envio$ =
+      presupuestoId != null
+        ? this.api.regenerarPedido(presupuestoId, req)
+        : pedidoEditarId != null
+          ? this.api.regenerarPedidoDesdePedido(pedidoEditarId, req)
+          : this.api.crearPedido(req);
     envio$.subscribe({
       next: (res) => {
         this.enviandoPedido.set(false);
@@ -775,12 +789,14 @@ export class CrearPedidoDialog {
           // haya devuelto el id local — sino el carrito quedaría sin vaciar y se
           // podría re-enviar/duplicar. Va ANTES del chequeo de pedidoLocalId.
           if (presupuestoId == null) {
-            this.toast.add({
-              severity: 'success',
-              summary: 'Pedido cargado en DUX',
-              detail: res.mensaje ?? 'El pedido se creó en DUX.',
-              life: 5000,
-            });
+            if (this.pedidoAnteriorId() == null) {
+              this.toast.add({
+                severity: 'success',
+                summary: 'Pedido cargado en DUX',
+                detail: res.mensaje ?? 'El pedido se creó en DUX.',
+                life: 5000,
+              });
+            }
             this.visible.set(false);
             this.pedidoCreado.emit({ presupuestoId: null, pedidoLocalId: res.pedidoLocalId ?? 0 });
             return;

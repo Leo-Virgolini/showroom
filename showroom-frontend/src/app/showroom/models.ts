@@ -653,6 +653,11 @@ export interface PedidoItemDetalle {
   cantidad: number;
   /** Precio unitario CON IVA. */
   precioUnitario: number | null;
+  /** PVP de lista CON IVA, PRE-forma de pago (sin recargo/descuento de la
+   *  forma elegida) — la base correcta para reconstruir el ítem al editar.
+   *  Null en pedidos anteriores a esta columna: la pantalla de edición
+   *  re-cotiza esos ítems a la lista vigente (ver {@link pedidoItemsAPresupuestoItems}). */
+  precioListaConIva: number | null;
   /** % de IVA aplicado al producto al momento del pedido. */
   porcIva: number | null;
   /** Si el {@code precioUnitario} de este ítem lleva IVA, según el perfil
@@ -766,6 +771,18 @@ export interface PresupuestoItem extends ScanResult {
    *  el presupuesto se transforma en pedido. Para genéricos = descripción
    *  tipeada por el operador. Null en items normales del catálogo. */
   comentarios?: string | null;
+}
+
+/** Diferencia detectada al abrir un presupuesto en edición entre el precio
+ *  guardado y el del catálogo actual. Alimenta el banner "precios
+ *  desactualizados" (host) y el pill por fila (carrito-editor). Ambos precios
+ *  son el precio de REFERENCIA (la columna "Precio" del detalle), ya según el
+ *  rubro del ítem. */
+export interface CambioPrecio {
+  /** Precio de referencia con el que se guardó el presupuesto. */
+  precioGuardado: number;
+  /** Precio de referencia actual según el catálogo local. */
+  precioActual: number;
 }
 
 /** Snapshot de una forma de pago precalculada en el frontend. Se manda al

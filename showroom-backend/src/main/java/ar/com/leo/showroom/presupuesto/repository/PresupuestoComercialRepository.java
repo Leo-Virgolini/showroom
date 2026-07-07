@@ -56,6 +56,14 @@ public interface PresupuestoComercialRepository extends JpaRepository<Presupuest
     List<Object[]> findPresupuestoIdsByPedidoIds(@Param("pedidoIds") Collection<Long> pedidoIds);
 
     /**
+     * El presupuesto (si existe) cuyo pedido convertido es {@code pedidoId}.
+     * Lo usa la edición de pedidos para re-vincular el presupuesto al pedido nuevo
+     * tras regenerar. El campo {@code convertidoEnPedidoId} se asume único por
+     * pedido (un pedido proviene de a lo sumo un presupuesto).
+     */
+    Optional<PresupuestoComercial> findByConvertidoEnPedidoId(Long convertidoEnPedidoId);
+
+    /**
      * Búsqueda paginada con filtros opcionales — usada por la pantalla
      * {@code /presupuestos/historial}. Filtra por:
      * <ul>

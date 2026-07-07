@@ -113,4 +113,42 @@ export class PrecioPerfilService {
     // (menaje c/IVA, maquinaria s/IVA).
     return !esMaq;
   }
+
+  /** Precio de REFERENCIA unitario a MOSTRAR en listas/tablas/visor (scan,
+   *  carrito-editor, presupuestos-page): alias de {@link precioReferencia} con
+   *  el shape suelto (`porcIva` opcional, `pvpKtGastroSinIva` puede faltar) que
+   *  usan esos consumidores. Única fuente: antes esta reshape vivía duplicada
+   *  como método privado en el host y en el componente. */
+  precioMostrado(r: {
+    pvpKtGastroConIva: number | null;
+    pvpKtGastroSinIva: number | null;
+    porcIva?: number | null;
+    rubro?: string | null;
+  }): number {
+    return this.precioReferencia({
+      pvpKtGastroConIva: r.pvpKtGastroConIva,
+      pvpKtGastroSinIva: r.pvpKtGastroSinIva,
+      porcIva: r.porcIva ?? null,
+      rubro: r.rubro,
+    });
+  }
+
+  /** Precio unitario a MOSTRAR según la forma de pago elegida por el operador
+   *  en el toolbar (null = "Todas" → cae a {@link precioMostrado}, el precio
+   *  de referencia). Antes esta lógica (perfil por rubro + `precioPorForma`)
+   *  vivía duplicada en el host y en `carrito-editor`; ahora es la única
+   *  fuente para la columna "Precio"/"Subtotal" en la forma seleccionada. */
+  precioVisualItem(
+    it: {
+      pvpKtGastroConIva: number | null;
+      pvpKtGastroSinIva: number | null;
+      porcIva?: number | null;
+      rubro?: string | null;
+    },
+    forma: FormaPago | null,
+  ): number {
+    if (!forma) return this.precioMostrado(it);
+    const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(it.rubro));
+    return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
+  }
 }

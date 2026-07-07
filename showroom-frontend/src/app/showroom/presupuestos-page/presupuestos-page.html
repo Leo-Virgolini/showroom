@@ -3,39 +3,44 @@
     [title]="esModoEdicion() ? ('Editando presupuesto #' + presupuestoEditandoId()) : 'Presupuestos'"
     [subtitle]="esModoEdicion() ? 'Modificá productos, cantidades o datos del cliente' : 'Armar y enviar al cliente'">
     <div header-end class="inline-flex gap-1.5 items-center">
-      <app-sync-button (dialogClosed)="focusInput()" />
+      <app-sync-button (dialogClosed)="carrito()?.focusScanInput()" />
     </div>
   </app-page-header>
 
   <!-- ============= CONTENIDO =============
-       Layout split 50/50 en lg+: izquierda buscador, derecha presupuesto
-       armado + datos cliente. En md y menores, vuelve a 1 columna apilada.
-       El padding-bottom se calcula dinámicamente con el alto real del
-       footer sticky (medido con ResizeObserver) + 16px de aire visual, así
-       el footer nunca tapa los últimos ítems aunque los chips de formas
-       hagan flex-wrap a 2 o más líneas. -->
+       Layout split 50/50 en lg+: izquierda los bloques del HOST (atención,
+       acciones de guardar/enviar/crear pedido, datos del cliente, modo de
+       cotización/forma de pago, banner de precios); derecha `carrito-editor`
+       (scan + tabla). En md y menores, vuelve a 1 columna apilada. El
+       padding-bottom se calcula dinámicamente con el alto real del footer
+       sticky (medido con ResizeObserver) + 16px de aire visual, así el
+       footer nunca tapa los últimos ítems aunque los chips de formas hagan
+       flex-wrap a 2 o más líneas. -->
   <main class="flex-1 p-3 sm:p-4 lg:p-6"
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ============= COLUMNA IZQUIERDA: scan + búsqueda =============
-           Sticky en lg+ para que el buscador esté siempre a la vista
-           mientras el operador arma el detalle a la derecha. No usamos
-           overflow-y-auto en la columna (provoca scrolls anidados con la
-           lista interna); la lista de resultados maneja su propio scroll
-           hasta el viewport disponible. -->
+      <!-- ============= COLUMNA IZQUIERDA: bloques del host =============
+           Atención (sesión + QR) + Acciones (guardar/enviar/crear pedido,
+           chip "Datos del cliente", modo de cotización/forma de pago del PDF
+           y el banner de "precios desactualizados"). Sticky en lg+ para que
+           quede siempre a la vista mientras el operador scrollea la tabla
+           del carrito a la derecha (que además tiene SU PROPIO buscador
+           sticky, ver `carrito-editor`). -->
       <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start">
 
-        <!-- Card: scan + búsqueda por descripción -->
+        <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
+             de `carrito-editor` (con su propia tabla, en la columna derecha).
+             Esta card queda solo con el contexto de la atención — sesión
+             compartida con el showroom + QR del visor de presupuesto — que
+             es un asunto del host, no del carrito. -->
         <p-card class="kt-card">
           <ng-template #title>
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <div class="kt-card-title">
-                <i class="pi pi-barcode"></i>
-                <span>Escanear / buscar producto</span>
+                <i class="pi pi-user"></i>
+                <span>Atención</span>
               </div>
-              <!-- Contexto de la atención (movido desde el header para no dejarlo
-                   en 2 filas): chip de sesión / "Nuevo cliente" + QR del visor. -->
               <div class="flex items-center gap-2.5 flex-wrap">
                 @if (haySesionActiva()) {
                   <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
@@ -64,634 +69,266 @@
               </div>
             </div>
           </ng-template>
-          <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
-            <div class="flex-1">
-              <label for="scanInput" class="kt-label">
-                <i class="pi pi-search"></i> Código, descripción o EAN — ENTER para buscar
-              </label>
-              <p-iconfield class="w-full block">
-                <p-inputicon class="pi pi-search" />
-                <input pInputText id="scanInput" #scanInput type="text" autocomplete="off"
-                  [ngModel]="skuInput()" (ngModelChange)="skuInput.set($event)"
-                  (keydown.enter)="onScanEnter()"
-                  placeholder="Escaneá un código o tipeá una descripción..."
-                  class="w-full" [disabled]="cargandoScan()" />
-              </p-iconfield>
-            </div>
-            @if (cargandoScan()) {
-              <div class="flex items-center justify-center px-3">
-                <p-progressSpinner class="!w-6 !h-6" strokeWidth="4" />
-              </div>
-            }
-          </div>
+        </p-card>
 
-          <!-- Atajo para cargar un producto que NO está en el catálogo KT
-               GASTRO (SKU comodín de DUX). Se oculta si el backend todavía
-               no expuso el SKU comodín (versión vieja). -->
-          @if (skuGenerico()) {
-            <div class="mt-2 flex justify-end">
-              <p-button icon="pi pi-plus-circle" label="Producto genérico"
-                class="btn-kt-teal" size="small" [outlined]="true"
-                (onClick)="abrirGenerico()"
-                pTooltip="Cargar un producto que no está en el catálogo (cotización rápida)"
-                tooltipPosition="left" />
+        <!-- Card "Acciones": estado de guardado + botones (generar/guardar,
+             enviar, crear pedido), el chip "Datos del cliente" (abre el
+             dialog unificado), el selector de modo de cotización/forma de
+             pago del PDF y el banner de "precios desactualizados" en
+             edición. Todo esto es del HOST — la tabla + scan viven en
+             `carrito-editor`, a la derecha. -->
+        <p-card class="kt-card">
+          <ng-template #title>
+            <div class="kt-card-title">
+              <i class="pi pi-bolt"></i>
+              <span>Acciones</span>
             </div>
-          }
+          </ng-template>
 
-          <!-- Resultados de búsqueda por descripción — lista clickable.
-               Paleta KT naranja para coherencia con el resto de la app. La
-               diferenciación con el "Detalle del presupuesto" (de abajo) se
-               logra por: borde izquierdo verde grueso del detalle + SKU pill
-               outline aquí vs sólido en el detalle + ícono distinto en cada
-               card title. -->
-          @if (resultadosBusqueda().length > 0) {
-            <div class="mt-4 border border-[#FF861C]/30 rounded-lg overflow-hidden">
-              <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#FF861C]/10">
-                <span class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                  <i class="pi pi-search text-[#FF861C]"></i>
-                  Buscando ({{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}) — elegí cuáles agregar
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              @if (cargandoEdicion()) {
+                <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
+                  <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
+                  Cargando presupuesto…
                 </span>
-                <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
-                  size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
-              </div>
-              <div class="flex items-center gap-2 px-3 py-2 border-b border-[#FF861C]/10 flex-wrap">
-                <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
-                <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
-                  [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
-                  size="small" appendTo="body" class="text-sm" />
-                <span class="text-xs text-muted-color shrink-0">Proveedor:</span>
-                <p-select [options]="proveedoresDisponibles()" [ngModel]="proveedorFiltro()"
-                  (ngModelChange)="cambiarProveedorFiltro($event)" [showClear]="true"
-                  placeholder="Todos" [filter]="true" size="small" appendTo="body" class="text-sm" />
-                @if (reordenando()) {
-                  <p-progressSpinner class="!w-4 !h-4" strokeWidth="6" ariaLabel="Reordenando" />
+              }
+              @if (esModoEdicion() && hayCambiosSinGuardar()) {
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
+                  pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
+                  tooltipPosition="bottom" role="status" aria-live="polite">
+                  <i class="pi pi-exclamation-circle"></i>
+                  <span class="hidden sm:inline">Sin guardar</span>
+                </span>
+              }
+              <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
+                [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
+                class="btn-kt-azul" [disabled]="!hayItems() || generandoPreview()"
+                [loading]="generandoPreview()" (onClick)="previsualizar()"
+                [pTooltip]="esModoEdicion()
+                    ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
+                    : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
+                tooltipPosition="bottom" />
+              <p-button icon="pi pi-send"
+                [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
+                ariaLabel="Enviar por email"
+                class="btn-kt-naranja" [disabled]="!hayItems()"
+                (onClick)="abrirDialogEnviar()"
+                [pTooltip]="esModoEdicion()
+                    ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
+                    : 'Generar y enviar el presupuesto al cliente'"
+                tooltipPosition="bottom" />
+              @if (pedidoIdConvertido() != null) {
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
+                  [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
+                  tooltipPosition="bottom">
+                  <i class="pi pi-check-circle"></i>
+                  <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
+                </span>
+                @if (editadoTrasConvertir()) {
+                  <p-button icon="pi pi-refresh" label="Regenerar"
+                    ariaLabel="Regenerar el pedido en DUX con los cambios"
+                    severity="warn" [disabled]="hayCambiosSinGuardar()"
+                    (onClick)="abrirRegenerarPedido()"
+                    [pTooltip]="hayCambiosSinGuardar()
+                        ? 'Guardá los cambios antes de regenerar el pedido'
+                        : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
+                    tooltipPosition="bottom" />
                 }
-              </div>
-              <!-- Altura adaptativa al viewport: en pantallas chicas mantiene
-                   un tope razonable; en sm+ el cálculo deja respirar a la
-                   lista hasta donde permite el viewport, restando toolbar
-                   (~5rem) + scan input + header de la card + header de
-                   resultados + "Cargar más" + footer sticky compacto
-                   (~22rem en total). El operador ve muchos más resultados
-                   sin scrollear el cuerpo de la página. -->
-              <div class="divide-y divide-[#FF861C]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
-                @for (r of resultadosBusqueda(); track r.sku) {
-                  <!-- Fila NO-clickeable. Para agregar al detalle, el operador
-                       toca el botón explícito "Agregar" del final de la fila.
-                       Después de agregar, la lista queda abierta para que pueda
-                       sumar varios productos seguidos sin volver a buscar.
-                       Las máquinas industriales (rubro excluido de descuentos)
-                       llevan un borde izquierdo ámbar grueso + tinte de fondo
-                       para identificarlas en listas largas. -->
-                  <div class="w-full flex items-center gap-3 px-3 py-2 transition-colors"
-                       [class.bg-amber-50]="esRubroMaquinaria(r.rubro)"
-                       [class.dark:bg-amber-950/20]="esRubroMaquinaria(r.rubro)"
-                       [class.border-l-4]="esRubroMaquinaria(r.rubro)"
-                       [class.border-amber-400]="esRubroMaquinaria(r.rubro)"
-                       [class.dark:border-amber-600]="esRubroMaquinaria(r.rubro)"
-                       [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(r.rubro)">
-                    <!-- Imagen más chica (48×48) que en el detalle (56×56) para
-                         reforzar visualmente que la lista es "secundaria/exploratoria". -->
-                    @if (r.imagenUrl) {
-                      <span class="shrink-0">
-                        <p-image [src]="r.imagenUrl" [alt]="r.sku" [preview]="true"
-                          imageClass="w-12 h-12 object-contain rounded border border-[#FF861C]/20 bg-white p-0.5 cursor-zoom-in" />
-                      </span>
-                    } @else {
-                      <div class="w-12 h-12 rounded bg-[#FF861C]/10 flex items-center justify-center shrink-0">
-                        <i class="pi pi-image text-[#FF861C]"></i>
-                      </div>
-                    }
-                    <div class="flex-1 flex items-center gap-3 text-left min-w-0">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <!-- SKU pill outline (no rellenado) — versión "secundaria" del
-                             pill naranja sólido que se usa en el detalle. Indica
-                             "candidato" vs "elegido". -->
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-[10px] font-bold">
-                          {{ r.sku }}
+              } @else {
+                <p-button icon="pi pi-cart-arrow-down" label="Crear pedido"
+                  ariaLabel="Crear pedido en DUX a partir de este presupuesto"
+                  class="btn-kt-naranja-oscuro"
+                  [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
+                  (onClick)="abrirCrearPedido()"
+                  [pTooltip]="!esModoEdicion()
+                      ? 'Generá el presupuesto primero para poder crear el pedido'
+                      : (hayCambiosSinGuardar()
+                          ? 'Guardá los cambios antes de generar el pedido'
+                          : 'Crear pedido en DUX a partir de este presupuesto')"
+                  tooltipPosition="bottom" />
+              }
+
+              <!-- Chip "Datos del cliente" — empujado a la derecha de la
+                   barra (identidad, separada de las acciones). -->
+              <button type="button" class="kt-cliente-chip sm:ml-auto"
+                (click)="abrirDialogCliente(null)"
+                [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
+                <i class="pi pi-user"></i>
+                @if (clienteNombre().trim() || clienteTelefono().trim()) {
+                  <span class="truncate max-w-[12rem]">
+                    {{ clienteNombre().trim() || clienteTelefono() }}
+                  </span>
+                } @else {
+                  <span>Sin datos del cliente</span>
+                }
+                <i class="pi pi-pencil text-[10px] opacity-70"></i>
+              </button>
+            </div>
+
+            <!-- Selector "Modo de cotización" — solo visible si hay items.
+                 Agregado = formato tabla detalle + total + formas globales.
+                 Individual = 1 hoja del PDF por producto, con foto y formas
+                 de pago calculadas sobre el precio de ESE ítem. -->
+            @if (items().length > 0) {
+              <div class="p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center gap-3 flex-wrap">
+                <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
+                  <i class="pi pi-file-pdf text-[#FF861C]"></i>
+                  Modo de cotización
+                </span>
+                <p-selectButton
+                  [options]="modoCotizacionOpciones"
+                  [ngModel]="modoCotizacionValue()"
+                  (ngModelChange)="setModoCotizacion($event)"
+                  optionLabel="label" optionValue="value"
+                  [allowEmpty]="false"
+                  ariaLabelledBy="modo-cotizacion-label"
+                  class="kt-modo-cotizacion">
+                  <ng-template let-opt #item>
+                    <span class="flex items-center gap-1.5 px-1 font-bold">
+                      <i [class]="opt.icon"></i>
+                      <span>{{ opt.label }}</span>
+                    </span>
+                  </ng-template>
+                </p-selectButton>
+                <span class="text-[11px] text-muted-color hidden sm:inline">
+                  {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
+                </span>
+                <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
+                     efectivo por ítem + sección comparativa de formas. Al elegir
+                     una, todo el presupuesto se expresa en ella. No aplica en
+                     modo individual (cada ítem lista sus formas). -->
+                @if (!cotizacionIndividual()) {
+                  <div class="inline-flex items-center gap-1.5">
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 shrink-0">
+                      <i class="pi pi-wallet text-[#FF861C]"></i>
+                      Forma de pago
+                    </span>
+                    <p-select
+                      [options]="formasPago()"
+                      [ngModel]="formaPagoSeleccionadaId()"
+                      (ngModelChange)="formaPagoSeleccionadaId.set($event)"
+                      optionLabel="nombre" optionValue="id"
+                      [showClear]="true"
+                      placeholder="Todas"
+                      appendTo="body"
+                      class="kt-forma-pago-pdf text-sm">
+                      <ng-template let-fp #selectedItem>
+                        <span class="inline-flex items-center gap-2">
+                          <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
+                          {{ fp.nombre }}
                         </span>
-                        @if (esRubroMaquinaria(r.rubro)) {
-                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
-                                       font-bold text-[9px] uppercase tracking-wide"
-                                pTooltip="Máquina industrial — no aplican los descuentos por monto"
-                                tooltipPosition="top">
-                            <i class="pi pi-wrench text-[8px]"></i>
-                            Máq. Industrial
-                          </span>
-                        }
-                        @if (r.habilitado === false) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
-                            Deshabilitado
-                          </span>
-                        }
-                        @if (!r.pvpKtGastroSinIva || r.pvpKtGastroSinIva <= 0) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex items-center gap-1"
-                            pTooltip="Producto sin precio cargado en DUX" tooltipPosition="top">
-                            <i class="pi pi-exclamation-triangle text-[9px]"></i> Sin precio
-                          </span>
-                        }
-                        @if (r.stockTotal == null) {
-                          <span class="text-[10px] text-muted-color font-medium flex items-center gap-1"
-                            pTooltip="Stock no sincronizado con DUX" tooltipPosition="top">
-                            <i class="pi pi-question-circle text-[9px]"></i> Stock —
-                          </span>
-                        } @else if (r.stockTotal <= 0) {
-                          <span class="text-[10px] text-red-700 dark:text-red-400 font-medium flex items-center gap-1">
-                            <i class="pi pi-times-circle text-[9px]"></i> Sin stock
-                          </span>
-                        } @else {
-                          <span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
-                            <i class="pi pi-box text-[9px]"></i> {{ r.stockTotal }}
-                          </span>
-                        }
-                      </div>
-                      <div class="text-sm font-medium text-surface-700 dark:text-surface-200 truncate mt-0.5">
-                        {{ r.descripcion || '—' }}
-                      </div>
-                    </div>
-                    <div class="text-right shrink-0">
-                      <div class="text-sm font-semibold text-surface-800 dark:text-surface-100">
-                        {{ precioMostrado(r) | currency:'ARS':'symbol':'1.0-0' }}
-                      </div>
-                    </div>
-                    </div>
-                    <!-- Layout: 3 columnas (Ver, Cantidad, Agregar) con la
-                         misma estructura [label/spacer + gap + elemento].
-                         items-center alinea los centros geométricos de cada
-                         columna, así los centros de los elementos (botones e
-                         input) quedan a la misma altura visual. Los botones
-                         usan un spacer invisible (aria-hidden) con la misma
-                         altura que la label "CANTIDAD". -->
-                    <div class="shrink-0 flex items-center gap-2">
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
-                        <p-button icon="pi pi-eye"
-                          severity="info" size="small"
-                          (onClick)="verResultado(r)"
-                          pTooltip="Ver el producto completo (foto grande, datos)"
-                          tooltipPosition="top"
-                          ariaLabel="Ver producto" />
-                      </div>
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span class="text-[9px] uppercase tracking-wider font-bold text-[#FF861C] dark:text-[#FF9A3F] leading-none">
-                          Cantidad
+                      </ng-template>
+                      <ng-template let-fp #item>
+                        <span class="inline-flex items-center gap-2">
+                          <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
+                          {{ fp.nombre }}
                         </span>
-                        <p-inputNumber [ngModel]="cantidadResultado(r.sku)"
-                          (ngModelChange)="setCantidadResultado(r.sku, $event)"
-                          [min]="1" [max]="cantidadMaximaResultado(r)"
-                          [showButtons]="true" buttonLayout="horizontal"
-                          spinnerMode="horizontal"
-                          decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                          inputStyleClass="w-20 text-center" [allowEmpty]="false"
-                          ariaLabel="Cantidad de unidades a agregar al detalle" />
-                      </div>
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
-                        <p-button icon="pi pi-arrow-right"
-                          severity="success" size="small"
-                          (onClick)="agregarResultado(r.sku)"
-                          pTooltip="Agregar al detalle (la lista se queda abierta)"
-                          tooltipPosition="top"
-                          ariaLabel="Agregar al detalle" />
-                      </div>
-                    </div>
+                      </ng-template>
+                    </p-select>
                   </div>
                 }
               </div>
-              @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-                <div class="px-3 py-1.5 border-t border-[#FF861C]/10 bg-[#FF861C]/5 flex items-center justify-center gap-2">
-                  <p-button icon="pi pi-chevron-down" label="Cargar más" severity="secondary"
-                    [text]="true" size="small"
-                    [loading]="cargandoMasResultados()" (onClick)="cargarMasResultados()" />
-                  <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-[#FF861C]/10">
-                    {{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}
-                  </span>
+            }
+
+            <!-- Banner "precios desactualizados" — solo en edición, cuando al
+                 abrir se detectó que el catálogo cambió respecto a lo guardado.
+                 Reúne el conteo + CTA para traer los precios actuales. Las filas
+                 afectadas llevan además un pill con el precio actual. -->
+            @if (esModoEdicion() && cantidadPreciosCambiados() > 0) {
+              <div class="p-3 rounded-lg border border-amber-300 bg-amber-50
+                          dark:bg-amber-900/20 dark:border-amber-700/50
+                          flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
+                <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
+                <div class="flex-1 min-w-[12rem]">
+                  <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
+                    {{ cantidadPreciosCambiados() }}
+                    {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
+                    en el catálogo desde que se guardó este presupuesto
+                  </p>
+                  <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
+                    Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
+                    conservando cantidades y descuentos.
+                  </p>
                 </div>
-              }
-            </div>
-          }
+                <button type="button"
+                  class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                         text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00] shadow-md
+                         hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg
+                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                         disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
+                  [disabled]="actualizandoPrecios()"
+                  (click)="actualizarPreciosDesdeCatalogo()"
+                  aria-label="Actualizar precios desde el catálogo">
+                  <i class="pi"
+                    [class.pi-refresh]="!actualizandoPrecios()"
+                    [class.pi-spinner]="actualizandoPrecios()"
+                    [class.pi-spin]="actualizandoPrecios()"></i>
+                  {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
+                </button>
+              </div>
+            }
+          </div>
         </p-card>
 
       </div>
 
-      <!-- ============= COLUMNA DERECHA: detalle + datos cliente ============= -->
+      <!-- ============= COLUMNA DERECHA: carrito-editor =============
+           Scan/búsqueda (sticky dentro del propio componente) + tabla
+           editable de ítems — todo vive en `app-carrito-editor`, autónomo. -->
       <div class="flex flex-col gap-4">
 
         <!-- Tabla de items — card destacada con borde izquierdo verde KT
-             para diferenciarla visualmente del card naranja de búsqueda
-             (a la izquierda). El verde refuerza que estos productos ya
-             están "comprometidos" en el presupuesto. -->
+             para diferenciarla visualmente del resto de las cards del host
+             (naranja, a la izquierda). El verde refuerza que estos productos
+             ya están "comprometidos" en el presupuesto. -->
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
-            <div class="flex flex-col gap-2.5">
-              <div class="kt-card-title kt-card-title-detalle">
-                <i class="pi pi-shopping-cart"></i>
-                <span>Detalle del presupuesto</span>
-                @if (items().length > 0) {
-                  <span class="kt-chip">
-                    <i class="pi pi-check-circle text-[#7EBA00]"></i>
-                    {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
-                  </span>
-                }
-                <!-- Actualizar precios: solo en edición. Trae los precios
-                     actuales del catálogo local (cache en BD, sin tocar DUX) y
-                     los pisa conservando cantidades y descuentos. Estilo pill
-                     verde KT coherente con el header del detalle. -->
-                @if (esModoEdicion() && hayItemsCatalogo()) {
-                  <button type="button"
-                    class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
-                           text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00]
-                           border border-[#FF6A00]/40 shadow-md ring-1 ring-[#FF861C]/30
-                           hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg hover:-translate-y-px
-                           active:translate-y-0 active:shadow-md
-                           focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
-                           disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0
-                           transition-all duration-150"
-                    [disabled]="actualizandoPrecios()"
-                    (click)="actualizarPreciosDesdeCatalogo()"
-                    pTooltip="Trae los precios actuales del catálogo (no toca DUX). Conserva cantidades y descuentos."
-                    tooltipPosition="bottom"
-                    aria-label="Actualizar precios desde el catálogo">
-                    <i class="pi text-[0.7rem] transition-transform group-hover:rotate-180"
-                      [class.pi-refresh]="!actualizandoPrecios()"
-                      [class.pi-spinner]="actualizandoPrecios()"
-                      [class.pi-spin]="actualizandoPrecios()"></i>
-                    <span>{{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}</span>
-                  </button>
-                }
-              </div>
-              <div class="flex items-center gap-2 flex-wrap pt-2.5 border-t border-[#7EBA00]/25 dark:border-[#7EBA00]/15">
-                <!-- Acciones del presupuesto — en su propia fila (barra de
-                     acciones) separada del título con un divisor, para que los
-                     botones tengan aire y no queden apretados al envolverse. -->
-                @if (cargandoEdicion()) {
-                  <span class="hidden sm:inline-flex items-center gap-1.5 text-xs text-muted-color">
-                    <p-progressSpinner class="!w-4 !h-4" strokeWidth="4" />
-                    Cargando presupuesto…
-                  </span>
-                }
-                @if (esModoEdicion() && hayCambiosSinGuardar()) {
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
-                    pTooltip="Hiciste cambios que todavía no guardaste. Tocá &quot;Guardar cambios&quot; para persistirlos."
-                    tooltipPosition="bottom" role="status" aria-live="polite">
-                    <i class="pi pi-exclamation-circle"></i>
-                    <span class="hidden sm:inline">Sin guardar</span>
-                  </span>
-                }
-                <p-button [icon]="esModoEdicion() ? 'pi pi-save' : 'pi pi-file-pdf'"
-                  [label]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
-                  [ariaLabel]="esModoEdicion() ? 'Guardar cambios' : 'Generar PDF'"
-                  class="btn-kt-azul" [disabled]="!hayItems() || generandoPreview()"
-                  [loading]="generandoPreview()" (onClick)="previsualizar()"
-                  [pTooltip]="esModoEdicion()
-                      ? 'Guarda los cambios y abre el PDF actualizado en una pestaña nueva'
-                      : 'Genera el PDF, lo guarda en el historial y lo abre en una pestaña nueva (pide confirmación antes)'"
-                  tooltipPosition="bottom" />
-                <p-button icon="pi pi-send"
-                  [label]="esModoEdicion() ? 'Guardar y enviar' : 'Enviar'"
-                  ariaLabel="Enviar por email"
-                  class="btn-kt-naranja" [disabled]="!hayItems()"
-                  (onClick)="abrirDialogEnviar()"
-                  [pTooltip]="esModoEdicion()
-                      ? 'Guarda los cambios y vuelve a enviar el presupuesto al cliente'
-                      : 'Generar y enviar el presupuesto al cliente'"
-                  tooltipPosition="bottom" />
-                @if (pedidoIdConvertido() != null) {
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wide border border-emerald-300"
-                    [pTooltip]="'Este presupuesto ya se convirtió en el pedido #' + pedidoIdConvertido() + ' de DUX.'"
-                    tooltipPosition="bottom">
-                    <i class="pi pi-check-circle"></i>
-                    <span class="hidden sm:inline">→ Pedido #{{ pedidoIdConvertido() }}</span>
-                  </span>
-                  @if (editadoTrasConvertir()) {
-                    <p-button icon="pi pi-refresh" label="Regenerar"
-                      ariaLabel="Regenerar el pedido en DUX con los cambios"
-                      severity="warn" [disabled]="hayCambiosSinGuardar()"
-                      (onClick)="abrirRegenerarPedido()"
-                      [pTooltip]="hayCambiosSinGuardar()
-                          ? 'Guardá los cambios antes de regenerar el pedido'
-                          : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
-                      tooltipPosition="bottom" />
-                  }
-                } @else {
-                  <p-button icon="pi pi-cart-arrow-down" label="Crear pedido"
-                    ariaLabel="Crear pedido en DUX a partir de este presupuesto"
-                    class="btn-kt-naranja-oscuro"
-                    [disabled]="!esModoEdicion() || hayCambiosSinGuardar()"
-                    (onClick)="abrirCrearPedido()"
-                    [pTooltip]="!esModoEdicion()
-                        ? 'Generá el presupuesto primero para poder crear el pedido'
-                        : (hayCambiosSinGuardar()
-                            ? 'Guardá los cambios antes de generar el pedido'
-                            : 'Crear pedido en DUX a partir de este presupuesto')"
-                    tooltipPosition="bottom" />
-                }
-
-                <!-- Chip "Datos del cliente" — empujado a la derecha de la
-                     barra (identidad, separada de las acciones). -->
-                <button type="button" class="kt-cliente-chip sm:ml-auto"
-                  (click)="abrirDialogCliente(null)"
-                  [attr.aria-label]="clienteNombre() ? 'Editar datos del cliente' : 'Cargar datos del cliente'">
-                  <i class="pi pi-user"></i>
-                  @if (clienteNombre().trim() || clienteTelefono().trim()) {
-                    <span class="truncate max-w-[12rem]">
-                      {{ clienteNombre().trim() || clienteTelefono() }}
-                    </span>
-                  } @else {
-                    <span>Sin datos del cliente</span>
-                  }
-                  <i class="pi pi-pencil text-[10px] opacity-70"></i>
+            <div class="kt-card-title kt-card-title-detalle">
+              <i class="pi pi-shopping-cart"></i>
+              <span>Detalle del presupuesto</span>
+              @if (items().length > 0) {
+                <span class="kt-chip">
+                  <i class="pi pi-check-circle text-[#7EBA00]"></i>
+                  {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
+                </span>
+              }
+              <!-- Actualizar precios: solo en edición. Trae los precios
+                   actuales del catálogo local (cache en BD, sin tocar DUX) y
+                   los pisa conservando cantidades y descuentos. Estilo pill
+                   verde KT coherente con el header del detalle. -->
+              @if (esModoEdicion() && hayItemsCatalogo()) {
+                <button type="button"
+                  class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                         text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00]
+                         border border-[#FF6A00]/40 shadow-md ring-1 ring-[#FF861C]/30
+                         hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg hover:-translate-y-px
+                         active:translate-y-0 active:shadow-md
+                         focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
+                         disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0
+                         transition-all duration-150"
+                  [disabled]="actualizandoPrecios()"
+                  (click)="actualizarPreciosDesdeCatalogo()"
+                  pTooltip="Trae los precios actuales del catálogo (no toca DUX). Conserva cantidades y descuentos."
+                  tooltipPosition="bottom"
+                  aria-label="Actualizar precios desde el catálogo">
+                  <i class="pi text-[0.7rem] transition-transform group-hover:rotate-180"
+                    [class.pi-refresh]="!actualizandoPrecios()"
+                    [class.pi-spinner]="actualizandoPrecios()"
+                    [class.pi-spin]="actualizandoPrecios()"></i>
+                  <span>{{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}</span>
                 </button>
-              </div>
+              }
             </div>
           </ng-template>
 
-          <!-- Selector "Modo de cotización" — solo visible si hay items.
-               Agregado = formato tabla detalle + total + formas globales.
-               Individual = 1 hoja del PDF por producto, con foto y formas
-               de pago calculadas sobre el precio de ESE ítem. -->
-          @if (items().length > 0) {
-            <div class="mb-3 p-2.5 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20 flex items-center gap-3 flex-wrap">
-              <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                <i class="pi pi-file-pdf text-[#FF861C]"></i>
-                Modo de cotización
-              </span>
-              <p-selectButton
-                [options]="modoCotizacionOpciones"
-                [ngModel]="modoCotizacionValue()"
-                (ngModelChange)="setModoCotizacion($event)"
-                optionLabel="label" optionValue="value"
-                [allowEmpty]="false"
-                ariaLabelledBy="modo-cotizacion-label"
-                class="kt-modo-cotizacion">
-                <ng-template let-opt #item>
-                  <span class="flex items-center gap-1.5 px-1 font-bold">
-                    <i [class]="opt.icon"></i>
-                    <span>{{ opt.label }}</span>
-                  </span>
-                </ng-template>
-              </p-selectButton>
-              <span class="text-[11px] text-muted-color hidden sm:inline">
-                {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
-              </span>
-              <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
-                   efectivo por ítem + sección comparativa de formas. Al elegir
-                   una, todo el presupuesto se expresa en ella. No aplica en
-                   modo individual (cada ítem lista sus formas). -->
-              @if (!cotizacionIndividual()) {
-                <div class="inline-flex items-center gap-1.5">
-                  <span class="text-xs font-bold uppercase tracking-wider text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5 shrink-0">
-                    <i class="pi pi-wallet text-[#FF861C]"></i>
-                    Forma de pago
-                  </span>
-                  <p-select
-                    [options]="formasPago()"
-                    [ngModel]="formaPagoSeleccionadaId()"
-                    (ngModelChange)="formaPagoSeleccionadaId.set($event)"
-                    optionLabel="nombre" optionValue="id"
-                    [showClear]="true"
-                    placeholder="Todas"
-                    appendTo="body"
-                    class="kt-forma-pago-pdf text-sm">
-                    <ng-template let-fp #selectedItem>
-                      <span class="inline-flex items-center gap-2">
-                        <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
-                        {{ fp.nombre }}
-                      </span>
-                    </ng-template>
-                    <ng-template let-fp #item>
-                      <span class="inline-flex items-center gap-2">
-                        <i [class]="iconoForma(fp.nombre)" class="text-[#FF861C]"></i>
-                        {{ fp.nombre }}
-                      </span>
-                    </ng-template>
-                  </p-select>
-                </div>
-              }
-            </div>
-          }
-
-          <!-- Banner "precios desactualizados" — solo en edición, cuando al
-               abrir se detectó que el catálogo cambió respecto a lo guardado.
-               Reúne el conteo + CTA para traer los precios actuales. Las filas
-               afectadas llevan además un pill con el precio actual. -->
-          @if (esModoEdicion() && cantidadPreciosCambiados() > 0) {
-            <div class="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50
-                        dark:bg-amber-900/20 dark:border-amber-700/50
-                        flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
-              <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
-              <div class="flex-1 min-w-[12rem]">
-                <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
-                  {{ cantidadPreciosCambiados() }}
-                  {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
-                  en el catálogo desde que se guardó este presupuesto
-                </p>
-                <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
-                  Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
-                  conservando cantidades y descuentos.
-                </p>
-              </div>
-              <button type="button"
-                class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
-                       text-white bg-gradient-to-r from-[#FF9A3C] to-[#FF6A00] shadow-md
-                       hover:from-[#FF861C] hover:to-[#F25C00] hover:shadow-lg
-                       focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FF6A00]
-                       disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
-                [disabled]="actualizandoPrecios()"
-                (click)="actualizarPreciosDesdeCatalogo()"
-                aria-label="Actualizar precios desde el catálogo">
-                <i class="pi"
-                  [class.pi-refresh]="!actualizandoPrecios()"
-                  [class.pi-spinner]="actualizandoPrecios()"
-                  [class.pi-spin]="actualizandoPrecios()"></i>
-                {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
-              </button>
-            </div>
-          }
-
-          @if (items().length === 0) {
-            <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
-              <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
-                <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>
-              </div>
-              <p class="m-0 text-base font-medium text-[#3B1E09] dark:text-surface-0">Todavía no agregaste productos</p>
-              <p class="m-0 text-sm">Escaneá un código arriba para empezar.</p>
-            </div>
-          } @else {
-            <p-table [value]="itemsOrdenados()" dataKey="uid" stripedRows class="kt-table">
-              <ng-template #header>
-                <tr>
-                  <th style="width: 4rem"></th>
-                  <th>
-                    <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
-                      (click)="ordenarItemsPor('producto')" pTooltip="Ordenar por producto" tooltipPosition="top">
-                      <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
-                      <i [class]="iconoOrdenItems('producto')" class="text-[10px] opacity-70"></i>
-                    </button>
-                  </th>
-                  <th class="text-center" style="width: 9rem">
-                    <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> Cantidad
-                  </th>
-                  <th class="text-right" style="width: 8rem">
-                    <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
-                      (click)="ordenarItemsPor('precio')" pTooltip="Ordenar por precio" tooltipPosition="top">
-                      <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Precio
-                      <i [class]="iconoOrdenItems('precio')" class="text-[10px] opacity-70"></i>
-                    </button>
-                  </th>
-                  <th class="text-center" style="width: 7rem">
-                    <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
-                  </th>
-                  <th class="text-right" style="width: 9rem">
-                    <i class="pi pi-calculator text-[#FF861C] mr-1"></i> Subtotal
-                  </th>
-                  <th style="width: 3rem" class="text-center">
-                    <!-- Vaciar todo el detalle — al tope de la columna de los
-                         botones de quitar (×) por fila. -->
-                    <p-button icon="pi pi-trash" severity="danger" [text]="true" [rounded]="true"
-                      size="small" (onClick)="vaciar()" ariaLabel="Vaciar el detalle"
-                      pTooltip="Vaciar el detalle" tooltipPosition="left" />
-                  </th>
-                </tr>
-              </ng-template>
-
-              <ng-template #body let-it>
-                <!-- Fila del detalle: si es máquina industrial, marcamos con
-                     fondo ámbar suave para que el operador no se sorprenda
-                     al ver que el descuento global no afecta a esa línea
-                     (lo aclaramos también con badge "Máq. Industrial"). -->
-                <tr [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)">
-                  <td>
-                    @if (it.imagenUrl) {
-                      <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
-                        imageClass="w-14 h-14 object-contain rounded-lg border border-[#FF861C]/30 bg-white p-0.5 cursor-zoom-in" />
-                    } @else {
-                      <div class="w-14 h-14 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
-                        <i class="pi pi-image text-[#FF861C]"></i>
-                      </div>
-                    }
-                  </td>
-                  <td>
-                    <div class="flex flex-col gap-0.5">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="kt-sku-pill">{{ it.sku }}</span>
-                        @if (it.generico) {
-                          <!-- Badge "Genérico": el producto fue cargado a mano
-                               con el SKU comodín, no existe en catálogo. -->
-                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                                       bg-indigo-200 text-indigo-900 dark:bg-indigo-900/70 dark:text-indigo-200
-                                       font-bold text-[10px] uppercase tracking-wide"
-                                pTooltip="Producto cargado a mano (sin catálogo)"
-                                tooltipPosition="top">
-                            <i class="pi pi-pencil text-[9px]"></i>
-                            Genérico
-                          </span>
-                        }
-                        @if (esRubroMaquinaria(it.rubro)) {
-                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
-                                       font-bold text-[10px] uppercase tracking-wide"
-                                pTooltip="Máquina industrial — no aplican los descuentos por monto"
-                                tooltipPosition="top">
-                            <i class="pi pi-wrench text-[9px]"></i>
-                            Máq. Industrial
-                          </span>
-                        }
-                        @if (!it.pvpKtGastroSinIva || it.pvpKtGastroSinIva <= 0) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex items-center gap-1"
-                            pTooltip="Este producto no tiene precio cargado en DUX — no aportará al total" tooltipPosition="top">
-                            <i class="pi pi-exclamation-triangle text-[9px]"></i> Sin precio
-                          </span>
-                        }
-                        <!-- Pill de stock — solo para items del catálogo. Los
-                             genéricos no representan un producto real, no tiene
-                             sentido mostrar pill de stock para ellos. -->
-                        @if (!it.generico) {
-                          @if (it.stockTotal == null) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-surface-200 text-surface-600 font-semibold flex items-center gap-1"
-                            pTooltip="Stock no sincronizado con DUX" tooltipPosition="top">
-                            <i class="pi pi-question-circle text-[9px]"></i> Stock —
-                          </span>
-                        } @else if (it.stockTotal <= 0) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex items-center gap-1">
-                            <i class="pi pi-times-circle text-[9px]"></i> Sin stock
-                          </span>
-                        } @else if (it.cantidad > it.stockTotal) {
-                          <!-- Cantidad pedida supera el stock disponible — pill
-                               amarilla con tooltip de advertencia. -->
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold flex items-center gap-1"
-                            pTooltip="La cantidad pedida supera el stock disponible"
-                            tooltipPosition="top">
-                            <i class="pi pi-exclamation-triangle text-[9px]"></i> Stock: {{ it.stockTotal }}
-                          </span>
-                        } @else {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold flex items-center gap-1">
-                            <i class="pi pi-box text-[9px]"></i> Stock: {{ it.stockTotal }}
-                          </span>
-                        }
-                        }
-                      </div>
-                      <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-                        {{ it.descripcion || '—' }}
-                      </span>
-                    </div>
-                  </td>
-                  <td class="text-center">
-                    <p-inputNumber [ngModel]="it.cantidad"
-                      (ngModelChange)="actualizarCantidad(it, $event)"
-                      [min]="1"
-                      [max]="cantidadMaximaDe(it)"
-                      [showButtons]="true" buttonLayout="horizontal"
-                      spinnerMode="horizontal"
-                      decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                      inputStyleClass="w-20 text-center" [allowEmpty]="false" />
-                  </td>
-                  <td class="text-right">
-                    <div class="flex flex-col items-end gap-1">
-                      <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0"
-                        [class.line-through]="cambioPrecioDe(it.uid)"
-                        [class.text-muted-color]="cambioPrecioDe(it.uid)">
-                        {{ precioVisualItem(it) | currency:'ARS':'symbol':'1.0-0' }}
-                      </span>
-                      <!-- Pill de precio desactualizado: el catálogo cambió desde
-                           que se guardó. Flecha ↑ si subió, ↓ si bajó. El precio
-                           tachado de arriba es el guardado; este es el actual. -->
-                      @if (cambioPrecioDe(it.uid); as cambio) {
-                        <span class="inline-flex items-center gap-1 text-[11px] font-bold px-1.5 py-0.5 rounded
-                                     bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                          [pTooltip]="'Precio guardado: ' + (cambio.precioGuardado | currency:'ARS':'symbol':'1.0-0')
-                            + ' · Catálogo actual: ' + (cambio.precioActual | currency:'ARS':'symbol':'1.0-0')"
-                          tooltipPosition="left">
-                          <i class="pi text-[9px]"
-                            [class.pi-arrow-up]="cambio.precioActual > cambio.precioGuardado"
-                            [class.pi-arrow-down]="cambio.precioActual < cambio.precioGuardado"></i>
-                          {{ cambio.precioActual | currency:'ARS':'symbol':'1.0-0' }}
-                        </span>
-                      }
-                    </div>
-                  </td>
-                  <td class="text-center">
-                    <p-inputNumber [ngModel]="it.descuentoPorcentaje"
-                      (ngModelChange)="actualizarDescuento(it, $event)"
-                      (onFocus)="seleccionarAlEnfocar($event)"
-                      [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
-                      [inputStyleClass]="claseInputDescuentoItem(it.descuentoPorcentaje)" />
-                  </td>
-                  <td class="text-right">
-                    <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
-                      {{ subtotalVisualItem(it) | currency:'ARS':'symbol':'1.0-0' }}
-                    </span>
-                  </td>
-                  <td>
-                    <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true"
-                      size="small" (onClick)="eliminarItem(it.uid)" pTooltip="Quitar" />
-                  </td>
-                </tr>
-              </ng-template>
-            </p-table>
-          }
+          <app-carrito-editor
+            [(items)]="items"
+            [formaPagoSeleccionada]="formaPagoSeleccionada()"
+            [cambiosPrecio]="cambiosPrecio()"
+            (mutacion)="onCarritoMutacion($event)"
+            (dialogCerrado)="onCarritoDialogCerrado()" />
         </p-card>
 
       </div>
@@ -1087,14 +724,8 @@
   [pedidoAnteriorId]="pedidoAnteriorParaRegenerar()"
   (pedidoCreado)="onPedidoCreado($event)" />
 
-<!-- ============= DIALOG "+ PRODUCTO GENÉRICO" =============
-     Permite cargar a mano un ítem que no está en el catálogo KT GASTRO.
-     Cada confirmación crea una línea NUEVA en el detalle, identificada con
-     uid sintético — varias líneas con el mismo SKU comodín coexisten. -->
-<app-producto-generico-dialog
-  [(visible)]="mostrarDialogGenerico"
-  [sku]="skuGenerico()"
-  (agregar)="onAgregarGenerico($event)" />
+<!-- El dialog "+ Producto genérico" ahora vive dentro de `app-carrito-editor`
+     (junto con el botón que lo abre). -->
 
 <!-- ============= DIALOG NUEVO CLIENTE (sesión compartida con el showroom) =============
      Asocia un cliente a la atención. Mismo mecanismo que el showroom: cierra la
@@ -1102,7 +733,7 @@
      prellena el campo del presupuesto; es opcional armar sin cliente. -->
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="focusInput()">
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="carrito()?.focusScanInput()">
   <div class="flex flex-col gap-3">
     @if (haySesionActiva()) {
     <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
@@ -1141,143 +772,7 @@
      el del presupuesto (no el producto-a-producto del showroom). -->
 <app-qr-celular-dialog [(visible)]="mostrarDialogVisor" [visorUrl]="visorUrl()"
   [qrDataUrl]="qrVisorDataUrl()" [generando]="qrVisorGenerando()"
-  visorTitulo="Ver el presupuesto" (dialogClosed)="focusInput()" />
+  visorTitulo="Ver el presupuesto" (dialogClosed)="carrito()?.focusScanInput()" />
 
-<!-- ============= DIALOG "VER PRODUCTO" =============
-     Preview rápido de un resultado de búsqueda: foto grande + datos
-     del producto + botón directo "Agregar al detalle". Sirve para que
-     el operador verifique el producto antes de meterlo en el
-     presupuesto, sin tener que cerrar la lista de resultados. -->
-@if (productoPreview(); as p) {
-  <p-dialog [visible]="true"
-    (visibleChange)="$event ? null : cerrarProductoPreview()"
-    [modal]="true" [draggable]="false"
-    [style]="{ width: '92vw', maxWidth: '32rem' }"
-    [breakpoints]="{ '640px': '95vw' }">
-    <ng-template #header>
-      <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
-        <i class="pi pi-eye text-[#FF861C]"></i>
-        <span class="font-bold">Vista previa del producto</span>
-      </div>
-    </ng-template>
-
-    <div class="flex flex-col gap-4">
-      <!-- Foto grande centrada (300x300 max) o placeholder. -->
-      <div class="flex justify-center bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 p-4">
-        @if (p.imagenUrl) {
-          <p-image [src]="p.imagenUrl" [alt]="p.descripcion ?? p.sku" [preview]="true"
-            imageClass="max-h-72 object-contain cursor-zoom-in" />
-        } @else {
-          <div class="h-72 w-full flex flex-col items-center justify-center gap-2 text-muted-color">
-            <i class="pi pi-image text-5xl opacity-40"></i>
-            <span class="text-xs">Sin imagen disponible</span>
-          </div>
-        }
-      </div>
-
-      <!-- SKU + badges. -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="inline-flex items-center px-2 py-1 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-xs font-bold">
-          {{ p.sku }}
-        </span>
-        <!-- Badge "Máq. Industrial" para rubros sin descuento. El rubro normal
-             NO se muestra acá: ya aparece en su propio chip "Rubro" más abajo. -->
-        @if (esRubroMaquinaria(p.rubro)) {
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
-                       font-bold text-[10px] uppercase tracking-wide"
-                pTooltip="Máquina industrial — no aplican los descuentos por monto"
-                tooltipPosition="top">
-            <i class="pi pi-wrench text-[9px]"></i>
-            Máq. Industrial
-          </span>
-        }
-        @if (p.habilitado === false) {
-          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
-            Deshabilitado
-          </span>
-        }
-      </div>
-
-      <!-- Descripción. -->
-      <div class="text-base font-medium text-[#3B1E09] dark:text-surface-0">
-        {{ p.descripcion || '—' }}
-      </div>
-
-      <!-- Precio + stock en dos columnas. -->
-      <div class="grid grid-cols-2 gap-3">
-        <div class="p-3 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">
-            Precio
-          </div>
-          @if (p.pvpKtGastroConIva != null && p.pvpKtGastroConIva > 0) {
-            <div class="text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
-              {{ precioMostrado(p) | currency:'ARS':'symbol':'1.0-0' }}
-            </div>
-          } @else {
-            <div class="text-sm text-red-600 dark:text-red-400 font-bold inline-flex items-center gap-1">
-              <i class="pi pi-exclamation-triangle text-[10px]"></i>
-              Sin precio cargado
-            </div>
-          }
-        </div>
-        <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-800/80 dark:text-emerald-300/80 mb-1">
-            Stock
-          </div>
-          @if (p.stockTotal == null) {
-            <div class="text-sm text-muted-color inline-flex items-center gap-1">
-              <i class="pi pi-question-circle text-[10px]"></i>
-              No sincronizado
-            </div>
-          } @else if (p.stockTotal <= 0) {
-            <div class="text-sm font-bold text-red-600 dark:text-red-400 inline-flex items-center gap-1">
-              <i class="pi pi-times-circle text-[10px]"></i>
-              Sin stock
-            </div>
-          } @else {
-            <div class="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-              {{ p.stockTotal }}
-            </div>
-          }
-        </div>
-      </div>
-
-      <!-- Proveedor, rubro e IVA del producto (datos DUX). -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-truck text-[10px]"></i> Proveedor
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
-            {{ p.proveedor || '—' }}
-          </div>
-        </div>
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-tag text-[10px]"></i> Rubro
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
-            {{ p.rubro || '—' }}
-          </div>
-        </div>
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-percentage text-[10px]"></i> IVA
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-            {{ p.porcIva != null ? p.porcIva + '%' : '—' }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <ng-template #footer>
-      <p-button label="Cerrar" icon="pi pi-times" severity="secondary" [outlined]="true"
-        (onClick)="cerrarProductoPreview()" />
-      <p-button label="Agregar al detalle" icon="pi pi-arrow-right" class="btn-kt-naranja"
-        [disabled]="p.habilitado === false || !p.pvpKtGastroSinIva || p.pvpKtGastroSinIva <= 0"
-        (onClick)="agregarDesdePreview()" />
-    </ng-template>
-  </p-dialog>
-}
+<!-- El dialog "Ver producto" (preview de un resultado de búsqueda) ahora
+     vive dentro de `app-carrito-editor`, junto con el scan/búsqueda. -->

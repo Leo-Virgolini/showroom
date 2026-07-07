@@ -296,6 +296,7 @@ public class PedidoService {
                         it.getDescripcion(),
                         it.getCantidad(),
                         it.getPrecioUnitario(),
+                        it.getPrecioListaConIva(),
                         it.getPorcIva(),
                         it.getAplicaIva(),
                         it.getDescuentoPorcentaje(),
@@ -471,6 +472,23 @@ public class PedidoService {
 
     @Transactional
     public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId, String username) {
+        return crearPedido(request, clientId, username, false);
+    }
+
+    /**
+     * Variante que permite tratar el alta como una REGENERACIÓN/EDICIÓN de pedido:
+     * cuando {@code tratarComoRegeneracion} es true se omite la asociación de la
+     * sesión de atención y el PDF de follow-up (igual que un pedido de presupuesto),
+     * sin necesidad de mandar {@code origenPresupuesto} en el request. El re-vínculo
+     * de presupuesto/sesión al pedido nuevo lo hace {@code EdicionPedidoService}.
+     */
+    @Transactional
+    public CrearPedidoResponseDTO crearPedido(CrearPedidoRequestDTO request, String clientId, String username, boolean tratarComoRegeneracion) {
+        // Combina el flag histórico del request con la instrucción explícita de
+        // regeneración. Controla el bloque sesión/follow-up (abajo) sin exponer
+        // "origenPresupuesto" al llamador de edición de pedidos.
+        boolean omitirAtencion = tratarComoRegeneracion || request.origenPresupuesto();
+
         // El descuento a nivel pedido se calcula como el % EFECTIVO sobre el
         // subtotal (monto descontado / subtotal bruto), recién después de iterar
         // los ítems — coincide con descuentos individuales mixtos, no solo con el
@@ -594,6 +612,7 @@ public class PedidoService {
                     .rubro(it.rubro())
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
+                    .precioListaConIva(precioBaseConIva)
                     .porcIva(porcIva)
                     .aplicaIva(aplicaIvaItem)
                     .descuentoPorcentaje(descItem.signum() > 0 ? descItem : null)
@@ -704,7 +723,7 @@ public class PedidoService {
                 // robándole una sesión en curso de otro cliente). Además el PDF de
                 // follow-up ("productos vistos no comprados") sale justamente de
                 // los items escaneados en una sesión, que acá no existen.
-                if (!request.origenPresupuesto()) {
+                if (!omitirAtencion) {
                     // Finalizar la sesión de atención asociada (si la hay) y
                     // asociarla al pedido recién creado. Esto deja la sesión
                     // marcada como "completada" y permite al email service
@@ -746,7 +765,7 @@ public class PedidoService {
                 // hay generación al abrir y se genera post-pedido como siempre.
                 // Si la generación al abrir falló, queda el botón "regenerar
                 // pickit" de la pantalla de pedidos como fallback.
-                if (request.origenPresupuesto()) {
+                if (omitirAtencion) {
                     pickitExternoService.generarAsync(pedido, clientId);
                 }
 
