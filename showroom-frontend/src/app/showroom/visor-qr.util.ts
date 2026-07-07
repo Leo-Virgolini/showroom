@@ -12,15 +12,16 @@
  * memoria del proyecto sobre IP vs DNS.
  */
 
-/** Arma la URL pública del visor: {@code base/segmento/username}. Vacío en SSR. */
+/** Arma la URL pública del visor: {@code base/segmento/token}. Vacío en SSR.
+ *  El {@code token} es el de la sesión de atención activa (rota por sesión). */
 export function construirVisorUrl(
   baseUrl: string | null | undefined,
-  username: string,
+  token: string,
   segmento: string,
 ): string {
   if (typeof window === 'undefined') return '';
   const base = baseUrl || window.location.origin;
-  return `${base}/${segmento}/${encodeURIComponent(username)}`;
+  return `${base}/${segmento}/${encodeURIComponent(token)}`;
 }
 
 /** Genera el dataURL del QR para una URL dada (carga `qrcode` lazy). Devuelve

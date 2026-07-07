@@ -42,6 +42,14 @@ export class PrecioPerfilService {
     });
   }
 
+  /** Setea formas activas + rubros sin IVA directamente (sin HTTP). Lo usa el
+   *  visor, que recibe ambos en el bootstrap token-scoped en vez de pegarle a
+   *  los endpoints globales (ahora autenticados). */
+  setDatos(formas: FormaPago[], rubros: string[]): void {
+    this.formasPago.set(formas ?? []);
+    this.rubrosSinIva.set(rubros ?? []);
+  }
+
   /** True si el rubro cotiza sin IVA (perfil maquinaria). */
   rubroCotizaSinIva(rubro: string | null | undefined): boolean {
     const n = normalizarRubro(rubro);
