@@ -46,47 +46,18 @@
            lg+ vía `order`. -->
       <div class="flex flex-col gap-4 order-1 lg:order-2">
 
-        <!-- Card "Acciones" (+ contexto de Atención integrado en el header
-             para ahorrar espacio): a la izquierda el título; a la derecha el
-             chip de cliente / "Nuevo cliente" + el QR del visor (antes una card
-             aparte). El cuerpo tiene el estado de guardado + botones
-             (generar/guardar, enviar, crear pedido), el chip "Datos del
-             cliente", el selector de modo de cotización/forma de pago del PDF y
-             el banner de "precios desactualizados" en edición. La tabla + scan
-             viven en `carrito-tabla`/`carrito-buscador`. -->
+        <!-- Card "Acciones": el header es solo el título. El cuerpo agrupa
+             TODOS los botones (estado de guardado + generar/guardar, enviar,
+             crear pedido, y los de atención "Nuevo cliente" + "QR" del visor,
+             movidos acá desde el header a pedido del usuario), el chip "Datos
+             del cliente", el selector de modo de cotización/forma de pago del
+             PDF y el banner de "precios desactualizados" en edición. La tabla +
+             scan viven en `carrito-tabla`/`carrito-buscador`. -->
         <p-card class="kt-card">
           <ng-template #title>
-            <div class="flex items-center justify-between gap-2 flex-wrap">
-              <div class="kt-card-title">
-                <i class="pi pi-bolt"></i>
-                <span>Acciones</span>
-              </div>
-              <div class="flex items-center gap-2 flex-wrap">
-                @if (haySesionActiva()) {
-                  <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
-                    [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
-                    tooltipPosition="bottom" role="status" aria-live="polite">
-                    <i class="pi pi-user"></i>
-                    <span class="truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
-                    <button type="button" aria-label="Finalizar atención"
-                      class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
-                      (click)="finalizarSesion()">
-                      <i class="pi pi-times text-[10px]"></i>
-                    </button>
-                  </span>
-                } @else {
-                  <p-button icon="pi pi-user-plus" label="Nuevo cliente"
-                    ariaLabel="Asociar cliente" class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
-                    pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
-                    tooltipPosition="bottom" />
-                }
-                <p-button icon="pi pi-mobile" label="QR"
-                  ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
-                  [disabled]="!haySesionActiva()"
-                  (onClick)="abrirDialogVisor()"
-                  [pTooltip]="haySesionActiva() ? 'Mostrar el QR para que el cliente vea el presupuesto en su celular' : 'Iniciá una atención para mostrar el visor'"
-                  tooltipPosition="bottom" />
-              </div>
+            <div class="kt-card-title">
+              <i class="pi pi-bolt"></i>
+              <span>Acciones</span>
             </div>
           </ng-template>
 
@@ -154,6 +125,33 @@
                           : 'Crear pedido en DUX a partir de este presupuesto')"
                   tooltipPosition="bottom" />
               }
+
+              <!-- Atención: asociar cliente + QR del visor. Movidos acá desde
+                   el header para agruparlos con el resto de las acciones. -->
+              @if (haySesionActiva()) {
+                <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
+                  [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
+                  tooltipPosition="bottom" role="status" aria-live="polite">
+                  <i class="pi pi-user"></i>
+                  <span class="truncate max-w-[8rem]">{{ sesionActiva().nombre }}</span>
+                  <button type="button" aria-label="Finalizar atención"
+                    class="ml-0.5 w-5 h-5 rounded-full hover:bg-emerald-200 dark:hover:bg-emerald-800 flex items-center justify-center"
+                    (click)="finalizarSesion()">
+                    <i class="pi pi-times text-[10px]"></i>
+                  </button>
+                </span>
+              } @else {
+                <p-button icon="pi pi-user-plus" label="Nuevo cliente"
+                  ariaLabel="Asociar cliente" class="btn-kt-verde" (onClick)="abrirDialogoNuevoCliente()"
+                  pTooltip="Asociar un cliente a la atención (compartido con el showroom)"
+                  tooltipPosition="bottom" />
+              }
+              <p-button icon="pi pi-mobile" label="QR"
+                ariaLabel="Mostrar el QR del visor de presupuesto" class="btn-kt-marron"
+                [disabled]="!haySesionActiva()"
+                (onClick)="abrirDialogVisor()"
+                [pTooltip]="haySesionActiva() ? 'Mostrar el QR para que el cliente vea el presupuesto en su celular' : 'Iniciá una atención para mostrar el visor'"
+                tooltipPosition="bottom" />
 
               <!-- Chip "Datos del cliente" — empujado a la derecha de la
                    barra (identidad, separada de las acciones). -->
