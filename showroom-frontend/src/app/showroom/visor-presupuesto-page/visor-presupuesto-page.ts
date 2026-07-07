@@ -23,10 +23,10 @@ import { ShowroomService } from '../showroom.service';
  * y se actualiza en vivo a medida que el operador lo arma. 100% lectura: no
  * permite editar ni quitar nada.
  *
- * <p>Se conecta al mismo canal SSE por operador que el visor del showroom
- * ({@code /visor/{username}/events}) pero escucha solo el evento
+ * <p>Se conecta al mismo canal SSE por token que el visor del showroom
+ * ({@code /visor/{token}/events}) pero escucha solo el evento
  * {@code presupuesto-visor}. Hidrata el estado inicial con
- * {@code GET /visor/{username}/presupuesto} (el backend guarda el último
+ * {@code GET /visor/{token}/presupuesto} (el backend guarda el último
  * snapshot en memoria), así el celular que escanea el QR tarde ve el armado
  * actual sin esperar al próximo cambio.
  */
@@ -44,14 +44,15 @@ export class VisorPresupuestoPage {
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
 
-  /** Username del operador al que está ligado este visor — viene del path
-   *  {@code /visor-presupuesto/:username}. Determina el canal SSE y de qué
-   *  operador hidratamos el snapshot. */
-  readonly operadorUsername = this.route.snapshot.paramMap.get('username') ?? '';
+  /** Token de la sesión de visor al que está ligado este visor — viene del path
+   *  {@code /visor-presupuesto/:token}. Determina el canal SSE y de qué
+   *  sesión hidratamos el snapshot. */
+  readonly visorToken = this.route.snapshot.paramMap.get('token') ?? '';
 
-  /** True cuando el username del path está vacío o no corresponde a un operador
-   *  activo (404 del backend). Muestra el overlay "URL inválida" — mismo patrón
-   *  que el visor del showroom. */
+  /** True cuando el token del path está vacío o no corresponde a una sesión
+   *  activa (404/410 del backend — no encontrada o atención ya finalizada).
+   *  Muestra el overlay "código inválido" — mismo patrón que el visor del
+   *  showroom. */
   readonly operadorInvalido = signal(false);
 
   /** Último snapshot del presupuesto recibido (hidratación inicial + SSE).
@@ -91,21 +92,22 @@ export class VisorPresupuestoPage {
   readonly formasExpandidas = signal(false);
 
   constructor() {
-    // Username faltante en la URL (alguien tipeó /visor-presupuesto/ a mano).
-    if (!this.operadorUsername) {
+    // Token faltante en la URL (alguien tipeó /visor-presupuesto/ a mano).
+    if (!this.visorToken) {
       this.operadorInvalido.set(true);
       return;
     }
-    // Engancha el SSE al canal personal del operador. Reusa el endpoint del
-    // visor del showroom; solo nos interesa el evento presupuesto-visor.
-    this.backendStatus.conectarComoVisor(this.operadorUsername);
+    // Engancha el SSE al canal de la sesión. Reusa el endpoint del visor del
+    // showroom; solo nos interesa el evento presupuesto-visor.
+    this.backendStatus.conectarComoVisor(this.visorToken);
 
-    // Hidratación inicial: el snapshot actual del armado (o vacío). El 404 acá
-    // significa que el username del path no es un operador válido.
-    this.api.visorObtenerPresupuesto(this.operadorUsername).subscribe({
+    // Hidratación inicial: el snapshot actual del armado (o vacío). El 404/410
+    // acá significa que el token del path no corresponde a una sesión activa
+    // (no encontrada o atención ya finalizada).
+    this.api.visorObtenerPresupuesto(this.visorToken).subscribe({
       next: (p) => this.snapshot.set(p),
       error: (err) => {
-        if (err?.status === 404) this.operadorInvalido.set(true);
+        if (err?.status === 404 || err?.status === 410) this.operadorInvalido.set(true);
       },
     });
 
