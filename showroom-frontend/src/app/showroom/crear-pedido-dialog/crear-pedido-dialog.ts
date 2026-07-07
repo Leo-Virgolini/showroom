@@ -789,12 +789,14 @@ export class CrearPedidoDialog {
           // haya devuelto el id local — sino el carrito quedaría sin vaciar y se
           // podría re-enviar/duplicar. Va ANTES del chequeo de pedidoLocalId.
           if (presupuestoId == null) {
-            this.toast.add({
-              severity: 'success',
-              summary: 'Pedido cargado en DUX',
-              detail: res.mensaje ?? 'El pedido se creó en DUX.',
-              life: 5000,
-            });
+            if (this.pedidoAnteriorId() == null) {
+              this.toast.add({
+                severity: 'success',
+                summary: 'Pedido cargado en DUX',
+                detail: res.mensaje ?? 'El pedido se creó en DUX.',
+                life: 5000,
+              });
+            }
             this.visible.set(false);
             this.pedidoCreado.emit({ presupuestoId: null, pedidoLocalId: res.pedidoLocalId ?? 0 });
             return;
