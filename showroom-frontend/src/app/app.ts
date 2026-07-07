@@ -29,6 +29,7 @@ import { filter, map, startWith } from 'rxjs/operators';
 import { AuthService } from './auth/auth.service';
 import { BackendStatusService } from './showroom/backend-status.service';
 import { PwaInstallService } from './showroom/pwa-install.service';
+import { PwaUpdateService } from './showroom/pwa-update.service';
 import { ShowroomService } from './showroom/showroom.service';
 import { SyncStateService } from './showroom/sync-state.service';
 import { ClientIdService } from './showroom/client-id.service';
@@ -46,6 +47,7 @@ export class App {
   protected readonly syncState = inject(SyncStateService);
   protected readonly backendStatus = inject(BackendStatusService);
   protected readonly pwaInstall = inject(PwaInstallService);
+  protected readonly pwaUpdate = inject(PwaUpdateService);
   protected readonly auth = inject(AuthService);
   private readonly api = inject(ShowroomService);
   private readonly toast = inject(MessageService);
@@ -414,6 +416,26 @@ export class App {
           });
         }
       });
+
+    // Toast de "nueva versión disponible". El PwaUpdateService prende `disponible`
+    // cuando el service worker terminó de bajar una versión nueva del frontend
+    // (tras un deploy, detectado por el reconnect del SSE). Es sticky: el operador
+    // decide cuándo actualizar con el botón del template headless (app.html),
+    // para no cortar un carrito/pedido a medio armar. No se muestra en el visor.
+    // `toastUpdateMostrado` evita re-disparar si el operador entra y sale de
+    // /visor con la actualización ya pendiente.
+    let toastUpdateMostrado = false;
+    effect(() => {
+      if (!this.pwaUpdate.disponible() || this.esVistaVisor() || toastUpdateMostrado) return;
+      toastUpdateMostrado = true;
+      this.toast.add({
+        key: 'pwa-update',
+        severity: 'info',
+        sticky: true,
+        summary: 'Nueva versión disponible',
+        detail: 'Actualizá para aplicar las últimas mejoras.',
+      });
+    });
   }
 
   /** Extrae el nombre del archivo de un path (separadores Unix o Windows). */

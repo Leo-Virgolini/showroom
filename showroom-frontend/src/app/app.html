@@ -75,6 +75,41 @@
   </ng-template>
 </p-toast>
 
+<!-- Toast de "nueva versión disponible" (PWA). Sticky: no se cierra solo — el
+     operador aplica la actualización con el botón "Actualizar" (recarga a la
+     versión nueva) o pospone con la X (reaparece en la próxima reconexión SSE).
+     Template headless por el mismo motivo que `carrito-add`: en PrimeNG 21 solo
+     el headless recibe `closeFn` y suprime la X default. -->
+<p-toast position="top-right" key="pwa-update">
+  <ng-template let-message #headless let-closeFn="closeFn">
+    <div class="relative flex items-start gap-3 w-full p-3 pr-9 overflow-hidden text-surface-900 dark:text-surface-0">
+      <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-primary-100 dark:bg-primary-900/40">
+        <i class="pi pi-download text-lg text-primary-600 dark:text-primary-400"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-bold leading-tight">{{ message.summary }}</div>
+        @if (message.detail) {
+          <div class="text-xs text-muted-color mt-1 leading-snug">{{ message.detail }}</div>
+        }
+        <p-button
+          label="Actualizar"
+          icon="pi pi-refresh"
+          size="small"
+          class="mt-3"
+          (onClick)="pwaUpdate.actualizar()"
+          ariaLabel="Actualizar a la nueva versión"
+        />
+      </div>
+      <button type="button"
+        (click)="closeFn($event)"
+        aria-label="Posponer"
+        class="absolute top-2 right-2 w-7 h-7 rounded-full inline-flex items-center justify-center text-muted-color hover:bg-surface-100 dark:hover:bg-surface-800 hover:text-surface-900 dark:hover:text-surface-0 transition-colors">
+        <i class="pi pi-times text-xs"></i>
+      </button>
+    </div>
+  </ng-template>
+</p-toast>
+
 <!-- ConfirmDialog global — cualquier componente que inyecte ConfirmationService
      y llame .confirm({...}) abre este dialog reutilizable. Evita declarar un
      <p-dialog> custom por cada confirmación. -->
