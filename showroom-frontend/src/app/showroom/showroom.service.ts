@@ -43,6 +43,7 @@ import {
   SesionDetalle,
   SesionListPage,
   SesionShowroom,
+  VisorBootstrap,
   VisorConfig,
   WhatsappMensajeConfig,
 } from './models';
@@ -62,15 +63,21 @@ export class ShowroomService {
     return this.http.get<ScanResult>(`${this.base}/scan/${encodeURIComponent(sku)}`, { params });
   }
 
-  /** Llamada desde /visor/:username cuando el cliente toca "Agregar al carrito"
-   *  en el celular. El backend lo suma al carrito DEL OPERADOR identificado
-   *  por {@code username} y emite SSE `carrito-updated` en su canal personal.
-   *  La respuesta incluye cuánto se sumó realmente. */
-  visorAgregarAlCarrito(username: string, sku: string, cantidad: number, forzar = false):
-      Observable<CarritoAgregarResponse> {
-    return this.http.post<CarritoAgregarResponse>(
-      `${this.base}/visor/${encodeURIComponent(username)}/agregar-carrito`,
-      { sku, cantidad, forzar });
+  /** Token del visor de la sesión activa del operador (para armar el QR). */
+  obtenerVisorToken(): Observable<{ token: string | null }> {
+    return this.http.get<{ token: string | null }>(`${this.base}/visor/token`);
+  }
+
+  /** Datos para renderizar precios en el visor (formas/escalas/rubros). */
+  visorBootstrap(token: string): Observable<VisorBootstrap> {
+    return this.http.get<VisorBootstrap>(
+      `${this.base}/visor/t/${encodeURIComponent(token)}/bootstrap`);
+  }
+
+  /** Sesión activa (nombre del cliente) para el visor. */
+  visorObtenerSesion(token: string): Observable<SesionShowroom> {
+    return this.http.get<SesionShowroom>(
+      `${this.base}/visor/t/${encodeURIComponent(token)}/sesion`);
   }
 
   /** Publica al visor del operador autenticado la forma de pago elegida en el
@@ -81,13 +88,6 @@ export class ShowroomService {
     return this.http.post<void>(`${this.base}/visor/forma`, { formaId });
   }
 
-  /** Estado de la sesión activa de un operador específico — endpoint público
-   *  que usa el visor para mostrar el nombre del cliente actual. */
-  visorObtenerSesionActiva(username: string): Observable<SesionShowroom> {
-    return this.http.get<SesionShowroom>(
-      `${this.base}/visor/${encodeURIComponent(username)}/sesion/activa`);
-  }
-
   /** Publica al visor de presupuesto del operador autenticado el snapshot
    *  actual del armado (ítems + total + formas de pago). El backend lo guarda
    *  en memoria y emite SSE `presupuesto-visor` en su canal personal. Lo
@@ -96,12 +96,18 @@ export class ShowroomService {
     return this.http.post<void>(`${this.base}/visor/presupuesto`, snapshot);
   }
 
-  /** Snapshot actual del armado del presupuesto de un operador — endpoint
-   *  público para la hidratación inicial del visor cuando el celular abre el
-   *  QR. Devuelve un snapshot vacío si el operador todavía no publicó nada. */
-  visorObtenerPresupuesto(username: string): Observable<PresupuestoVisor> {
+  /** Snapshot del presupuesto para hidratar el visor de presupuesto. */
+  visorObtenerPresupuesto(token: string): Observable<PresupuestoVisor> {
     return this.http.get<PresupuestoVisor>(
-      `${this.base}/visor/${encodeURIComponent(username)}/presupuesto`);
+      `${this.base}/visor/t/${encodeURIComponent(token)}/presupuesto`);
+  }
+
+  /** El cliente agrega un producto al carrito desde el celular. */
+  visorAgregarAlCarrito(token: string, sku: string, cantidad: number, forzar = false):
+    Observable<CarritoAgregarResponse> {
+    return this.http.post<CarritoAgregarResponse>(
+      `${this.base}/visor/t/${encodeURIComponent(token)}/agregar-carrito`,
+      { sku, cantidad, forzarFlag: forzar });
   }
 
   // =====================================================

@@ -587,6 +587,14 @@ export interface FormaPago {
   creadoAt: string | null;
 }
 
+/** Datos que el visor pide en una sola llamada token-scoped para renderizar
+ *  precios (reemplaza los GET globales de formas/escalas/rubros). */
+export interface VisorBootstrap {
+  formasPago: FormaPago[];
+  escalasDescuento: EscalaDescuento[];
+  rubrosSinIva: string[];
+}
+
 export interface PedidoListItem {
   id: number;
   creadoAt: string;
