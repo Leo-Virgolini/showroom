@@ -61,7 +61,9 @@ import ar.com.leo.showroom.showroom.dto.ProductoListPageDTO;
 import ar.com.leo.showroom.showroom.dto.ProvinciaDTO;
 import ar.com.leo.showroom.showroom.dto.ScanResultDTO;
 import ar.com.leo.showroom.showroom.dto.SkusRequestDTO;
+import ar.com.leo.showroom.showroom.dto.VisorBootstrapDTO;
 import ar.com.leo.showroom.showroom.dto.VisorConfigDTO;
+import ar.com.leo.showroom.showroom.dto.VisorTokenDTO;
 import ar.com.leo.showroom.showroom.dto.WhatsappMensajeConfigDTO;
 import ar.com.leo.showroom.showroom.service.ShowroomService;
 import ar.com.leo.showroom.visor.PresupuestoVisorService;
@@ -176,45 +178,11 @@ public class ShowroomController {
         visorService.publicarForma(auth.getName(), body.formaId());
     }
 
-    /**
-     * Disparado desde {@code /visor/{username}}: el cliente agregó un producto
-     * al carrito desde el celular. Pasa por el {@link CarritoService} apuntando
-     * al carrito del operador correspondiente — el item aparece en la pantalla
-     * de ese operador automáticamente vía SSE {@code carrito-updated} en su
-     * canal personal.
-     *
-     * <p>El response incluye cuánto se agregó realmente (puede ser menor a lo
-     * pedido si el carrito ya estaba al tope por stock). El visor muestra esa
-     * cantidad real al cliente, no la pedida.
-     *
-     * <p>Endpoint público (el visor no tiene sesión HTTP) — el {@code username}
-     * en el path determina a qué operador pertenece el carrito.
-     *
-     * <p>Rechaza con 409 si el operador no tiene sesión de atención activa: el
-     * carrito tiene sentido solo cuando hay un cliente concreto siendo atendido.
-     * Sin esta validación, cualquiera con la URL del visor podría agregar items
-     * al carrito de un operador que ni siquiera está atendiendo.
-     */
-    @PostMapping("/visor/{username}/agregar-carrito")
-    public CarritoAgregarResponseDTO visorAgregarAlCarrito(
-            @PathVariable String username,
-            @RequestBody @Valid CarritoAgregarRequestDTO request) {
-        validarOperadorVisor(username);
-        if (sesionShowroomService.obtenerActiva(username).id() == null) {
-            throw new ConflictException(
-                    "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
-        }
-        return carritoService.agregar(
-                username, request.sku(), request.cantidad(),
-                CarritoStateDTO.Origen.VISOR, request.forzarFlag());
-    }
-
-    /** Estado de la sesión activa del operador — público (sin auth) para que
-     *  el visor del cliente pueda mostrar el nombre del cliente actual. */
-    @GetMapping("/visor/{username}/sesion/activa")
-    public SesionShowroomDTO visorSesionActiva(@PathVariable String username) {
-        validarOperadorVisor(username);
-        return sesionShowroomService.obtenerActiva(username);
+    /** Token del visor de la sesión activa del operador logueado, para armar el
+     *  QR. Null si el operador no inició sesión. Autenticado. */
+    @GetMapping("/visor/token")
+    public VisorTokenDTO obtenerVisorToken(Authentication auth) {
+        return new VisorTokenDTO(sesionShowroomService.tokenDeSesionActiva(auth.getName()));
     }
 
     /**
@@ -232,46 +200,74 @@ public class ShowroomController {
         presupuestoVisorService.publicar(auth.getName(), body);
     }
 
-    /** Snapshot actual del armado del presupuesto del operador — público (sin
-     *  auth) para la hidratación inicial del visor cuando el celular abre el QR.
-     *  Devuelve un snapshot vacío si el operador todavía no publicó nada. */
-    @GetMapping("/visor/{username}/presupuesto")
-    public PresupuestoVisorDTO visorPresupuesto(@PathVariable String username) {
-        validarOperadorVisor(username);
+    // =====================================================
+    // Visor del cliente — endpoints públicos por TOKEN de sesión.
+    // El token (path) se resuelve al operador dueño de la sesión activa;
+    // 404 si el token no existe, 410 si la sesión ya cerró.
+    // =====================================================
+
+    /** SSE del visor. Suscribe el celular al canal del operador como VISOR
+     *  (para poder cortarlo al cerrar la sesión). */
+    @GetMapping(value = "/visor/t/{token}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter visorEvents(@PathVariable String token) {
+        String username = sesionShowroomService.resolverUsernamePorTokenActivo(token);
+        return eventService.subscribeVisor(username);
+    }
+
+    /** Estado de la sesión activa (nombre del cliente, etc.) para el visor.
+     *  Nunca incluye el token (SesionShowroomDTO es token-free). */
+    @GetMapping("/visor/t/{token}/sesion")
+    public SesionShowroomDTO visorSesion(@PathVariable String token) {
+        String username = sesionShowroomService.resolverUsernamePorTokenActivo(token);
+        return sesionShowroomService.obtenerActiva(username);
+    }
+
+    /** Snapshot del armado del presupuesto para hidratar el visor de presupuesto. */
+    @GetMapping("/visor/t/{token}/presupuesto")
+    public PresupuestoVisorDTO visorPresupuesto(@PathVariable String token) {
+        String username = sesionShowroomService.resolverUsernamePorTokenActivo(token);
         return presupuestoVisorService.obtener(username);
     }
 
-    /**
-     * SSE para la pantalla {@code /visor/{username}} — público, sin auth.
-     * Subscribe el emitter al canal del operador correspondiente; el celular
-     * recibe solo los eventos de ese operador (carrito, scan-visor,
-     * sesion-updated) y nada de los demás.
-     *
-     * <p>Valida que {@code username} exista como operador activo antes de
-     * abrir el canal — sino, cualquiera podría spammear URLs aleatorias
-     * {@code /visor/{random}/events} para ir creando suscripciones fantasma
-     * que nunca reciben eventos y solo consumen memoria del bus SSE.
-     */
-    @GetMapping(value = "/visor/{username}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter visorEvents(@PathVariable String username) {
-        validarOperadorVisor(username);
-        return eventService.subscribe(username);
+    /** Datos para renderizar precios en el visor (formas, escalas, rubros s/IVA),
+     *  en una sola llamada. */
+    @GetMapping("/visor/t/{token}/bootstrap")
+    public VisorBootstrapDTO visorBootstrap(@PathVariable String token) {
+        sesionShowroomService.resolverUsernamePorTokenActivo(token); // valida token
+        return new VisorBootstrapDTO(
+                formaPagoService.listarActivas().stream().map(FormaPagoService::toDTO).toList(),
+                service.listarEscalasDescuento(),
+                service.getRubrosSinIva());
     }
 
-    /** 404 si el username del visor no corresponde a un operador existente
-     *  y activo. Aplica a TODOS los endpoints públicos del visor para
-     *  prevenir abuso por URLs aleatorias. */
-    private void validarOperadorVisor(String username) {
-        if (username == null || username.isBlank()) {
-            throw new NotFoundException("URL del visor inválida — falta el username del operador.");
+    /** Imagen de un producto, token-gated (el visor no tiene login). */
+    @GetMapping("/visor/t/{token}/productos/{sku}/imagen")
+    public ResponseEntity<Resource> visorImagenProducto(
+            @PathVariable String token, @PathVariable String sku) {
+        sesionShowroomService.resolverUsernamePorTokenActivo(token); // valida token
+        return imagenLocalService.buscar(sku)
+                .<ResponseEntity<Resource>>map(file -> ResponseEntity.ok()
+                        .contentType(mediaTypeFor(file.getName()))
+                        .cacheControl(CacheControl.maxAge(Duration.ofDays(7)).cachePublic())
+                        .body(new FileSystemResource(file)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** El cliente agregó un producto al carrito desde el celular. Rechaza con
+     *  409 si el operador no tiene sesión activa (aunque el token válido ya
+     *  implica sesión activa, se mantiene el chequeo por robustez). */
+    @PostMapping("/visor/t/{token}/agregar-carrito")
+    public CarritoAgregarResponseDTO visorAgregarAlCarrito(
+            @PathVariable String token,
+            @RequestBody @Valid CarritoAgregarRequestDTO request) {
+        String username = sesionShowroomService.resolverUsernamePorTokenActivo(token);
+        if (sesionShowroomService.obtenerActiva(username).id() == null) {
+            throw new ConflictException(
+                    "No hay una sesión de atención activa — el operador todavía no te asoció. Avisale al vendedor.");
         }
-        boolean existeYActivo = usuarioRepository.findByUsername(username)
-                .map(u -> u.isActivo())
-                .orElse(false);
-        if (!existeYActivo) {
-            throw new NotFoundException(
-                    "El operador '" + username + "' no existe o está deshabilitado.");
-        }
+        return carritoService.agregar(
+                username, request.sku(), request.cantidad(),
+                CarritoStateDTO.Origen.VISOR, request.forzarFlag());
     }
 
     // =====================================================
