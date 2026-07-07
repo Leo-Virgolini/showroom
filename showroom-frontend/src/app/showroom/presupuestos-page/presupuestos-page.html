@@ -9,29 +9,39 @@
 
   <!-- ============= CONTENIDO =============
        Layout split 50/50 en lg+ (vía `order`): IZQUIERDA el buscador de
-       productos (`carrito-buscador`); DERECHA los bloques del HOST (atención,
-       acciones de guardar/enviar/crear pedido, datos del cliente, modo de
-       cotización/forma de pago, banner de precios) + la tabla del detalle
-       (`carrito-tabla`). El scan/búsqueda y la tabla se separaron en dos
-       componentes que comparten el mismo `items`. En md y menores, vuelve a 1
-       columna apilada. El padding-bottom se calcula dinámicamente con el alto
-       real del footer sticky (medido con ResizeObserver) + 16px de aire
-       visual, así el footer nunca tapa los últimos ítems aunque los chips de
-       formas hagan flex-wrap a 2 o más líneas. -->
+       productos (`carrito-buscador`) + los bloques del HOST (Acciones con la
+       Atención integrada en el header: guardar/enviar/crear pedido, datos del
+       cliente, modo de cotización/forma de pago); DERECHA solo la tabla del
+       detalle (`carrito-tabla`), que usa la columna entera. El scan/búsqueda y
+       la tabla se separaron en dos componentes que comparten el mismo `items`.
+       En md y menores, vuelve a 1 columna apilada. El padding-bottom se calcula
+       dinámicamente con el alto real del footer sticky (medido con
+       ResizeObserver) + 16px de aire visual, así el footer nunca tapa los
+       últimos ítems aunque los chips de formas hagan flex-wrap a 2+ líneas. -->
   <main class="flex-1 p-3 sm:p-4 lg:p-6"
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ===== Bloques del host + tabla del detalle =====
-           En DESKTOP (lg+) esta columna va a la DERECHA vía `order` (el
-           buscador queda a la izquierda, como el layout previo a
-           editar-pedido); en mobile va primero (order-1). Contiene: Atención
-           (sesión + QR) + Acciones (guardar/enviar/crear pedido, chip "Datos
-           del cliente", modo de cotización/forma de pago del PDF y el banner
-           de "precios desactualizados") + la card "Detalle del presupuesto"
-           con la tabla (`carrito-tabla`). El buscador de la izquierda tiene su
-           propio sticky interno (ver `carrito-buscador`). -->
-      <div class="flex flex-col gap-4 order-1 lg:order-2">
+      <!-- ===== COLUMNA IZQUIERDA (desktop): buscador + bloques del host =====
+           Arriba el buscador de productos (`carrito-buscador`); abajo los
+           bloques del host (Atención integrada en el header de Acciones +
+           acciones + modo/forma de cotización). Va a la IZQUIERDA en lg+ vía
+           `order`; así aprovecha el espacio que antes quedaba vacío a la
+           izquierda y la tabla del detalle usa la columna derecha entera. -->
+      <div class="flex flex-col gap-4 order-2 lg:order-1">
+
+        <p-card class="kt-card">
+          <ng-template #title>
+            <div class="kt-card-title">
+              <i class="pi pi-search"></i>
+              <span>Buscar productos</span>
+            </div>
+          </ng-template>
+          <app-carrito-buscador
+            [(items)]="items"
+            (mutacion)="onCarritoMutacion($event)"
+            (dialogCerrado)="onCarritoDialogCerrado()" />
+        </p-card>
 
         <!-- Card "Acciones" (+ contexto de Atención integrado en el header
              para ahorrar espacio): a la izquierda el título; a la derecha el
@@ -184,9 +194,6 @@
                     </span>
                   </ng-template>
                 </p-selectButton>
-                <span class="text-[11px] text-muted-color hidden sm:inline">
-                  {{ cotizacionIndividual() ? '1 hoja del PDF por producto' : 'Una hoja con tabla detalle + total' }}
-                </span>
                 <!-- Forma de pago del PDF agregado. "Todas" (default) = precio
                      efectivo por ítem + sección comparativa de formas. Al elegir
                      una, todo el presupuesto se expresa en ella. No aplica en
@@ -264,10 +271,13 @@
           </div>
         </p-card>
 
-        <!-- Detalle del presupuesto: la TABLA de ítems agregados. El
-             scan/búsqueda vive en la columna IZQUIERDA (`carrito-buscador`).
-             Borde izquierdo verde KT para diferenciarla de las cards naranjas
-             del host. -->
+      </div>
+
+      <!-- ===== COLUMNA DERECHA (desktop): Detalle del presupuesto =====
+           Solo la tabla de ítems agregados; usa la columna derecha entera. Va
+           a la DERECHA en lg+ vía `order`. Borde izquierdo verde KT para
+           diferenciarla de las cards naranjas del host. -->
+      <div class="flex flex-col gap-4 order-1 lg:order-2">
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
             <div class="kt-card-title kt-card-title-detalle">
@@ -281,8 +291,7 @@
               }
               <!-- Actualizar precios: solo en edición. Trae los precios
                    actuales del catálogo local (cache en BD, sin tocar DUX) y
-                   los pisa conservando cantidades y descuentos. Estilo pill
-                   verde KT coherente con el header del detalle. -->
+                   los pisa conservando cantidades y descuentos. -->
               @if (esModoEdicion() && hayItemsCatalogo()) {
                 <button type="button"
                   class="group inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
@@ -314,26 +323,6 @@
             [cambiosPrecio]="cambiosPrecio()"
             (mutacion)="onCarritoMutacion($event)"
             (vaciado)="buscador()?.focusScanInput()" />
-        </p-card>
-
-      </div>
-
-      <!-- ============= COLUMNA IZQUIERDA (desktop): buscador =============
-           Scan/búsqueda de productos (sticky interno, ver `carrito-buscador`).
-           Va a la IZQUIERDA en lg+ vía `order`; en mobile queda después de los
-           bloques del host (Atención/Acciones/Detalle). -->
-      <div class="flex flex-col gap-4 order-2 lg:order-1">
-        <p-card class="kt-card">
-          <ng-template #title>
-            <div class="kt-card-title">
-              <i class="pi pi-search"></i>
-              <span>Buscar productos</span>
-            </div>
-          </ng-template>
-          <app-carrito-buscador
-            [(items)]="items"
-            (mutacion)="onCarritoMutacion($event)"
-            (dialogCerrado)="onCarritoDialogCerrado()" />
         </p-card>
       </div>
     </div>
