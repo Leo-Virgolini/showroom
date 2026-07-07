@@ -8,12 +8,12 @@
   </app-page-header>
 
   <!-- ============= CONTENIDO =============
-       Layout split 50/50 en lg+ (vía `order`): IZQUIERDA el buscador de
-       productos (`carrito-buscador`) + los bloques del HOST (Acciones con la
-       Atención integrada en el header: guardar/enviar/crear pedido, datos del
-       cliente, modo de cotización/forma de pago); DERECHA solo la tabla del
-       detalle (`carrito-tabla`), que usa la columna entera. El scan/búsqueda y
-       la tabla se separaron en dos componentes que comparten el mismo `items`.
+       Layout split 50/50 en lg+ (vía `order`): IZQUIERDA solo el buscador de
+       productos (`carrito-buscador`); DERECHA los bloques del HOST (Acciones
+       con la Atención integrada en el header: guardar/enviar/crear pedido,
+       datos del cliente, modo de cotización/forma de pago) + la tabla del
+       detalle (`carrito-tabla`). El scan/búsqueda y la tabla se separaron en
+       dos componentes que comparten el mismo `items`.
        En md y menores, vuelve a 1 columna apilada. El padding-bottom se calcula
        dinámicamente con el alto real del footer sticky (medido con
        ResizeObserver) + 16px de aire visual, así el footer nunca tapa los
@@ -22,14 +22,10 @@
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ===== COLUMNA IZQUIERDA (desktop): buscador + bloques del host =====
-           Arriba el buscador de productos (`carrito-buscador`); abajo los
-           bloques del host (Atención integrada en el header de Acciones +
-           acciones + modo/forma de cotización). Va a la IZQUIERDA en lg+ vía
-           `order`; así aprovecha el espacio que antes quedaba vacío a la
-           izquierda y la tabla del detalle usa la columna derecha entera. -->
+      <!-- ===== COLUMNA IZQUIERDA (desktop): buscador =====
+           Solo el buscador de productos (`carrito-buscador`, con sticky
+           interno). Va a la IZQUIERDA en lg+ vía `order`. -->
       <div class="flex flex-col gap-4 order-2 lg:order-1">
-
         <p-card class="kt-card">
           <ng-template #title>
             <div class="kt-card-title">
@@ -42,6 +38,13 @@
             (mutacion)="onCarritoMutacion($event)"
             (dialogCerrado)="onCarritoDialogCerrado()" />
         </p-card>
+      </div>
+
+      <!-- ===== COLUMNA DERECHA (desktop): Acciones + Detalle =====
+           Bloques del host (Acciones con la Atención integrada en el header +
+           modo/forma de cotización) y la tabla del Detalle. Van a la DERECHA en
+           lg+ vía `order`. -->
+      <div class="flex flex-col gap-4 order-1 lg:order-2">
 
         <!-- Card "Acciones" (+ contexto de Atención integrado en el header
              para ahorrar espacio): a la izquierda el título; a la derecha el
@@ -271,13 +274,8 @@
           </div>
         </p-card>
 
-      </div>
-
-      <!-- ===== COLUMNA DERECHA (desktop): Detalle del presupuesto =====
-           Solo la tabla de ítems agregados; usa la columna derecha entera. Va
-           a la DERECHA en lg+ vía `order`. Borde izquierdo verde KT para
-           diferenciarla de las cards naranjas del host. -->
-      <div class="flex flex-col gap-4 order-1 lg:order-2">
+        <!-- Detalle del presupuesto: la tabla de ítems agregados. Borde
+             izquierdo verde KT para diferenciarla de las cards del host. -->
         <p-card class="kt-card kt-card-detalle">
           <ng-template #title>
             <div class="kt-card-title kt-card-title-detalle">
