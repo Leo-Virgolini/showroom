@@ -31,9 +31,11 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
  *    <li>Logout via {@code POST /api/auth/logout} (manejado por Spring Security).</li>
  *    <li>CSRF activo con cookie {@code XSRF-TOKEN} (header {@code X-XSRF-TOKEN}).
  *        Angular lo manda automáticamente con {@code provideHttpClient(withXsrfConfiguration)}.</li>
- *    <li>Endpoints públicos: {@code /api/auth/**}, {@code /api/showroom/events} (SSE del visor),
- *        imágenes de productos, {@code GET /api/showroom/config/escalas-descuento}, scan.
- *        El resto requiere autenticación.</li>
+ *    <li>Endpoints públicos (Task 5 — Spring Security whitelist): {@code /api/auth/login},
+ *        {@code /api/auth/me}, {@code GET /api/showroom/health} (healthcheck),
+ *        {@code /api/showroom/visor/t/**} (visor del cliente, validado por token),
+ *        {@code /error}. Scan, formas de pago, escalas, rubros e imágenes globales
+ *        requieren autenticación. El resto del API requiere login.</li>
  *  </ul>
  */
 @Configuration
