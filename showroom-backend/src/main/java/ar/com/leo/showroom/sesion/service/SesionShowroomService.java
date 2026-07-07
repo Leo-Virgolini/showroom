@@ -3,6 +3,7 @@ package ar.com.leo.showroom.sesion.service;
 import ar.com.leo.showroom.auth.entity.Usuario;
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
+import ar.com.leo.showroom.common.exception.GoneException;
 import ar.com.leo.showroom.common.exception.NotFoundException;
 import ar.com.leo.showroom.events.SesionCerradaEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -27,7 +28,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -61,6 +64,14 @@ import java.util.stream.Collectors;
 public class SesionShowroomService {
 
     public static final String EVENTO_SESION = "sesion-updated";
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private static String generarVisorToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
 
     private final SesionShowroomRepository repository;
     private final SyncEventService eventService;
@@ -98,6 +109,7 @@ public class SesionShowroomService {
             // y sus carritos no se ven afectados.
             applicationEventPublisher.publishEvent(new SesionCerradaEvent(
                     activa.getId(), activa.getNombre(), username, SesionCerradaEvent.Motivo.ABANDONADA));
+            eventService.cerrarVisores(username);
             log.info("Sesión {} ({}, op={}) abandonada al iniciar una nueva",
                     activa.getId(), activa.getNombre(), username);
         });
@@ -106,6 +118,7 @@ public class SesionShowroomService {
                 .usuarioId(operador.getId())
                 .nombre(limpio)
                 .iniciadaAt(Instant.now())
+                .visorToken(generarVisorToken())
                 .build();
         nueva = repository.save(nueva);
         log.info("Sesión {} iniciada por '{}' para cliente '{}'",
@@ -133,6 +146,7 @@ public class SesionShowroomService {
         repository.save(s);
         applicationEventPublisher.publishEvent(new SesionCerradaEvent(
                 s.getId(), s.getNombre(), username, SesionCerradaEvent.Motivo.CANCELADA));
+        eventService.cerrarVisores(username);
         log.info("Sesión {} ({}, op={}) cancelada manualmente",
                 s.getId(), s.getNombre(), username);
         eventService.publishTo(username, EVENTO_SESION, SesionShowroomDTO.inactiva());
@@ -147,6 +161,34 @@ public class SesionShowroomService {
         return repository.findActivaByUsuarioId(op.get().getId())
                 .map(this::toEstadoDTO)
                 .orElseGet(SesionShowroomDTO::inactiva);
+    }
+
+    /** Token del visor de la sesión activa del operador, o null si no hay una.
+     *  Lo consume la app del operador (autenticada) para armar el QR. */
+    @Transactional
+    public String tokenDeSesionActiva(String username) {
+        Optional<Usuario> op = usuarioRepository.findByUsername(username);
+        if (op.isEmpty()) return null;
+        return repository.findActivaByUsuarioId(op.get().getId())
+                .map(SesionShowroom::getVisorToken)
+                .orElse(null);
+    }
+
+    /** Resuelve el token público del visor al username del operador dueño de la
+     *  sesión. 404 si el token no existe o es blank; 410 si la sesión ya cerró. */
+    @Transactional
+    public String resolverUsernamePorTokenActivo(String token) {
+        if (token == null || token.isBlank()) {
+            throw new NotFoundException("Código de visor inválido.");
+        }
+        SesionShowroom s = repository.findByVisorToken(token)
+                .orElseThrow(() -> new NotFoundException("Código de visor inválido."));
+        if (s.getFinalizadaAt() != null) {
+            throw new GoneException("Esta atención finalizó. Pedí un nuevo código al vendedor.");
+        }
+        return usuarioRepository.findById(s.getUsuarioId())
+                .map(Usuario::getUsername)
+                .orElseThrow(() -> new NotFoundException("Operador del visor no encontrado."));
     }
 
     /**
@@ -216,6 +258,7 @@ public class SesionShowroomService {
         // el caller (email service async) los usa fuera del @Transactional.
         s.getItems().size();
         repository.save(s);
+        eventService.cerrarVisores(username);
         log.info("Sesión {} ({}, op={}) finalizada con pedido {}",
                 s.getId(), s.getNombre(), username, pedidoId);
         eventService.publishTo(username, EVENTO_SESION, SesionShowroomDTO.inactiva());

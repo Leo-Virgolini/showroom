@@ -29,6 +29,11 @@ public class GlobalExceptionHandler {
         return body(HttpStatus.CONFLICT, ex.getMessage(), req);
     }
 
+    @ExceptionHandler(GoneException.class)
+    public ResponseEntity<Map<String, Object>> handleGone(GoneException ex, HttpServletRequest req) {
+        return body(HttpStatus.GONE, ex.getMessage(), req);
+    }
+
     @ExceptionHandler(ServiceNotConfiguredException.class)
     public ResponseEntity<Map<String, Object>> handleNotConfigured(ServiceNotConfiguredException ex, HttpServletRequest req) {
         log.warn("Servicio no configurado: {}", ex.getMessage());

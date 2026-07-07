@@ -47,8 +47,19 @@ public class SyncEventService {
      * {@code username=null} equivale a {@link #subscribe()}.
      */
     public SseEmitter subscribe(String username) {
+        return subscribe(username, Tipo.OPERADOR);
+    }
+
+    /** Suscribe el stream de un celular-visor ligado a {@code username}. Igual
+     *  que {@link #subscribe(String)} pero marcado VISOR para poder cortarlo en
+     *  {@link #cerrarVisores(String)} cuando la sesión de atención se cierra. */
+    public SseEmitter subscribeVisor(String username) {
+        return subscribe(username, Tipo.VISOR);
+    }
+
+    private SseEmitter subscribe(String username, Tipo tipo) {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
-        Subscriber sub = new Subscriber(emitter, username);
+        Subscriber sub = new Subscriber(emitter, username, tipo);
         emitter.onCompletion(() -> subscribers.remove(sub));
         emitter.onTimeout(() -> {
             subscribers.remove(sub);
@@ -116,15 +127,36 @@ public class SyncEventService {
         return subscribers.size();
     }
 
-    /** Pareja emitter + username — el username puede ser null para suscriptores
-     *  que solo reciben eventos globales. Usamos identidad de instancia para
-     *  poder removerlo en los callbacks sin depender de equals(). */
+    /**
+     * Completa (desconecta) todos los emitters de tipo VISOR ligados a
+     * {@code username}. Se llama al cerrar la sesión de atención: el celular
+     * del cliente saliente se desconecta y, al reconectar con su token ya
+     * inválido, recibe 410 y muestra "atención finalizada". Los emitters del
+     * OPERADOR no se tocan.
+     */
+    public void cerrarVisores(String username) {
+        if (username == null || username.isBlank()) return;
+        for (Subscriber s : subscribers) {
+            if (s.tipo == Tipo.VISOR && username.equals(s.username)) {
+                subscribers.remove(s);
+                try { s.emitter.complete(); } catch (Throwable ignored) { /* ya cerrado */ }
+            }
+        }
+    }
+
+    /** Distingue el stream del operador (su app autenticada) del stream del
+     *  visor (celular del cliente) — ambos se suscriben con el mismo username,
+     *  pero al cerrar la sesión solo hay que cortar los del visor. */
+    public enum Tipo { OPERADOR, VISOR }
+
     private static final class Subscriber {
         final SseEmitter emitter;
         final String username;
-        Subscriber(SseEmitter emitter, String username) {
+        final Tipo tipo;
+        Subscriber(SseEmitter emitter, String username, Tipo tipo) {
             this.emitter = emitter;
             this.username = username;
+            this.tipo = tipo;
         }
     }
 }
