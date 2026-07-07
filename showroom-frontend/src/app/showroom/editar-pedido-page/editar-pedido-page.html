@@ -24,6 +24,13 @@
       </div>
     }
 
+    @if (huboRecotizacion()) {
+      <div class="flex items-start gap-2 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-800 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+        <i class="pi pi-info-circle mt-0.5"></i>
+        <span>Algunos precios se actualizaron a la lista vigente (este pedido no guardaba el precio de lista original).</span>
+      </div>
+    }
+
     <!-- ============= Forma de pago + total en vivo =============
          El pedido ya tiene una forma de pago congelada (`formaPagoId`); acá el
          operador puede cambiarla para ver el total con otra forma (mismo

@@ -645,6 +645,11 @@ export interface PedidoItemDetalle {
   cantidad: number;
   /** Precio unitario CON IVA. */
   precioUnitario: number | null;
+  /** PVP de lista CON IVA, PRE-forma de pago (sin recargo/descuento de la
+   *  forma elegida) — la base correcta para reconstruir el ítem al editar.
+   *  Null en pedidos anteriores a esta columna: la pantalla de edición
+   *  re-cotiza esos ítems a la lista vigente (ver {@link pedidoItemsAPresupuestoItems}). */
+  precioListaConIva: number | null;
   /** % de IVA aplicado al producto al momento del pedido. */
   porcIva: number | null;
   /** Si el {@code precioUnitario} de este ítem lleva IVA, según el perfil

@@ -10,6 +10,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { catchError, forkJoin, map, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -100,6 +101,12 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   readonly cargando = signal(true);
   readonly hayCambiosSinGuardar = signal(false);
   readonly mostrarDialog = signal(false);
+
+  /** True si al menos un ítem se re-cotizó a la lista vigente al cargar el
+   *  pedido (ver {@link recotizarItemsViejos}) — pedidos anteriores a
+   *  `precioListaConIva` no guardan el PVP pre-forma original. Dispara el
+   *  aviso en el template. */
+  readonly huboRecotizacion = signal(false);
 
   /** Contador que se incrementa en cada mutación in-place (cantidad/descuento)
    *  del `carrito-editor` — fuerza el recompute de {@link total} sin necesidad
@@ -198,6 +205,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
         this.cargando.set(false);
         this.hayCambiosSinGuardar.set(false);
         this.carrito()?.focusScanInput();
+        this.recotizarItemsViejos(det);
       },
       error: (err) => {
         this.cargando.set(false);
@@ -205,6 +213,46 @@ export class EditarPedidoPage implements HasUnsavedChanges {
           'No se pudo cargar el pedido. Volvé al listado e intentá de nuevo.');
         this.router.navigate(['/pedidos']);
       },
+    });
+  }
+
+  /** Pedidos anteriores a `precioListaConIva` no guardan el PVP de lista
+   *  pre-forma original — `pedidoItemsAPresupuestoItems` ya los hidrató con
+   *  el fallback aproximado (`precioUnitario`, que es POST-forma). Acá se
+   *  re-cotizan esos ítems puntuales a la lista VIGENTE (best-effort, mismo
+   *  `scan(sku, false)` que usa el presupuestador para no tocar el visor del
+   *  cliente): si el scan falla o el SKU ya no existe, se deja el fallback
+   *  aproximado sin romper la pantalla. Matchea por `uid` (no por índice)
+   *  para no depender de que el array de {@link items} no haya cambiado
+   *  mientras viajan los requests. */
+  private recotizarItemsViejos(det: PedidoDetalle): void {
+    const objetivos = det.items
+      .map((it, i) => ({ uid: `${it.sku}-${i}`, sku: it.sku, precioListaConIva: it.precioListaConIva }))
+      .filter((x) => x.precioListaConIva == null);
+    if (objetivos.length === 0) return;
+
+    const requests = objetivos.map(({ uid, sku }) =>
+      this.api.scan(sku, false).pipe(
+        map((res) => ({ uid, res })),
+        catchError(() => of(null)),
+      ),
+    );
+    forkJoin(requests).subscribe((resultados) => {
+      let recotizo = false;
+      this.items.update((arr) =>
+        arr.map((item) => {
+          const match = resultados.find((r) => r?.uid === item.uid);
+          if (!match || match.res.pvpKtGastroConIva == null) return item;
+          recotizo = true;
+          return {
+            ...item,
+            pvpKtGastroConIva: match.res.pvpKtGastroConIva,
+            pvpKtGastroSinIva: match.res.pvpKtGastroSinIva,
+            porcIva: match.res.porcIva,
+          };
+        }),
+      );
+      if (recotizo) this.huboRecotizacion.set(true);
     });
   }
 

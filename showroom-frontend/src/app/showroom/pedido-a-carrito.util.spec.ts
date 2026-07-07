@@ -5,7 +5,7 @@ import { PedidoItemDetalle } from './models';
 describe('pedidoItemsAPresupuestoItems', () => {
   const base: PedidoItemDetalle = {
     sku: '1016506', descripcion: 'VASO', cantidad: 3,
-    precioUnitario: 1210, porcIva: 21, aplicaIva: true,
+    precioUnitario: 1210, precioListaConIva: 1210, porcIva: 21, aplicaIva: true,
     descuentoPorcentaje: 10, imagenUrl: '/img/1016506', comentarios: null, rubro: 'MENAJE',
   };
 
@@ -28,7 +28,9 @@ describe('pedidoItemsAPresupuestoItems', () => {
   });
 
   it('descuento null → 0; conIva null → 0 y sinIva 0', () => {
-    const [r] = pedidoItemsAPresupuestoItems([{ ...base, descuentoPorcentaje: null, precioUnitario: null }]);
+    const [r] = pedidoItemsAPresupuestoItems([{
+      ...base, descuentoPorcentaje: null, precioListaConIva: null, precioUnitario: null,
+    }]);
     expect(r.descuentoPorcentaje).toBe(0);
     expect(r.pvpKtGastroConIva).toBe(0);
     expect(r.pvpKtGastroSinIva).toBe(0);
@@ -40,8 +42,25 @@ describe('pedidoItemsAPresupuestoItems', () => {
   });
 
   it('aplicaIva=false: precioUnitario ya es sin IVA, reconstruye el con IVA', () => {
-    const [r] = pedidoItemsAPresupuestoItems([{ ...base, aplicaIva: false, precioUnitario: 1000, porcIva: 21 }]);
+    const [r] = pedidoItemsAPresupuestoItems([{
+      ...base, aplicaIva: false, precioListaConIva: null, precioUnitario: 1000, porcIva: 21,
+    }]);
     expect(r.pvpKtGastroSinIva).toBeCloseTo(1000, 6);
     expect(r.pvpKtGastroConIva).toBeCloseTo(1210, 6);
+  });
+
+  it('usa precioListaConIva (pre-forma) para pvpKtGastroConIva cuando está', () => {
+    const [r] = pedidoItemsAPresupuestoItems([{
+      ...base, precioListaConIva: 1210, precioUnitario: 1089, aplicaIva: true, porcIva: 21,
+    }]);
+    expect(r.pvpKtGastroConIva).toBe(1210);
+    expect(r.pvpKtGastroSinIva).toBeCloseTo(1000, 6);
+  });
+
+  it('cae a precioUnitario (aprox) cuando precioListaConIva es null', () => {
+    const [r] = pedidoItemsAPresupuestoItems([{
+      ...base, precioListaConIva: null, precioUnitario: 1089, aplicaIva: true, porcIva: 21,
+    }]);
+    expect(r.pvpKtGastroConIva).toBe(1089);
   });
 });
