@@ -29,6 +29,10 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
             """)
     Optional<SesionShowroom> findActivaByUsuarioId(@Param("usuarioId") Long usuarioId);
 
+    /** Sesión por su token de visor (activa o no). El caller decide qué hacer
+     *  según finalizadaAt: activa → OK, finalizada → 410, ausente → 404. */
+    Optional<SesionShowroom> findByVisorToken(String visorToken);
+
     /** Detalle de una sesión con sus items hidratados (evita N+1 al renderizar). */
     @EntityGraph(attributePaths = "items")
     @Query("SELECT s FROM SesionShowroom s WHERE s.id = :id")

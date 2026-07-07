@@ -69,6 +69,12 @@ public class SesionShowroom {
     @Column(name = "pedido_id")
     private Long pedidoId;
 
+    /** Token público del visor de esta sesión. El QR del celular apunta a
+     *  /visor/{token}. Válido mientras la sesión esté activa (finalizadaAt
+     *  null). Único; nullable para filas legacy previas a esta feature. */
+    @Column(name = "visor_token", length = 43, unique = true)
+    private String visorToken;
+
     @OneToMany(mappedBy = "sesion", cascade = CascadeType.ALL, orphanRemoval = true,
             fetch = FetchType.LAZY)
     @BatchSize(size = 50)
