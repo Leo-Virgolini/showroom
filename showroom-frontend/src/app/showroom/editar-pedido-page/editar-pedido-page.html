@@ -17,42 +17,46 @@
       </div>
     }
 
-    @if (pedido()?.estado === 'ENVIADO') {
-      <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 dark:border-amber-800 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
-        <i class="pi pi-exclamation-triangle mt-0.5"></i>
-        <span>Al guardar se creará un pedido nuevo y este quedará anulado; cancelá el comprobante en DUX a mano.</span>
-      </div>
-    }
-
-    @if (huboRecotizacion()) {
-      <div class="flex items-start gap-2 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-950/40 dark:border-blue-800 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
-        <i class="pi pi-info-circle mt-0.5"></i>
-        <span>Algunos precios se actualizaron a la lista vigente (este pedido no guardaba el precio de lista original).</span>
-      </div>
-    }
-
-    <!-- ============= Forma de pago + total en vivo =============
-         El pedido ya tiene una forma de pago congelada (`formaPagoId`); acá el
-         operador puede cambiarla para ver el total con otra forma (mismo
-         criterio que el selector de presupuestos-page). El total refleja los
-         ítems editables de abajo, no el total original persistido. -->
-    <p-card>
-      <ng-template #title>
-        <div class="flex items-center gap-2 text-sm font-semibold">
-          <i class="pi pi-dollar text-primary"></i>
-          <span>Forma de pago</span>
-        </div>
-      </ng-template>
-      <div class="flex items-center gap-3 flex-wrap">
+    <!-- ============= Barra compacta: forma de pago + total + avisos =============
+         Antes esto eran 3 bloques full-width (2 banners + una card de forma de
+         pago). Se consolidó en una sola barra fina: forma de pago + total a la
+         izquierda, y los avisos ("se reemplaza el pedido al guardar" y "precios
+         actualizados") como chips a la derecha con el texto completo en el
+         tooltip — para no comerse el alto del área de trabajo (buscador+tabla). -->
+    <div class="flex items-center gap-x-4 gap-y-2 flex-wrap rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 px-3 py-2">
+      <div class="flex items-center gap-2">
+        <i class="pi pi-dollar text-primary"></i>
+        <span class="text-sm font-semibold">Forma de pago</span>
         <p-select [options]="formasPago()" optionLabel="nombre"
           [ngModel]="formaPagoSeleccionada()" (ngModelChange)="formaPagoSeleccionada.set($event)"
-          placeholder="Elegí una forma de pago" appendTo="body" class="min-w-[14rem]" />
+          placeholder="Elegí una forma de pago" appendTo="body" class="min-w-[13rem]" />
+      </div>
+      <div class="flex items-center gap-1.5">
         <span class="text-sm text-muted-color">Total</span>
         <span class="text-lg font-bold text-primary tabular-nums">
           {{ total() | currency:'ARS':'symbol':'1.0-0' }}
         </span>
       </div>
-    </p-card>
+      <!-- Avisos como chips compactos — el texto completo va en el tooltip. -->
+      <div class="flex items-center gap-2 flex-wrap ml-auto">
+        @if (pedido()?.estado === 'ENVIADO') {
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+            pTooltip="Al guardar se creará un pedido nuevo y este quedará anulado; cancelá el comprobante en DUX a mano."
+            tooltipPosition="bottom" role="status" aria-live="polite">
+            <i class="pi pi-exclamation-triangle text-[10px]"></i>
+            <span>Reemplaza el pedido al guardar</span>
+          </span>
+        }
+        @if (huboRecotizacion()) {
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-blue-300 bg-blue-50 text-blue-800 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
+            pTooltip="Algunos precios se actualizaron a la lista vigente (este pedido no guardaba el precio de lista original)."
+            tooltipPosition="bottom" role="status">
+            <i class="pi pi-info-circle text-[10px]"></i>
+            <span>Precios actualizados</span>
+          </span>
+        }
+      </div>
+    </div>
 
     <!-- ============= Detalle editable: buscador (izq) + tabla (der) =============
          El scan/búsqueda y la tabla de ítems se separaron en dos componentes

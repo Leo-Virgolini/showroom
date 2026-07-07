@@ -33,19 +33,22 @@
            propio sticky interno (ver `carrito-buscador`). -->
       <div class="flex flex-col gap-4 order-1 lg:order-2">
 
-        <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
-             de `carrito-editor` (con su propia tabla, en la columna derecha).
-             Esta card queda solo con el contexto de la atención — sesión
-             compartida con el showroom + QR del visor de presupuesto — que
-             es un asunto del host, no del carrito. -->
+        <!-- Card "Acciones" (+ contexto de Atención integrado en el header
+             para ahorrar espacio): a la izquierda el título; a la derecha el
+             chip de cliente / "Nuevo cliente" + el QR del visor (antes una card
+             aparte). El cuerpo tiene el estado de guardado + botones
+             (generar/guardar, enviar, crear pedido), el chip "Datos del
+             cliente", el selector de modo de cotización/forma de pago del PDF y
+             el banner de "precios desactualizados" en edición. La tabla + scan
+             viven en `carrito-tabla`/`carrito-buscador`. -->
         <p-card class="kt-card">
           <ng-template #title>
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <div class="kt-card-title">
-                <i class="pi pi-user"></i>
-                <span>Atención</span>
+                <i class="pi pi-bolt"></i>
+                <span>Acciones</span>
               </div>
-              <div class="flex items-center gap-2.5 flex-wrap">
+              <div class="flex items-center gap-2 flex-wrap">
                 @if (haySesionActiva()) {
                   <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
                     [pTooltip]="'Atendiendo a ' + sesionActiva().nombre + ' — tocá la X para finalizar'"
@@ -71,21 +74,6 @@
                   [pTooltip]="haySesionActiva() ? 'Mostrar el QR para que el cliente vea el presupuesto en su celular' : 'Iniciá una atención para mostrar el visor'"
                   tooltipPosition="bottom" />
               </div>
-            </div>
-          </ng-template>
-        </p-card>
-
-        <!-- Card "Acciones": estado de guardado + botones (generar/guardar,
-             enviar, crear pedido), el chip "Datos del cliente" (abre el
-             dialog unificado), el selector de modo de cotización/forma de
-             pago del PDF y el banner de "precios desactualizados" en
-             edición. Todo esto es del HOST — la tabla + scan viven en
-             `carrito-editor`, a la derecha. -->
-        <p-card class="kt-card">
-          <ng-template #title>
-            <div class="kt-card-title">
-              <i class="pi pi-bolt"></i>
-              <span>Acciones</span>
             </div>
           </ng-template>
 
