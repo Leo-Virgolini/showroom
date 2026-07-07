@@ -10,7 +10,7 @@ export const routes: Routes = [
       import('./auth/login-page/login-page').then((m) => m.LoginPage),
   },
   {
-    path: 'visor/:username',
+    path: 'visor/:token',
     loadComponent: () =>
       import('./showroom/visor-page/visor-page').then((m) => m.VisorPage),
   },
@@ -18,7 +18,7 @@ export const routes: Routes = [
     // Visor read-only del armado de presupuestos (espejo en el celular del
     // cliente). Distinto del visor del showroom: muestra el carrito completo
     // del presupuesto, no producto-a-producto. Público, sin login.
-    path: 'visor-presupuesto/:username',
+    path: 'visor-presupuesto/:token',
     loadComponent: () =>
       import('./showroom/visor-presupuesto-page/visor-presupuesto-page')
         .then((m) => m.VisorPresupuestoPage),
