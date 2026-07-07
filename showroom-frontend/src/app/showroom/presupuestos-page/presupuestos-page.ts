@@ -34,7 +34,6 @@ import { SelectButtonModule } from 'primeng/selectbutton';
 import { TooltipModule } from 'primeng/tooltip';
 import {
   CambioPrecio,
-  CatalogoItem,
   ClienteAutocompletar,
   EnviarPresupuestoRequest,
   FormaPago,
@@ -43,7 +42,6 @@ import {
   PresupuestoFormaPagoSnapshot,
   PresupuestoItem,
   PresupuestoVisor,
-  ScanResult,
   OPCIONES_RUBRO_CLIENTE,
 } from '../models';
 import {
@@ -143,7 +141,10 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  guardar/generar con éxito y al cargar inicial el detalle en edición. */
   readonly hayCambiosSinGuardar = signal(false);
 
-  readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
+  /** Ref al `carrito-editor` — el scan/búsqueda y su input viven ahora ahí;
+   *  el host lo usa para refocar el scan tras cerrar SUS PROPIOS diálogos
+   *  (QR, nuevo cliente, sync). */
+  readonly carrito = viewChild(CarritoEditor);
   /** Referencia al footer sticky para medir su alto real (cambia cuando los
    *  chips de formas de pago se wrappean a 2+ líneas). El padding-bottom
    *  del main se ajusta a este alto para que los últimos ítems del detalle
@@ -168,52 +169,9 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
   // ------------------------------------------------------------
-  // Inputs y estado del scan
+  // Lista de ítems — el scan/búsqueda que la alimenta ahora vive por
+  // completo en `carrito-editor` (autónomo); el host solo posee la lista.
   // ------------------------------------------------------------
-  readonly skuInput = signal('');
-  readonly cargandoScan = signal(false);
-  /** Resultados de búsqueda por descripción cuando la query no es un código
-   *  exacto. Se muestra como lista clickable debajo del input; al elegir uno
-   *  se agrega al detalle vía {@link seleccionarResultado}. */
-  readonly resultadosBusqueda = signal<CatalogoItem[]>([]);
-  /** Total de matches en el backend — puede ser mayor que la lista visible
-   *  si todavía no se cargaron todas las páginas. */
-  readonly totalResultadosBusqueda = signal(0);
-  /** Última query usada — necesaria para paginar. */
-  private readonly busquedaQuery = signal('');
-
-  /** Orden elegido para los resultados de búsqueda. 'relevancia' = ranking del
-   *  backend (default). El resto fuerza el orden en el backend sobre TODO el
-   *  resultado (no solo la página visible). */
-  readonly ordenResultados = signal<'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'>('relevancia');
-
-  /** Opciones del selector de orden de resultados (para el template). */
-  readonly opcionesOrdenResultados: { label: string; value: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc' }[] = [
-    { label: 'Relevancia', value: 'relevancia' },
-    { label: 'Producto A-Z', value: 'producto' },
-    { label: 'Precio: menor a mayor', value: 'precio_asc' },
-    { label: 'Precio: mayor a menor', value: 'precio_desc' },
-  ];
-
-  /** Filtro por proveedor de los resultados (null = todos). Se aplica en el
-   *  backend sobre todo el resultado, igual que el orden. */
-  readonly proveedorFiltro = signal<string | null>(null);
-  /** Proveedores disponibles para el dropdown del filtro. */
-  readonly proveedoresDisponibles = signal<string[]>([]);
-
-  /** True mientras se re-busca por un cambio de orden. Muestra un spinner chico
-   *  junto al selector SIN tapar la lista ni deshabilitar el input. */
-  readonly reordenando = signal(false);
-  /** Última página cargada (0-indexed). */
-  private readonly paginaResultados = signal(0);
-  /** Loading state del botón "Cargar más" (separado de cargandoScan). */
-  readonly cargandoMasResultados = signal(false);
-  /** Tamaño de cada página de resultados. */
-  private readonly BUSQUEDA_PAGE_SIZE = 50;
-  /** Secuencia incremental para descartar respuestas obsoletas — si el operador
-   *  dispara una nueva búsqueda antes de que termine la anterior, solo la
-   *  última actualiza la UI. */
-  private scanSeq = 0;
   /** Lista de ítems del presupuesto — orden de agregado preservado.
    *  Solo se reemplaza el array al AGREGAR o ELIMINAR ítems; las ediciones
    *  inline (cantidad, descuento) mutan el objeto in-place para no
@@ -363,11 +321,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  componente solo mantiene la visibilidad. */
   readonly mostrarDialogCrearPedido = signal(false);
 
-  /** SKU comodín derivado del estado del backend — usado acá SOLO para el
-   *  guard de {@link agregarItem} (rechazar el escaneo directo del comodín).
-   *  El botón "+ Producto genérico" y su dialog viven ahora en
-   *  `carrito-editor`, que lee el mismo signal por su cuenta (inyecta
-   *  {@link BackendStatusService} directo). */
+  /** SKU comodín derivado del estado del backend — usado acá SOLO para
+   *  distinguir los ítems genéricos al hidratar un presupuesto en edición
+   *  (ver {@link cargarParaEditar}). El scan/búsqueda, el botón "+ Producto
+   *  genérico" y su dialog viven ahora en `carrito-editor`, que lee el mismo
+   *  signal por su cuenta (inyecta {@link BackendStatusService} directo). */
   readonly skuGenerico = this.backendStatus.skuProductoGenerico;
 
   /** Id del pedido DUX al que se convirtió este presupuesto durante la
@@ -674,7 +632,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   });
 
   ngAfterViewInit(): void {
-    this.focusInput();
+    this.carrito()?.focusScanInput();
   }
 
   constructor() {
@@ -682,9 +640,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // el showroom. Si fallan, las señales quedan vacías (el PDF se genera igual
     // sin sección de formas; todos los rubros cotizan con IVA).
     this.precioPerfil.cargar();
-
-    // Proveedores para el dropdown del filtro de búsqueda.
-    this.cargarProveedores();
 
     // Purga el map de "cambios de precio" cuando un ítem se quita del
     // detalle (por `carrito-editor.eliminarItem`/`vaciar`, que ya NO tocan
@@ -762,7 +717,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
             // El operador está editando un campo (cantidad, descuento,
             // observaciones): respetamos su foco.
             if (this.esCampoEditable(document.activeElement)) return;
-            this.scanInput()?.nativeElement.focus();
+            this.carrito()?.focusScanInput();
           }, 0);
         };
         document.addEventListener('click', refocusOnClick);
@@ -950,7 +905,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         this.pedidoIdConvertido.set(det.convertidoEnPedidoId ?? null);
         this.convertidoAtPresupuesto.set(det.convertidoAt ?? null);
         this.modificadoAtPresupuesto.set(det.modificadoAt ?? null);
-        this.focusInput();
+        this.carrito()?.focusScanInput();
 
         // Lookup contra el cache local (no toca DUX) para traer imagen,
         // stock, descripción y flag habilitado. Antes usábamos `refreshStock`
@@ -1168,7 +1123,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           detail: partes.join(', ') + '.',
           life: 5000,
         });
-        this.focusInput();
+        this.carrito()?.focusScanInput();
       },
       error: (err) => {
         this.actualizandoPrecios.set(false);
@@ -1187,46 +1142,29 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   }
 
   // ============================================================
-  // Scan / búsqueda
-  //
-  // SIEMPRE busca en el catálogo local cacheado — nunca dispara una llamada
-  // directa a DUX. /presupuestos asume catálogo sincronizado: el operador
-  // arma presupuestos sobre productos KT GASTRO conocidos, no necesita la
-  // freshness real-time de DUX (que paga 7s de rate limit por miss).
-  //
-  // Flujo:
-  //   - 0 resultados → toast "Sin resultados".
-  //   - 1 resultado único → cargar via /scan/{sku} (rápido — está en cache,
-  //     no toca DUX) para traer pvpConIva + porcIva que /catalogo no expone.
-  //   - N resultados → mostrar lista clickable.
-  //
-  // `scanSeq` evita race conditions cuando se dispara una nueva búsqueda
-  // mientras la anterior está en vuelo.
+  // Refoco del scan (host) — el input y la búsqueda viven en `carrito-editor`;
+  // el host solo decide CUÁNDO refocar tras SUS PROPIOS clicks/diálogos.
   // ============================================================
-  focusInput(): void {
-    setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
-  }
-
-  /** Refoco automático "best-effort": como {@link focusInput} pero respeta el
-   *  guard táctil ({@link esTactil}). Lo usan el listener global de clicks y el
-   *  cierre de dialogs. El flujo de scan/búsqueda usa {@link focusInput}
-   *  directo porque la pistola debe alimentar el input también en tablets. */
+  /** Refoco automático "best-effort": respeta el guard táctil
+   *  ({@link esTactil}) — lo usan el listener global de clicks y el cierre de
+   *  los dialogs propios del host. El componente refoca directo (sin este
+   *  guard) para su propio flujo de scan/búsqueda, porque la pistola debe
+   *  alimentar el input también en tablets. */
   private focusInputAuto(): void {
     if (this.esTactil) return;
-    this.focusInput();
+    this.carrito()?.focusScanInput();
   }
 
-  /** True si hay algún dialog/overlay propio abierto. En ese caso no robamos
-   *  el foco hacia el scan que está detrás del overlay (el operador está
-   *  trabajando dentro del dialog). El dialog "Producto genérico" ya NO se
-   *  chequea acá — vive dentro de `carrito-editor`, que emite su propio
-   *  output {@code dialogCerrado} cuando se cierra (ver
-   *  {@link onCarritoDialogCerrado}). */
+  /** True si hay algún dialog/overlay PROPIO DEL HOST abierto. En ese caso no
+   *  robamos el foco hacia el scan que está detrás del overlay (el operador
+   *  está trabajando dentro del dialog). Los dialogs propios de
+   *  `carrito-editor` ("Producto genérico", "Ver producto") ya NO se chequean
+   *  acá — el componente emite su propio output {@code dialogCerrado} cuando
+   *  se cierra (ver {@link onCarritoDialogCerrado}). */
   private algunDialogAbierto(): boolean {
     return (
       this.mostrarDialogCliente() ||
-      this.mostrarDialogCrearPedido() ||
-      this.productoPreview() != null
+      this.mostrarDialogCrearPedido()
     );
   }
 
@@ -1239,223 +1177,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     const tag = el.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
     return (el as HTMLElement).isContentEditable === true;
-  }
-
-  onScanEnter(): void {
-    const query = this.skuInput().trim();
-    if (!query) return;
-    this.skuInput.set('');
-    this.resultadosBusqueda.set([]);
-    // Reset de cantidades tipeadas — corresponden a la búsqueda anterior y
-    // no deberían sobrevivir a una nueva query.
-    this.cantidadesResultados.set({});
-    // Cada búsqueda NUEVA arranca sin el filtro de proveedor anterior (sino
-    // quedaba "pegado"). Los re-search por cambio de filtro/orden no pasan por
-    // acá, así que se preservan.
-    this.proveedorFiltro.set(null);
-    // El dropdown de proveedores se acota a lo buscado.
-    this.cargarProveedores(query);
-    const seq = ++this.scanSeq;
-    this.cargandoScan.set(true);
-    this.buscarEnCatalogo(query, seq);
-  }
-
-  /** Búsqueda paginada en el catálogo CACHEADO (sin tocar DUX). Si la query
-   *  matchea un único producto, lo carga directo. Si no, muestra la lista. */
-  /** Traduce el orden elegido por el operador a los params del backend.
-   *  'relevancia' → sin params (el backend usa su ranking). */
-  private ordenResultadosParams(): { sortField?: 'descripcion' | 'precio'; sortOrder?: 'asc' | 'desc' } {
-    switch (this.ordenResultados()) {
-      case 'producto': return { sortField: 'descripcion', sortOrder: 'asc' };
-      case 'precio_asc': return { sortField: 'precio', sortOrder: 'asc' };
-      case 'precio_desc': return { sortField: 'precio', sortOrder: 'desc' };
-      default: return {};
-    }
-  }
-
-  /** Cambia el orden de los resultados y re-ejecuta la búsqueda desde la
-   *  primera página (el orden se aplica en el backend sobre todo el resultado). */
-  cambiarOrdenResultados(orden: 'relevancia' | 'producto' | 'precio_asc' | 'precio_desc'): void {
-    if (this.ordenResultados() === orden) return;
-    this.ordenResultados.set(orden);
-    const query = this.busquedaQuery();
-    if (query) {
-      const seq = ++this.scanSeq;
-      this.reordenando.set(true);
-      // Refinamiento de la lista: nunca auto-agregar aunque quede 1 resultado.
-      this.buscarEnCatalogo(query, seq, false);
-    }
-  }
-
-  /** Cambia el filtro por proveedor y re-ejecuta la búsqueda desde la primera
-   *  página (el filtro se aplica en el backend sobre todo el resultado). */
-  cambiarProveedorFiltro(proveedor: string | null): void {
-    if (this.proveedorFiltro() === proveedor) return;
-    this.proveedorFiltro.set(proveedor);
-    const query = this.busquedaQuery();
-    if (query) {
-      const seq = ++this.scanSeq;
-      this.reordenando.set(true);
-      // Refinamiento de la lista: nunca auto-agregar aunque quede 1 resultado.
-      this.buscarEnCatalogo(query, seq, false);
-    }
-  }
-
-  /** Carga la lista de proveedores para el dropdown del filtro (best-effort).
-   *  Si se pasa `q`, trae solo los proveedores de los productos que matchean esa
-   *  búsqueda — así el filtro muestra proveedores relevantes a lo buscado. */
-  private cargarProveedores(q?: string): void {
-    this.api.listarProveedoresCatalogo(q)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (lista) => this.proveedoresDisponibles.set(lista),
-        error: () => { /* sin proveedores el filtro queda vacío, no bloquea */ },
-      });
-  }
-
-  private buscarEnCatalogo(query: string, seq: number, autoAgregarSiUnico = true): void {
-    this.busquedaQuery.set(query);
-    this.paginaResultados.set(0);
-    const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(query, 0, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro()).subscribe({
-      next: (page) => {
-        if (seq !== this.scanSeq) return;
-        this.cargandoScan.set(false);
-        this.reordenando.set(false);
-        if (page.items.length === 0) {
-          // Posible producto fuera del catálogo cacheado o catálogo desactualizado.
-          // Mostramos un mensaje útil para que el operador sepa qué chequear.
-          this.toast.add({
-            severity: 'warn',
-            summary: 'Sin resultados',
-            detail: `No encontré "${query}" en el catálogo. Si es un producto nuevo, sincronizá el catálogo desde el showroom.`,
-            life: 6000,
-          });
-          this.resultadosBusqueda.set([]);
-          this.totalResultadosBusqueda.set(0);
-        } else if (autoAgregarSiUnico && page.items.length === 1 && page.total === 1) {
-          // Único resultado en todo el catálogo — lo agregamos directo.
-          // Solo en la búsqueda inicial (el operador tipeó una query): al
-          // refinar filtro/orden NO auto-agregamos, sino el cambio de filtro
-          // metía el producto al detalle (o le sumaba cantidad si ya estaba).
-          this.totalResultadosBusqueda.set(1);
-          this.seleccionarResultado(page.items[0].sku);
-          return;
-        } else {
-          this.resultadosBusqueda.set(page.items);
-          this.totalResultadosBusqueda.set(page.total);
-        }
-        this.focusInput();
-      },
-      error: (err) => {
-        if (seq !== this.scanSeq) return;
-        this.cargandoScan.set(false);
-        this.reordenando.set(false);
-        toastError(this.toast, 'Búsqueda', err, 'No se pudo buscar.');
-        this.focusInput();
-      },
-    });
-  }
-
-  /** Pagina siguiente de los resultados ya cargados — appendea sin recargar. */
-  cargarMasResultados(): void {
-    if (this.cargandoMasResultados()) return;
-    if (this.resultadosBusqueda().length >= this.totalResultadosBusqueda()) return;
-    this.cargandoMasResultados.set(true);
-    const seq = this.scanSeq;
-    const nextPage = this.paginaResultados() + 1;
-    const { sortField, sortOrder } = this.ordenResultadosParams();
-    this.api.buscarCatalogo(this.busquedaQuery(), nextPage, this.BUSQUEDA_PAGE_SIZE, sortField, sortOrder, this.proveedorFiltro())
-      .subscribe({
-        next: (page) => {
-          if (seq !== this.scanSeq) return;
-          this.cargandoMasResultados.set(false);
-          this.paginaResultados.set(nextPage);
-          this.resultadosBusqueda.set([...this.resultadosBusqueda(), ...page.items]);
-          this.focusInput();
-        },
-        error: (err) => {
-          if (seq !== this.scanSeq) return;
-          this.cargandoMasResultados.set(false);
-          this.focusInput();
-          toastError(this.toast, 'Búsqueda', err, 'No se pudieron cargar más resultados.');
-        },
-      });
-  }
-
-  /** Cierra la lista de resultados (botón ✕) y devuelve el foco al input.
-   *  Limpia también las cantidades tipeadas — si el operador busca otra cosa
-   *  después, los inputs arrancan en el default sin sorpresas heredadas. */
-  cerrarResultadosBusqueda(): void {
-    this.resultadosBusqueda.set([]);
-    this.cantidadesResultados.set({});
-    this.focusInput();
-  }
-
-  /** El operador eligió un item de la lista de resultados — lo cargamos via
-   *  `/scan/{sku}` para traer todos los datos (precios c/IVA + s/IVA, stock,
-   *  imagen) y lo agregamos al detalle. Acepta `cantidad` opcional para que
-   *  el botón "Agregar" inline de cada fila pueda mandar varias unidades de
-   *  una sola vez.
-   *
-   *  <p>La lista de resultados queda ABIERTA tras agregar — el operador
-   *  puede sumar varios productos del mismo set de resultados sin tener que
-   *  volver a buscar. La cantidad del item recién agregado se resetea a 1
-   *  para que un siguiente click no duplique la cantidad anterior. */
-  seleccionarResultado(sku: string, cantidad: number = 1): void {
-    this.cargandoScan.set(true);
-    const seq = ++this.scanSeq;
-    const cant = Number.isFinite(cantidad) && cantidad > 0 ? Math.floor(cantidad) : 1;
-    // publicarVisor=false: el presupuestador es un flujo paralelo a la
-    // atención del cliente — los productos cotizados no deben aparecer en
-    // la pantalla /visor que mira el cliente.
-    this.api.scan(sku, false).subscribe({
-      next: (res) => {
-        if (seq !== this.scanSeq) return;
-        this.cargandoScan.set(false);
-        this.agregarItem(res, cant);
-        // Reset de la cantidad del sku recién agregado — sin esto, si el
-        // operador apreta "Agregar" 3 veces con cantidad=5, agregaría 5
-        // primero y luego cada click pondría 5 más (el input no se limpia).
-        this.cantidadesResultados.update((m) => {
-          const nm = { ...m };
-          delete nm[sku];
-          return nm;
-        });
-        this.focusInput();
-      },
-      error: (err) => {
-        if (seq !== this.scanSeq) return;
-        this.cargandoScan.set(false);
-        this.focusInput();
-        toastError(this.toast, 'Cargar producto', err, 'No se pudo cargar el producto.');
-      },
-    });
-  }
-
-  /** Cantidades tipeadas en los inputs de la lista de resultados, por SKU.
-   *  Vive aparte del array `resultadosBusqueda()` para no mutar el `CatalogoItem`
-   *  recibido del backend. Se limpia al cerrar la lista. */
-  readonly cantidadesResultados = signal<Record<string, number>>({});
-
-  cantidadResultado(sku: string): number {
-    return this.cantidadesResultados()[sku] ?? 1;
-  }
-
-  setCantidadResultado(sku: string, cantidad: number): void {
-    if (!Number.isFinite(cantidad) || cantidad <= 0) cantidad = 1;
-    this.cantidadesResultados.set({
-      ...this.cantidadesResultados(),
-      [sku]: Math.floor(cantidad),
-    });
-  }
-
-  /** Tope de cantidad para el input de la lista de resultados. NO se topea al
-   *  stock: el presupuesto no descuenta stock, así que el operador puede cargar
-   *  la cantidad que quiera; el detalle muestra un pill amarillo "excede stock"
-   *  si la cantidad supera el disponible. Cap alto solo para evitar absurdos. */
-  cantidadMaximaResultado(_r: CatalogoItem): number {
-    return 9999;
   }
 
   /** True si el producto es de maquinaria (rubro de la lista configurable que
@@ -1484,77 +1205,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     });
   }
 
-  agregarResultado(sku: string): void {
-    const cant = this.cantidadResultado(sku);
-    this.seleccionarResultado(sku, cant);
-  }
-
-  /** Producto que se está previsualizando en el diálogo "Ver producto".
-   *  Null = diálogo cerrado. Usamos el {@link CatalogoItem} de la lista
-   *  directamente (sin refetch) — los datos visibles son los mismos. */
-  readonly productoPreview = signal<CatalogoItem | null>(null);
-
-  /** Abre el diálogo de preview con la foto grande + datos del producto.
-   *  El operador puede ver mejor el producto antes de decidir si lo agrega
-   *  al detalle. El botón "Agregar" del diálogo respeta la cantidad
-   *  tipeada en la fila de la lista. */
-  verResultado(r: CatalogoItem): void {
-    this.productoPreview.set(r);
-  }
-
-  /** Cierra el diálogo de preview. */
-  cerrarProductoPreview(): void {
-    this.productoPreview.set(null);
-  }
-
-  /** Confirma "Agregar al detalle" desde el diálogo de preview: respeta la
-   *  cantidad ya tipeada en la fila del listado (default 1) y cierra el
-   *  diálogo después. */
-  agregarDesdePreview(): void {
-    const r = this.productoPreview();
-    if (!r) return;
-    this.agregarResultado(r.sku);
-    this.cerrarProductoPreview();
-  }
-
-  private agregarItem(res: ScanResult, cantidad: number = 1): void {
-    const cant = cantidad > 0 ? cantidad : 1;
-    // Si el operador escaneó/buscó el SKU comodín directamente, lo rechazamos
-    // y le indicamos el dialog correcto — sino se cargaría con la descripción
-    // genérica de DUX ("Producto a cotizar") y, si ya hay otro genérico en el
-    // detalle, el merge por SKU haría que la cantidad caiga sobre un ítem
-    // incorrecto (todos los genéricos comparten el SKU).
-    if (this.skuGenerico() && res.sku === this.skuGenerico()) {
-      this.warn('Para cargar un producto que no está en catálogo, usá el botón "Producto genérico".');
-      return;
-    }
-    const actuales = this.items();
-    // Si ya existe el SKU, sumarle cantidad (caso típico: re-escanear).
-    const existente = actuales.find((it) => it.sku === res.sku);
-    if (existente) {
-      const nuevaCantidad = existente.cantidad + cant;
-      this.items.set(actuales.map((it) =>
-        it.sku === res.sku ? { ...it, cantidad: nuevaCantidad } : it));
-      this.notificarMutacion('info', 'Cantidad actualizada',
-        `${this.etiquetaItem(existente)}: ${existente.cantidad}u → ${nuevaCantidad}u`);
-      return;
-    }
-    const uid = `${res.sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const nuevo: PresupuestoItem = {
-      ...res,
-      uid,
-      cantidad: cant,
-      descuentoPorcentaje: 0,
-    };
-    this.items.set([...actuales, nuevo]);
-    this.notificarMutacion('success', 'Producto agregado',
-      `${this.etiquetaItem(nuevo)}${cant > 1 ? ` (${cant}u)` : ''}`);
-  }
-
   // ============================================================
-  // carrito-editor — tabla editable + "Producto genérico" (agregar/editar/
-  // quitar/vaciar). Este host solo reacciona a lo que el componente emite;
-  // la mutación real de `items` la hace el componente (two-way model).
+  // carrito-editor — scan/búsqueda + tabla editable + "Producto genérico"
+  // (agregar/editar/quitar/vaciar). Este host solo reacciona a lo que el
+  // componente emite; la mutación real de `items` la hace el componente
+  // (two-way model).
   // ============================================================
   /** Bumpea el tick propio (recalcula totales/formas) y replica el toast +
    *  `hayCambiosSinGuardar` con la MISMA data que ya usó el componente para
@@ -1565,16 +1220,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     this.notificarMutacion(ev.severity, ev.summary, ev.detail);
   }
 
-  /** `vaciar()` del carrito ya no puede refocar el scan input él mismo (el
-   *  input sigue viviendo acá, no en el componente) — replica el
-   *  `focusInput()` incondicional que hacía el `vaciar()` original. */
-  onCarritoVaciado(): void {
-    this.focusInput();
-  }
-
-  /** El dialog "Producto genérico" (ahora dentro de `carrito-editor`) se
-   *  cerró por cualquier camino — replica el refoco que antes disparaba el
-   *  effect unificado sobre `algunDialogAbierto()` (respeta el guard táctil). */
+  /** Un dialog/overlay PROPIO de `carrito-editor` ("Producto genérico" o "Ver
+   *  producto") se cerró por cualquier camino — replica el refoco que antes
+   *  disparaba el effect unificado sobre `algunDialogAbierto()` (respeta el
+   *  guard táctil). `vaciar()` ya no necesita este roundtrip: el componente
+   *  se refoca a sí mismo de forma incondicional (scanInput vive ahí). */
   onCarritoDialogCerrado(): void {
     this.focusInputAuto();
   }

@@ -3,7 +3,7 @@
     [title]="esModoEdicion() ? ('Editando presupuesto #' + presupuestoEditandoId()) : 'Presupuestos'"
     [subtitle]="esModoEdicion() ? 'Modificá productos, cantidades o datos del cliente' : 'Armar y enviar al cliente'">
     <div header-end class="inline-flex gap-1.5 items-center">
-      <app-sync-button (dialogClosed)="focusInput()" />
+      <app-sync-button (dialogClosed)="carrito()?.focusScanInput()" />
     </div>
   </app-page-header>
 
@@ -26,16 +26,18 @@
            hasta el viewport disponible. -->
       <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start">
 
-        <!-- Card: scan + búsqueda por descripción -->
+        <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
+             de `carrito-editor` (arriba de su tabla, en la columna derecha).
+             Esta card queda solo con el contexto de la atención — sesión
+             compartida con el showroom + QR del visor de presupuesto — que
+             es un asunto del host, no del carrito. -->
         <p-card class="kt-card">
           <ng-template #title>
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <div class="kt-card-title">
-                <i class="pi pi-barcode"></i>
-                <span>Escanear / buscar producto</span>
+                <i class="pi pi-user"></i>
+                <span>Atención</span>
               </div>
-              <!-- Contexto de la atención (movido desde el header para no dejarlo
-                   en 2 filas): chip de sesión / "Nuevo cliente" + QR del visor. -->
               <div class="flex items-center gap-2.5 flex-wrap">
                 @if (haySesionActiva()) {
                   <span class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200 text-[11px] font-bold border border-emerald-300 dark:border-emerald-800"
@@ -63,205 +65,6 @@
               </div>
             </div>
           </ng-template>
-          <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
-            <div class="flex-1">
-              <label for="scanInput" class="kt-label">
-                <i class="pi pi-search"></i> Código, descripción o EAN — ENTER para buscar
-              </label>
-              <p-iconfield class="w-full block">
-                <p-inputicon class="pi pi-search" />
-                <input pInputText id="scanInput" #scanInput type="text" autocomplete="off"
-                  [ngModel]="skuInput()" (ngModelChange)="skuInput.set($event)"
-                  (keydown.enter)="onScanEnter()"
-                  placeholder="Escaneá un código o tipeá una descripción..."
-                  class="w-full" [disabled]="cargandoScan()" />
-              </p-iconfield>
-            </div>
-            @if (cargandoScan()) {
-              <div class="flex items-center justify-center px-3">
-                <p-progressSpinner class="!w-6 !h-6" strokeWidth="4" />
-              </div>
-            }
-          </div>
-
-          <!-- El botón "+ Producto genérico" ahora vive dentro de
-               `carrito-editor` (junto con su dialog) — ver la card "Detalle
-               del presupuesto" más abajo. -->
-
-          <!-- Resultados de búsqueda por descripción — lista clickable.
-               Paleta KT naranja para coherencia con el resto de la app. La
-               diferenciación con el "Detalle del presupuesto" (de abajo) se
-               logra por: borde izquierdo verde grueso del detalle + SKU pill
-               outline aquí vs sólido en el detalle + ícono distinto en cada
-               card title. -->
-          @if (resultadosBusqueda().length > 0) {
-            <div class="mt-4 border border-[#FF861C]/30 rounded-lg overflow-hidden">
-              <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#FF861C]/10">
-                <span class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-                  <i class="pi pi-search text-[#FF861C]"></i>
-                  Buscando ({{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}) — elegí cuáles agregar
-                </span>
-                <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
-                  size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
-              </div>
-              <div class="flex items-center gap-2 px-3 py-2 border-b border-[#FF861C]/10 flex-wrap">
-                <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
-                <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
-                  [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
-                  size="small" appendTo="body" class="text-sm" />
-                <span class="text-xs text-muted-color shrink-0">Proveedor:</span>
-                <p-select [options]="proveedoresDisponibles()" [ngModel]="proveedorFiltro()"
-                  (ngModelChange)="cambiarProveedorFiltro($event)" [showClear]="true"
-                  placeholder="Todos" [filter]="true" size="small" appendTo="body" class="text-sm" />
-                @if (reordenando()) {
-                  <p-progressSpinner class="!w-4 !h-4" strokeWidth="6" ariaLabel="Reordenando" />
-                }
-              </div>
-              <!-- Altura adaptativa al viewport: en pantallas chicas mantiene
-                   un tope razonable; en sm+ el cálculo deja respirar a la
-                   lista hasta donde permite el viewport, restando toolbar
-                   (~5rem) + scan input + header de la card + header de
-                   resultados + "Cargar más" + footer sticky compacto
-                   (~22rem en total). El operador ve muchos más resultados
-                   sin scrollear el cuerpo de la página. -->
-              <div class="divide-y divide-[#FF861C]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
-                @for (r of resultadosBusqueda(); track r.sku) {
-                  <!-- Fila NO-clickeable. Para agregar al detalle, el operador
-                       toca el botón explícito "Agregar" del final de la fila.
-                       Después de agregar, la lista queda abierta para que pueda
-                       sumar varios productos seguidos sin volver a buscar.
-                       Las máquinas industriales (rubro excluido de descuentos)
-                       llevan un borde izquierdo ámbar grueso + tinte de fondo
-                       para identificarlas en listas largas. -->
-                  <div class="w-full flex items-center gap-3 px-3 py-2 transition-colors"
-                       [class.bg-amber-50]="esRubroMaquinaria(r.rubro)"
-                       [class.dark:bg-amber-950/20]="esRubroMaquinaria(r.rubro)"
-                       [class.border-l-4]="esRubroMaquinaria(r.rubro)"
-                       [class.border-amber-400]="esRubroMaquinaria(r.rubro)"
-                       [class.dark:border-amber-600]="esRubroMaquinaria(r.rubro)"
-                       [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(r.rubro)">
-                    <!-- Imagen más chica (48×48) que en el detalle (56×56) para
-                         reforzar visualmente que la lista es "secundaria/exploratoria". -->
-                    @if (r.imagenUrl) {
-                      <span class="shrink-0">
-                        <p-image [src]="r.imagenUrl" [alt]="r.sku" [preview]="true"
-                          imageClass="w-12 h-12 object-contain rounded border border-[#FF861C]/20 bg-white p-0.5 cursor-zoom-in" />
-                      </span>
-                    } @else {
-                      <div class="w-12 h-12 rounded bg-[#FF861C]/10 flex items-center justify-center shrink-0">
-                        <i class="pi pi-image text-[#FF861C]"></i>
-                      </div>
-                    }
-                    <div class="flex-1 flex items-center gap-3 text-left min-w-0">
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center gap-2 flex-wrap">
-                        <!-- SKU pill outline (no rellenado) — versión "secundaria" del
-                             pill naranja sólido que se usa en el detalle. Indica
-                             "candidato" vs "elegido". -->
-                        <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-[10px] font-bold">
-                          {{ r.sku }}
-                        </span>
-                        @if (esRubroMaquinaria(r.rubro)) {
-                          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
-                                       font-bold text-[9px] uppercase tracking-wide"
-                                pTooltip="Máquina industrial — no aplican los descuentos por monto"
-                                tooltipPosition="top">
-                            <i class="pi pi-wrench text-[8px]"></i>
-                            Máq. Industrial
-                          </span>
-                        }
-                        @if (r.habilitado === false) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
-                            Deshabilitado
-                          </span>
-                        }
-                        @if (!r.pvpKtGastroSinIva || r.pvpKtGastroSinIva <= 0) {
-                          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold flex items-center gap-1"
-                            pTooltip="Producto sin precio cargado en DUX" tooltipPosition="top">
-                            <i class="pi pi-exclamation-triangle text-[9px]"></i> Sin precio
-                          </span>
-                        }
-                        @if (r.stockTotal == null) {
-                          <span class="text-[10px] text-muted-color font-medium flex items-center gap-1"
-                            pTooltip="Stock no sincronizado con DUX" tooltipPosition="top">
-                            <i class="pi pi-question-circle text-[9px]"></i> Stock —
-                          </span>
-                        } @else if (r.stockTotal <= 0) {
-                          <span class="text-[10px] text-red-700 dark:text-red-400 font-medium flex items-center gap-1">
-                            <i class="pi pi-times-circle text-[9px]"></i> Sin stock
-                          </span>
-                        } @else {
-                          <span class="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
-                            <i class="pi pi-box text-[9px]"></i> {{ r.stockTotal }}
-                          </span>
-                        }
-                      </div>
-                      <div class="text-sm font-medium text-surface-700 dark:text-surface-200 truncate mt-0.5">
-                        {{ r.descripcion || '—' }}
-                      </div>
-                    </div>
-                    <div class="text-right shrink-0">
-                      <div class="text-sm font-semibold text-surface-800 dark:text-surface-100">
-                        {{ precioMostrado(r) | currency:'ARS':'symbol':'1.0-0' }}
-                      </div>
-                    </div>
-                    </div>
-                    <!-- Layout: 3 columnas (Ver, Cantidad, Agregar) con la
-                         misma estructura [label/spacer + gap + elemento].
-                         items-center alinea los centros geométricos de cada
-                         columna, así los centros de los elementos (botones e
-                         input) quedan a la misma altura visual. Los botones
-                         usan un spacer invisible (aria-hidden) con la misma
-                         altura que la label "CANTIDAD". -->
-                    <div class="shrink-0 flex items-center gap-2">
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
-                        <p-button icon="pi pi-eye"
-                          severity="info" size="small"
-                          (onClick)="verResultado(r)"
-                          pTooltip="Ver el producto completo (foto grande, datos)"
-                          tooltipPosition="top"
-                          ariaLabel="Ver producto" />
-                      </div>
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span class="text-[9px] uppercase tracking-wider font-bold text-[#FF861C] dark:text-[#FF9A3F] leading-none">
-                          Cantidad
-                        </span>
-                        <p-inputNumber [ngModel]="cantidadResultado(r.sku)"
-                          (ngModelChange)="setCantidadResultado(r.sku, $event)"
-                          [min]="1" [max]="cantidadMaximaResultado(r)"
-                          [showButtons]="true" buttonLayout="horizontal"
-                          spinnerMode="horizontal"
-                          decrementButtonClass="!p-1" incrementButtonClass="!p-1"
-                          inputStyleClass="w-20 text-center" [allowEmpty]="false"
-                          ariaLabel="Cantidad de unidades a agregar al detalle" />
-                      </div>
-                      <div class="flex flex-col items-center gap-0.5">
-                        <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
-                        <p-button icon="pi pi-arrow-right"
-                          severity="success" size="small"
-                          (onClick)="agregarResultado(r.sku)"
-                          pTooltip="Agregar al detalle (la lista se queda abierta)"
-                          tooltipPosition="top"
-                          ariaLabel="Agregar al detalle" />
-                      </div>
-                    </div>
-                  </div>
-                }
-              </div>
-              @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-                <div class="px-3 py-1.5 border-t border-[#FF861C]/10 bg-[#FF861C]/5 flex items-center justify-center gap-2">
-                  <p-button icon="pi pi-chevron-down" label="Cargar más" severity="secondary"
-                    [text]="true" size="small"
-                    [loading]="cargandoMasResultados()" (onClick)="cargarMasResultados()" />
-                  <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-[#FF861C]/10">
-                    {{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}
-                  </span>
-                </div>
-              }
-            </div>
-          }
         </p-card>
 
       </div>
@@ -501,12 +304,11 @@
             </div>
           }
 
-          <app-carrito-editor #carrito
+          <app-carrito-editor
             [(items)]="items"
             [formaPagoSeleccionada]="formaPagoSeleccionada()"
             [cambiosPrecio]="cambiosPrecio()"
             (mutacion)="onCarritoMutacion($event)"
-            (vaciado)="onCarritoVaciado()"
             (dialogCerrado)="onCarritoDialogCerrado()" />
         </p-card>
 
@@ -912,7 +714,7 @@
      prellena el campo del presupuesto; es opcional armar sin cliente. -->
 <p-dialog header="Nuevo cliente" [(visible)]="mostrarDialogoNuevoCliente" [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '28rem' }" [breakpoints]="{ '640px': '95vw' }"
-  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="focusInput()">
+  [closeOnEscape]="!iniciandoSesion()" [closable]="!iniciandoSesion()" (onHide)="carrito()?.focusScanInput()">
   <div class="flex flex-col gap-3">
     @if (haySesionActiva()) {
     <div class="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-sm">
@@ -951,143 +753,7 @@
      el del presupuesto (no el producto-a-producto del showroom). -->
 <app-qr-celular-dialog [(visible)]="mostrarDialogVisor" [visorUrl]="visorUrl()"
   [qrDataUrl]="qrVisorDataUrl()" [generando]="qrVisorGenerando()"
-  visorTitulo="Ver el presupuesto" (dialogClosed)="focusInput()" />
+  visorTitulo="Ver el presupuesto" (dialogClosed)="carrito()?.focusScanInput()" />
 
-<!-- ============= DIALOG "VER PRODUCTO" =============
-     Preview rápido de un resultado de búsqueda: foto grande + datos
-     del producto + botón directo "Agregar al detalle". Sirve para que
-     el operador verifique el producto antes de meterlo en el
-     presupuesto, sin tener que cerrar la lista de resultados. -->
-@if (productoPreview(); as p) {
-  <p-dialog [visible]="true"
-    (visibleChange)="$event ? null : cerrarProductoPreview()"
-    [modal]="true" [draggable]="false"
-    [style]="{ width: '92vw', maxWidth: '32rem' }"
-    [breakpoints]="{ '640px': '95vw' }">
-    <ng-template #header>
-      <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
-        <i class="pi pi-eye text-[#FF861C]"></i>
-        <span class="font-bold">Vista previa del producto</span>
-      </div>
-    </ng-template>
-
-    <div class="flex flex-col gap-4">
-      <!-- Foto grande centrada (300x300 max) o placeholder. -->
-      <div class="flex justify-center bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 p-4">
-        @if (p.imagenUrl) {
-          <p-image [src]="p.imagenUrl" [alt]="p.descripcion ?? p.sku" [preview]="true"
-            imageClass="max-h-72 object-contain cursor-zoom-in" />
-        } @else {
-          <div class="h-72 w-full flex flex-col items-center justify-center gap-2 text-muted-color">
-            <i class="pi pi-image text-5xl opacity-40"></i>
-            <span class="text-xs">Sin imagen disponible</span>
-          </div>
-        }
-      </div>
-
-      <!-- SKU + badges. -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="inline-flex items-center px-2 py-1 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-xs font-bold">
-          {{ p.sku }}
-        </span>
-        <!-- Badge "Máq. Industrial" para rubros sin descuento. El rubro normal
-             NO se muestra acá: ya aparece en su propio chip "Rubro" más abajo. -->
-        @if (esRubroMaquinaria(p.rubro)) {
-          <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded
-                       bg-amber-200 text-amber-900 dark:bg-amber-900/70 dark:text-amber-200
-                       font-bold text-[10px] uppercase tracking-wide"
-                pTooltip="Máquina industrial — no aplican los descuentos por monto"
-                tooltipPosition="top">
-            <i class="pi pi-wrench text-[9px]"></i>
-            Máq. Industrial
-          </span>
-        }
-        @if (p.habilitado === false) {
-          <span class="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-semibold">
-            Deshabilitado
-          </span>
-        }
-      </div>
-
-      <!-- Descripción. -->
-      <div class="text-base font-medium text-[#3B1E09] dark:text-surface-0">
-        {{ p.descripcion || '—' }}
-      </div>
-
-      <!-- Precio + stock en dos columnas. -->
-      <div class="grid grid-cols-2 gap-3">
-        <div class="p-3 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">
-            Precio
-          </div>
-          @if (p.pvpKtGastroConIva != null && p.pvpKtGastroConIva > 0) {
-            <div class="text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
-              {{ precioMostrado(p) | currency:'ARS':'symbol':'1.0-0' }}
-            </div>
-          } @else {
-            <div class="text-sm text-red-600 dark:text-red-400 font-bold inline-flex items-center gap-1">
-              <i class="pi pi-exclamation-triangle text-[10px]"></i>
-              Sin precio cargado
-            </div>
-          }
-        </div>
-        <div class="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-emerald-800/80 dark:text-emerald-300/80 mb-1">
-            Stock
-          </div>
-          @if (p.stockTotal == null) {
-            <div class="text-sm text-muted-color inline-flex items-center gap-1">
-              <i class="pi pi-question-circle text-[10px]"></i>
-              No sincronizado
-            </div>
-          } @else if (p.stockTotal <= 0) {
-            <div class="text-sm font-bold text-red-600 dark:text-red-400 inline-flex items-center gap-1">
-              <i class="pi pi-times-circle text-[10px]"></i>
-              Sin stock
-            </div>
-          } @else {
-            <div class="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-              {{ p.stockTotal }}
-            </div>
-          }
-        </div>
-      </div>
-
-      <!-- Proveedor, rubro e IVA del producto (datos DUX). -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-truck text-[10px]"></i> Proveedor
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
-            {{ p.proveedor || '—' }}
-          </div>
-        </div>
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-tag text-[10px]"></i> Rubro
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
-            {{ p.rubro || '—' }}
-          </div>
-        </div>
-        <div class="p-3 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
-            <i class="pi pi-percentage text-[10px]"></i> IVA
-          </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
-            {{ p.porcIva != null ? p.porcIva + '%' : '—' }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <ng-template #footer>
-      <p-button label="Cerrar" icon="pi pi-times" severity="secondary" [outlined]="true"
-        (onClick)="cerrarProductoPreview()" />
-      <p-button label="Agregar al detalle" icon="pi pi-arrow-right" class="btn-kt-naranja"
-        [disabled]="p.habilitado === false || !p.pvpKtGastroSinIva || p.pvpKtGastroSinIva <= 0"
-        (onClick)="agregarDesdePreview()" />
-    </ng-template>
-  </p-dialog>
-}
+<!-- El dialog "Ver producto" (preview de un resultado de búsqueda) ahora
+     vive dentro de `app-carrito-editor`, junto con el scan/búsqueda. -->
