@@ -20,14 +20,16 @@
     [style.padding-bottom.px]="hayItems() ? footerHeight() + 16 : null">
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-      <!-- ============= COLUMNA IZQUIERDA: bloques del host =============
-           Atención (sesión + QR) + Acciones (guardar/enviar/crear pedido,
-           chip "Datos del cliente", modo de cotización/forma de pago del PDF
-           y el banner de "precios desactualizados"). Sticky en lg+ para que
-           quede siempre a la vista mientras el operador scrollea la tabla
-           del carrito a la derecha (que además tiene SU PROPIO buscador
-           sticky, ver `carrito-editor`). -->
-      <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start">
+      <!-- ===== Bloques del host: Atención + Acciones =====
+           En DESKTOP (lg+) van a la DERECHA vía `order` (el buscador+tabla
+           quedan a la izquierda, como el layout previo a editar-pedido); en
+           mobile van primero (order-1). Atención (sesión + QR) + Acciones
+           (guardar/enviar/crear pedido, chip "Datos del cliente", modo de
+           cotización/forma de pago del PDF y el banner de "precios
+           desactualizados"). Sticky en lg+ para que quede siempre a la vista
+           mientras el operador scrollea la tabla del carrito (que además
+           tiene SU PROPIO buscador sticky, ver `carrito-editor`). -->
+      <div class="flex flex-col gap-4 lg:sticky lg:top-3 lg:self-start order-1 lg:order-2">
 
         <!-- Card "Atención": el scan/búsqueda de productos ahora vive dentro
              de `carrito-editor` (con su propia tabla, en la columna derecha).
@@ -277,7 +279,7 @@
       <!-- ============= COLUMNA DERECHA: carrito-editor =============
            Scan/búsqueda (sticky dentro del propio componente) + tabla
            editable de ítems — todo vive en `app-carrito-editor`, autónomo. -->
-      <div class="flex flex-col gap-4">
+      <div class="flex flex-col gap-4 order-2 lg:order-1">
 
         <!-- Tabla de items — card destacada con borde izquierdo verde KT
              para diferenciarla visualmente del resto de las cards del host
