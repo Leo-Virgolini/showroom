@@ -65,37 +65,24 @@ public class SecurityConfig {
                         .csrfTokenRequestHandler(csrfHandler)
                         // El login no tiene sesión todavía → exento.
                         // El visor es público y sin sesión → su POST también va exento.
-                        .ignoringRequestMatchers("/api/auth/login", "/api/showroom/visor/**"))
+                        .ignoringRequestMatchers("/api/auth/login", "/api/showroom/visor/t/**"))
                 // CORS unificado: toma el bean CorsConfigurationSource (ver
                 // CorsConfig). El filtro CORS de Security maneja el preflight
                 // OPTIONS antes de la autorización — un solo lugar para CORS.
                 .cors(Customizer.withDefaults())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
-                        // Auth endpoints (login y me siempre disponibles; el chequeo de
-                        // sesión activa lo hace el propio AuthController).
+                        // Login y chequeo de sesión.
                         .requestMatchers("/api/auth/login", "/api/auth/me").permitAll()
-                        // SSE + recursos que necesita el visor (lectura pública).
-                        // /events (operador autenticado) sigue público — Authentication
-                        // puede ser null y el endpoint funciona devolviendo solo
-                        // eventos globales en ese caso.
-                        .requestMatchers("/api/showroom/events").permitAll()
-                        .requestMatchers("/api/showroom/productos/*/imagen").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/showroom/config/escalas-descuento").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/showroom/formas-pago/activas").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/showroom/config/rubros-sin-iva").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/showroom/scan/*").permitAll()
-                        // Endpoints del visor por operador — todos públicos. El
-                        // {username} en el path identifica el canal del operador.
-                        .requestMatchers("/api/showroom/visor/**").permitAll()
-                        // Healthcheck — el container Docker hace curl /health
-                        // para saber si está UP. Sin esto, queda "starting" para
-                        // siempre porque el endpoint responde 401 sin sesión.
+                        // Healthcheck del container.
                         .requestMatchers(HttpMethod.GET, "/api/showroom/health").permitAll()
+                        // Visor del cliente: ÚNICA superficie pública de negocio.
+                        // Todo se valida por token dentro del controller.
+                        .requestMatchers("/api/showroom/visor/t/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        // Resto del API: requiere login.
+                        // Resto del API: requiere login. (scan, formas-pago,
+                        // escalas, rubros e imágenes globales ya NO son públicos.)
                         .requestMatchers("/api/**").authenticated()
-                        // Recursos estáticos (cuando se sirvan juntos al frontend).
                         .anyRequest().permitAll())
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
