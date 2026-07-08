@@ -42,6 +42,46 @@
       </div>
     }
 
+    <!-- ============= Banner "precios desactualizados" =============
+         Aparece cuando al abrir el pedido se detectó que el catálogo cambió
+         respecto al precio CONGELADO. Las filas afectadas llevan además un pill
+         con el precio actual (lo pinta `carrito-tabla` vía `cambiosPrecio`).
+         "Actualizar precios" trae los precios actuales conservando cantidades y
+         descuentos (mismo flujo que el presupuestador). -->
+    @if (cantidadPreciosCambiados() > 0) {
+      <div class="p-3 rounded-lg border border-amber-300 bg-amber-50
+                  dark:bg-amber-900/20 dark:border-amber-700/50
+                  flex items-center gap-3 flex-wrap" role="status" aria-live="polite">
+        <i class="pi pi-exclamation-triangle text-amber-500 text-xl shrink-0"></i>
+        <div class="flex-1 min-w-[12rem]">
+          <p class="m-0 text-sm font-bold text-amber-900 dark:text-amber-200">
+            {{ cantidadPreciosCambiados() }}
+            {{ cantidadPreciosCambiados() === 1 ? 'precio cambió' : 'precios cambiaron' }}
+            en el catálogo desde que se cargó este pedido
+          </p>
+          <p class="m-0 text-xs text-amber-700 dark:text-amber-300/80">
+            Las filas marcadas muestran el valor actual. "Actualizar precios" los aplica
+            conservando cantidades y descuentos.
+          </p>
+        </div>
+        <button type="button"
+          class="shrink-0 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide
+                 text-white bg-gradient-to-r from-sky-500 to-sky-700 shadow-md
+                 hover:from-sky-600 hover:to-sky-800 hover:shadow-lg
+                 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600
+                 disabled:opacity-70 disabled:cursor-not-allowed transition-all duration-150"
+          [disabled]="actualizandoPrecios()"
+          (click)="actualizarPreciosDesdeCatalogo()"
+          aria-label="Actualizar precios desde el catálogo">
+          <i class="pi"
+            [class.pi-refresh]="!actualizandoPrecios()"
+            [class.pi-spinner]="actualizandoPrecios()"
+            [class.pi-spin]="actualizandoPrecios()"></i>
+          {{ actualizandoPrecios() ? 'Actualizando…' : 'Actualizar precios' }}
+        </button>
+      </div>
+    }
+
     <!-- ============= Detalle editable: buscador (izq) + tabla (der) =============
          El scan/búsqueda y la tabla de ítems son dos componentes compartidos
          (`carrito-buscador` + `carrito-tabla`) que comparten el mismo `items`.
@@ -77,6 +117,7 @@
         <app-carrito-tabla
           [(items)]="items"
           [formaPagoSeleccionada]="formaPagoSeleccionada()"
+          [cambiosPrecio]="cambiosPrecio()"
           (mutacion)="onCarritoMutacion($event)"
           (vaciado)="buscador()?.focusScanInput()" />
       </p-card>

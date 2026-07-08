@@ -12,13 +12,12 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { catchError, forkJoin, map, of } from 'rxjs';
-import { MessageService } from 'primeng/api';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TooltipModule } from 'primeng/tooltip';
-import { FormaPago, PedidoDetalle, PresupuestoItem } from '../models';
+import { CambioPrecio, FormaPago, PedidoDetalle, PresupuestoItem } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
@@ -91,6 +90,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly backendStatus = inject(BackendStatusService);
   private readonly toast = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Id del pedido a editar (parseado del `:id` de la ruta). Null solo en el
@@ -129,6 +129,27 @@ export class EditarPedidoPage implements HasUnsavedChanges {
    *  `precioListaConIva` no guardan el PVP pre-forma original. Dispara el
    *  aviso en el template. */
   readonly huboRecotizacion = signal(false);
+
+  /** Cambios de precio detectados al abrir el pedido: uid del ítem →
+   *  {precioGuardado, precioActual}. Se llena en {@link enriquecerYDetectarCambios}
+   *  comparando el precio CONGELADO del pedido contra el catálogo local (sin
+   *  tocar DUX) y se vacía cuando el operador aplica "Actualizar precios".
+   *  Alimenta el pill por fila (vía el input `cambiosPrecio` de `carrito-tabla`)
+   *  y el banner de aviso. Vacío = todo al día. */
+  readonly cambiosPrecio = signal<Map<string, CambioPrecio>>(new Map());
+
+  /** Cantidad de ítems con precio desactualizado — gatilla el banner. */
+  readonly cantidadPreciosCambiados = computed(() => this.cambiosPrecio().size);
+
+  /** True si hay al menos un ítem de catálogo (no genérico): "Actualizar
+   *  precios" no aplica cuando todos son genéricos (SKU comodín, sin catálogo). */
+  readonly hayItemsCatalogo = computed(() => {
+    this.itemsTick();
+    return this.items().some((it) => !it.generico);
+  });
+
+  /** True mientras corre el lookup de "Actualizar precios" (deshabilita el botón). */
+  readonly actualizandoPrecios = signal(false);
 
   /** Contador que se incrementa en cada mutación in-place (cantidad/descuento)
    *  del `carrito-editor` — fuerza el recompute de {@link total} sin necesidad
@@ -290,6 +311,16 @@ export class EditarPedidoPage implements HasUnsavedChanges {
       this.formaResuelta.set(true);
     });
 
+    // Purga el map de "cambios de precio" cuando un ítem se quita del detalle,
+    // así el contador del banner no queda inflado con uids que ya no existen.
+    effect(() => {
+      const vivos = new Set(this.items().map((i) => i.uid));
+      const m = this.cambiosPrecio();
+      if ([...m.keys()].some((k) => !vivos.has(k))) {
+        this.cambiosPrecio.set(new Map([...m].filter(([k]) => vivos.has(k))));
+      }
+    });
+
     // Observa el alto del footer sticky y lo refleja en `footerHeight()`, para
     // que el padding-bottom del main crezca cuando los chips de formas hacen
     // flex-wrap a 2+ líneas y el footer no tape los últimos ítems.
@@ -313,7 +344,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
         this.cargando.set(false);
         this.hayCambiosSinGuardar.set(false);
         this.buscador()?.focusScanInput();
-        this.recotizarItemsViejos(det);
+        this.enriquecerYDetectarCambios(det);
       },
       error: (err) => {
         this.cargando.set(false);
@@ -324,43 +355,160 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     });
   }
 
-  /** Pedidos anteriores a `precioListaConIva` no guardan el PVP de lista
-   *  pre-forma original — `pedidoItemsAPresupuestoItems` ya los hidrató con
-   *  el fallback aproximado (`precioUnitario`, que es POST-forma). Acá se
-   *  re-cotizan esos ítems puntuales a la lista VIGENTE (best-effort, mismo
-   *  `scan(sku, false)` que usa el presupuestador para no tocar el visor del
-   *  cliente): si el scan falla o el SKU ya no existe, se deja el fallback
-   *  aproximado sin romper la pantalla. Matchea por `uid` (no por índice)
-   *  para no depender de que el array de {@link items} no haya cambiado
-   *  mientras viajan los requests. */
-  private recotizarItemsViejos(det: PedidoDetalle): void {
-    const objetivos = det.items
-      .map((it, i) => ({ uid: `${it.sku}-${i}`, sku: it.sku, precioListaConIva: it.precioListaConIva }))
-      .filter((x) => x.precioListaConIva == null);
-    if (objetivos.length === 0) return;
-
-    const requests = objetivos.map(({ uid, sku }) =>
-      this.api.scan(sku, false).pipe(
-        map((res) => ({ uid, res })),
-        catchError(() => of(null)),
-      ),
+  /** Al abrir el pedido, hace UN lookup contra el catálogo local (cache en BD,
+   *  no toca DUX) para:
+   *   1. Enriquecer cada ítem con descripción/stock/imagen/habilitado actuales
+   *      (el pedido guarda pocos de estos datos → sin esto la tabla mostraba
+   *      "stock —" y sin foto).
+   *   2. Pedidos VIEJOS (sin `precioListaConIva` guardado): recotización
+   *      silenciosa al precio actual — su precio congelado era una aproximación
+   *      POST-forma, no un precio de lista real (dispara {@link huboRecotizacion}).
+   *   3. Pedidos con precio congelado: NO se pisa; solo se DETECTA si el
+   *      catálogo cambió (→ {@link cambiosPrecio}), que alimenta el pill por
+   *      fila y el banner. El operador decide traerlos con "Actualizar precios".
+   *
+   *  Matchea por `uid` (`${sku}-${i}`) para no depender del orden del array. */
+  private enriquecerYDetectarCambios(det: PedidoDetalle): void {
+    const viejos = new Set(
+      det.items
+        .map((it, i) => ({ uid: `${it.sku}-${i}`, viejo: it.precioListaConIva == null }))
+        .filter((x) => x.viejo)
+        .map((x) => x.uid),
     );
-    forkJoin(requests).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((resultados) => {
-      let recotizo = false;
-      this.items.update((arr) =>
-        arr.map((item) => {
-          const match = resultados.find((r) => r?.uid === item.uid);
-          if (!match || match.res.pvpKtGastroConIva == null) return item;
-          recotizo = true;
-          return {
-            ...item,
-            pvpKtGastroConIva: match.res.pvpKtGastroConIva,
-            pvpKtGastroSinIva: match.res.pvpKtGastroSinIva,
-            porcIva: match.res.porcIva,
-          };
-        }),
-      );
-      if (recotizo) this.huboRecotizacion.set(true);
+    const skus = this.items().filter((it) => !it.generico).map((it) => it.sku);
+    if (skus.length === 0) return;
+
+    this.api.lookupBulk(skus).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (frescos) => {
+        const porSku = new Map(frescos.map((f) => [f.sku, f]));
+        const cambios = new Map<string, CambioPrecio>();
+        let recotizo = false;
+        this.items.set(
+          this.items().map((it) => {
+            // Genéricos no se refrescan contra catálogo — su SKU es comodín.
+            if (it.generico) return it;
+            const f = porSku.get(it.sku);
+            if (!f) return it;
+            // Enriquecer datos de catálogo (no tocan el precio).
+            const enriquecido: PresupuestoItem = {
+              ...it,
+              descripcion: f.descripcion ?? it.descripcion,
+              stockTotal: f.stockTotal,
+              habilitado: f.habilitado ?? it.habilitado,
+              imagenUrl: f.imagenUrl ?? it.imagenUrl,
+            };
+            if (f.pvpKtGastroConIva == null) return enriquecido;
+            if (viejos.has(it.uid)) {
+              // Pedido viejo: recotización silenciosa al precio de lista actual.
+              recotizo = true;
+              return {
+                ...enriquecido,
+                pvpKtGastroConIva: f.pvpKtGastroConIva,
+                pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+                porcIva: f.porcIva,
+                rubro: f.rubro ?? it.rubro,
+              };
+            }
+            // Precio congelado: solo avisamos si el catálogo cambió.
+            const guardado = redondearMoneda(it.pvpKtGastroConIva ?? 0);
+            const actual = redondearMoneda(f.pvpKtGastroConIva);
+            if (guardado > 0 && guardado !== actual) {
+              cambios.set(it.uid, { precioGuardado: guardado, precioActual: actual });
+            }
+            return enriquecido;
+          }),
+        );
+        this.cambiosPrecio.set(cambios);
+        if (recotizo) this.huboRecotizacion.set(true);
+        this.itemsTick.update((v) => v + 1);
+      },
+      // Sin catálogo (fallo del lookup): se dejan los precios congelados sin
+      // pills; el operador igual puede guardar con los datos del pedido.
+      error: () => { /* best-effort: no rompe la pantalla */ },
+    });
+  }
+
+  /** Trae los precios actuales del catálogo (cache local, no toca DUX) y los
+   *  aplica a los ítems de catálogo conservando cantidad, descuento, uid y
+   *  comentarios. Pide confirmación porque reemplaza precios que pudieron
+   *  negociarse. Al terminar, limpia {@link cambiosPrecio}. Mismo flujo que el
+   *  presupuestador. */
+  actualizarPreciosDesdeCatalogo(): void {
+    const skus = this.items().filter((it) => !it.generico).map((it) => it.sku);
+    if (skus.length === 0) {
+      this.toast.add({ severity: 'warn', summary: 'Sin catálogo',
+        detail: 'No hay productos de catálogo para actualizar.', life: 4000 });
+      return;
+    }
+    this.confirmationService.confirm({
+      header: '¿Actualizar precios?',
+      message: 'Se van a reemplazar los precios de este pedido por los del '
+        + 'catálogo actual. Las cantidades y los descuentos se conservan. ¿Continuás?',
+      icon: 'pi pi-dollar',
+      acceptButtonProps: { label: 'Actualizar', icon: 'pi pi-refresh' },
+      rejectButtonProps: { label: 'Cancelar', severity: 'secondary', outlined: true },
+      accept: () => this.ejecutarActualizarPrecios(skus),
+      reject: () => this.buscador()?.focusScanInput(),
+    });
+  }
+
+  private ejecutarActualizarPrecios(skus: string[]): void {
+    this.actualizandoPrecios.set(true);
+    this.api.lookupBulk(skus).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (frescos) => {
+        this.actualizandoPrecios.set(false);
+        const porSku = new Map(frescos.map((f) => [f.sku, f]));
+        let actualizados = 0;
+        let sinCambios = 0;
+        let noEncontrados = 0;
+        this.items.set(
+          this.items().map((it) => {
+            if (it.generico) return it;
+            const f = porSku.get(it.sku);
+            if (!f || f.pvpKtGastroConIva == null) {
+              noEncontrados++;
+              return it;
+            }
+            const guardado = redondearMoneda(it.pvpKtGastroConIva ?? 0);
+            const actual = redondearMoneda(f.pvpKtGastroConIva);
+            if (guardado === actual) {
+              sinCambios++;
+              return it;
+            }
+            actualizados++;
+            // Pisa SOLO precio/IVA/rubro; conserva cantidad, descuento, uid.
+            return {
+              ...it,
+              pvpKtGastroConIva: f.pvpKtGastroConIva,
+              pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+              porcIva: f.porcIva,
+              rubro: f.rubro ?? it.rubro,
+            };
+          }),
+        );
+        this.itemsTick.update((v) => v + 1);
+        if (actualizados > 0) this.hayCambiosSinGuardar.set(true);
+        // Ya al día: se vacían los pills/banner de "precio desactualizado".
+        this.cambiosPrecio.set(new Map());
+
+        const partes: string[] = [
+          `${actualizados} ${actualizados === 1 ? 'precio actualizado' : 'precios actualizados'}`,
+        ];
+        if (sinCambios > 0) partes.push(`${sinCambios} sin ${sinCambios === 1 ? 'cambio' : 'cambios'}`);
+        if (noEncontrados > 0) partes.push(`${noEncontrados} fuera de catálogo`);
+        this.toast.add({
+          severity: actualizados > 0 ? 'success' : 'info',
+          summary: actualizados > 0 ? 'Precios actualizados' : 'Sin cambios de precio',
+          detail: partes.join(', ') + '.',
+          life: 5000,
+        });
+        this.buscador()?.focusScanInput();
+      },
+      error: (err) => {
+        this.actualizandoPrecios.set(false);
+        toastError(this.toast, 'Actualizar precios', err,
+          'No se pudieron actualizar los precios.');
+      },
     });
   }
 
