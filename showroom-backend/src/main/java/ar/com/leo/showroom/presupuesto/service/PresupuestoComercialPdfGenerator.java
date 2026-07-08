@@ -403,7 +403,7 @@ public class PresupuestoComercialPdfGenerator {
 
         GenerarPresupuestoRequestDTO datos = new GenerarPresupuestoRequestDTO(
                 clienteNombre, null, null, null, null,
-                BigDecimal.ZERO, Boolean.FALSE, null, items, List.of());
+                BigDecimal.ZERO, Boolean.FALSE, null, null, items, List.of());
 
         // Stub con los únicos campos que usa el layout: nombre + fecha. id null
         // → el header no imprime número.

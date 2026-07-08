@@ -36,4 +36,22 @@ class GenerarPresupuestoRequestDTODeserializationTest {
         GenerarPresupuestoRequestDTO dto = mapper.readValue(json, GenerarPresupuestoRequestDTO.class);
         assertThat(dto.formaPagoSeleccionadaId()).isEqualTo(7L);
     }
+
+    @Test
+    void origenAtencion_true_se_respeta() {
+        String json = """
+                {"items":[{"sku":"1","cantidad":1,"precioConIva":1000}],
+                 "origenAtencion":true}
+                """;
+        GenerarPresupuestoRequestDTO dto = mapper.readValue(json, GenerarPresupuestoRequestDTO.class);
+        assertThat(dto.origenAtencion()).isTrue();
+    }
+
+    @Test
+    void origenAtencion_ausente_se_deserializa_como_null() {
+        GenerarPresupuestoRequestDTO dto = mapper.readValue(SIN_FORMA, GenerarPresupuestoRequestDTO.class);
+        assertThat(dto.origenAtencion())
+                .as("ausente ⇒ null (flujo normal del presupuestador, no toca ninguna sesión)")
+                .isNull();
+    }
 }

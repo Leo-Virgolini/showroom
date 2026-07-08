@@ -638,7 +638,7 @@ public class PresupuestoComercialService {
         return new GenerarPresupuestoRequestDTO(
                 datos.clienteNombre(), datos.clienteTelefono(), datos.clienteEmail(),
                 datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
-                false, datos.formaPagoSeleccionadaId(), datos.items(), formasAgregadas);
+                false, datos.formaPagoSeleccionadaId(), datos.origenAtencion(), datos.items(), formasAgregadas);
     }
 
     /** Total con IVA de una línea: precio con IVA × (1 − desc%) × cantidad. */
@@ -686,7 +686,7 @@ public class PresupuestoComercialService {
                 datos.rubro(), datos.observaciones(), datos.descuentoGlobalPorcentaje(),
                 // En individual el id de forma elegida no aplica (cada ítem
                 // lista sus propias formas) — se descarta.
-                true, null, datos.items(), formasIndividuales);
+                true, null, datos.origenAtencion(), datos.items(), formasIndividuales);
     }
 
     /** Deduplica formas de pago snapshot: en modo individual el JSON
@@ -734,6 +734,7 @@ public class PresupuestoComercialService {
                 p.getDescuentoGlobalPorcentaje(),
                 individual,
                 p.getFormaPagoSeleccionadaId(),
+                null,
                 items == null ? List.of() : items,
                 formas == null ? List.of() : formas);
     }

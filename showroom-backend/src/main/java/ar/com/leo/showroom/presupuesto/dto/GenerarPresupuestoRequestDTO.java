@@ -53,6 +53,14 @@ public record GenerarPresupuestoRequestDTO(
          *  snapshot correspondiente desde {@link #formasPago()} por este id. */
         Long formaPagoSeleccionadaId,
 
+        /** True cuando el presupuesto se crea DESDE una atención del showroom
+         *  (el operador eligió "Crear presupuesto" en vez de "Crear pedido").
+         *  El controller lo usa para finalizar la sesión activa y registrarla
+         *  como convertida a presupuesto. Ausente/null/false = flujo normal del
+         *  presupuestador (no toca ninguna sesión). Wrapper porque Jackson 3
+         *  falla al mapear un primitivo ausente. */
+        Boolean origenAtencion,
+
         @NotEmpty(message = "El presupuesto debe tener al menos un ítem")
         @Valid
         List<Item> items,
