@@ -837,6 +837,11 @@ export interface GenerarPresupuestoRequest {
    *  "Todas" (precio efectivo por ítem + sección de formas comparativas, como
    *  hoy). Solo aplica al modo agregado; en individual el backend lo ignora. */
   formaPagoSeleccionadaId?: number | null;
+  /** True cuando el presupuesto se crea desde una atención del showroom (el
+   *  operador eligió "Crear presupuesto"). El backend finaliza la sesión activa
+   *  y la registra como convertida a presupuesto. Ausente/false = flujo normal
+   *  del presupuestador. */
+  origenAtencion?: boolean;
   items: {
     sku: string;
     descripcion?: string | null;
