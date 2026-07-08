@@ -75,6 +75,15 @@ body {
 html {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  // Reserva SIEMPRE el ancho de la scrollbar vertical. Sin esto, cuando el
+  // contenido crece/decrece y la scrollbar aparece/desaparece, el viewport
+  // cambia de ancho y los elementos `position: fixed` de ancho completo (p. ej.
+  // el footer sticky del presupuestador/editor) se re-acomodan. Combinado con un
+  // ResizeObserver que ajusta padding según el alto del footer, eso genera un
+  // loop de realimentación (padding → alto del doc → scrollbar → ancho → wrap de
+  // chips → alto del footer → padding…) que congela la pestaña. Reservar el
+  // gutter rompe el ciclo y además evita el "salto" de layout al aparecer scroll.
+  scrollbar-gutter: stable;
 }
 
 // Caret invisible por default — sólo aparece en inputs/textareas/contenteditable

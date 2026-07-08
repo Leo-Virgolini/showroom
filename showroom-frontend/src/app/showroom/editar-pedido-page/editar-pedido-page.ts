@@ -141,13 +141,6 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   /** Cantidad de ítems con precio desactualizado — gatilla el banner. */
   readonly cantidadPreciosCambiados = computed(() => this.cambiosPrecio().size);
 
-  /** True si hay al menos un ítem de catálogo (no genérico): "Actualizar
-   *  precios" no aplica cuando todos son genéricos (SKU comodín, sin catálogo). */
-  readonly hayItemsCatalogo = computed(() => {
-    this.itemsTick();
-    return this.items().some((it) => !it.generico);
-  });
-
   /** True mientras corre el lookup de "Actualizar precios" (deshabilita el botón). */
   readonly actualizandoPrecios = signal(false);
 
@@ -324,14 +317,30 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     // Observa el alto del footer sticky y lo refleja en `footerHeight()`, para
     // que el padding-bottom del main crezca cuando los chips de formas hacen
     // flex-wrap a 2+ líneas y el footer no tape los últimos ítems.
+    //
+    // A prueba de loops: el callback se difiere a requestAnimationFrame y solo
+    // escribe la señal si el alto cambió de verdad. Así, aunque un ajuste de
+    // layout dispare el observer, no se re-entra sincrónicamente ni se generan
+    // ciclos de change-detection (la causa raíz —el toggle de la scrollbar— la
+    // corta `scrollbar-gutter: stable` en styles.scss).
     effect((onCleanup) => {
       const el = this.footerSticky()?.nativeElement;
       if (!el || typeof window === 'undefined') return;
-      const update = () => this.footerHeight.set(el.offsetHeight);
+      let frame = 0;
+      const update = () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          const h = Math.round(el.offsetHeight);
+          if (h !== this.footerHeight()) this.footerHeight.set(h);
+        });
+      };
       const obs = new ResizeObserver(update);
       obs.observe(el);
       update();
-      onCleanup(() => obs.disconnect());
+      onCleanup(() => {
+        cancelAnimationFrame(frame);
+        obs.disconnect();
+      });
     });
   }
 
