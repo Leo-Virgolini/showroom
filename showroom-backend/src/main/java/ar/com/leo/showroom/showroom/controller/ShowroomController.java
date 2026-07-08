@@ -852,6 +852,9 @@ public class ShowroomController {
             Authentication auth) {
         PresupuestoComercialService.Resultado r =
                 presupuestoComercialService.generarYPersistir(body, auth.getName());
+        if (Boolean.TRUE.equals(body.origenAtencion())) {
+            sesionShowroomService.finalizarConPresupuesto(auth.getName(), r.presupuesto().getId());
+        }
         // Usamos `attachment` (no `inline`) para que Chrome no bloquee la
         // descarga como "no segura": cuando combinamos blob URL + a.click()
         // + window.open() automático, browsers modernos consideran sospechosa
@@ -1035,6 +1038,9 @@ public class ShowroomController {
         PresupuestoComercialService.Resultado r =
                 presupuestoComercialService.generarYEnviarPorEmail(
                         body.email(), body.presupuesto(), auth.getName());
+        if (Boolean.TRUE.equals(body.presupuesto().origenAtencion())) {
+            sesionShowroomService.finalizarConPresupuesto(auth.getName(), r.presupuesto().getId());
+        }
         return ResponseEntity.accepted().body(Map.of(
                 "message", "Envío encolado — el toast confirmará cuando salga.",
                 "presupuestoId", r.presupuesto().getId(),
