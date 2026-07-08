@@ -29,7 +29,8 @@ import java.util.List;
         @Index(name = "idx_sesion_showroom_iniciada_at", columnList = "iniciada_at"),
         @Index(name = "idx_sesion_showroom_finalizada_at", columnList = "finalizada_at"),
         @Index(name = "idx_sesion_showroom_pedido_id", columnList = "pedido_id"),
-        @Index(name = "idx_sesion_showroom_usuario_activa", columnList = "usuario_id, finalizada_at")
+        @Index(name = "idx_sesion_showroom_usuario_activa", columnList = "usuario_id, finalizada_at"),
+        @Index(name = "idx_sesion_showroom_presupuesto_id", columnList = "presupuesto_id")
 })
 @Data
 @NoArgsConstructor
@@ -68,6 +69,13 @@ public class SesionShowroom {
      *  fetch graph del listado) — la columna alcanza para hacer join manual. */
     @Column(name = "pedido_id")
     private Long pedidoId;
+
+    /** Presupuesto comercial asociado a la sesión, si la atención terminó en
+     *  presupuesto en vez de pedido. NULL para sesiones abandonadas o que
+     *  terminaron en pedido. No es FK estricta (igual criterio que pedidoId) —
+     *  la columna alcanza para el join manual de las estadísticas. */
+    @Column(name = "presupuesto_id")
+    private Long presupuestoId;
 
     /** Token público del visor de esta sesión. El QR del celular apunta a
      *  /visor/{token}. Válido mientras la sesión esté activa (finalizadaAt

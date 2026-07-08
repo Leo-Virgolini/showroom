@@ -22,6 +22,9 @@ public record SesionCerradaEvent(Long sesionId, String nombreCliente, String use
         /** Operador cerró la sesión activamente desde la UI. */
         CANCELADA,
         /** Sesión activa que se cerró automáticamente al iniciar una nueva. */
-        ABANDONADA
+        ABANDONADA,
+        /** Sesión activa que se cerró porque la atención terminó en presupuesto
+         *  comercial (no en pedido). El listener del carrito la vacía igual. */
+        PRESUPUESTO
     }
 }
