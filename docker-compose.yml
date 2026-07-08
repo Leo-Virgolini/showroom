@@ -56,8 +56,8 @@ services:
   # `mysqldump` coincide exacto con la versión del server) y corre un loop bash
   # que duerme hasta las 02:00, dumpea, comprime y rota.
   #
-  # - Los dumps van a ./backups del host (gzip). Restore:
-  #     gunzip < backups/showroom-XXXX.sql.gz | \
+  # - Los dumps van a /data/showroom/backups del host (gzip). Restore:
+  #     gunzip < /data/showroom/backups/showroom-XXXX.sql.gz | \
   #       docker compose exec -T showroom-db mysql -uroot -p"$MYSQL_ROOT_PASSWORD" showroom
   # - Retención: conserva los 7 dumps más recientes (los anteriores se borran).
   # - Solo corre mientras el stack está levantado: si la PC está apagada a las
@@ -80,7 +80,7 @@ services:
       MYSQL_PWD: ${MYSQL_ROOT_PASSWORD}
       TZ: America/Argentina/Buenos_Aires
     volumes:
-      - ./backups:/backups
+      - /data/showroom/backups:/backups
     networks:
       - showroom-net
     command:
@@ -183,10 +183,11 @@ services:
       # server las mantiene SuperMaster; acá solo se leen.
       - "/data/supermaster/secrets:/app/secrets:ro"
       - "/data/supermaster/imagenes:/app/imagenes:ro"
-      # Logs persistentes en el host. Sobrevive a `docker compose down`. Útil
+      # Logs persistentes en /data/showroom/logs del host. Sobrevive a
+      # `docker compose down`. Útil
       # para diagnosticar incidentes pasados ("se cayó el sync ayer a la noche")
       # sin tener que entrar al contenedor.
-      - "./logs:/app/logs"
+      - "/data/showroom/logs:/app/logs"
       # Integración con el programa externo pickit-y-etiquetas (jar Java desktop).
       # `PICKIT_HOST_PATH` (en .env) apunta a una carpeta del host que contenga:
       #   - el .jar (compilado con mvn package)
