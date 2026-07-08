@@ -15,9 +15,10 @@ import {
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { EMPTY, Subject, firstValueFrom } from 'rxjs';
 import { catchError, debounceTime, groupBy, mergeMap, switchMap, tap } from 'rxjs/operators';
-import { ConfirmationService, MessageService } from 'primeng/api';
+import { ConfirmationService, MenuItem, MessageService } from 'primeng/api';
 import { AvatarModule } from 'primeng/avatar';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -32,10 +33,12 @@ import { InputTextModule } from 'primeng/inputtext';
 import { MeterGroupModule } from 'primeng/metergroup';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { SelectModule } from 'primeng/select';
+import { SplitButtonModule } from 'primeng/splitbutton';
 import { SplitterModule } from 'primeng/splitter';
 import { TagModule } from 'primeng/tag';
 import { TooltipModule } from 'primeng/tooltip';
 import { BackendStatusService } from '../backend-status.service';
+import { carritoItemsAPresupuestoItems } from '../carrito-a-presupuesto.util';
 import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, ScanResult } from '../models';
 import {
   hayEscalonSuperior,
@@ -43,6 +46,7 @@ import {
   ordenarEscalasPorUmbral,
 } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
+import { PresupuestoDesdeAtencionService } from '../presupuesto-desde-atencion.service';
 import { SesionClienteService } from '../sesion-cliente.service';
 import { ShowroomService } from '../showroom.service';
 import { construirVisorUrl, generarQrDataUrl } from '../visor-qr.util';
@@ -83,6 +87,7 @@ import {
     OverlayBadgeModule,
     ProgressSpinnerModule,
     SelectModule,
+    SplitButtonModule,
     SplitterModule,
     TagModule,
     TooltipModule,
@@ -103,6 +108,8 @@ export class ShowroomPage implements AfterViewInit {
   private readonly backendStatus = inject(BackendStatusService);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly sesionService = inject(SesionClienteService);
+  private readonly router = inject(Router);
+  private readonly presupuestoAtencion = inject(PresupuestoDesdeAtencionService);
 
   readonly scanInput = viewChild<ElementRef<HTMLInputElement>>('scanInput');
 
@@ -1918,6 +1925,35 @@ export class ShowroomPage implements AfterViewInit {
     this.api.generarPickitDesdeCarrito().subscribe({
       error: (err) => console.warn('[pickit] no se pudo encolar desde el carrito:', err),
     });
+  }
+
+  /** Ítems del menú desplegable del split-button "Crear Pedido". Hoy solo
+   *  "Crear presupuesto"; la acción principal del botón sigue creando el pedido. */
+  readonly accionesPedido: MenuItem[] = [
+    {
+      label: 'Crear presupuesto',
+      icon: 'pi pi-file-edit',
+      command: () => this.crearPresupuestoDesdeAtencion(),
+    },
+  ];
+
+  /** Transfiere el carrito actual (con descuentos efectivos por ítem, forma de
+   *  pago y nombre del cliente) al presupuestador y navega a /presupuestos. NO
+   *  vacía el carrito ni cierra la sesión: eso ocurre solo si el presupuesto
+   *  llega a guardarse (el backend lo hace vía origenAtencion). */
+  crearPresupuestoDesdeAtencion(): void {
+    if (this.carrito().length === 0) return;
+    const items = carritoItemsAPresupuestoItems(
+      this.carrito(),
+      (it) => this.descuentoEfectivoItem(it),
+    );
+    this.presupuestoAtencion.set({
+      items,
+      clienteNombre: this.haySesionActiva() ? (this.sesionActiva().nombre ?? null) : null,
+      formaPagoSeleccionadaId: this.formaPagoSeleccionada()?.id ?? null,
+      sesionId: this.haySesionActiva() ? (this.sesionActiva().id ?? null) : null,
+    });
+    this.router.navigate(['/presupuestos']);
   }
 
   /** Abre el modal unificado de pedido. Si está activada la verificación de

@@ -956,9 +956,9 @@
               [binary]="true" [disabled]="refrescando()" inputId="verifStockEnvio" />
             Verificar stock
           </label>
-          <p-button class="shrink-0" label="Crear Pedido en Dux" icon="pi pi-cloud-upload" size="large"
-            [disabled]="carrito().length === 0"
-            [loading]="refrescando()"
+          <p-splitButton class="shrink-0" label="Crear Pedido en Dux" icon="pi pi-cloud-upload"
+            size="large" [model]="accionesPedido"
+            [disabled]="carrito().length === 0 || refrescando()"
             (onClick)="abrirConfirmacion()" />
         </div>
         }
