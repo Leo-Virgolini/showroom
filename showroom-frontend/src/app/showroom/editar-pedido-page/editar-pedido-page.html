@@ -4,7 +4,11 @@
     subtitle="Modificá productos, cantidades o la forma de pago">
   </app-page-header>
 
-  <main class="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col gap-4">
+  <!-- El padding-bottom deja aire para el footer sticky (su alto real lo mide
+       un ResizeObserver, ver footerHeight) + 16px, así el footer nunca tapa
+       los últimos ítems aunque los chips de formas envuelvan a 2+ líneas. -->
+  <main class="flex-1 p-3 sm:p-4 lg:p-6 flex flex-col gap-4"
+    [style.padding-bottom.px]="items().length > 0 ? footerHeight() + 16 : null">
 
     @if (cargando()) {
       <div class="flex items-center gap-2 text-sm text-muted-color">
@@ -13,28 +17,12 @@
       </div>
     }
 
-    <!-- ============= Barra compacta: forma de pago + total + avisos =============
-         Antes esto eran 3 bloques full-width (2 banners + una card de forma de
-         pago). Se consolidó en una sola barra fina: forma de pago + total a la
-         izquierda, y los avisos ("se reemplaza el pedido al guardar" y "precios
-         actualizados") como chips a la derecha con el texto completo en el
-         tooltip — para no comerse el alto del área de trabajo (buscador+tabla). -->
-    <div class="flex items-center gap-x-4 gap-y-2 flex-wrap rounded-lg border border-surface-200 dark:border-surface-700 bg-surface-0 dark:bg-surface-900 px-3 py-2">
-      <div class="flex items-center gap-2">
-        <i class="pi pi-dollar text-primary"></i>
-        <span class="text-sm font-semibold">Forma de pago</span>
-        <p-select [options]="formasPago()" optionLabel="nombre"
-          [ngModel]="formaPagoSeleccionada()" (ngModelChange)="formaPagoSeleccionada.set($event)"
-          placeholder="Elegí una forma de pago" appendTo="body" class="min-w-[13rem]" />
-      </div>
-      <div class="flex items-center gap-1.5">
-        <span class="text-sm text-muted-color">Total</span>
-        <span class="text-lg font-bold text-primary tabular-nums">
-          {{ total() | currency:'ARS':'symbol':'1.0-0' }}
-        </span>
-      </div>
-      <!-- Avisos como chips compactos — el texto completo va en el tooltip. -->
-      <div class="flex items-center gap-2 flex-wrap ml-auto">
+    <!-- ============= Avisos contextuales (compactos, arriba a la derecha) =====
+         Antes eran una barra ancha junto a la forma de pago; ahora que la forma
+         y el total viven en el footer, quedan solo estos dos chips con el texto
+         completo en el tooltip. -->
+    @if (pedido()?.estado === 'ENVIADO' || huboRecotizacion()) {
+      <div class="flex items-center gap-2 flex-wrap justify-end">
         @if (pedido()?.estado === 'ENVIADO') {
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-amber-300 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
             pTooltip="Al guardar se creará un pedido nuevo y este quedará anulado; cancelá el comprobante en DUX a mano."
@@ -52,17 +40,18 @@
           </span>
         }
       </div>
-    </div>
+    }
 
     <!-- ============= Detalle editable: buscador (izq) + tabla (der) =============
-         El scan/búsqueda y la tabla de ítems se separaron en dos componentes
+         El scan/búsqueda y la tabla de ítems son dos componentes compartidos
          (`carrito-buscador` + `carrito-tabla`) que comparten el mismo `items`.
-         En lg+ van lado a lado; en mobile se apilan (buscador arriba). -->
+         En lg+ van lado a lado; en mobile se apilan (buscador arriba). Las cards
+         usan la identidad KT en tema CELESTE (ver editar-pedido-page.scss). -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      <p-card>
+      <p-card class="kt-card">
         <ng-template #title>
-          <div class="flex items-center gap-2 text-sm font-semibold">
-            <i class="pi pi-search text-primary"></i>
+          <div class="kt-card-title">
+            <i class="pi pi-search"></i>
             <span>Buscar productos</span>
           </div>
         </ng-template>
@@ -72,11 +61,17 @@
           (dialogCerrado)="buscador()?.focusScanInput()" />
       </p-card>
 
-      <p-card>
+      <p-card class="kt-card kt-card-detalle">
         <ng-template #title>
-          <div class="flex items-center gap-2 text-sm font-semibold">
-            <i class="pi pi-shopping-cart text-primary"></i>
+          <div class="kt-card-title kt-card-title-detalle">
+            <i class="pi pi-shopping-cart"></i>
             <span>Ítems del pedido</span>
+            @if (items().length > 0) {
+              <span class="kt-chip">
+                <i class="pi pi-check-circle text-[var(--kt-detalle)]"></i>
+                {{ items().length }} {{ items().length === 1 ? 'producto' : 'productos' }}
+              </span>
+            }
           </div>
         </ng-template>
         <app-carrito-tabla
@@ -87,20 +82,79 @@
       </p-card>
     </div>
 
-    <div class="flex items-center justify-end gap-2">
-      @if (hayCambiosSinGuardar()) {
-        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse">
-          <i class="pi pi-exclamation-circle"></i>
-          <span class="hidden sm:inline">Sin guardar</span>
-        </span>
-      }
-      <p-button icon="pi pi-save" label="Guardar cambios" ariaLabel="Guardar cambios"
-        class="btn-kt-azul" [disabled]="items().length === 0" (onClick)="abrirGuardar()"
-        pTooltip="Crea un pedido nuevo en DUX con estos ítems y anula el pedido actual"
-        tooltipPosition="top" />
-    </div>
-
   </main>
+
+  <!-- ============= FOOTER STICKY: TOTAL + FORMAS DE PAGO + GUARDAR =============
+       Solo con ítems. Versión compacta (sin panel expandible del presupuestador):
+       el editor solo necesita el total en vivo, elegir forma de pago del
+       comparativo (con "mejor precio") y guardar. Fijo al borde inferior para
+       que el operador no scrollee hasta el fondo para ver el total/guardar. -->
+  @if (items().length > 0) {
+    <footer class="kt-footer-sticky" #footerSticky role="region" aria-label="Total y formas de pago">
+      <div class="kt-footer-bar">
+        <!-- Izquierda: TOTAL grande + conteo + estado "sin guardar" -->
+        <div class="kt-footer-totales">
+          <div class="flex flex-col leading-tight">
+            <span class="text-[10px] uppercase tracking-wider font-bold text-[var(--kt-accent)]">
+              <i class="pi pi-wallet"></i> Total
+              <span class="text-muted-color font-medium normal-case tracking-normal ml-1">
+                · {{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}
+              </span>
+            </span>
+            <span class="text-xl sm:text-2xl font-bold text-[var(--kt-texto)] dark:text-surface-0 tabular-nums">
+              {{ total() | currency:'ARS':'symbol':'1.0-0' }}
+            </span>
+          </div>
+          @if (hayCambiosSinGuardar()) {
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
+              pTooltip="Hiciste cambios que todavía no guardaste."
+              tooltipPosition="top" role="status" aria-live="polite">
+              <i class="pi pi-exclamation-circle"></i>
+              <span class="hidden sm:inline">Sin guardar</span>
+            </span>
+          }
+        </div>
+
+        <!-- Derecha: chips comparativos de formas + botón Guardar -->
+        <div class="kt-footer-formas">
+          <div class="kt-footer-chips">
+            @if (formasPagoFooter().length > 0) {
+              @for (f of formasPagoFooter(); track f.id) {
+                <!-- Clickeable: cotiza el pedido en esa forma (total + tabla). La
+                     más barata se resalta (verde "mejor precio"); la elegida
+                     lleva anillo del acento. -->
+                <button type="button"
+                  (click)="seleccionarForma(f.id)"
+                  [class]="clasesFormaChip(f)"
+                  [pTooltip]="f.id === formaPagoSeleccionada()?.id ? 'Forma elegida para este pedido' : ('Cotizar el pedido en ' + f.nombre)"
+                  tooltipPosition="top">
+                  @if (f.esMejorPrecio) {
+                    <i class="pi pi-check-circle"></i>
+                  } @else {
+                    <i [class]="iconoForma(f.nombre)"></i>
+                  }
+                  <span class="font-bold kt-forma-chip-nombre">{{ f.nombre }}</span>
+                  <span class="kt-forma-chip-precio">
+                    {{ f.precioFinal | currency:'ARS':'symbol':'1.0-0' }}
+                  </span>
+                </button>
+              }
+            } @else {
+              <span class="text-xs text-muted-color italic">
+                <i class="pi pi-info-circle"></i>
+                No hay formas de pago configuradas
+              </span>
+            }
+          </div>
+
+          <p-button icon="pi pi-save" label="Guardar cambios" ariaLabel="Guardar cambios"
+            class="btn-kt-azul shrink-0" [disabled]="items().length === 0" (onClick)="abrirGuardar()"
+            pTooltip="Crea un pedido nuevo en DUX con estos ítems y anula el pedido actual"
+            tooltipPosition="top" />
+        </div>
+      </div>
+    </footer>
+  }
 </div>
 
 <!-- ============= DIALOG CREAR PEDIDO EN DUX (REUSABLE, modo "editar pedido") =============

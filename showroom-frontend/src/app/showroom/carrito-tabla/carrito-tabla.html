@@ -1,9 +1,9 @@
 @if (items().length === 0) {
   <div class="flex flex-col items-center justify-center py-14 text-center text-muted-color gap-3">
-    <div class="w-20 h-20 rounded-full bg-[#FF861C]/10 flex items-center justify-center">
-      <i class="pi pi-inbox text-4xl text-[#FF861C]"></i>
+    <div class="w-20 h-20 rounded-full bg-[var(--kt-accent,#FF861C)]/10 flex items-center justify-center">
+      <i class="pi pi-inbox text-4xl text-[var(--kt-accent,#FF861C)]"></i>
     </div>
-    <p class="m-0 text-base font-medium text-[#3B1E09] dark:text-surface-0">Todavía no agregaste productos</p>
+    <p class="m-0 text-base font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">Todavía no agregaste productos</p>
     <p class="m-0 text-sm">Buscá un producto para agregarlo al detalle.</p>
   </div>
 } @else {
@@ -12,27 +12,27 @@
       <tr>
         <th style="width: 4rem"></th>
         <th>
-          <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
+          <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[var(--kt-accent,#FF861C)] text-inherit font-inherit"
             (click)="ordenarItemsPor('producto')" pTooltip="Ordenar por producto" tooltipPosition="top">
-            <i class="pi pi-tag text-[#FF861C] mr-1"></i> Producto
+            <i class="pi pi-tag text-[var(--kt-accent,#FF861C)] mr-1"></i> Producto
             <i [class]="iconoOrdenItems('producto')" class="text-[10px] opacity-70"></i>
           </button>
         </th>
         <th class="text-center" style="width: 9rem">
-          <i class="pi pi-hashtag text-[#FF861C] mr-1"></i> Cantidad
+          <i class="pi pi-hashtag text-[var(--kt-accent,#FF861C)] mr-1"></i> Cantidad
         </th>
         <th class="text-right" style="width: 8rem">
-          <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[#FF861C] text-inherit font-inherit"
+          <button type="button" class="inline-flex items-center gap-1 bg-transparent border-0 p-0 cursor-pointer hover:text-[var(--kt-accent,#FF861C)] text-inherit font-inherit"
             (click)="ordenarItemsPor('precio')" pTooltip="Ordenar por precio" tooltipPosition="top">
-            <i class="pi pi-dollar text-[#FF861C] mr-1"></i> Precio
+            <i class="pi pi-dollar text-[var(--kt-accent,#FF861C)] mr-1"></i> Precio
             <i [class]="iconoOrdenItems('precio')" class="text-[10px] opacity-70"></i>
           </button>
         </th>
         <th class="text-center" style="width: 7rem">
-          <i class="pi pi-percentage text-[#FF861C] mr-1"></i> Desc.
+          <i class="pi pi-percentage text-[var(--kt-accent,#FF861C)] mr-1"></i> Desc.
         </th>
         <th class="text-right" style="width: 9rem">
-          <i class="pi pi-calculator text-[#FF861C] mr-1"></i> Subtotal
+          <i class="pi pi-calculator text-[var(--kt-accent,#FF861C)] mr-1"></i> Subtotal
         </th>
         <th style="width: 3rem" class="text-center">
           <!-- Vaciar todo el detalle — al tope de la columna de los
@@ -53,10 +53,10 @@
         <td>
           @if (it.imagenUrl) {
             <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
-              imageClass="w-14 h-14 object-contain rounded-lg border border-[#FF861C]/30 bg-white p-0.5 cursor-zoom-in" />
+              imageClass="w-14 h-14 object-contain rounded-lg border border-[var(--kt-accent,#FF861C)]/30 bg-white p-0.5 cursor-zoom-in" />
           } @else {
-            <div class="w-14 h-14 rounded-lg bg-[#FF861C]/10 flex items-center justify-center">
-              <i class="pi pi-image text-[#FF861C]"></i>
+            <div class="w-14 h-14 rounded-lg bg-[var(--kt-accent,#FF861C)]/10 flex items-center justify-center">
+              <i class="pi pi-image text-[var(--kt-accent,#FF861C)]"></i>
             </div>
           }
         </td>
@@ -120,7 +120,7 @@
               }
               }
             </div>
-            <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+            <span class="text-sm font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
               {{ it.descripcion || '—' }}
             </span>
           </div>
@@ -137,7 +137,7 @@
         </td>
         <td class="text-right">
           <div class="flex flex-col items-end gap-1">
-            <span class="text-sm font-medium text-[#3B1E09] dark:text-surface-0"
+            <span class="text-sm font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0"
               [class.line-through]="cambioPrecioDe(it.uid)"
               [class.text-muted-color]="cambioPrecioDe(it.uid)">
               {{ precioVisualItem(it) | currency:'ARS':'symbol':'1.0-0' }}
@@ -167,7 +167,7 @@
             [inputStyleClass]="claseInputDescuentoItem(it.descuentoPorcentaje)" />
         </td>
         <td class="text-right">
-          <span class="text-sm font-bold text-[#3B1E09] dark:text-surface-0">
+          <span class="text-sm font-bold text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
             {{ subtotalVisualItem(it) | currency:'ARS':'symbol':'1.0-0' }}
           </span>
         </td>

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -10,20 +11,23 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { catchError, forkJoin, map, of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
-import { SelectModule } from 'primeng/select';
 import { TooltipModule } from 'primeng/tooltip';
 import { FormaPago, PedidoDetalle, PresupuestoItem } from '../models';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { BackendStatusService } from '../backend-status.service';
 import { ShowroomService } from '../showroom.service';
 import { pedidoItemsAPresupuestoItems } from '../pedido-a-carrito.util';
+import {
+  calcularIndiceMejorPrecio,
+  iconoFormaReferencia,
+  redondearMoneda,
+} from '../precio-referencia.util';
 import { CarritoBuscador } from '../carrito-buscador/carrito-buscador';
 import { CarritoTabla } from '../carrito-tabla/carrito-tabla';
 import { CarritoMutacion } from '../models';
@@ -35,6 +39,19 @@ import {
 import { PageHeader } from '../page-header/page-header';
 import { toastError } from '../toast.utils';
 import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
+
+/** Forma de pago con su precio final calculado para los ítems actuales, más
+ *  los metadatos que consume el chip del footer (color rotativo + ganadora). */
+interface FormaChipEditor {
+  id: number;
+  nombre: string;
+  cantidadCuotas: number | null;
+  /** Índice en el orden original de `formasPago()` — fija el color rotativo. */
+  indiceOriginal: number;
+  /** True si es la forma más barata del comparativo. */
+  esMejorPrecio: boolean;
+  precioFinal: number | null;
+}
 
 /**
  * Pantalla `pedidos/editar/:id`: carga un pedido ya cargado en DUX, hidrata
@@ -55,11 +72,9 @@ import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
-    FormsModule,
     ButtonModule,
     CardModule,
     ProgressSpinnerModule,
-    SelectModule,
     TooltipModule,
     CarritoBuscador,
     CarritoTabla,
@@ -67,6 +82,7 @@ import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
     PageHeader,
   ],
   templateUrl: './editar-pedido-page.html',
+  styleUrl: './editar-pedido-page.scss',
 })
 export class EditarPedidoPage implements HasUnsavedChanges {
   private readonly api = inject(ShowroomService);
@@ -123,18 +139,89 @@ export class EditarPedidoPage implements HasUnsavedChanges {
    *  pedido y tras cerrar sus propios diálogos. */
   readonly buscador = viewChild(CarritoBuscador);
 
+  /** Ref al footer sticky — su alto se refleja en {@link footerHeight} vía
+   *  ResizeObserver para calcular el padding-bottom del main (los chips de
+   *  formas pueden envolver a 2+ líneas). */
+  readonly footerSticky = viewChild<ElementRef<HTMLElement>>('footerSticky');
+  /** Alto del footer sticky en px (default aproximado hasta la 1ª medición). */
+  readonly footerHeight = signal(72);
+
   /** Total en vivo con la forma de pago elegida — mismo cálculo que el
    *  footer de presupuestos-page ({@link PrecioPerfilService.precioVisualItem}
    *  por ítem, con el descuento individual de la línea aplicado encima). */
   readonly total = computed(() => {
     this.itemsTick();
-    const forma = this.formaPagoSeleccionada();
+    return this.totalConForma(this.formaPagoSeleccionada());
+  });
+
+  /** Total del pedido cotizado con una forma de pago dada — mismo cálculo que
+   *  {@link total} pero parametrizado, para comparar todas las formas en el
+   *  footer. Usa {@link PrecioPerfilService.precioVisualItem} (resuelve
+   *  recargo/IVA por perfil del rubro) y aplica el descuento de línea encima. */
+  private totalConForma(forma: FormaPago | null): number {
     return this.items().reduce((acc, it) => {
       const precio = this.precioPerfil.precioVisualItem(it, forma);
       const desc = it.descuentoPorcentaje ?? 0;
       return acc + precio * it.cantidad * (1 - desc / 100);
     }, 0);
+  }
+
+  /** Precio final de cada forma de pago activa para los ítems actuales.
+   *  Alimenta el comparativo del footer y el resalte de "mejor precio". */
+  readonly formasPagoCalculadas = computed<FormaChipEditor[]>(() => {
+    this.itemsTick();
+    return this.formasPago().map((f, i) => ({
+      id: f.id,
+      nombre: f.nombre,
+      cantidadCuotas: f.cantidadCuotas,
+      indiceOriginal: i,
+      esMejorPrecio: false,
+      precioFinal: redondearMoneda(this.totalConForma(f)),
+    }));
   });
+
+  /** Índice (en {@link formasPagoCalculadas}) de la forma más barata, o -1 si
+   *  no hay ganadora clara (misma lógica que el presupuestador/PDF). */
+  readonly indiceMejorPrecio = computed(() =>
+    calcularIndiceMejorPrecio(this.formasPagoCalculadas()));
+
+  /** Chips de formas para el footer: mejor precio primero (resaltado verde),
+   *  el resto por precio ascendente. Cada uno conserva su color rotativo. */
+  readonly formasPagoFooter = computed<FormaChipEditor[]>(() => {
+    const todas = this.formasPagoCalculadas();
+    if (todas.length === 0) return [];
+    const idxMejor = this.indiceMejorPrecio();
+    const decoradas = todas.map((f, i) => ({ ...f, esMejorPrecio: i === idxMejor }));
+    const porPrecio = (a: FormaChipEditor, b: FormaChipEditor) =>
+      (a.precioFinal ?? Infinity) - (b.precioFinal ?? Infinity);
+    if (idxMejor >= 0) {
+      const ganadora = decoradas[idxMejor];
+      const otras = decoradas.filter((_, i) => i !== idxMejor).sort(porPrecio);
+      return [ganadora, ...otras];
+    }
+    return [...decoradas].sort(porPrecio);
+  });
+
+  /** Selecciona la forma de pago para el total en vivo (y prellena el dialog).
+   *  A diferencia del presupuestador, no hace toggle a "Todas": el pedido
+   *  siempre se cotiza con una forma concreta. */
+  seleccionarForma(id: number): void {
+    const f = this.formasPago().find((x) => x.id === id) ?? null;
+    if (f) this.formaPagoSeleccionada.set(f);
+  }
+
+  /** Clase CSS completa de un chip de forma (color rotativo + mejor + sel). */
+  clasesFormaChip(f: FormaChipEditor): string {
+    const color = `color-${(f.indiceOriginal % 10) + 1}`;
+    const mejor = f.esMejorPrecio ? ' kt-forma-chip-mejor' : '';
+    const sel = f.id === this.formaPagoSeleccionada()?.id ? ' kt-forma-chip-seleccionado' : '';
+    return `kt-forma-chip ${color}${mejor}${sel}`;
+  }
+
+  /** Ícono PrimeNG inferido del nombre de la forma de pago. */
+  iconoForma(nombre: string | null | undefined): string {
+    return iconoFormaReferencia(nombre);
+  }
 
   /** Pre-llenado del formulario de cliente del dialog con los datos ya
    *  cargados en ESTE pedido — evita que el operador tenga que retipearlos
@@ -150,7 +237,9 @@ export class EditarPedidoPage implements HasUnsavedChanges {
       telefono: p.telefono ?? undefined,
       email: p.email ?? undefined,
       nroDoc: p.nroDoc ?? undefined,
-      formaPagoId: p.formaPagoId ?? undefined,
+      // Forma que el operador tiene elegida en el comparativo (cae a la del
+      // pedido original si todavía no resolvió ninguna).
+      formaPagoId: this.formaPagoSeleccionada()?.id ?? p.formaPagoId ?? undefined,
     };
   });
 
@@ -199,6 +288,19 @@ export class EditarPedidoPage implements HasUnsavedChanges {
       const forma = formas.find((f) => f.id === ped.formaPagoId) ?? null;
       this.formaPagoSeleccionada.set(forma);
       this.formaResuelta.set(true);
+    });
+
+    // Observa el alto del footer sticky y lo refleja en `footerHeight()`, para
+    // que el padding-bottom del main crezca cuando los chips de formas hacen
+    // flex-wrap a 2+ líneas y el footer no tape los últimos ítems.
+    effect((onCleanup) => {
+      const el = this.footerSticky()?.nativeElement;
+      if (!el || typeof window === 'undefined') return;
+      const update = () => this.footerHeight.set(el.offsetHeight);
+      const obs = new ResizeObserver(update);
+      obs.observe(el);
+      update();
+      onCleanup(() => obs.disconnect());
     });
   }
 

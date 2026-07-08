@@ -1,0 +1,387 @@
+// =====================================================
+// Tema del EDITOR DE PEDIDOS — paleta CELESTE/AZUL, deliberadamente
+// distinta del presupuestador (naranja/verde) para que el operador
+// distinga de un vistazo en qué pantalla está.
+//
+// La identidad se inyecta como CSS custom properties en :host y la
+// heredan tanto las reglas de abajo como los componentes compartidos
+// (`carrito-tabla` / `carrito-buscador`), cuyos templates leen
+// `var(--kt-accent, …)` con fallback naranja (así presupuestos, que NO
+// define estas vars, sigue viéndose naranja sin tocar su .scss).
+//
+// El VERDE de "mejor precio" se mantiene literal en ambas pantallas: es
+// semántico (verde = más barato), no de marca.
+// =====================================================
+:host {
+  display: block;
+
+  // Acento principal — sky-600 y variantes.
+  --kt-accent: #0284c7;
+  --kt-accent-light: #38bdf8;
+  --kt-accent-strong: #0369a1;
+  // Acento del DETALLE (card de ítems) — azul más saturado + fondo claro.
+  --kt-detalle: #2563eb;
+  --kt-detalle-bg: #dbeafe;
+  --kt-detalle-bg-strong: #bfdbfe;
+  // Texto oscuro de marca (reemplaza el marrón del presupuestador).
+  --kt-texto: #0f2b46;
+}
+
+$kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
+
+// =====================================================
+// Cards con identidad KT (header con tinte del acento + título oscuro)
+// =====================================================
+:host ::ng-deep .kt-card {
+  .p-card {
+    background: white;
+    border: 1px solid color-mix(in srgb, var(--kt-accent) 15%, transparent);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--kt-accent) 35%, transparent);
+    }
+  }
+
+  .p-card-title {
+    padding: 0.85rem 1rem 0.6rem;
+    margin: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--kt-accent) 10%, transparent);
+    background: linear-gradient(
+      to right,
+      color-mix(in srgb, var(--kt-accent) 6%, transparent),
+      transparent 60%
+    );
+  }
+
+  .p-card-body {
+    padding: 1rem;
+  }
+}
+
+// Card "Ítems del pedido" — fondo azul claro sólido, diferenciado de la
+// card de búsqueda (crema/blanca). Mismo criterio que el detalle verde del
+// presupuestador, en azul.
+:host ::ng-deep .kt-card-detalle {
+  .p-card {
+    border: 1.5px solid var(--kt-detalle) !important;
+    border-left: 6px solid var(--kt-detalle) !important;
+    background: var(--kt-detalle-bg) !important;
+
+    &:hover {
+      border-color: var(--kt-detalle) !important;
+      box-shadow: 0 2px 6px -2px color-mix(in srgb, var(--kt-detalle) 30%, transparent) !important;
+    }
+  }
+
+  .p-card-title {
+    background: linear-gradient(
+      to right,
+      var(--kt-detalle-bg-strong),
+      var(--kt-detalle-bg) 70%
+    ) !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--kt-detalle) 50%, transparent) !important;
+  }
+
+  .p-card-body {
+    background: transparent !important;
+  }
+}
+
+// Ícono del título del detalle en azul detalle (no en el acento sky).
+:host ::ng-deep .kt-card-title-detalle > i {
+  color: var(--kt-detalle);
+}
+
+// =====================================================
+// Título de card: ícono acento + texto oscuro
+// =====================================================
+:host ::ng-deep .kt-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--kt-texto);
+
+  > i {
+    color: var(--kt-accent);
+    font-size: 1.05rem;
+  }
+}
+
+:host-context(.dark) ::ng-deep .kt-card-title {
+  color: var(--p-surface-0);
+}
+
+// =====================================================
+// Chip pequeño (e.g. "2 productos")
+// =====================================================
+:host ::ng-deep .kt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--kt-detalle) 12%, transparent);
+  color: var(--kt-texto);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+// =====================================================
+// Labels de inputs con ícono acento (usado por el buscador)
+// =====================================================
+:host ::ng-deep .kt-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--p-text-muted-color);
+  margin-bottom: 0.35rem;
+
+  > i {
+    color: var(--kt-accent);
+    font-size: 0.75rem;
+  }
+}
+
+// =====================================================
+// Pill SKU (acento → acento claro)
+// =====================================================
+:host ::ng-deep .kt-sku-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--kt-accent), var(--kt-accent-light));
+  color: white;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  width: fit-content;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--kt-accent) 30%, transparent);
+}
+
+// =====================================================
+// Tabla con look KT (header con tinte del acento)
+// =====================================================
+:host ::ng-deep .kt-table {
+  .p-datatable-thead > tr > th {
+    background: color-mix(in srgb, var(--kt-accent) 5%, transparent);
+    color: var(--kt-texto);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid color-mix(in srgb, var(--kt-accent) 20%, transparent);
+    padding: 0.6rem 0.5rem;
+  }
+
+  .p-datatable-tbody > tr > td {
+    padding: 0.7rem 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--kt-accent) 8%, transparent);
+  }
+
+  .p-datatable-tbody > tr:hover > td {
+    background: color-mix(in srgb, var(--kt-accent) 3%, transparent) !important;
+  }
+}
+
+:host-context(.dark) ::ng-deep .kt-table {
+  .p-datatable-thead > tr > th {
+    color: var(--p-surface-0);
+  }
+}
+
+// Fila del detalle cuyo producto es MÁQUINA INDUSTRIAL — ámbar (literal,
+// semántico: no recibe descuento por escala). Igual que el presupuestador.
+::ng-deep tr.item-maquina-industrial > td {
+  background-color: var(--p-amber-50);
+  border-left: 0;
+}
+
+::ng-deep tr.item-maquina-industrial > td:first-child {
+  border-left: 4px solid var(--p-amber-400);
+}
+
+:host-context(.dark) ::ng-deep tr.item-maquina-industrial > td {
+  background-color: color-mix(in oklab, var(--p-amber-950) 35%, transparent);
+}
+
+:host-context(.dark) ::ng-deep tr.item-maquina-industrial > td:first-child {
+  border-left-color: var(--p-amber-600);
+}
+
+// =====================================================
+// Footer sticky con TOTAL + chips de formas de pago + acción Guardar.
+// Versión COMPACTA (sin panel expandible): el editor no compara modos de
+// cotización, solo necesita el total en vivo y elegir forma de pago.
+// =====================================================
+.kt-footer-sticky {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: white;
+  border-top: 1px solid color-mix(in srgb, var(--kt-accent) 25%, transparent);
+  box-shadow: 0 -4px 14px -6px rgba(0, 0, 0, 0.18);
+}
+
+.kt-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 1.5rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 640px) {
+    padding: 0.5rem 0.75rem;
+    gap: 0.5rem;
+  }
+}
+
+.kt-footer-totales {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.kt-footer-formas {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+}
+
+.kt-footer-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  row-gap: 0.3rem;
+}
+
+// Chip compacto de forma de pago — ícono + nombre + precio. Clickeable:
+// selecciona esa forma para el total en vivo.
+:host ::ng-deep .kt-forma-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  background: var(--p-surface-50);
+  border: 1px solid color-mix(in srgb, var(--kt-accent) 20%, transparent);
+  color: var(--kt-texto);
+  font-size: 0.82rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  min-width: 0;
+
+  > i {
+    color: var(--kt-accent);
+    font-size: 0.9rem;
+    flex-shrink: 0;
+  }
+
+  .kt-forma-chip-nombre {
+    white-space: nowrap;
+  }
+}
+
+// 10 colores rotativos por índice — mismo set que el presupuestador para
+// mantener la identidad de cada forma (NO son de marca, no se re-tematizan).
+@mixin kt-forma-chip-color($color) {
+  border-left: 4px solid $color;
+  background: color-mix(in srgb, $color 8%, white);
+
+  > i:not(.pi-check-circle) {
+    color: $color;
+  }
+
+  .kt-forma-chip-precio {
+    color: $color;
+    border-left-color: rgba($color, 0.4);
+  }
+}
+
+:host ::ng-deep .kt-forma-chip {
+  &.color-1  { @include kt-forma-chip-color(#eab308); }
+  &.color-2  { @include kt-forma-chip-color(#3b82f6); }
+  &.color-3  { @include kt-forma-chip-color(#ef4444); }
+  &.color-4  { @include kt-forma-chip-color(#f97316); }
+  &.color-5  { @include kt-forma-chip-color(#a855f7); }
+  &.color-6  { @include kt-forma-chip-color(#ec4899); }
+  &.color-7  { @include kt-forma-chip-color(#06b6d4); }
+  &.color-8  { @include kt-forma-chip-color(#475569); }
+  &.color-9  { @include kt-forma-chip-color(#6366f1); }
+  &.color-10 { @include kt-forma-chip-color(#d97706); }
+}
+
+// "Mejor precio" — verde sólido, gana al color rotativo (semántico).
+:host ::ng-deep .kt-forma-chip-mejor.kt-forma-chip-mejor {
+  background: linear-gradient(135deg, $kt-mejor 0%, #95cc28 100%);
+  border-left-color: #5a8500;
+  border-color: $kt-mejor;
+  color: white;
+  box-shadow: 0 3px 8px -2px rgba($kt-mejor, 0.4);
+
+  > i {
+    color: white;
+  }
+
+  .kt-forma-chip-precio {
+    color: white;
+    border-left-color: rgba(255, 255, 255, 0.5);
+  }
+}
+
+// Forma SELECCIONADA — anillo del acento. Coexiste con "mejor precio".
+:host ::ng-deep .kt-forma-chip-seleccionado.kt-forma-chip-seleccionado {
+  outline: 2.5px solid var(--kt-accent);
+  outline-offset: 1.5px;
+}
+
+:host ::ng-deep .kt-forma-chip-precio {
+  padding-left: 0.4rem;
+  margin-left: 0.2rem;
+  border-left: 1px solid currentColor;
+  opacity: 0.95;
+  font-weight: 700;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+// Dark mode del footer.
+:host-context(.dark) .kt-footer-sticky {
+  background: var(--p-surface-900);
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+:host-context(.dark) ::ng-deep .kt-forma-chip {
+  background: var(--p-surface-800);
+  color: var(--p-surface-0);
+  border-color: rgba(255, 255, 255, 0.08);
+}

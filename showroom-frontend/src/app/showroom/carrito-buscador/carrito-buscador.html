@@ -42,16 +42,16 @@
   <!-- Resultados de búsqueda por descripción — lista clickable. Paleta KT
        naranja para coherencia con el resto de la app. -->
   @if (resultadosBusqueda().length > 0) {
-    <div class="mt-4 mb-4 border border-[#FF861C]/30 rounded-lg overflow-hidden">
-      <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[#FF861C]/10">
-        <span class="text-xs font-bold text-[#3B1E09] dark:text-surface-0 flex items-center gap-1.5">
-          <i class="pi pi-search text-[#FF861C]"></i>
+    <div class="mt-4 mb-4 border border-[var(--kt-accent,#FF861C)]/30 rounded-lg overflow-hidden">
+      <div class="flex items-center justify-between gap-2 px-3 py-2 bg-[var(--kt-accent,#FF861C)]/10">
+        <span class="text-xs font-bold text-[var(--kt-texto,#3B1E09)] dark:text-surface-0 flex items-center gap-1.5">
+          <i class="pi pi-search text-[var(--kt-accent,#FF861C)]"></i>
           Buscando ({{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}) — elegí cuáles agregar
         </span>
         <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
           size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
       </div>
-      <div class="flex items-center gap-2 px-3 py-2 border-b border-[#FF861C]/10 flex-wrap">
+      <div class="flex items-center gap-2 px-3 py-2 border-b border-[var(--kt-accent,#FF861C)]/10 flex-wrap">
         <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>
         <p-select [options]="opcionesOrdenResultados" optionLabel="label" optionValue="value"
           [ngModel]="ordenResultados()" (ngModelChange)="cambiarOrdenResultados($event)"
@@ -66,7 +66,7 @@
       </div>
       <!-- Altura adaptativa al viewport: en pantallas chicas mantiene un tope
            razonable; en sm+ el cálculo deja respirar a la lista. -->
-      <div class="divide-y divide-[#FF861C]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
+      <div class="divide-y divide-[var(--kt-accent,#FF861C)]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
         @for (r of resultadosBusqueda(); track r.sku) {
           <!-- Fila NO-clickeable. Para agregar al detalle, el operador toca el
                botón explícito "Agregar" del final de la fila. Después de
@@ -78,24 +78,24 @@
                [class.border-l-4]="esRubroMaquinaria(r.rubro)"
                [class.border-amber-400]="esRubroMaquinaria(r.rubro)"
                [class.dark:border-amber-600]="esRubroMaquinaria(r.rubro)"
-               [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(r.rubro)">
+               [class.hover:bg-[var(--kt-accent,#FF861C)]/5]="!esRubroMaquinaria(r.rubro)">
             <!-- Imagen más chica (48×48) que en el detalle (56×56) para reforzar
                  visualmente que la lista es "secundaria/exploratoria". -->
             @if (r.imagenUrl) {
               <span class="shrink-0">
                 <p-image [src]="r.imagenUrl" [alt]="r.sku" [preview]="true"
-                  imageClass="w-12 h-12 object-contain rounded border border-[#FF861C]/20 bg-white p-0.5 cursor-zoom-in" />
+                  imageClass="w-12 h-12 object-contain rounded border border-[var(--kt-accent,#FF861C)]/20 bg-white p-0.5 cursor-zoom-in" />
               </span>
             } @else {
-              <div class="w-12 h-12 rounded bg-[#FF861C]/10 flex items-center justify-center shrink-0">
-                <i class="pi pi-image text-[#FF861C]"></i>
+              <div class="w-12 h-12 rounded bg-[var(--kt-accent,#FF861C)]/10 flex items-center justify-center shrink-0">
+                <i class="pi pi-image text-[var(--kt-accent,#FF861C)]"></i>
               </div>
             }
             <div class="flex-1 flex items-center gap-3 text-left min-w-0">
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <!-- SKU pill outline (no rellenado) — "candidato" vs "elegido". -->
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-[10px] font-bold">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full border border-[var(--kt-accent,#FF861C)]/50 text-[var(--kt-accent,#FF861C)] dark:text-[var(--kt-accent-light,#FF9A3F)] font-mono text-[10px] font-bold">
                   {{ r.sku }}
                 </span>
                 @if (esRubroMaquinaria(r.rubro)) {
@@ -156,7 +156,7 @@
                   ariaLabel="Ver producto" />
               </div>
               <div class="flex flex-col items-center gap-0.5">
-                <span class="text-[9px] uppercase tracking-wider font-bold text-[#FF861C] dark:text-[#FF9A3F] leading-none">
+                <span class="text-[9px] uppercase tracking-wider font-bold text-[var(--kt-accent,#FF861C)] dark:text-[var(--kt-accent-light,#FF9A3F)] leading-none">
                   Cantidad
                 </span>
                 <p-inputNumber [ngModel]="cantidadResultado(r.sku)"
@@ -182,11 +182,11 @@
         }
       </div>
       @if (resultadosBusqueda().length < totalResultadosBusqueda()) {
-        <div class="px-3 py-1.5 border-t border-[#FF861C]/10 bg-[#FF861C]/5 flex items-center justify-center gap-2">
+        <div class="px-3 py-1.5 border-t border-[var(--kt-accent,#FF861C)]/10 bg-[var(--kt-accent,#FF861C)]/5 flex items-center justify-center gap-2">
           <p-button icon="pi pi-chevron-down" label="Cargar más" severity="secondary"
             [text]="true" size="small"
             [loading]="cargandoMasResultados()" (onClick)="cargarMasResultados()" />
-          <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-[#FF861C]/10">
+          <span class="text-[10px] font-semibold text-muted-color tabular-nums px-1.5 py-0.5 rounded-full bg-[var(--kt-accent,#FF861C)]/10">
             {{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}
           </span>
         </div>
@@ -212,8 +212,8 @@
     [style]="{ width: '92vw', maxWidth: '32rem' }"
     [breakpoints]="{ '640px': '95vw' }">
     <ng-template #header>
-      <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
-        <i class="pi pi-eye text-[#FF861C]"></i>
+      <div class="flex items-center gap-2 text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
+        <i class="pi pi-eye text-[var(--kt-accent,#FF861C)]"></i>
         <span class="font-bold">Vista previa del producto</span>
       </div>
     </ng-template>
@@ -234,7 +234,7 @@
 
       <!-- SKU + badges. -->
       <div class="flex items-center gap-2 flex-wrap">
-        <span class="inline-flex items-center px-2 py-1 rounded-full border border-[#FF861C]/50 text-[#FF861C] dark:text-[#FF9A3F] font-mono text-xs font-bold">
+        <span class="inline-flex items-center px-2 py-1 rounded-full border border-[var(--kt-accent,#FF861C)]/50 text-[var(--kt-accent,#FF861C)] dark:text-[var(--kt-accent-light,#FF9A3F)] font-mono text-xs font-bold">
           {{ p.sku }}
         </span>
         @if (esRubroMaquinaria(p.rubro)) {
@@ -255,18 +255,18 @@
       </div>
 
       <!-- Descripción. -->
-      <div class="text-base font-medium text-[#3B1E09] dark:text-surface-0">
+      <div class="text-base font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
         {{ p.descripcion || '—' }}
       </div>
 
       <!-- Precio + stock en dos columnas. -->
       <div class="grid grid-cols-2 gap-3">
-        <div class="p-3 rounded-lg bg-[#FF861C]/5 border border-[#FF861C]/20">
-          <div class="text-[10px] font-bold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color mb-1">
+        <div class="p-3 rounded-lg bg-[var(--kt-accent,#FF861C)]/5 border border-[var(--kt-accent,#FF861C)]/20">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-[var(--kt-texto,#3B1E09)]/70 dark:text-muted-color mb-1">
             Precio
           </div>
           @if (p.pvpKtGastroConIva != null && p.pvpKtGastroConIva > 0) {
-            <div class="text-2xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0">
+            <div class="text-2xl font-bold tabular-nums text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
               {{ precioMostrado(p) | currency:'ARS':'symbol':'1.0-0' }}
             </div>
           } @else {
@@ -304,7 +304,7 @@
           <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
             <i class="pi pi-truck text-[10px]"></i> Proveedor
           </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
+          <div class="text-sm font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0 break-words">
             {{ p.proveedor || '—' }}
           </div>
         </div>
@@ -312,7 +312,7 @@
           <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
             <i class="pi pi-tag text-[10px]"></i> Rubro
           </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0 break-words">
+          <div class="text-sm font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0 break-words">
             {{ p.rubro || '—' }}
           </div>
         </div>
@@ -320,7 +320,7 @@
           <div class="text-[10px] font-bold uppercase tracking-wider text-muted-color mb-1 inline-flex items-center gap-1">
             <i class="pi pi-percentage text-[10px]"></i> IVA
           </div>
-          <div class="text-sm font-medium text-[#3B1E09] dark:text-surface-0">
+          <div class="text-sm font-medium text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
             {{ p.porcIva != null ? p.porcIva + '%' : '—' }}
           </div>
         </div>
