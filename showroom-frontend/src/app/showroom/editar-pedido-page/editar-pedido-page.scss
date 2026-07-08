@@ -203,6 +203,13 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
   }
 }
 
+// Input compacto del descuento por ítem (carrito-tabla lo aplica vía
+// `inputStyleClass`). Sin esta regla el input se estira a todo el ancho de la
+// columna. 6rem entra cómodo "100%" sin quedar pegado a los bordes.
+:host ::ng-deep .descuento-input {
+  width: 6rem;
+}
+
 // Fila del detalle cuyo producto es MÁQUINA INDUSTRIAL — ámbar (literal,
 // semántico: no recibe descuento por escala). Igual que el presupuestador.
 ::ng-deep tr.item-maquina-industrial > td {
