@@ -117,6 +117,16 @@ export class VisorPresupuestoPage {
       .subscribe((p) => this.snapshot.set(p));
   }
 
+  /** URL token-scoped (pública) de la imagen del producto para el visor. El
+   *  endpoint global `/api/showroom/productos/{sku}/imagen` que trae `imagenUrl`
+   *  ahora exige login (ver SecurityConfig: "imágenes globales ya NO son
+   *  públicas"); el visor no está autenticado, así que debe pedir la imagen por
+   *  el endpoint gateado por token. Mismo formato de SKU que arma el backend en
+   *  {@code ImagenLocalService.urlPublica}. */
+  visorImagenUrl(sku: string): string {
+    return `/api/showroom/visor/t/${this.visorToken}/productos/${sku}/imagen`;
+  }
+
   /** Ícono PrimeNG para una forma de pago, inferido del nombre (efectivo,
    *  transferencia, cuotas/tarjeta…). Reusa el helper compartido. */
   iconoForma(nombre: string | null): string {

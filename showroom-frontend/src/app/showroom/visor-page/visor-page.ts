@@ -414,6 +414,16 @@ export class VisorPage {
     });
   }
 
+  /** URL token-scoped (pública) de la imagen del producto para el visor. El
+   *  endpoint global `/api/showroom/productos/{sku}/imagen` que trae `imagenUrl`
+   *  ahora exige login (ver SecurityConfig: "imágenes globales ya NO son
+   *  públicas"); el visor no está autenticado, así que debe pedir la imagen por
+   *  el endpoint gateado por token. Se construye con el mismo formato de SKU que
+   *  arma el backend en {@code ImagenLocalService.urlPublica}. */
+  visorImagenUrl(sku: string): string {
+    return `/api/showroom/visor/t/${this.visorToken}/productos/${sku}/imagen`;
+  }
+
   /** Monto que se ahorra el cliente por unidad al alcanzar un escalón. */
   ahorro(precio: number | null, porcentaje: number): number {
     if (precio == null) return 0;
