@@ -11,10 +11,12 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
+import { InputNumberModule } from 'primeng/inputnumber';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TooltipModule } from 'primeng/tooltip';
 import { CambioPrecio, FormaPago, PedidoDetalle, PresupuestoItem } from '../models';
@@ -37,6 +39,7 @@ import {
 } from '../crear-pedido-dialog/crear-pedido-dialog';
 import { PageHeader } from '../page-header/page-header';
 import { toastError } from '../toast.utils';
+import { seleccionarTextoAlEnfocar } from '../dom.utils';
 import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
 
 /** Forma de pago con su precio final calculado para los ítems actuales, más
@@ -70,8 +73,10 @@ interface FormaChipEditor {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CommonModule,
+    FormsModule,
     ButtonModule,
     CardModule,
+    InputNumberModule,
     ProgressSpinnerModule,
     TooltipModule,
     CarritoBuscador,
@@ -179,6 +184,33 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     }, 0);
   }
 
+  /** Subtotal BRUTO en la forma elegida (sin los descuentos por línea) — base
+   *  para mostrar el precio tachado cuando hay descuento. */
+  readonly subtotalVisual = computed(() => {
+    this.itemsTick();
+    const forma = this.formaPagoSeleccionada();
+    return this.items().reduce(
+      (acc, it) => acc + this.precioPerfil.precioVisualItem(it, forma) * it.cantidad, 0);
+  });
+
+  /** Ahorro en pesos por los descuentos por línea (bruto − neto). */
+  readonly descuentoVisualMonto = computed(() => this.subtotalVisual() - this.total());
+
+  /** % EFECTIVO del descuento sobre el subtotal BRUTO de lista (con IVA),
+   *  independiente de la forma de pago. Cuando todas las líneas llevan el mismo
+   *  descuento coincide con ese %; si difieren, es el promedio ponderado por el
+   *  peso de cada línea. Es lo que muestra el input "Desc. global"; si el
+   *  operador lo edita, ese % se COPIA a cada ítem (no se suma encima). */
+  readonly descuentoGlobal = computed(() => {
+    this.itemsTick();
+    const items = this.items();
+    const bruto = items.reduce((a, it) => a + (it.pvpKtGastroConIva ?? 0) * it.cantidad, 0);
+    if (bruto <= 0) return 0;
+    const desc = items.reduce(
+      (a, it) => a + (it.pvpKtGastroConIva ?? 0) * it.cantidad * ((it.descuentoPorcentaje ?? 0) / 100), 0);
+    return (desc / bruto) * 100;
+  });
+
   /** Precio final de cada forma de pago activa para los ítems actuales.
    *  Alimenta el comparativo del footer y el resalte de "mejor precio". */
   readonly formasPagoCalculadas = computed<FormaChipEditor[]>(() => {
@@ -234,6 +266,42 @@ export class EditarPedidoPage implements HasUnsavedChanges {
   iconoForma(nombre: string | null | undefined): string {
     return iconoFormaReferencia(nombre);
   }
+
+  /** Cuando el operador escribe en "Desc. global", el % se COPIA a cada ítem
+   *  (sobreescribe su descuento por línea) como atajo. NO se suma sobre los
+   *  descuentos individuales. El display se recalcula solo como % efectivo.
+   *  Reemplaza el array (no muta in-place) para que `carrito-tabla` refleje el
+   *  cambio en cada fila. */
+  actualizarDescuentoGlobal(valor: number): void {
+    if (!Number.isFinite(valor) || valor < 0) valor = 0;
+    if (valor > 100) valor = 100;
+    const items = this.items();
+    if (items.length === 0) return;
+    // Al enfocar/desenfocar sin tipear, p-inputNumber re-emite el % efectivo
+    // mostrado; si coincide (±0,005) no hubo cambio real → no aplastar los
+    // descuentos individuales distintos con el promedio.
+    if (Math.abs(valor - this.descuentoGlobal()) < 0.005) return;
+    if (items.every((it) => (it.descuentoPorcentaje ?? 0) === valor)) return;
+    this.items.set(items.map((it) => ({ ...it, descuentoPorcentaje: valor })));
+    this.itemsTick.update((v) => v + 1);
+    this.hayCambiosSinGuardar.set(true);
+    this.toast.add({
+      severity: 'info', summary: 'Descuento global aplicado',
+      detail: `${valor}% sobre ${items.length} ${items.length === 1 ? 'ítem' : 'ítems'}.`,
+      life: 1500,
+    });
+  }
+
+  /** Clase del input "Desc. global" — resaltado del acento cuando hay descuento. */
+  claseInputDescuentoGlobal(): string {
+    const base = 'text-center descuento-input';
+    return this.descuentoGlobal() > 0
+      ? `${base} font-semibold text-sky-600 dark:text-sky-400`
+      : `${base} text-muted-color`;
+  }
+
+  /** Selecciona el contenido del input al enfocarlo (el "0%" no se concatena). */
+  protected readonly seleccionarAlEnfocar = seleccionarTextoAlEnfocar;
 
   /** Pre-llenado del formulario de cliente del dialog con los datos ya
    *  cargados en ESTE pedido — evita que el operador tenga que retipearlos

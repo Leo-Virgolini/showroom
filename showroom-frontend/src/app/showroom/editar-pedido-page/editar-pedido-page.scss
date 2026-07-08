@@ -266,6 +266,18 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
   min-width: 0;
 }
 
+// Caja del input "Desc. global" — tinte del acento, igual que el presupuestador.
+.kt-footer-dcto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--kt-accent) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--kt-accent) 20%, transparent);
+}
+
 .kt-footer-formas {
   display: flex;
   align-items: center;

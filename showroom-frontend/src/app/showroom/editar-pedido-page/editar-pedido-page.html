@@ -133,7 +133,7 @@
   @if (items().length > 0) {
     <footer class="kt-footer-sticky" #footerSticky role="region" aria-label="Total y formas de pago">
       <div class="kt-footer-bar">
-        <!-- Izquierda: TOTAL grande + conteo + estado "sin guardar" -->
+        <!-- Izquierda: TOTAL grande + descuento global + estado "sin guardar" -->
         <div class="kt-footer-totales">
           <div class="flex flex-col leading-tight">
             <span class="text-[10px] uppercase tracking-wider font-bold text-[var(--kt-accent)]">
@@ -142,10 +142,39 @@
                 · {{ items().length }} {{ items().length === 1 ? 'ítem' : 'ítems' }}
               </span>
             </span>
-            <span class="text-xl sm:text-2xl font-bold text-[var(--kt-texto)] dark:text-surface-0 tabular-nums">
-              {{ total() | currency:'ARS':'symbol':'1.0-0' }}
-            </span>
+            <div class="flex items-baseline gap-2 flex-wrap">
+              <span class="text-xl sm:text-2xl font-bold text-[var(--kt-texto)] dark:text-surface-0 tabular-nums">
+                {{ total() | currency:'ARS':'symbol':'1.0-0' }}
+              </span>
+              @if (descuentoVisualMonto() > 0) {
+                <span class="text-[11px] text-muted-color line-through">
+                  {{ subtotalVisual() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  −{{ descuentoVisualMonto() | currency:'ARS':'symbol':'1.0-0' }}
+                </span>
+              }
+            </div>
           </div>
+
+          <!-- Descuento global — atajo: al editarlo se COPIA el % a cada ítem
+               (no se suma). Cuando los ítems tienen descuentos distintos, muestra
+               el % efectivo (descuento total / subtotal bruto). -->
+          <div class="kt-footer-dcto"
+            pTooltip="El % se aplica a cada ítem por igual. Si los ítems tienen descuentos distintos, este campo muestra el % efectivo."
+            tooltipPosition="top">
+            <label for="dctoGlobalEditor" class="text-[10px] uppercase tracking-wider font-bold text-[var(--kt-texto)] dark:text-surface-0 flex items-center gap-1 cursor-pointer">
+              <i class="pi pi-percentage text-[var(--kt-accent)]"></i>
+              Desc. global
+            </label>
+            <p-inputNumber inputId="dctoGlobalEditor" [ngModel]="descuentoGlobal()"
+              (ngModelChange)="actualizarDescuentoGlobal($event)"
+              (onFocus)="seleccionarAlEnfocar($event)"
+              [min]="0" [max]="100" suffix="%" [allowEmpty]="false"
+              [maxFractionDigits]="2"
+              [inputStyleClass]="claseInputDescuentoGlobal()" />
+          </div>
+
           @if (hayCambiosSinGuardar()) {
             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-[11px] font-bold uppercase tracking-wide shadow-md ring-2 ring-red-300 animate-pulse"
               pTooltip="Hiciste cambios que todavía no guardaste."
