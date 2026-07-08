@@ -142,7 +142,11 @@
   }
 
   // Imagen del producto escaneado — achicar para que entre.
-  :host ::ng-deep .scan-body p-image img {
+  // `:not(.p-image-original)` para NO pisar la imagen ampliada del preview:
+  // PrimeNG la renderiza inline dentro del mismo <p-image> (clase
+  // `p-image-original`), así que sin el filtro este selector la achicaba a
+  // 6.5rem y el zoom se veía igual de chico que el thumbnail.
+  :host ::ng-deep .scan-body p-image img:not(.p-image-original) {
     width: 6.5rem !important;
     height: 6.5rem !important;
   }
@@ -157,7 +161,7 @@
     gap: 0.35rem !important;
   }
 
-  :host ::ng-deep .carrito-items p-image img {
+  :host ::ng-deep .carrito-items p-image img:not(.p-image-original) {
     width: 2.25rem !important;
     height: 2.25rem !important;
   }
