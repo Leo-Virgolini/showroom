@@ -266,6 +266,42 @@ public class SesionShowroomService {
     }
 
     /**
+     * Marca la sesión activa del operador como finalizada y la asocia al
+     * presupuesto comercial creado desde la atención. No-op si no había sesión
+     * activa (el presupuesto se guarda igual, solo que sin cerrar sesión).
+     *
+     * <p>A diferencia de {@link #finalizarConPedido}, el carrito se vacía acá
+     * mismo publicando {@link SesionCerradaEvent}: el presupuesto se guarda
+     * desde el presupuestador (otra pantalla), así que el showroom no vacía su
+     * propio carrito como sí hace tras crear un pedido.
+     *
+     * @return la sesión finalizada, o vacío si no había sesión activa.
+     */
+    @Transactional
+    public Optional<SesionShowroom> finalizarConPresupuesto(String username, Long presupuestoId) {
+        if (username == null || username.isBlank()) return Optional.empty();
+        Optional<Usuario> op = usuarioRepository.findByUsername(username);
+        if (op.isEmpty()) return Optional.empty();
+        Optional<SesionShowroom> activaOpt = repository.findActivaByUsuarioId(op.get().getId());
+        if (activaOpt.isEmpty()) return Optional.empty();
+        SesionShowroom s = activaOpt.get();
+        s.setFinalizadaAt(Instant.now());
+        s.setPresupuestoId(presupuestoId);
+        s.getItems().size();
+        repository.save(s);
+        // Vaciar el carrito del operador (el listener de CarritoService escucha
+        // este evento). El pedido no lo necesita porque el showroom vacía su
+        // carrito en el frontend; acá el guardado ocurre en otra pantalla.
+        applicationEventPublisher.publishEvent(new SesionCerradaEvent(
+                s.getId(), s.getNombre(), username, SesionCerradaEvent.Motivo.PRESUPUESTO));
+        eventService.cerrarVisores(username);
+        log.info("Sesión {} ({}, op={}) finalizada con presupuesto {}",
+                s.getId(), s.getNombre(), username, presupuestoId);
+        eventService.publishTo(username, EVENTO_SESION, SesionShowroomDTO.inactiva());
+        return Optional.of(s);
+    }
+
+    /**
      * Whitelist de campos por los que se permite ordenar el listado de sesiones.
      * Mapea el nombre que manda el frontend (id de columna del p-table) al
      * atributo de la entity. Solo columnas que son campos directos de
