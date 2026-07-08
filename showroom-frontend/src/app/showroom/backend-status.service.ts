@@ -117,8 +117,15 @@ export class BackendStatusService {
   private ultimoUsernameAutenticado: string | null = null;
 
   constructor() {
-    this.iniciarSSE();
-
+    // NO abrimos el SSE de operador acá: /api/showroom/events requiere sesión
+    // (ver SecurityConfig). En la pantalla de login todavía no hay usuario, así
+    // que abrirlo daría 401 → `onerror` → markDisconnected → aparece el modal
+    // "Sin conexión al servidor" aunque el backend esté sano. El health-poll
+    // público (/health) lo volvería a marcar conectado y el effect de abajo
+    // reabriría el SSE, que vuelve a dar 401: eso producía el parpadeo del
+    // modal en el login. El stream de operador lo abre el effect de auth (más
+    // abajo) recién cuando hay un operador autenticado; los visores lo abren
+    // por su lado con `conectarComoVisor(token)`.
     effect(() => {
       const isConnected = this.connected();
       if (!isConnected && this.healthPoll == null) {
@@ -161,7 +168,18 @@ export class BackendStatusService {
         this.resetearEstadoLocal();
         this.cerrarSSE();
         this.yaConectoAlMenosUnaVez = false;
-        this.iniciarSSE();
+        // Solo reabrimos el SSE de operador si hay alguien autenticado. En
+        // logout (usernameNuevo === null) lo dejamos cerrado: /events sin
+        // sesión da 401 y volvería a disparar el modal "Sin conexión" en el
+        // login. Al ir al login forzamos `connected` para descartar cualquier
+        // estado de desconexión residual del stream anterior; si el backend
+        // estuviera realmente caído, el interceptor lo re-detecta en el próximo
+        // request HTTP (p. ej. /api/auth/me o el login).
+        if (usernameNuevo) {
+          this.iniciarSSE();
+        } else {
+          this.markConnected();
+        }
       }
     });
 

@@ -440,7 +440,14 @@ export class CrearPedidoDialog {
         this.pedidoAnteriorEnviadoADux.set(ped.estado === 'ENVIADO');
         if (ped.nroDoc != null) this.pedidoCuit.set(ped.nroDoc);
         if (ped.domicilio) this.pedidoDomicilio.set(ped.domicilio);
-        if (ped.formaPagoId != null) this.pedidoFormaPagoId.set(ped.formaPagoId);
+        // Forma de pago: solo rellenar con la del pedido anterior si NO se
+        // eligió una antes (el editor pre-llena con la forma elegida en el
+        // comparativo; el flujo presupuesto con la del presupuesto). Sin este
+        // guard, este GET async pisaba la elección del operador con la forma
+        // original y facturaba con la forma equivocada.
+        if (ped.formaPagoId != null && this.pedidoFormaPagoId() == null) {
+          this.pedidoFormaPagoId.set(ped.formaPagoId);
+        }
         // Observaciones: solo si el presupuesto no traía las suyas (no pisar).
         if (ped.observaciones && !this.pedidoObservaciones().trim()) {
           this.pedidoObservaciones.set(ped.observaciones);

@@ -44,7 +44,6 @@ import { HasUnsavedChanges } from '../presupuestos-page/unsaved-changes.guard';
 interface FormaChipEditor {
   id: number;
   nombre: string;
-  cantidadCuotas: number | null;
   /** Índice en el orden original de `formasPago()` — fija el color rotativo. */
   indiceOriginal: number;
   /** True si es la forma más barata del comparativo. */
@@ -187,7 +186,6 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     return this.formasPago().map((f, i) => ({
       id: f.id,
       nombre: f.nombre,
-      cantidadCuotas: f.cantidadCuotas,
       indiceOriginal: i,
       esMejorPrecio: false,
       precioFinal: redondearMoneda(this.totalConForma(f)),

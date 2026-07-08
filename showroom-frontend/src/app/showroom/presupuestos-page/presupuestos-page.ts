@@ -758,14 +758,28 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // El footer crece cuando los chips de formas de pago hacen flex-wrap a
     // 2+ líneas — sin este ajuste, el padding-bottom estático del main no
     // alcanza y el footer tapa los últimos ítems del detalle.
+    // A prueba de loops: se difiere a requestAnimationFrame y solo escribe la
+    // señal si el alto cambió (evita re-entradas síncronas y ciclos de
+    // change-detection; la causa raíz —el toggle de la scrollbar— la corta
+    // `scrollbar-gutter: stable` en styles.scss).
     effect((onCleanup) => {
       const el = this.footerSticky()?.nativeElement;
       if (!el || typeof window === 'undefined') return;
-      const update = () => this.footerHeight.set(el.offsetHeight);
+      let frame = 0;
+      const update = () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          const h = Math.round(el.offsetHeight);
+          if (h !== this.footerHeight()) this.footerHeight.set(h);
+        });
+      };
       const obs = new ResizeObserver(update);
       obs.observe(el);
       update();
-      onCleanup(() => obs.disconnect());
+      onCleanup(() => {
+        cancelAnimationFrame(frame);
+        obs.disconnect();
+      });
     });
 
     // --- Sesión de cliente compartida con el showroom ---
