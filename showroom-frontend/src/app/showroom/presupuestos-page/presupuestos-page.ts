@@ -50,6 +50,7 @@ import {
   redondearMoneda,
 } from '../precio-referencia.util';
 import { PrecioPerfilService } from '../precio-perfil.service';
+import { PresupuestoDesdeAtencionService } from '../presupuesto-desde-atencion.service';
 import { ShowroomService } from '../showroom.service';
 import { BackendStatusService } from '../backend-status.service';
 import { SesionClienteService } from '../sesion-cliente.service';
@@ -124,12 +125,17 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
   private readonly route = inject(ActivatedRoute);
   private readonly precioPerfil = inject(PrecioPerfilService);
   private readonly sesionService = inject(SesionClienteService);
+  private readonly presupuestoAtencion = inject(PresupuestoDesdeAtencionService);
 
   /** Si está en una URL `/presupuestos/editar/:id`, el id se setea acá y la
    *  pantalla pasa a modo edición: el botón principal dice "Guardar cambios",
    *  el confirm dialog cambia de copy, y `previsualizar()` llama al PUT en
    *  lugar del POST de creación. Null = modo creación (URL `/presupuestos`). */
   readonly presupuestoEditandoId = signal<number | null>(null);
+  /** Id de la sesión de atención de la que provino este presupuesto (si vino de
+   *  una). No nulo ⇒ al guardar (preview/enviar) se manda `origenAtencion=true`
+   *  para que el backend cierre la sesión. Se limpia tras el primer guardado. */
+  private readonly origenAtencionSesionId = signal<number | null>(null);
   /** True mientras se carga el detalle del presupuesto a editar — pinta un
    *  overlay simple para que el operador no toque el form a medio llenar. */
   readonly cargandoEdicion = signal(false);
@@ -663,6 +669,20 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       const id = Number(idParam);
       if (Number.isFinite(id) && id > 0) {
         this.cargarParaEditar(id);
+      }
+    }
+
+    // Precarga desde una atención del showroom: si NO estamos editando y hay un
+    // borrador pendiente, lo consumimos (una sola vez) y poblamos el form. El
+    // presupuesto arranca en modo AGREGADO (cotizacionIndividual=false).
+    if (!idParam) {
+      const borrador = this.presupuestoAtencion.consumir();
+      if (borrador) {
+        this.items.set(borrador.items);
+        if (borrador.clienteNombre) this.clienteNombre.set(borrador.clienteNombre);
+        this.formaPagoSeleccionadaId.set(borrador.formaPagoSeleccionadaId);
+        this.cotizacionIndividual.set(false);
+        this.origenAtencionSesionId.set(borrador.sesionId ?? -1);
       }
     }
 
@@ -1445,6 +1465,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       formaPagoSeleccionadaId: individual ? null : this.formaPagoSeleccionadaId(),
       items,
       formasPago,
+      origenAtencion: this.origenAtencionSesionId() != null,
     };
   }
 
@@ -1501,6 +1522,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           return;
         }
         this.hayCambiosSinGuardar.set(false);
+        this.origenAtencionSesionId.set(null);
         // Un presupuesto NUEVO se persiste al generar el PDF: el backend
         // devuelve su número en el header. Lo tomamos para pasar a "modo
         // edición" de ese presupuesto → habilita el botón "Crear pedido" y
@@ -1600,6 +1622,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       next: (res) => {
         this.enviandoEmail.set(false);
         this.hayCambiosSinGuardar.set(false);
+        this.origenAtencionSesionId.set(null);
         this.toast.add({
           severity: 'info',
           summary: editandoId != null ? 'Cambios guardados — envío encolado' : 'Envío encolado',
