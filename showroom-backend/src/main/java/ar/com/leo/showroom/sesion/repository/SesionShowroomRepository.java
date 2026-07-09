@@ -140,7 +140,7 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
     @Query("""
             SELECT COUNT(s) FROM SesionShowroom s
             WHERE s.finalizadaAt IS NOT NULL
-              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL)
+              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL OR s.presupuestoId IS NOT NULL)
               AND (:desde IS NULL OR s.iniciadaAt >= :desde)
               AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
             """)
@@ -163,6 +163,20 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
               AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
             """)
     long contarConPedido(
+            @Param("desde") Instant desde,
+            @Param("hasta") Instant hasta);
+
+    /** Sesiones cuya atención terminó en un presupuesto comercial. Numerador de
+     *  la conversión a presupuesto (categoría separada del pedido). No filtra
+     *  por estado del presupuesto (no se anulan como los pedidos). */
+    @Query("""
+            SELECT COUNT(s) FROM SesionShowroom s
+            WHERE s.finalizadaAt IS NOT NULL
+              AND s.presupuestoId IS NOT NULL
+              AND (:desde IS NULL OR s.iniciadaAt >= :desde)
+              AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
+            """)
+    long contarConPresupuesto(
             @Param("desde") Instant desde,
             @Param("hasta") Instant hasta);
 
