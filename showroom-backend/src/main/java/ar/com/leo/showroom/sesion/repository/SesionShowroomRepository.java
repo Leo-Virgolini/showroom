@@ -48,17 +48,21 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
      *  case-insensitive sobre el nombre del cliente. Rango de fechas optativo.
      *
      *  <p>Muestra SOLO sesiones provenientes del showroom: las que tienen al
-     *  menos un scan o un pedido asociado. El presupuestador escanea con
+     *  menos un scan, un pedido o un presupuesto asociado. Este último cubre
+     *  la atención que se cierra generando un presupuesto directamente desde
+     *  la sesión activa ({@code finalizarConPresupuesto}), aun sin scans
+     *  previos. El presupuestador standalone escanea con
      *  {@code publicarVisor=false} (no registra scans en la sesión) y sus
-     *  pedidos no se asocian a la sesión ({@code origenPresupuesto}), así que
-     *  una sesión iniciada desde el presupuestador queda con 0 scans y sin
-     *  pedido → no es una atención del showroom y se excluye del historial. */
+     *  pedidos/presupuestos no se asocian a la sesión ({@code origenPresupuesto}),
+     *  así que una sesión iniciada desde el presupuestador queda con 0 scans y
+     *  sin pedido ni presupuesto → no es una atención del showroom y se
+     *  excluye del historial. */
     @Query("""
             SELECT s FROM SesionShowroom s
             WHERE (:q IS NULL OR LOWER(s.nombre) LIKE LOWER(CONCAT('%', :q, '%')))
               AND (:desde IS NULL OR s.iniciadaAt >= :desde)
               AND (:hasta IS NULL OR s.iniciadaAt <= :hasta)
-              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL)
+              AND (s.items IS NOT EMPTY OR s.pedidoId IS NOT NULL OR s.presupuestoId IS NOT NULL)
             """)
     Page<SesionShowroom> buscar(
             @Param("q") String q,
@@ -133,10 +137,12 @@ public interface SesionShowroomRepository extends JpaRepository<SesionShowroom, 
      *  el operador cerró explícitamente (con o sin pedido) — es el denominador
      *  natural del KPI de conversión.
      *
-     *  <p>Solo cuenta atenciones REALES del showroom (con al menos un scan o un
-     *  pedido); excluye las sesiones de presupuesto (0 scans, sin pedido) para
-     *  no inflar el denominador y bajar artificialmente la conversión. Coherente
-     *  con el filtro del listado {@link #buscar}. */
+     *  <p>Solo cuenta atenciones REALES del showroom (con al menos un scan, un
+     *  pedido o un presupuesto asociado a la sesión); excluye las sesiones
+     *  abiertas por el presupuestador standalone (0 scans, sin pedido ni
+     *  presupuesto asociado) para no inflar el denominador y bajar
+     *  artificialmente la conversión. Coherente con el filtro del listado
+     *  {@link #buscar}. */
     @Query("""
             SELECT COUNT(s) FROM SesionShowroom s
             WHERE s.finalizadaAt IS NOT NULL

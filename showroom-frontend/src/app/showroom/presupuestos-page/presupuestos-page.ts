@@ -1510,6 +1510,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     request$.subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
+        // El backend ya cerró la sesión de origen (si la había) al procesar
+        // este request, haya o no devuelto un PDF — limpiamos el flag acá
+        // (antes del posible return de más abajo) para que un reintento no
+        // reenvíe origenAtencion=true sobre una sesión que ya no existe.
+        this.origenAtencionSesionId.set(null);
         // Abrimos el PDF en la pestaña pre-abierta para que el operador lo
         // previsualice. NO auto-descargamos cuando el preview se abre OK:
         // si quiere bajarlo a disco (para mandarlo por WhatsApp/email
@@ -1522,7 +1527,6 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
           return;
         }
         this.hayCambiosSinGuardar.set(false);
-        this.origenAtencionSesionId.set(null);
         // Un presupuesto NUEVO se persiste al generar el PDF: el backend
         // devuelve su número en el header. Lo tomamos para pasar a "modo
         // edición" de ese presupuesto → habilita el botón "Crear pedido" y
