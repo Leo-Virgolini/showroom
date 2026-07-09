@@ -244,6 +244,7 @@ public class PedidoService {
         // KPI global: cuántas sesiones cerradas terminaron en pedido (no anulado).
         long finalizadas = sesionRepository.contarFinalizadas(desde, hasta);
         long conPedido = sesionRepository.contarConPedido(desde, hasta);
+        long conPresupuesto = sesionRepository.contarConPresupuesto(desde, hasta);
 
         // Tasa de conversión por producto: numerador = sesiones únicas que
         // escanearon X y compraron X; denominador = sesiones únicas que
@@ -279,7 +280,7 @@ public class PedidoService {
         return new EstadisticasHistorialDTO(
                 sesionRepository.topEscaneados(desde, hasta, limit),
                 pedidoRepository.topComprados(desde, hasta, limit),
-                new TasaConversionGlobalDTO(finalizadas, conPedido),
+                new TasaConversionGlobalDTO(finalizadas, conPedido, conPresupuesto),
                 topConversion
         );
     }

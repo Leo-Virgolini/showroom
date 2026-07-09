@@ -1,17 +1,17 @@
 package ar.com.leo.showroom.showroom.dto;
 
 /**
- * KPI de "salud" del showroom: del total de sesiones de atención al cliente,
- * cuántas terminaron en pedido (no anulado). El frontend muestra
- * {@code sesionesConPedido / sesionesFinalizadas * 100} como un % grande.
+ * KPI de "salud" del showroom: del total de sesiones de atención cerradas,
+ * cuántas terminaron en pedido (no anulado) y cuántas en presupuesto. Las
+ * abandonadas se derivan en el frontend: finalizadas − conPedido − conPresupuesto.
  *
- * @param sesionesFinalizadas total de sesiones cerradas (con
- *                            {@code finalizadaAt != null}) en el rango.
- * @param sesionesConPedido   subset de {@code sesionesFinalizadas} cuya
- *                            sesión terminó en un pedido NO anulado.
+ * @param sesionesFinalizadas  total de sesiones cerradas (atenciones reales) en el rango.
+ * @param sesionesConPedido    subset que terminó en pedido NO anulado.
+ * @param sesionesConPresupuesto subset que terminó en presupuesto comercial.
  */
 public record TasaConversionGlobalDTO(
         long sesionesFinalizadas,
-        long sesionesConPedido
+        long sesionesConPedido,
+        long sesionesConPresupuesto
 ) {
 }
