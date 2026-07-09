@@ -515,8 +515,9 @@ export interface EstadisticaProducto {
 }
 
 /** KPI global del showroom: cuántas sesiones cerradas terminaron en pedido
- *  (no anulado). El frontend muestra {@code sesionesConPedido / sesionesFinalizadas}
- *  como un % grande. */
+ *  (no anulado) y cuántas en presupuesto comercial. El frontend muestra
+ *  {@code sesionesConPedido / sesionesFinalizadas} como un % grande, y
+ *  {@code sesionesConPresupuesto / sesionesFinalizadas} como métrica secundaria. */
 export interface TasaConversionGlobal {
   sesionesFinalizadas: number;
   sesionesConPedido: number;

@@ -148,10 +148,13 @@ export class HistorialPage {
   });
 
   /** % de sesiones que terminaron en presupuesto (categoría propia, distinta del
-   *  pedido). Null si no hay sesiones finalizadas en el rango. */
+   *  pedido). Null si no hay sesiones finalizadas en el rango, o si no hubo
+   *  ninguna conversión a presupuesto (oculta la línea en vez de mostrar "+0%"
+   *  o NaN). */
   readonly conversionPresupuestoPct = computed<number | null>(() => {
     const t = this.stats()?.tasaConversion;
     if (!t || t.sesionesFinalizadas === 0) return null;
+    if (!t.sesionesConPresupuesto) return null;
     return Math.round((t.sesionesConPresupuesto / t.sesionesFinalizadas) * 1000) / 10;
   });
 
