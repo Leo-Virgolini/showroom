@@ -147,6 +147,14 @@ export class HistorialPage {
     return Math.round((t.sesionesConPedido / t.sesionesFinalizadas) * 1000) / 10;
   });
 
+  /** % de sesiones que terminaron en presupuesto (categoría propia, distinta del
+   *  pedido). Null si no hay sesiones finalizadas en el rango. */
+  readonly conversionPresupuestoPct = computed<number | null>(() => {
+    const t = this.stats()?.tasaConversion;
+    if (!t || t.sesionesFinalizadas === 0) return null;
+    return Math.round((t.sesionesConPresupuesto / t.sesionesFinalizadas) * 1000) / 10;
+  });
+
   /** Lista para la tabla de conversión por producto. */
   readonly topConversion = computed<ConversionProducto[]>(
     () => this.stats()?.topConversion ?? [],

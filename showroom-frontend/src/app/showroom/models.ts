@@ -520,6 +520,8 @@ export interface EstadisticaProducto {
 export interface TasaConversionGlobal {
   sesionesFinalizadas: number;
   sesionesConPedido: number;
+  /** Sesiones cerradas que terminaron en presupuesto comercial. */
+  sesionesConPresupuesto: number;
 }
 
 /** Tasa de conversión real de un producto: porcentaje de sesiones que lo
