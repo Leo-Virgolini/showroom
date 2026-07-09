@@ -852,8 +852,9 @@ public class ShowroomController {
             Authentication auth) {
         PresupuestoComercialService.Resultado r =
                 presupuestoComercialService.generarYPersistir(body, auth.getName());
-        if (Boolean.TRUE.equals(body.origenAtencion())) {
-            sesionShowroomService.finalizarConPresupuesto(auth.getName(), r.presupuesto().getId());
+        if (body.origenAtencionSesionId() != null) {
+            sesionShowroomService.finalizarConPresupuesto(
+                    auth.getName(), r.presupuesto().getId(), body.origenAtencionSesionId());
         }
         // Usamos `attachment` (no `inline`) para que Chrome no bloquee la
         // descarga como "no segura": cuando combinamos blob URL + a.click()
@@ -1038,8 +1039,9 @@ public class ShowroomController {
         PresupuestoComercialService.Resultado r =
                 presupuestoComercialService.generarYEnviarPorEmail(
                         body.email(), body.presupuesto(), auth.getName());
-        if (Boolean.TRUE.equals(body.presupuesto().origenAtencion())) {
-            sesionShowroomService.finalizarConPresupuesto(auth.getName(), r.presupuesto().getId());
+        if (body.presupuesto().origenAtencionSesionId() != null) {
+            sesionShowroomService.finalizarConPresupuesto(
+                    auth.getName(), r.presupuesto().getId(), body.presupuesto().origenAtencionSesionId());
         }
         return ResponseEntity.accepted().body(Map.of(
                 "message", "Envío encolado — el toast confirmará cuando salga.",

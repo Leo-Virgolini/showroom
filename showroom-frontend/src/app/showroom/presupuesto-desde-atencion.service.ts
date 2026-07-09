@@ -7,8 +7,10 @@ export interface BorradorPresupuestoAtencion {
   items: PresupuestoItem[];
   clienteNombre: string | null;
   formaPagoSeleccionadaId: number | null;
-  /** Id de la sesión de atención de origen — solo informativo; el backend
-   *  resuelve la sesión activa por operador al guardar. */
+  /** Id de la sesión de atención de origen. Viaja al backend como
+   *  `origenAtencionSesionId`: al guardar el presupuesto, el backend cierra
+   *  esa sesión SOLO SI todavía es la sesión activa del operador (si en otra
+   *  pestaña ya arrancó otra atención, no se toca nada). */
   sesionId: number | null;
 }
 

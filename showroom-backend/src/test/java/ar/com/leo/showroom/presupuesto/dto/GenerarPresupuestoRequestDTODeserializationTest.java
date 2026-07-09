@@ -38,19 +38,19 @@ class GenerarPresupuestoRequestDTODeserializationTest {
     }
 
     @Test
-    void origenAtencion_true_se_respeta() {
+    void origenAtencionSesionId_explicito_se_respeta() {
         String json = """
                 {"items":[{"sku":"1","cantidad":1,"precioConIva":1000}],
-                 "origenAtencion":true}
+                 "origenAtencionSesionId": 42}
                 """;
         GenerarPresupuestoRequestDTO dto = mapper.readValue(json, GenerarPresupuestoRequestDTO.class);
-        assertThat(dto.origenAtencion()).isTrue();
+        assertThat(dto.origenAtencionSesionId()).isEqualTo(42L);
     }
 
     @Test
-    void origenAtencion_ausente_se_deserializa_como_null() {
+    void origenAtencionSesionId_ausente_se_deserializa_como_null() {
         GenerarPresupuestoRequestDTO dto = mapper.readValue(SIN_FORMA, GenerarPresupuestoRequestDTO.class);
-        assertThat(dto.origenAtencion())
+        assertThat(dto.origenAtencionSesionId())
                 .as("ausente ⇒ null (flujo normal del presupuestador, no toca ninguna sesión)")
                 .isNull();
     }

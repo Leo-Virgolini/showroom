@@ -839,11 +839,13 @@ export interface GenerarPresupuestoRequest {
    *  "Todas" (precio efectivo por ítem + sección de formas comparativas, como
    *  hoy). Solo aplica al modo agregado; en individual el backend lo ignora. */
   formaPagoSeleccionadaId?: number | null;
-  /** True cuando el presupuesto se crea desde una atención del showroom (el
-   *  operador eligió "Crear presupuesto"). El backend finaliza la sesión activa
-   *  y la registra como convertida a presupuesto. Ausente/false = flujo normal
-   *  del presupuestador. */
-  origenAtencion?: boolean;
+  /** Id de la sesión de atención de ORIGEN cuando el presupuesto se crea desde
+   *  una atención del showroom (el operador eligió "Crear presupuesto"). El
+   *  backend finaliza esa sesión y la registra como convertida a presupuesto
+   *  SOLO SI sigue siendo la sesión activa del operador (evita cerrar la
+   *  atención de otro cliente si el operador ya pasó a otra pestaña).
+   *  Ausente/null = flujo normal del presupuestador, no toca ninguna sesión. */
+  origenAtencionSesionId?: number | null;
   items: {
     sku: string;
     descripcion?: string | null;

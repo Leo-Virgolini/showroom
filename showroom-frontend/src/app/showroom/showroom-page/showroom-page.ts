@@ -1940,8 +1940,9 @@ export class ShowroomPage implements AfterViewInit {
   /** Transfiere el carrito actual (con descuentos efectivos por ítem, forma de
    *  pago y nombre del cliente) al presupuestador y navega a /presupuestos. NO
    *  vacía el carrito ni cierra la sesión: eso ocurre solo si el presupuesto
-   *  llega a guardarse (el backend lo hace vía origenAtencion). */
-  crearPresupuestoDesdeAtencion(): void {
+   *  llega a guardarse (el backend lo hace vía origenAtencionSesionId, y solo
+   *  si esta sesión sigue siendo la activa del operador). */
+  private crearPresupuestoDesdeAtencion(): void {
     if (this.carrito().length === 0) return;
     const items = carritoItemsAPresupuestoItems(
       this.carrito(),

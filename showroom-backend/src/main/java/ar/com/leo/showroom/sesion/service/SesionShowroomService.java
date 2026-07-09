@@ -81,9 +81,10 @@ public class SesionShowroomService {
     /** Lookup bulk de operadores (usuarioId → displayName) compartido por todos
      *  los listados. */
     private final ar.com.leo.showroom.auth.service.UsuarioService usuarioService;
-    /** Para publicar {@link SesionCerradaEvent} cuando se abandona/cancela una
-     *  sesión. {@code CarritoService} lo escucha y vacía el carrito — así
-     *  evitamos el acoplamiento directo y el ciclo de dependencias. */
+    /** Para publicar {@link SesionCerradaEvent} cuando se abandona/cancela/
+     *  convierte a presupuesto una sesión. {@code CarritoService} lo escucha
+     *  y vacía el carrito — así evitamos el acoplamiento directo y el ciclo
+     *  de dependencias. */
     private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
@@ -267,24 +268,38 @@ public class SesionShowroomService {
 
     /**
      * Marca la sesión activa del operador como finalizada y la asocia al
-     * presupuesto comercial creado desde la atención. No-op si no había sesión
-     * activa (el presupuesto se guarda igual, solo que sin cerrar sesión).
+     * presupuesto comercial creado desde la atención — pero SOLO SI esa
+     * sesión activa sigue siendo la sesión de ORIGEN ({@code
+     * sesionIdEsperada}) desde la que se armó el presupuesto. No-op si no
+     * había sesión activa, si no se indicó sesión de origen, o si el
+     * operador ya pasó a atender a otro cliente en otra pestaña (la sesión
+     * activa cambió) — en ese caso el presupuesto se guarda igual, solo que
+     * sin cerrar ninguna sesión ni vaciar el carrito de la atención en curso.
      *
      * <p>A diferencia de {@link #finalizarConPedido}, el carrito se vacía acá
      * mismo publicando {@link SesionCerradaEvent}: el presupuesto se guarda
      * desde el presupuestador (otra pantalla), así que el showroom no vacía su
      * propio carrito como sí hace tras crear un pedido.
      *
-     * @return la sesión finalizada, o vacío si no había sesión activa.
+     * @return la sesión finalizada, o vacío si no había sesión activa o si la
+     *         sesión activa ya no coincide con la de origen.
      */
     @Transactional
-    public Optional<SesionShowroom> finalizarConPresupuesto(String username, Long presupuestoId) {
+    public Optional<SesionShowroom> finalizarConPresupuesto(
+            String username, Long presupuestoId, Long sesionIdEsperada) {
         if (username == null || username.isBlank()) return Optional.empty();
+        if (sesionIdEsperada == null) return Optional.empty();
         Optional<Usuario> op = usuarioRepository.findByUsername(username);
         if (op.isEmpty()) return Optional.empty();
         Optional<SesionShowroom> activaOpt = repository.findActivaByUsuarioId(op.get().getId());
         if (activaOpt.isEmpty()) return Optional.empty();
         SesionShowroom s = activaOpt.get();
+        if (!sesionIdEsperada.equals(s.getId())) {
+            log.info("Sesión de origen {} ya no es la activa del operador '{}' (activa={}) — "
+                            + "presupuesto {} guardado sin cerrar ninguna sesión",
+                    sesionIdEsperada, username, s.getId(), presupuestoId);
+            return Optional.empty();
+        }
         s.setFinalizadaAt(Instant.now());
         s.setPresupuestoId(presupuestoId);
         s.getItems().size();

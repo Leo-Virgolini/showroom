@@ -132,9 +132,12 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
    *  el confirm dialog cambia de copy, y `previsualizar()` llama al PUT en
    *  lugar del POST de creación. Null = modo creación (URL `/presupuestos`). */
   readonly presupuestoEditandoId = signal<number | null>(null);
-  /** Id de la sesión de atención de la que provino este presupuesto (si vino de
-   *  una). No nulo ⇒ al guardar (preview/enviar) se manda `origenAtencion=true`
-   *  para que el backend cierre la sesión. Se limpia tras el primer guardado. */
+  /** Id REAL de la sesión de atención de la que provino este presupuesto (si
+   *  vino de una) — no un sentinel. No nulo ⇒ al guardar (preview/enviar) se
+   *  manda como `origenAtencionSesionId` para que el backend cierre esa
+   *  sesión, pero SOLO SI todavía es la sesión activa del operador (si en
+   *  otra pestaña ya arrancó otra atención, el backend no toca nada). Se
+   *  limpia tras el primer guardado exitoso. */
   private readonly origenAtencionSesionId = signal<number | null>(null);
   /** True mientras se carga el detalle del presupuesto a editar — pinta un
    *  overlay simple para que el operador no toque el form a medio llenar. */
@@ -682,7 +685,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         if (borrador.clienteNombre) this.clienteNombre.set(borrador.clienteNombre);
         this.formaPagoSeleccionadaId.set(borrador.formaPagoSeleccionadaId);
         this.cotizacionIndividual.set(false);
-        this.origenAtencionSesionId.set(borrador.sesionId ?? -1);
+        this.origenAtencionSesionId.set(borrador.sesionId ?? null);
       }
     }
 
@@ -1465,7 +1468,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
       formaPagoSeleccionadaId: individual ? null : this.formaPagoSeleccionadaId(),
       items,
       formasPago,
-      origenAtencion: this.origenAtencionSesionId() != null,
+      origenAtencionSesionId: this.origenAtencionSesionId(),
     };
   }
 
@@ -1510,10 +1513,11 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     request$.subscribe({
       next: (res) => {
         this.generandoPreview.set(false);
-        // El backend ya cerró la sesión de origen (si la había) al procesar
-        // este request, haya o no devuelto un PDF — limpiamos el flag acá
-        // (antes del posible return de más abajo) para que un reintento no
-        // reenvíe origenAtencion=true sobre una sesión que ya no existe.
+        // El backend ya evaluó (y, si correspondía, cerró) la sesión de origen
+        // al procesar este request, haya o no devuelto un PDF — limpiamos el
+        // flag acá (antes del posible return de más abajo) para que un
+        // reintento no reenvíe un origenAtencionSesionId sobre una sesión que
+        // ya se procesó.
         this.origenAtencionSesionId.set(null);
         // Abrimos el PDF en la pestaña pre-abierta para que el operador lo
         // previsualice. NO auto-descargamos cuando el preview se abre OK:
