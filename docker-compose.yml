@@ -262,15 +262,6 @@ services:
       - "80"
     networks:
       - showroom-net
-    healthcheck:
-      # Verifica que nginx esté sirviendo el index (busybox wget viene en la
-      # imagen alpine). Sin esto el orquestador no distinguía "nginx colgado" de
-      # "sirviendo OK". No chequea /api (eso lo cubre el healthcheck del backend).
-      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 volumes:
   mysql-data:
