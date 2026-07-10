@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.events;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -125,6 +126,33 @@ public class SyncEventService {
 
     public int activeClients() {
         return subscribers.size();
+    }
+
+    /**
+     * Heartbeat periódico: envía un comentario SSE (línea {@code :hb}, que el
+     * cliente ignora) a cada emitter. Cumple dos funciones:
+     * <ul>
+     *   <li>Detecta y remueve emitters muertos. Un visor/celular que se durmió o
+     *       perdió la red sin cerrar el socket TCP nunca recibe un evento dirigido
+     *       (los per-user solo llegan cuando hay actividad), así que su Subscriber
+     *       quedaría para siempre en la lista reteniendo el async context de
+     *       Tomcat. El {@code send} del heartbeat falla sobre el socket muerto y lo
+     *       purga.</li>
+     *   <li>Mantiene viva la conexión a través de proxies con idle-timeout.</li>
+     * </ul>
+     * Cada 20s: suficiente para purgar zombis sin generar tráfico notable.
+     */
+    @Scheduled(fixedDelay = 20_000L)
+    public void heartbeat() {
+        if (subscribers.isEmpty()) return;
+        for (Subscriber s : subscribers) {
+            try {
+                s.emitter.send(SseEmitter.event().comment("hb"));
+            } catch (Throwable t) {
+                subscribers.remove(s);
+                log.debug("Heartbeat: removí emitter SSE muerto ({}): {}", s.username, t.toString());
+            }
+        }
     }
 
     /**

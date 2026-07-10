@@ -873,11 +873,18 @@ export class ShowroomPage implements AfterViewInit {
     // La primera forma de la lista (orden asc) queda seleccionada por default —
     // el operador la configuró como "default" desde /configuracion (p.ej.
     // Efectivo). Lo hacemos en un effect que reacciona a la carga async de
-    // formas, preservando la guarda "solo si todavía no hay una elegida".
+    // formas. Solo inicializa UNA VEZ (primera carga con lista no vacía): sin
+    // este flag, si el operador elige "Todas" (null) y luego las formas se
+    // re-emiten (al volver de otra pantalla), el effect le pisaría su elección
+    // con la primera forma.
+    let formaPagoInicializada = false;
     effect(() => {
       const lista = this.precioPerfil.formasPago();
-      if (lista.length > 0 && untracked(() => this.formaPagoSeleccionada()) == null) {
-        this.formaPagoSeleccionada.set(lista[0]);
+      if (lista.length > 0 && !formaPagoInicializada) {
+        formaPagoInicializada = true;
+        if (untracked(() => this.formaPagoSeleccionada()) == null) {
+          this.formaPagoSeleccionada.set(lista[0]);
+        }
       }
     });
 
@@ -943,7 +950,15 @@ export class ShowroomPage implements AfterViewInit {
     // avisa y el carrito se reconcilia con el state real.
     this.cantidadUpdates$
       .pipe(
-        groupBy((u) => u.itemKey),
+        // `duration` cierra el grupo de un SKU tras 10s de inactividad, así no se
+        // acumula una suscripción interna viva por cada SKU distinto tocado en la
+        // sesión. 10s es holgado: el PATCH arranca 250ms tras el último click y
+        // tarda <2s, así que el cierre nunca corta uno in-flight (haría falta un
+        // PATCH de >9.75s, que ya sería timeout de red). El próximo update del
+        // mismo SKU crea un grupo nuevo con estado independiente.
+        groupBy((u) => u.itemKey, {
+          duration: (grupo) => grupo.pipe(debounceTime(10_000)),
+        }),
         mergeMap((porKey) =>
           porKey.pipe(
             debounceTime(250),
@@ -1826,9 +1841,12 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   vaciarCarrito(): void {
-    // Vaciamos optimisticamente en pantalla; si el backend rechaza, el SSE
-    // siguiente lo va a corregir. Esto evita que el operador vea el carrito
-    // viejo unos ms tras enviar el pedido.
+    // Snapshot para poder revertir si el server rechaza (abajo).
+    const prevCarrito = this.carrito();
+    const prevScan = this.ultimoScan();
+    const prevDescuentos = this.descuentosManuales();
+    // Vaciamos optimisticamente en pantalla. Esto evita que el operador vea el
+    // carrito viejo unos ms tras enviar el pedido.
     this.carrito.set([]);
     this.ultimoScan.set(null);
     // Reset de los descuentos manuales (estado local) — el próximo cliente
@@ -1837,7 +1855,15 @@ export class ShowroomPage implements AfterViewInit {
     this.focusInput();
     this.api.vaciarCarritoServer().subscribe({
       next: (state) => this.carrito.set(state.items),
-      error: (err) => toastError(this.toast, 'Carrito', err, 'No se pudo vaciar el carrito.'),
+      error: (err) => {
+        // Revertimos el vaciado optimista: cuando la operación falla NO llega un
+        // SSE que corrija, así que sin esto la pantalla quedaría con el carrito
+        // vacío mientras el server lo tiene lleno.
+        this.carrito.set(prevCarrito);
+        this.ultimoScan.set(prevScan);
+        this.descuentosManuales.set(prevDescuentos);
+        toastError(this.toast, 'Carrito', err, 'No se pudo vaciar el carrito.');
+      },
     });
   }
 

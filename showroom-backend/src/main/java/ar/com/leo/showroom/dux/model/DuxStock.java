@@ -12,8 +12,10 @@ import lombok.Setter;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DuxStock {
 
+    // Wrapper (no primitivo): Jackson 3 tiene FAIL_ON_NULL_FOR_PRIMITIVES=true por
+    // default, así que un "id": null de DUX rompería el parseo de toda la página.
     @JsonProperty("id")
-    private int id;
+    private Integer id;
 
     @JsonProperty("nombre")
     private String nombre;

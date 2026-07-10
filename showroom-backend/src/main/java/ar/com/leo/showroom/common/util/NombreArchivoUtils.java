@@ -1,12 +1,17 @@
-package ar.com.leo.showroom.picking;
+package ar.com.leo.showroom.common.util;
 
 import java.text.Normalizer;
 
 /**
  * Utilities para construir nombres de archivo a partir de strings de usuario.
  * Quita acentos, reemplaza caracteres no válidos para filesystems y trunca.
+ *
+ * <p>Vive en {@code common.util} (antes en {@code picking}, package-private) para
+ * que los generadores de PDF de distintos paquetes reusen la MISMA sanitización
+ * sin copiarla. Nota: {@code CotizacionFinancieraPdfGenerator} usa una variante
+ * propia (lowercase, sin sacar acentos ni truncar) — a propósito, no unificada.
  */
-final class NombreArchivoUtils {
+public final class NombreArchivoUtils {
 
     private static final int MAX_LARGO = 40;
 
@@ -22,7 +27,7 @@ final class NombreArchivoUtils {
      *  - Trunca a 40 chars
      *  - Si queda vacío, devuelve "sin-nombre"
      */
-    static String sanitizar(String raw) {
+    public static String sanitizar(String raw) {
         if (raw == null) return "sin-nombre";
         String s = raw.trim();
         if (s.isEmpty()) return "sin-nombre";

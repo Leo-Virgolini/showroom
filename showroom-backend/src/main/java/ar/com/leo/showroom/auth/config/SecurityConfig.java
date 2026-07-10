@@ -85,7 +85,11 @@ public class SecurityConfig {
                         // Resto del API: requiere login. (scan, formas-pago,
                         // escalas, rubros e imágenes globales ya NO son públicos.)
                         .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll())
+                        // Fallback seguro: todo lo que no sea /api/** (hoy no hay
+                        // otros mappings — el frontend estático lo sirve nginx) se
+                        // deniega por default. Si mañana se agrega un mapping
+                        // no-/api, queda protegido salvo que se exima explícito.
+                        .anyRequest().denyAll())
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(logout -> logout

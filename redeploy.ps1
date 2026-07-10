@@ -39,8 +39,8 @@ $envFile = Join-Path $PSScriptRoot '.env'
 $composeFile = Join-Path $PSScriptRoot 'docker-compose.yml'
 
 # Validacion temprana: docker-compose.yml referencia variables del .env
-# (DUX_EMPRESA_ID, DUX_SECRETS_PATH, SHOWROOM_IMAGENES_PATH, etc.). Sin .env
-# el "up" arranca pero los volumes quedan rotos y la app falla en runtime.
+# (MYSQL_ROOT_PASSWORD, SPRING_MAIL_USERNAME/PASSWORD, SHOWROOM_CORS_ALLOWED_ORIGINS,
+# etc.). Sin .env el "up" arranca pero faltan credenciales y la app falla en runtime.
 if (-not (Test-Path $envFile)) {
     Write-Host "[ERROR] Falta $envFile" -ForegroundColor Red
     Write-Host '        Copia .env.example a .env y completa las rutas/secretos.' -ForegroundColor Red

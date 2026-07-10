@@ -1,9 +1,12 @@
 package ar.com.leo.showroom.common.pdf;
 
+import com.itextpdf.io.image.ImageData;
 import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.layout.element.Image;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.net.URL;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
@@ -46,6 +49,29 @@ public final class PdfImagenUtils {
     private static final float JPEG_QUALITY = 0.78f;
 
     private PdfImagenUtils() {}
+
+    /**
+     * Carga una imagen ESTÁTICA del classpath (logos, fondos, placeholders en
+     * {@code /images/...}) como {@link ImageData} de iText. Devuelve {@code null}
+     * — sin lanzar — si el recurso no existe o no se puede decodificar, para que
+     * la generación del PDF siga sin la decoración. Unifica las tres variantes que
+     * tenían los generadores (una de ellas sin null-check → NPE si faltaba el
+     * recurso). Para imágenes de PRODUCTO desde disco usar
+     * {@link #cargarImagenProducto}.
+     */
+    public static ImageData cargarImagenClasspath(String resourcePath) {
+        URL url = PdfImagenUtils.class.getResource(resourcePath);
+        if (url == null) {
+            log.warn("Recurso PDF no encontrado en classpath: {}", resourcePath);
+            return null;
+        }
+        try {
+            return ImageDataFactory.create(url.toExternalForm());
+        } catch (Exception e) {
+            log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
+            return null;
+        }
+    }
 
     /**
      * Carga una imagen de producto desde disco y la prepara para embeber en el

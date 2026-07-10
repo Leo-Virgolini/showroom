@@ -13,6 +13,7 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
@@ -39,7 +40,7 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { calcularSugerenciasEmail } from '../email-suggestions.utils';
-import { perfilForma, precioPorForma, iconoFormaReferencia } from '../precio-referencia.util';
+import { perfilForma, precioPorForma, iconoFormaReferencia, redondearMoneda } from '../precio-referencia.util';
 import { BackendStatusService } from '../backend-status.service';
 
 /** Ítem de pedido provisto directamente al modal (flujo showroom, desde el
@@ -361,7 +362,7 @@ export class CrearPedidoDialog {
   private cargarDetalle(id: number): void {
     this.cargandoDetallePresupuesto.set(true);
     this.cambiosPrecio.set([]);
-    this.api.obtenerDetallePresupuestoComercial(id).subscribe({
+    this.api.obtenerDetallePresupuestoComercial(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (det) => {
         this.cargandoDetallePresupuesto.set(false);
         // El nombre cargado en el presupuesto es el nombre INFORMAL del cliente →
@@ -435,7 +436,7 @@ export class CrearPedidoDialog {
    *  mostrar el aviso de "cancelá el comprobante viejo a mano". */
   private prellenarDesdePedidoAnterior(pedidoId: number): void {
     this.pedidoAnteriorEnviadoADux.set(false);
-    this.api.obtenerPedido(pedidoId).subscribe({
+    this.api.obtenerPedido(pedidoId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (ped) => {
         this.pedidoAnteriorEnviadoADux.set(ped.estado === 'ENVIADO');
         if (ped.nroDoc != null) this.pedidoCuit.set(ped.nroDoc);
@@ -457,7 +458,8 @@ export class CrearPedidoDialog {
           this.pedidoCodigoProvincia.set(ped.codigoProvincia);
           this.cargandoLocalidadesPedido.set(true);
           this.localidadesSub?.unsubscribe();
-          this.localidadesSub = this.api.obtenerLocalidades(ped.codigoProvincia).subscribe({
+          this.localidadesSub = this.api.obtenerLocalidades(ped.codigoProvincia)
+            .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: (lista) => {
               this.cargandoLocalidadesPedido.set(false);
               this.localidadesPedido.set(lista);
@@ -488,23 +490,32 @@ export class CrearPedidoDialog {
     const items = this.itemsDelPresupuesto();
     const skus = items.filter((it) => it.sku !== skuGen).map((it) => it.sku);
     if (skus.length === 0) return;
-    this.api.lookupBulk(skus).subscribe({
+    this.api.lookupBulk(skus).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (catalogo) => {
         const porSku = new Map(catalogo.map((c) => [c.sku, c]));
         const cambios = items.flatMap((it) => {
           if (it.sku === skuGen) return [];
           const actual = porSku.get(it.sku);
           const nuevo = actual?.pvpKtGastroConIva;
-          if (nuevo == null || it.precioConIva == null || nuevo === it.precioConIva) {
+          if (nuevo == null || it.precioConIva == null) {
+            return [];
+          }
+          // Redondeamos a moneda antes de comparar: sin esto, una diferencia de
+          // sub-centavo por aritmética flotante dispara el banner "el precio
+          // cambió" con dos montos que se ven idénticos. Mismo criterio que
+          // editar-pedido-page.
+          const nuevoR = redondearMoneda(nuevo);
+          const viejoR = redondearMoneda(it.precioConIva);
+          if (nuevoR === viejoR) {
             return [];
           }
           return [{
             sku: it.sku,
             descripcion: actual?.descripcion ?? it.sku,
-            precioViejo: it.precioConIva,
-            precioNuevo: nuevo,
-            deltaPct: it.precioConIva > 0
-              ? ((nuevo - it.precioConIva) / it.precioConIva) * 100
+            precioViejo: viejoR,
+            precioNuevo: nuevoR,
+            deltaPct: viejoR > 0
+              ? ((nuevoR - viejoR) / viejoR) * 100
               : 0,
           }];
         });
@@ -516,7 +527,7 @@ export class CrearPedidoDialog {
 
   private cargarProvinciasSiHaceFalta(): void {
     if (this.provinciasPedido().length > 0) return;
-    this.api.obtenerProvincias().subscribe({
+    this.api.obtenerProvincias().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (lista) => this.provinciasPedido.set(lista),
       error: (err) =>
         toastError(this.toast, 'Provincias', err, 'No se pudieron cargar las provincias'),
@@ -548,7 +559,8 @@ export class CrearPedidoDialog {
       return;
     }
     this.cargandoLocalidadesPedido.set(true);
-    this.localidadesSub = this.api.obtenerLocalidades(codigo).subscribe({
+    this.localidadesSub = this.api.obtenerLocalidades(codigo)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (lista) => {
         this.cargandoLocalidadesPedido.set(false);
         this.localidadesPedido.set(lista);
@@ -580,7 +592,7 @@ export class CrearPedidoDialog {
   /** Busca un cliente por CUIT y completa SOLO los campos vacíos del formulario
    *  (no pisa lo que el operador tipeó ni lo que vino del presupuesto). */
   private autocompletarDesdeCuit(nroDoc: number): void {
-    this.api.buscarClientePorCuit(nroDoc).subscribe((cli) => {
+    this.api.buscarClientePorCuit(nroDoc).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((cli) => {
       if (!cli) return;
       if (this.completarDesdeCliente(cli) > 0) {
         this.toast.add({
@@ -630,7 +642,8 @@ export class CrearPedidoDialog {
   buscarSugerenciasRazonSocial(event: { query: string }): void {
     const q = (event.query ?? '').trim();
     if (q.length < 2) { this.sugerenciasRazonSocial.set([]); return; }
-    this.api.buscarClientesPorRazonSocial(q).subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
+    this.api.buscarClientesPorRazonSocial(q).pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
   }
 
   /** ngModelChange del p-autoComplete de razón social. Si llega un objeto, el
@@ -682,7 +695,8 @@ export class CrearPedidoDialog {
   private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null): void {
     this.cargandoLocalidadesPedido.set(true);
     this.localidadesSub?.unsubscribe();
-    this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia).subscribe({
+    this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia)
+      .pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (lista) => {
         this.cargandoLocalidadesPedido.set(false);
         this.localidadesPedido.set(lista);

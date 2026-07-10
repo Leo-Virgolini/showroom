@@ -63,6 +63,13 @@ export const routes: Routes = [
   {
     path: 'presupuestos',
     canActivate: [authGuard],
+    // Mismo guard que `/presupuestos/editar/:id`: tras la PRIMERA generación de
+    // un presupuesto nuevo, el componente pasa a "modo edición" sin cambiar de
+    // URL (sigue en `/presupuestos`). Sin el guard acá, las ediciones POSTERIORES
+    // a esa primera generación se perderían al navegar dentro de la SPA. Durante
+    // la creación inicial (aún sin generar) `hasUnsavedChanges()` es false, así
+    // que el guard no molesta al abandonar el armado.
+    canDeactivate: [unsavedChangesGuard],
     loadComponent: () =>
       import('./showroom/presupuestos-page/presupuestos-page').then((m) => m.PresupuestosPage),
   },

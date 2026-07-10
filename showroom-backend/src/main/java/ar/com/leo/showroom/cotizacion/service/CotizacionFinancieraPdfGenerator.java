@@ -2,6 +2,7 @@ package ar.com.leo.showroom.cotizacion.service;
 
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
+import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
@@ -366,7 +367,9 @@ public class CotizacionFinancieraPdfGenerator {
                 .setMarginTop(20)
                 .setMarginBottom(8));
 
-        int idxMejor = calcularIndiceMejorPrecio(formas);
+        int idxMejor = PdfFormatoUtils.indiceMejorPrecio(formas,
+                GenerarCotizacionRequestDTO.FormaPagoSnapshot::precioFinal,
+                GenerarCotizacionRequestDTO.FormaPagoSnapshot::monedaSimbolo);
 
         float[] cols = new float[COLUMNAS_FORMAS_PAGO];
         for (int i = 0; i < COLUMNAS_FORMAS_PAGO; i++) cols[i] = 1f;
@@ -572,32 +575,6 @@ public class CotizacionFinancieraPdfGenerator {
         return chip;
     }
 
-    /** Índice de la forma con menor precio final (ignorando las que están en
-     *  moneda extranjera). -1 si no hay clara ganadora — empate o todas en
-     *  moneda extranjera. */
-    private int calcularIndiceMejorPrecio(List<GenerarCotizacionRequestDTO.FormaPagoSnapshot> formas) {
-        if (formas.size() <= 1) return -1;
-        int idx = -1;
-        BigDecimal min = null;
-        for (int i = 0; i < formas.size(); i++) {
-            GenerarCotizacionRequestDTO.FormaPagoSnapshot f = formas.get(i);
-            if (f.precioFinal() == null || f.precioFinal().signum() <= 0) continue;
-            if (f.monedaSimbolo() != null && !f.monedaSimbolo().isBlank()) continue;
-            if (min == null || f.precioFinal().compareTo(min) < 0) {
-                min = f.precioFinal();
-                idx = i;
-            }
-        }
-        if (idx < 0 || min == null) return -1;
-        // Empate → no resaltamos a nadie.
-        final BigDecimal minF = min;
-        long empates = formas.stream()
-                .filter(f -> minF.equals(f.precioFinal())
-                        && (f.monedaSimbolo() == null || f.monedaSimbolo().isBlank()))
-                .count();
-        return empates > 1 ? -1 : idx;
-    }
-
     private void agregarNotas(Document doc) {
         // Nota final con setKeepTogether para que iText NO la corte entre
         // páginas — si no entra completa en la actual, mueve el bloque
@@ -659,14 +636,7 @@ public class CotizacionFinancieraPdfGenerator {
     }
 
     private static ImageData cargarRecurso(String path) {
-        try {
-            var stream = CotizacionFinancieraPdfGenerator.class.getResourceAsStream(path);
-            if (stream == null) return null;
-            return ImageDataFactory.create(stream.readAllBytes());
-        } catch (Exception e) {
-            log.warn("No se pudo cargar recurso {}: {}", path, e.getMessage());
-            return null;
-        }
+        return PdfImagenUtils.cargarImagenClasspath(path);
     }
 
     /** Footer minimalista con número de página + logo chico. */

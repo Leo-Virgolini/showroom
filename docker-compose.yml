@@ -25,6 +25,10 @@ services:
     image: mysql:8.4
     container_name: showroom-db
     restart: unless-stopped
+    # Tope de RAM del contenedor. La VPS (16 GB) hospeda 2 stacks full-stack
+    # (showroom + super-master), cada uno con su MySQL: sin límites, un pico de
+    # cualquiera puede disparar el OOM-killer. buffer-pool 512M + overhead ~1G.
+    mem_limit: 1g
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: showroom
@@ -40,7 +44,10 @@ services:
     networks:
       - showroom-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      # MYSQL_PWD (env, escapada como $$ para Compose) en vez de -p en la cmdline:
+      # así el password NO queda visible en `ps`/`docker inspect` del proceso
+      # mysqladmin. Mismo criterio que el sidecar de backup.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h localhost -u root --silent"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -72,6 +79,8 @@ services:
     image: mysql:8.4
     container_name: showroom-db-backup
     restart: unless-stopped
+    # Sidecar liviano: solo duerme y corre mysqldump 1 vez/día.
+    mem_limit: 256m
     depends_on:
       showroom-db:
         condition: service_healthy
@@ -114,6 +123,11 @@ services:
     image: showroom-backend:latest
     container_name: showroom-backend
     restart: unless-stopped
+    # Tope de RAM del contenedor (defensa extra sobre el -Xmx1536m del Dockerfile).
+    # Cubre heap 1.5G + metaspace/threads/off-heap de ZGC. Es el freno de cgroup
+    # que faltaba: sin él, MaxRAMPercentage veía los 16 GB del host y el heap se
+    # iba a ~12 GB → OOM. Ahora el heap es absoluto y además el contenedor topea acá.
+    mem_limit: 2g
     depends_on:
       showroom-db:
         condition: service_healthy
@@ -212,7 +226,11 @@ services:
       # instalado en el Dockerfile del backend.
       test: ["CMD-SHELL", "curl -sf http://localhost:8081/api/showroom/health || exit 1"]
       interval: 15s
-      timeout: 5s
+      # 10s (no 5s): el endpoint hace un count() a la BD; durante el sync de
+      # catálogo (escrituras masivas) puede tardar más de 5s y marcar el
+      # contenedor unhealthy justo cuando está ocupado, disparando una recreación
+      # innecesaria en Coolify. 10s da margen sin enmascarar una caída real.
+      timeout: 10s
       retries: 5
       start_period: 60s
     # El backend NO necesita puerto público: el nginx del frontend lo proxea por
@@ -229,6 +247,8 @@ services:
     image: showroom-frontend:latest
     container_name: showroom-frontend
     restart: unless-stopped
+    # nginx sirviendo estáticos + proxy: liviano.
+    mem_limit: 128m
     depends_on:
       - showroom-backend
     # En Coolify NO se publica el puerto: se le asigna un DOMINIO al servicio y
@@ -242,6 +262,15 @@ services:
       - "80"
     networks:
       - showroom-net
+    healthcheck:
+      # Verifica que nginx esté sirviendo el index (busybox wget viene en la
+      # imagen alpine). Sin esto el orquestador no distinguía "nginx colgado" de
+      # "sirviendo OK". No chequea /api (eso lo cubre el healthcheck del backend).
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mysql-data:

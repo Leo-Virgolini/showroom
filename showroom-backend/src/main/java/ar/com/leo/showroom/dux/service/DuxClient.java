@@ -57,7 +57,10 @@ public class DuxClient {
     private String secretsDir;
 
     private DuxRetryHandler retryHandler;
-    private TokensDux tokens;
+    // volatile: se escribe en @PostConstruct (un thread) pero cargarTokens() puede
+    // re-ejecutarse desde verificarTokens() en threads de scan concurrentes cuando
+    // isConfigured() da false; sin volatile hay riesgo de visibilidad entre threads.
+    private volatile TokensDux tokens;
     private volatile Long cachedListaPrecioId;
 
     public DuxClient(RestClient duxRestClient, DuxProperties properties, ObjectMapper objectMapper,
@@ -219,14 +222,25 @@ public class DuxClient {
                 log.info("DUX sync cancelado durante request en offset={} ({} items traídos)", offset, all.size());
                 break;
             }
-            if (response == null) break;
+            // Body vacío/null a mitad de paginación NO es fin normal (el fin se
+            // detecta por `results` vacío o all.size() >= total). Abortamos con
+            // excepción en vez de `break`: si retornáramos parcial, el caller lo
+            // marcaría como "última sync exitosa" y avanzaría el cursor incremental,
+            // perdiendo para siempre los items de las páginas no descargadas.
+            if (response == null) {
+                throw new IllegalStateException(
+                        "DUX devolvió body vacío en offset=" + offset + " (" + all.size() + " items traídos)");
+            }
 
             DuxResponse parsed;
             try {
                 parsed = objectMapper.readValue(response, DuxResponse.class);
             } catch (Exception e) {
-                log.error("DUX - Error parseando página offset={}: {}", offset, e.getMessage());
-                break;
+                // Error de parseo a mitad del catálogo: abortar el sync, NO marcarlo
+                // exitoso con datos parciales (ver comentario del body null arriba).
+                // El próximo sync programado reintentará desde el mismo cursor.
+                throw new IllegalStateException(
+                        "DUX - Error parseando página offset=" + offset + ": " + e.getMessage(), e);
             }
 
             if (parsed.getPaging() != null) {
@@ -235,8 +249,11 @@ public class DuxClient {
             }
 
             if (parsed.getResults() == null || parsed.getResults().isEmpty()) {
+                // Página vacía: puede ser el fin real o un glitch transitorio de
+                // DUX. NO avanzamos el offset — reintentamos el MISMO offset hasta
+                // MAX_INTENTOS_VACIOS. Antes hacía `offset += limit` y, si el vacío
+                // era transitorio, salteaba un bloque de items para siempre.
                 if (++vacios >= MAX_INTENTOS_VACIOS) break;
-                offset += limit;
                 continue;
             }
             vacios = 0;
@@ -254,7 +271,13 @@ public class DuxClient {
                     log.warn("Error en callback de progreso: {}", ex.getMessage());
                 }
             }
-            offset += limit;
+            // Avanzar por items REALMENTE recibidos, no por `limit`: si DUX
+            // devolviera una página corta no-final (menos de `limit` pero no vacía,
+            // p.ej. por el filtro incremental de fecha o un cap del server), sumar
+            // `limit` saltearía el hueco [offset+recibidos, offset+limit) y esos
+            // items se perderían. Re-bajar alguno en el borde es inocuo (el upsert
+            // por SKU es idempotente).
+            offset += parsed.getResults().size();
             if (all.size() >= total) break;
         }
         return all;
@@ -338,8 +361,9 @@ public class DuxClient {
                             arr.isArray() ? arr.size() : -1);
                 }
                 if (!arr.isArray() || arr.isEmpty()) {
+                    // Vacío: fin real o glitch transitorio. No avanzamos offset —
+                    // reintentamos el mismo hasta MAX_INTENTOS_VACIOS (ver items).
                     if (++vacios >= MAX_INTENTOS_VACIOS) break;
-                    offset += limit;
                     continue;
                 }
                 vacios = 0;
@@ -361,7 +385,8 @@ public class DuxClient {
                 }
                 // Progreso paginado en DEBUG por las mismas razones que el sync de items.
                 log.debug("DUX localidades idProvincia={} - {}/{}", idProvincia, all.size(), total);
-                offset += limit;
+                // Avanzar por items recibidos, no por `limit` (ver comentario en items).
+                offset += arr.size();
                 if (all.size() >= total) break;
             } catch (RuntimeException e) {
                 throw e;

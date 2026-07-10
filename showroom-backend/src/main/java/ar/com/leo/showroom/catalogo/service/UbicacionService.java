@@ -84,7 +84,15 @@ public class UbicacionService {
         return provinciaRepo.findAllByOrderByNombreAsc();
     }
 
-    @Transactional(readOnly = true)
+    // SIN @Transactional a propósito: para una provincia no precargada, este
+    // método dispara `asegurarLocalidadesDe`, que pagina DUX a 1 req/7s (minutos).
+    // Bajo una tx envolvente eso mantendría una conexión JDBC del pool tomada
+    // durante toda la I/O de red (agota Hikari bajo concurrencia) y ejecutaría los
+    // `saveAll` de la descarga dentro de una tx marcada readOnly. Sin tx acá, cada
+    // operación de repo corre en su propia tx corta (auto-commit): la lectura de
+    // provincia, cada `saveAll` de página en `asegurarLocalidadesDe`, y la lectura
+    // final — la descarga DUX no retiene ninguna conexión. Mismo principio que el
+    // sync de catálogo (descarga fuera de tx, persistencia en tx cortas por página).
     public List<Localidad> listarLocalidadesPorCodIso(String codIso) {
         if (codIso == null || codIso.isBlank()) return List.of();
         Provincia prov = provinciaRepo.findByCodIsoIgnoreCase(codIso).orElse(null);

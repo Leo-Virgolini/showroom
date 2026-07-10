@@ -32,18 +32,33 @@ USER app
 EXPOSE 8081
 
 # Flags de JVM optimizadas para Spring Boot + JDK 25:
-#   - MaxRAMPercentage=75: usa hasta el 75% de la RAM del container.
+#   - Xmx1536m: tope de heap ABSOLUTO. Antes se usaba MaxRAMPercentage=75, pero
+#     sin un mem_limit de cgroup la JVM lee la RAM TOTAL del host (16 GB en esta
+#     VPS) y apunta ~12 GB de heap — con 2 apps full-stack + 2 MySQL conviviendo,
+#     eso disparaba el OOM-killer (los "504" y "OOM" vistos en prod). Un valor
+#     absoluto garantiza el límite sin depender de que Coolify aplique mem_limit.
+#     1536m sobra para el cache de ~6000 productos y el pico del sync; subir si
+#     hiciera falta. Se combina con el mem_limit del docker-compose (defensa extra).
 #   - UseZGC: garbage collector de baja latencia (<1ms pauses). En JDK 25
 #     ya viene en modo generacional por default — ideal para apps web con
 #     cargas variables (sync de catálogo = picos de heap).
 #   - UseStringDeduplication: deduplica strings idénticos en el heap. El
 #     cache de productos suele tener muchas descripciones/categorías
 #     repetidas; ahorra ~5-10% de heap sin afectar performance.
+#   - HeapDumpOnOutOfMemoryError + HeapDumpPath=/app/logs: ante un
+#     java.lang.OutOfMemoryError (heap agotado por la app) vuelca un .hprof a la
+#     carpeta de logs (montada al host /data/showroom/logs) para analizar la fuga.
+#     OJO: esto NO cubre el OOM-killer del kernel (SIGKILL por exceder mem_limit),
+#     que no deja rastro en la app — ese se detecta con
+#     `docker inspect --format '{{.State.OOMKilled}} {{.State.ExitCode}}'` (→ true 137).
+#   - ExitOnOutOfMemoryError: ante un OOME interno, termina la JVM de una en vez
+#     de quedar medio-viva con threads muertos; con restart: unless-stopped el
+#     contenedor reinicia limpio (y el dump ya quedó escrito).
 # Override desde docker-compose con `environment: JAVA_OPTS: "..."` si hace falta.
 #
 # Flag opcional NO incluida por default (probar si querés ahorrar heap):
 #   -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders
 #   (JEP 450/519 — reduce el header de cada objeto Java de 12 a 4 bytes;
 #    todavía marcada experimental en JDK 25 pero estable en producción).
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:+UseZGC -XX:+UseStringDeduplication"
+ENV JAVA_OPTS="-Xmx1536m -Xms384m -XX:+UseZGC -XX:+UseStringDeduplication -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/logs -XX:+ExitOnOutOfMemoryError"
 ENTRYPOINT ["sh","-c","exec java $JAVA_OPTS -jar /app/app.jar"]

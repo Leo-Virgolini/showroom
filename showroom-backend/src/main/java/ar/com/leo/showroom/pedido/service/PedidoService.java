@@ -53,6 +53,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.SocketTimeoutException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -60,6 +61,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -504,6 +506,11 @@ public class PedidoService {
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Forma de pago no encontrada: " + request.formaPagoId()));
         }
+        // Snapshot de cabecera del perfil MENAJE (base). Sirve de default para el
+        // builder y de fallback cuando el pedido mezcla perfiles (menaje +
+        // maquinaria) — caso en que un único recargo/IVA de cabecera es
+        // intrínsecamente ambiguo. Para pedidos homogéneos, la cabecera se
+        // re-deriva del perfil realmente aplicado tras el loop (ver más abajo).
         BigDecimal recargoPorc = formaPago != null && formaPago.getRecargoPorcentaje() != null
                 ? formaPago.getRecargoPorcentaje() : BigDecimal.ZERO;
         boolean aplicaIva = formaPago == null || !Boolean.FALSE.equals(formaPago.getAplicaIva());
@@ -547,6 +554,12 @@ public class PedidoService {
                 request.items().stream().map(CrearPedidoRequestDTO.Item::sku).toList()
         );
         Set<String> rubrosMaq = rubrosMaquinariaNormalizados();
+        // Perfiles (recargo/IVA) efectivamente aplicados a los ítems. En un pedido
+        // homogéneo el set queda con un único valor y ese es el snapshot correcto
+        // de cabecera; si el pedido mezcla menaje y maquinaria, el set tiene 2
+        // valores y dejamos el default menaje (ambiguo por diseño).
+        Set<BigDecimal> recargosPerfilUsados = new HashSet<>();
+        Set<Boolean> ivasPerfilUsados = new HashSet<>();
 
         String skuGenerico = duxProperties.skuProductoGenerico();
         for (CrearPedidoRequestDTO.Item it : request.items()) {
@@ -588,6 +601,10 @@ public class PedidoService {
             // con qué forma paga el cliente al crear el pedido y el IVA es parte de
             // esa forma.
             boolean aplicaIvaItem = aplicaIvaPerfil(formaPago, esMaq);
+            if (formaPago != null) {
+                recargosPerfilUsados.add(recargoItem);
+                ivasPerfilUsados.add(aplicaIvaItem);
+            }
 
             // Precio que paga el cliente (BRUTO, sin el descuento de la línea),
             // calculado con la forma de pago ELEGIDA sobre el precio de lista con
@@ -610,7 +627,14 @@ public class PedidoService {
                     .pedido(pedido)
                     .sku(it.sku())
                     .descripcion(descripcion)
-                    .rubro(it.rubro())
+                    // Persistimos el rubro RESUELTO (rubroItem), no el crudo del
+                    // request: en el flujo showroom rubroItem cae al rubro del cache
+                    // cuando el request no lo trae. Sin esto, un ítem de maquinaria
+                    // que llega con rubro=null se guardaba con rubro=null y, al
+                    // EDITAR el pedido, resolverEsMaq lo re-derivaba como menaje →
+                    // le volvía a sumar IVA y cambiaba el precio. Para pedidos de
+                    // presupuesto rubroItem == it.rubro(), así que no cambia nada.
+                    .rubro(rubroItem)
                     .cantidad(it.cantidad())
                     .precioUnitario(precioFinal)
                     .precioListaConIva(precioBaseConIva)
@@ -650,6 +674,20 @@ public class PedidoService {
                 }
             }
         }
+        // Re-derivar el snapshot de cabecera del perfil REALMENTE aplicado. Sin
+        // esto, un pedido de maquinaria con recargo/IVA solo en el perfil
+        // maquinaria mostraría en /pedidos el recargo/IVA del perfil menaje (0 o
+        // el equivocado), aunque los ítems y totales se cobraron bien. Solo cuando
+        // hay un único perfil en juego (pedido homogéneo); en pedidos mixtos se
+        // conserva el default menaje del builder.
+        if (formaPago != null) {
+            if (recargosPerfilUsados.size() == 1) {
+                pedido.setRecargoPorcentaje(recargosPerfilUsados.iterator().next());
+            }
+            if (ivasPerfilUsados.size() == 1) {
+                pedido.setFormaPagoAplicaIva(ivasPerfilUsados.iterator().next());
+            }
+        }
         pedido.setTotal(total.setScale(2, RoundingMode.HALF_UP));
         pedido.setTotalSinIva(totalSinIva.setScale(2, RoundingMode.HALF_UP));
         // Descuento EFECTIVO del pedido = (bruto − neto) / bruto × 100. Coincide
@@ -662,10 +700,14 @@ public class PedidoService {
                     .setScale(2, RoundingMode.HALF_UP);
             pedido.setDescuentoPorcentaje(descEfectivo);
         }
-        // Solo persistir totalSinRecargo si efectivamente hubo recargo — sino
-        // es ruido (el total ya es el sin-recargo).
-        if (formaPago != null && recargoPorc.signum() > 0) {
-            pedido.setTotalSinRecargo(totalSinRecargo.setScale(2, RoundingMode.HALF_UP));
+        // Solo persistir totalSinRecargo si efectivamente hubo recargo POSITIVO —
+        // sino es ruido (el total ya es el sin-recargo). Comparamos los totales en
+        // vez de mirar recargoPorc (perfil menaje): así capturamos el recargo
+        // aunque venga solo del perfil maquinaria, y no guardamos ruido cuando el
+        // perfil menaje tiene recargo pero el pedido es de maquinaria sin recargo.
+        BigDecimal totalSinRecargoSc = totalSinRecargo.setScale(2, RoundingMode.HALF_UP);
+        if (formaPago != null && pedido.getTotal().compareTo(totalSinRecargoSc) > 0) {
+            pedido.setTotalSinRecargo(totalSinRecargoSc);
         }
         pedidoRepository.save(pedido);
 
@@ -797,19 +839,40 @@ public class PedidoService {
         } catch (Exception e) {
             log.error("Error enviando pedido a DUX: {}", e.getMessage(), e);
             pedido.setEstado(EstadoPedido.ERROR);
-            // Guardamos el getMessage() crudo en BD para diagnóstico; al frontend
-            // mandamos un mensaje legible (UserMessages traduce timeouts/red/DUX).
-            pedido.setRespuestaDux(e.getMessage());
+            // Read-timeout DESPUÉS de mandar el POST: caso AMBIGUO. DUX puede haber
+            // creado el comprobante igual (no devuelve id ni acepta clave de
+            // idempotencia), así que reintentar a ciegas lo DUPLICARÍA. Distinto de
+            // un fallo pre-envío (connect/DNS/red), donde reintentar es seguro.
+            boolean ambiguo = esTimeoutAmbiguo(e);
+            // Guardamos el getMessage() crudo en BD para diagnóstico; marcamos el
+            // caso ambiguo para que quede evidente en respuesta_dux (/pedidos).
+            pedido.setRespuestaDux(
+                    (ambiguo ? "[TIMEOUT AMBIGUO - el POST salió pero DUX no confirmó] " : "") + e.getMessage());
             pedidoRepository.save(pedido);
-            String detalle = UserMessages.traducir(e,
-                    "No se pudo enviar el pedido a DUX. El pedido quedó guardado y puede reintentarse desde Pedidos.");
+            String mensaje = ambiguo
+                    ? "El pedido se ENVIÓ a DUX pero no llegó la confirmación (timeout). El comprobante PUEDE "
+                      + "haberse creado igual. ANTES de reintentar, verificá en DUX si el pedido ya existe — "
+                      + "reintentar sin verificar lo duplicaría."
+                    : "Pedido guardado localmente pero falló el envío a DUX. " + UserMessages.traducir(e,
+                            "No se pudo enviar el pedido a DUX. El pedido quedó guardado y puede reintentarse desde Pedidos.");
             return new CrearPedidoResponseDTO(
                     pedido.getId(),
                     EstadoPedido.ERROR,
                     null,
-                    "Pedido guardado localmente pero falló el envío a DUX. " + detalle
+                    mensaje
             );
         }
+    }
+
+    /** True si la causa raíz de {@code e} es un {@link SocketTimeoutException}
+     *  (read timeout). En el POST de creación de pedido significa que el request
+     *  SALIÓ pero no llegó la respuesta — DUX pudo haber creado el comprobante, así
+     *  que el reintento NO es seguro. Mismo criterio que los envíos de email/PDF. */
+    private static boolean esTimeoutAmbiguo(Throwable e) {
+        for (Throwable cur = e; cur != null; cur = cur.getCause()) {
+            if (cur instanceof SocketTimeoutException) return true;
+        }
+        return false;
     }
 
     /**
@@ -961,6 +1024,16 @@ public class PedidoService {
     private boolean mensajeIndicaExito(String mensaje) {
         if (mensaje == null) return false;
         String low = mensaje.toLowerCase(Locale.ROOT);
+        // Guarda anti-falso-positivo: un mensaje que NIEGA o reporta error NO es
+        // éxito aunque contenga la palabra "éxito" (ej. "no se pudo ingresar con
+        // éxito", "sin éxito"). Se chequea antes del match positivo. Si DUX cambia
+        // el wording, es preferible un falso ERROR (el operador reintenta) a un
+        // falso ENVIADO (cierra la sesión y manda follow-up de un pedido rechazado).
+        if (low.contains("no se pudo") || low.contains("no fue") || low.contains("sin éxito")
+                || low.contains("sin exito") || low.contains("error") || low.contains("debe ")
+                || low.contains("fall")) {
+            return false;
+        }
         return low.contains("exito") || low.contains("éxito") || low.contains("ingresado con");
     }
 

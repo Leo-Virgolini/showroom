@@ -16,17 +16,19 @@ import java.util.List;
  * <p>Los orígenes permitidos se toman de {@code showroom.cors.allowed-origins}
  * (env var {@code SHOWROOM_CORS_ALLOWED_ORIGINS}, lista separada por comas).
  *
- * <p><b>LAN / dev (default):</b> {@code http://*:*,https://*:*} — la app es
- * un showroom interno accesible indistintamente por IP (192.168.x.x),
- * localhost o hostname NetBIOS/mDNS. Cualquier cliente que acceda por hostname
- * manda el header {@code Origin} y Spring lo valida contra los patterns; con el
- * comodín no recibe 403 en los POST.
+ * <p><b>Dev (default):</b> {@code http://localhost:4200,http://127.0.0.1:4200}
+ * — cubre {@code ng serve}. Es un default RESTRICTIVO a propósito: con
+ * {@code allowCredentials=true} un comodín ({@code http://*:*}) permitiría que
+ * cualquier sitio hiciera requests autenticados y leyera precios/clientes. Si
+ * en dev accedés por IP/hostname distinto, seteá {@code SHOWROOM_CORS_ALLOWED_ORIGINS}
+ * con ese origen. El acceso normal por IP en la LAN (visor/QR) va contra el
+ * stack dockerizado y es same-origin vía nginx — no necesita CORS.
  *
- * <p><b>Producción (internet público):</b> el comodín NO es seguro con
- * {@code allowCredentials=true} — cualquier sitio podría hacer requests
- * autenticados. En Coolify/Hetzner hay que setear
+ * <p><b>Producción (internet público):</b> setear
  * {@code SHOWROOM_CORS_ALLOWED_ORIGINS=https://showroom.tudominio.com}
- * (uno o varios dominios separados por coma).
+ * (uno o varios dominios separados por coma). Si queda vacío, no se permite
+ * ningún origen cross-origin (solo same-origin) — que es lo correcto detrás de
+ * nginx/Traefik.
  *
  * <p>Se expone como {@link CorsConfigurationSource} (no como
  * {@code WebMvcConfigurer}) para que la config CORS viva en un único lugar: el
@@ -42,7 +44,7 @@ public class CorsConfig {
      * {@code allowedOriginPatterns} para soportar comodines de puerto/host
      * (necesario en LAN) y también dominios exactos (producción).
      */
-    @Value("${showroom.cors.allowed-origins:http://*:*,https://*:*}")
+    @Value("${showroom.cors.allowed-origins:http://localhost:4200,http://127.0.0.1:4200}")
     private String allowedOrigins;
 
     @Bean

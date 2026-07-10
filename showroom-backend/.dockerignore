@@ -8,3 +8,7 @@ target/
 .mvn/
 HELP.md
 README.md
+# Config de DEV con la App Password de Gmail en claro. Está gitignored (no llega
+# al build de Coolify desde git), pero un `docker compose build` local sí lo
+# hornearía en la imagen. Excluirlo es defensa en profundidad.
+src/main/resources/application-local.properties

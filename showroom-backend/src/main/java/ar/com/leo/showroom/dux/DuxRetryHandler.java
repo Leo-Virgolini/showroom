@@ -36,6 +36,13 @@ public class DuxRetryHandler {
 
     private static final int MAX_RETRIES = 3;
     private static final int MAX_RETRIES_RATE_LIMIT = 10;
+    // Tope de reintentos 429 MENOR para llamadas HIGH (scan del operador, alta de
+    // pedido): son interactivas y no pueden colgar. Con 10 reintentos y backoff
+    // capped a 5min, un 429 sostenido de DUX podía dejar la request bloqueada
+    // ~50min; con 3, falla en ~14s y propaga el 429 (que UserMessages traduce a
+    // "DUX saturado, reintentá"). El sync (LOW) conserva los 10 reintentos: no es
+    // interactivo y conviene que insista.
+    private static final int MAX_RETRIES_RATE_LIMIT_HIGH = 3;
     private static final int RATE_LIMIT_NOTIFY_THRESHOLD = 3;
     private static final long MAX_WAIT_MS = 300_000;
     private static final long CONFLICT_BASE_WAIT_MS = 2000;
@@ -99,6 +106,7 @@ public class DuxRetryHandler {
                                      boolean highPriority, Supplier<T> call) {
         int normalRetries = 0;
         int rateLimitRetries = 0;
+        int maxRateLimitRetries = highPriority ? MAX_RETRIES_RATE_LIMIT_HIGH : MAX_RETRIES_RATE_LIMIT;
         while (true) {
             checkCancelled(isCancelled);
             try {
@@ -111,9 +119,9 @@ public class DuxRetryHandler {
                     throw e;
                 }
                 if (status == 429) {
-                    if (++rateLimitRetries > MAX_RETRIES_RATE_LIMIT) throw e;
+                    if (++rateLimitRetries > maxRateLimitRetries) throw e;
                     long w = calcular429(e.getResponseHeaders(), rateLimitRetries);
-                    log.warn("DUX 429 en {} - retry en {}s ({}/{})", op, w / 1000, rateLimitRetries, MAX_RETRIES_RATE_LIMIT);
+                    log.warn("DUX 429 en {} - retry en {}s ({}/{})", op, w / 1000, rateLimitRetries, maxRateLimitRetries);
                     notificarSiCorresponde(rateLimitRetries, w, op);
                     sleepCancellable(w, isCancelled);
                     continue;

@@ -3,6 +3,7 @@ package ar.com.leo.showroom.picking;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
+import ar.com.leo.showroom.common.util.NombreArchivoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.FormaPago;
@@ -442,12 +443,7 @@ public class PresupuestoPdfGenerator {
     }
 
     private ImageData cargarRecurso(String resourcePath) {
-        try {
-            return ImageDataFactory.create(getClass().getResource(resourcePath).toExternalForm());
-        } catch (Exception e) {
-            log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
-            return null;
-        }
+        return PdfImagenUtils.cargarImagenClasspath(resourcePath);
     }
 
     private static String formatPesos(BigDecimal v) {

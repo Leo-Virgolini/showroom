@@ -3,6 +3,7 @@ package ar.com.leo.showroom.presupuesto.service;
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
+import ar.com.leo.showroom.common.util.NombreArchivoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.config.entity.EscalaDescuento;
@@ -302,7 +303,7 @@ public class PresupuestoComercialPdfGenerator {
     /** Filename: presupuesto-{cliente}-N{id}-ddMMyyyy.pdf. Cuando no hay id
      *  (preview) usa "borrador" como sufijo. */
     public String nombreArchivo(PresupuestoComercial presupuesto) {
-        String cliente = sanitizar(Optional.ofNullable(presupuesto.getClienteNombre()).orElse(""));
+        String cliente = NombreArchivoUtils.sanitizar(Optional.ofNullable(presupuesto.getClienteNombre()).orElse(""));
         String fecha = presupuesto.getCreadoAt() != null
                 ? presupuesto.getCreadoAt().atZone(TZ_AR).toLocalDate()
                         .format(DateTimeFormatter.ofPattern("ddMMyyyy"))
@@ -417,7 +418,7 @@ public class PresupuestoComercialPdfGenerator {
 
     /** Filename: items-de-interes-{cliente}-{idSesion}-ddMMyyyy.pdf. */
     public String nombreArchivoItemsDeInteres(SesionShowroom sesion) {
-        String cliente = sanitizar(Optional.ofNullable(sesion.getNombre()).orElse(""));
+        String cliente = NombreArchivoUtils.sanitizar(Optional.ofNullable(sesion.getNombre()).orElse(""));
         String fecha = sesion.getIniciadaAt() != null
                 ? sesion.getIniciadaAt().atZone(TZ_AR).toLocalDate()
                         .format(DateTimeFormatter.ofPattern("ddMMyyyy"))
@@ -648,7 +649,9 @@ public class PresupuestoComercialPdfGenerator {
         } else {
             List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formasItem =
                     filtrarFormasDelItem(todasFormas, item.sku());
-            int indiceMejor = indiceMejorPrecio(formasItem);
+            int indiceMejor = PdfFormatoUtils.indiceMejorPrecio(formasItem,
+                    GenerarPresupuestoRequestDTO.FormaPagoSnapshot::precioFinal,
+                    GenerarPresupuestoRequestDTO.FormaPagoSnapshot::monedaSimbolo);
             celdaFormas.setVerticalAlignment(VerticalAlignment.TOP);
             // Régimen de IVA de ESTE ítem (una hoja = un producto): maquinaria
             // usa el perfil maquinaria de la forma, el resto el perfil menaje.
@@ -1056,7 +1059,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setPadding(14);
 
         Paragraph tituloSeccion = new Paragraph()
-                .add(buntoColor(KT_NARANJA))
+                .add(puntoColor(KT_NARANJA))
                 .add("  DETALLE DE PRODUCTOS")
                 .simulateBold()
                 .setFontSize(10)
@@ -1289,7 +1292,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setPadding(14);
 
         Paragraph tituloSeccion = new Paragraph()
-                .add(buntoColor(KT_NARANJA))
+                .add(puntoColor(KT_NARANJA))
                 .add("  DETALLE DE PRODUCTOS")
                 .simulateBold()
                 .setFontSize(10)
@@ -1699,7 +1702,7 @@ public class PresupuestoComercialPdfGenerator {
                 .setKeepTogether(true);
 
         Paragraph titulo = new Paragraph()
-                .add(buntoColor(VERDE_PRECIO))
+                .add(puntoColor(VERDE_PRECIO))
                 .add("  FORMAS DE PAGO DISPONIBLES")
                 .simulateBold()
                 .setFontSize(10)
@@ -1712,7 +1715,9 @@ public class PresupuestoComercialPdfGenerator {
         final int COLUMNAS = 3;
         // Identifica la forma con menor precio (misma moneda local) para
         // resaltarla con el badge "MEJOR PRECIO".
-        int indiceMejorPrecio = indiceMejorPrecio(formas);
+        int indiceMejorPrecio = PdfFormatoUtils.indiceMejorPrecio(formas,
+                GenerarPresupuestoRequestDTO.FormaPagoSnapshot::precioFinal,
+                GenerarPresupuestoRequestDTO.FormaPagoSnapshot::monedaSimbolo);
 
         Table grid = new Table(UnitValue.createPercentArray(new float[]{1f, 1f, 1f}))
                 .useAllAvailableWidth()
@@ -1765,38 +1770,6 @@ public class PresupuestoComercialPdfGenerator {
             return menajeIva;
         }
         return null;
-    }
-
-    /**
-     * Devuelve el índice (en {@code formas}) de la forma con precio más bajo,
-     * ignorando las que están en moneda extranjera (USD) para no comparar
-     * peras con manzanas. -1 si no hay una clara ganadora (todas iguales o
-     * lista de un solo elemento).
-     */
-    private static int indiceMejorPrecio(
-            List<GenerarPresupuestoRequestDTO.FormaPagoSnapshot> formas) {
-        if (formas == null || formas.size() <= 1) return -1;
-        int idx = -1;
-        BigDecimal min = null;
-        for (int i = 0; i < formas.size(); i++) {
-            GenerarPresupuestoRequestDTO.FormaPagoSnapshot f = formas.get(i);
-            if (f.precioFinal() == null || f.precioFinal().signum() <= 0) continue;
-            if (esTextoValido(f.monedaSimbolo())) continue;
-            if (min == null || f.precioFinal().compareTo(min) < 0) {
-                min = f.precioFinal();
-                idx = i;
-            }
-        }
-        // Si el "mínimo" empata con otras formas, no marcamos a nadie.
-        if (idx == -1 || min == null) return -1;
-        int empates = 0;
-        for (GenerarPresupuestoRequestDTO.FormaPagoSnapshot f : formas) {
-            if (f.precioFinal() != null && !esTextoValido(f.monedaSimbolo())
-                    && f.precioFinal().compareTo(min) == 0) {
-                empates++;
-            }
-        }
-        return empates > 1 ? -1 : idx;
     }
 
     private Div buildCardFormaPago(GenerarPresupuestoRequestDTO.FormaPagoSnapshot f,
@@ -2097,7 +2070,7 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     /** Punto coloreado decorativo para títulos de sección (bullet circular). */
-    private static IBlockElement buntoColor(Color c) {
+    private static IBlockElement puntoColor(Color c) {
         return new Paragraph("●")
                 .setFontColor(c)
                 .setFontSize(10)
@@ -2114,17 +2087,7 @@ public class PresupuestoComercialPdfGenerator {
     }
 
     private ImageData cargarRecurso(String resourcePath) {
-        java.net.URL url = getClass().getResource(resourcePath);
-        if (url == null) {
-            log.warn("Recurso PDF no encontrado en classpath: {}", resourcePath);
-            return null;
-        }
-        try {
-            return ImageDataFactory.create(url.toExternalForm());
-        } catch (Exception e) {
-            log.warn("No se pudo cargar el recurso PDF {}: {}", resourcePath, e.getMessage());
-            return null;
-        }
+        return PdfImagenUtils.cargarImagenClasspath(resourcePath);
     }
 
     private static String safe(String s, String fallback) {
@@ -2160,19 +2123,6 @@ public class PresupuestoComercialPdfGenerator {
         BigDecimal r = v.setScale(1, RoundingMode.HALF_UP).stripTrailingZeros();
         if (r.scale() < 0) r = r.setScale(0, RoundingMode.UNNECESSARY);
         return r.toPlainString().replace('.', ',');
-    }
-
-    private static String sanitizar(String s) {
-        if (s == null) return "sin-nombre";
-        String r = s.trim();
-        if (r.isEmpty()) return "sin-nombre";
-        r = java.text.Normalizer.normalize(r, java.text.Normalizer.Form.NFD)
-                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
-        r = r.replaceAll("[^A-Za-z0-9_-]+", "-");
-        r = r.replaceAll("-+", "-").replaceAll("^-|-$", "");
-        if (r.isEmpty()) return "sin-nombre";
-        if (r.length() > 40) r = r.substring(0, 40);
-        return r;
     }
 
     // =====================================================

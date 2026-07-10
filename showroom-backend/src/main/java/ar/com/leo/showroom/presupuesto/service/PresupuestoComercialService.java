@@ -829,7 +829,12 @@ public class PresupuestoComercialService {
                     "El presupuesto " + presupuestoId + " no tiene un pedido generado — no hay nada que regenerar.");
         }
         // Alta del nuevo pedido (reusa la lógica de creación + envío a DUX).
-        CrearPedidoResponseDTO res = pedidoService.crearPedido(request, clientId, username);
+        // tratarComoRegeneracion=true: forzamos omitir la asociación de sesión de
+        // atención y el PDF de follow-up sin depender de que el request traiga
+        // origenPresupuesto. Sin esto, regenerar cerraría la atención ACTIVA del
+        // operador (conversión fantasma) si el frontend olvidara el flag — misma
+        // garantía que EdicionPedidoService.
+        CrearPedidoResponseDTO res = pedidoService.crearPedido(request, clientId, username, true);
         // Solo si DUX aceptó el nuevo pedido tocamos el anterior y el vínculo.
         if (res.estado() == EstadoPedido.ENVIADO && res.pedidoLocalId() != null) {
             Long nuevoId = res.pedidoLocalId();
