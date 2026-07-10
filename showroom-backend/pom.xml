@@ -82,6 +82,22 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- Actuator: endpoints de observabilidad (health, info, metrics). El
+             backend NO está expuesto públicamente (nginx solo proxea /api/*, sin
+             dominio en Traefik), así que /actuator solo se alcanza desde la red
+             interna de Docker o `docker exec` — ese aislamiento es la frontera de
+             seguridad. En application.properties se limita el exposure a
+             health,info,metrics (el default expondría solo health).
+             /actuator/metrics ya expone heap/GC/threads/Hikari on-demand vía el
+             registry interno de Micrometer — no hace falta un registry externo.
+             Si en el futuro se monta Prometheus/Grafana, agregar
+             io.micrometer:micrometer-registry-prometheus para el endpoint
+             scrapeable /actuator/prometheus. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
         <!-- Spring Session JDBC: persiste las sesiones HTTP en MySQL en vez
              de la memoria del Tomcat. Sin esto, cada restart del backend
              desloguea a todos los operadores aunque el timeout configurado

@@ -82,6 +82,14 @@ public class SecurityConfig {
                         // Todo se valida por token dentro del controller.
                         .requestMatchers("/api/showroom/visor/t/**").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Actuator (health/info/metrics/prometheus): accesible sin
+                        // login PERO solo desde la red interna de Docker — el
+                        // backend no tiene dominio en Traefik y nginx no proxea
+                        // /actuator (solo /api/*), así que desde afuera es
+                        // inalcanzable. Ese aislamiento de red es la frontera de
+                        // seguridad; sin este matcher caería en el denyAll de abajo.
+                        // El exposure está limitado a 4 endpoints en application.properties.
+                        .requestMatchers("/actuator/**").permitAll()
                         // Resto del API: requiere login. (scan, formas-pago,
                         // escalas, rubros e imágenes globales ya NO son públicos.)
                         .requestMatchers("/api/**").authenticated()
