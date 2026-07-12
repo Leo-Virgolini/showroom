@@ -2,6 +2,18 @@
   display: block;
 }
 
+// En celulares la toolbar de acciones (Vaciar / Generar PDF / Enviar) se apila
+// en varias filas comiendo vertical. La colapsamos a solo-ícono; cada botón
+// conserva ariaLabel/pTooltip.
+@media (max-width: 640px) {
+  :host ::ng-deep .kt-acciones-bar .p-button .p-button-label {
+    display: none;
+  }
+  :host ::ng-deep .kt-acciones-bar .p-button .p-button-icon {
+    margin: 0;
+  }
+}
+
 $kt-naranja: #FF861C;
 $kt-verde:   #7EBA00;
 $kt-marron:  #3B1E09;

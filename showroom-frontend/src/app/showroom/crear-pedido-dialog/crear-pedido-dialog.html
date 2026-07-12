@@ -58,7 +58,7 @@
           <ul class="flex flex-col gap-1 mt-1 list-none p-0 m-0">
             @for (c of cambiosPrecio(); track c.sku) {
               <li class="flex items-center justify-between gap-2 tabular-nums">
-                <span class="truncate text-surface-700 dark:text-surface-200">
+                <span class="truncate min-w-0 text-surface-700 dark:text-surface-200">
                   <span class="font-mono text-[10px] text-muted-color mr-1">{{ c.sku }}</span>
                   {{ c.descripcion }}
                 </span>
@@ -216,7 +216,7 @@
           <ng-template let-f #selectedItem>
             @if (f) {
               <div class="flex items-center justify-between gap-2 w-full">
-                <span class="flex items-center gap-2 truncate">
+                <span class="flex items-center gap-2 min-w-0 truncate">
                   <i [class]="iconoForma(f)" class="text-[#FF861C] shrink-0"></i>
                   <span class="truncate">{{ f.nombre }}</span>
                 </span>

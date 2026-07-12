@@ -109,7 +109,7 @@
             <i class="text-lg shrink-0"
                [ngClass]="iconoForma(f.nombre) + (f.esMejorPrecio ? ' text-emerald-600 dark:text-emerald-400' : ' text-[#FF861C]')"></i>
             <div class="min-w-0">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 min-w-0">
                 <span class="font-medium text-surface-800 dark:text-surface-100 truncate">{{ f.nombre }}</span>
                 @if (f.esMejorPrecio) {
                 <span class="shrink-0 text-[0.6rem] uppercase tracking-wide font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">Mejor precio</span>

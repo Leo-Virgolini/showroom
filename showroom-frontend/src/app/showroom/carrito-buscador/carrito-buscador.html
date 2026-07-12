@@ -268,7 +268,7 @@
             Precio
           </div>
           @if (p.pvpKtGastroConIva != null && p.pvpKtGastroConIva > 0) {
-            <div class="text-2xl font-bold tabular-nums text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
+            <div class="text-xl sm:text-2xl font-bold tabular-nums break-all text-[var(--kt-texto,#3B1E09)] dark:text-surface-0">
               {{ precioMostrado(p) | currency:'ARS':'symbol':'1.0-0' }}
             </div>
           } @else {
