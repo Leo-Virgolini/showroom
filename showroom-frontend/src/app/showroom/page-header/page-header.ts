@@ -48,7 +48,7 @@ import { TopActions } from '../top-actions/top-actions';
         </div>
       </ng-template>
       <ng-template #end>
-        <div class="inline-flex items-center gap-2">
+        <div class="inline-flex flex-wrap items-center justify-end gap-2">
           <ng-content select="[header-end]" />
           <app-top-actions />
         </div>

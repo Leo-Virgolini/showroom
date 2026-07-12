@@ -214,7 +214,8 @@
           Sin productos con scans suficientes en este rango.
         </div>
       } @else {
-        <p-table [value]="topConversion()" class="p-datatable-sm">
+        <div class="overflow-x-auto">
+        <p-table [value]="topConversion()" class="p-datatable-sm" [tableStyle]="{ 'min-width': '48rem' }">
           <ng-template #header>
             <tr>
               <th style="width: 8rem">SKU</th>
@@ -261,6 +262,7 @@
             </tr>
           </ng-template>
         </p-table>
+        </div>
       }
     </p-card>
 
@@ -269,12 +271,13 @@
 
       <p-tabpanel value="sesiones">
     <p-card>
+      <div class="overflow-x-auto">
       <p-table [value]="sesiones()" [lazy]="true" [paginator]="true" [totalRecords]="total()" [rows]="pageSize()"
         [first]="first()" [rowsPerPageOptions]="[25, 50, 100]" [loading]="cargando()" [rowTrackBy]="trackById"
         [sortField]="sortField()" [sortOrder]="sortOrder() === 'asc' ? 1 : -1"
         (onLazyLoad)="onLazyLoad($event)"
         currentPageReportTemplate="Mostrando {first} - {last} de {totalRecords}" [showCurrentPageReport]="true"
-        class="p-datatable-sm">
+        class="p-datatable-sm" [tableStyle]="{ 'min-width': '64rem' }">
         <ng-template #header>
           <tr>
             <th style="width: 3rem"></th>
@@ -387,7 +390,8 @@
                 No se escaneó ningún producto en esta sesión.
               </div>
               } @else {
-              <p-table [value]="det.items" class="p-datatable-sm">
+              <div class="overflow-x-auto">
+              <p-table [value]="det.items" class="p-datatable-sm" [tableStyle]="{ 'min-width': '46rem' }">
                 <ng-template #header>
                   <tr>
                     <th style="width: 4rem"></th>
@@ -446,6 +450,7 @@
                   </tr>
                 </ng-template>
               </p-table>
+              </div>
               }
               }
             </td>
@@ -466,6 +471,7 @@
           </tr>
         </ng-template>
       </p-table>
+      </div>
     </p-card>
       </p-tabpanel>
 

@@ -313,12 +313,35 @@ $kt-amarillo: #a2ab00;
   }
 }
 
+// En celulares la toolbar de acciones acumula ~5 botones con label ("Generar
+// PDF", "Enviar", "Crear pedido", "Nuevo cliente", "QR") que se apilan en 3-4
+// filas comiendo alto antes del contenido. Los colapsamos a solo-ícono en
+// mobile — cada botón conserva su `ariaLabel`/`pTooltip`, así que siguen
+// siendo accesibles.
+@media (max-width: 640px) {
+  :host ::ng-deep .kt-acciones-bar .p-button .p-button-label {
+    display: none;
+  }
+  :host ::ng-deep .kt-acciones-bar .p-button .p-button-icon {
+    margin: 0;
+  }
+}
+
 // =====================================================
 // Selector de forma de pago en la toolbar del presupuestador
 // Ancho estable para evitar jitter al cambiar entre opciones
 // =====================================================
 :host ::ng-deep .kt-forma-pago-pdf {
   min-width: 11rem !important;
+}
+
+// En mobile el ancho fijo de 11rem del select fuerza wraps antiestéticos junto
+// al label y al selectButton; que ocupe la fila completa.
+@media (max-width: 640px) {
+  :host ::ng-deep .kt-forma-pago-pdf {
+    min-width: 0 !important;
+    width: 100%;
+  }
 }
 
 // =====================================================
@@ -474,6 +497,11 @@ $kt-amarillo: #a2ab00;
   @media (max-width: 640px) {
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
+    // Apilar: totales arriba (ancho completo) y los chips de formas abajo
+    // usando TODO el ancho, en vez de quedar comprimidos en una columna
+    // angosta a la derecha (que es lo que pasaba con `flex:1` + space-between).
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -547,6 +575,37 @@ $kt-amarillo: #a2ab00;
 
   .kt-forma-chip-nombre {
     white-space: nowrap;
+  }
+}
+
+// En celulares los ~8 chips de formas de pago, si envuelven, arman un footer
+// altísimo (3-4 filas). En su lugar los ponemos en UNA sola fila deslizable
+// horizontalmente: el footer ocupa mínimo y no se pierde la comparación de
+// precios (se desliza con el dedo). El chevron sigue abriendo el grid completo.
+@media (max-width: 640px) {
+  .kt-footer-formas {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+
+  .kt-footer-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+    justify-content: flex-start;
+  }
+
+  :host ::ng-deep .kt-forma-chip {
+    flex: 0 0 auto;
+    max-width: 70vw;
+  }
+
+  :host ::ng-deep .kt-forma-chip .kt-forma-chip-nombre {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 }
 
@@ -703,6 +762,12 @@ $kt-amarillo: #a2ab00;
     background: rgba($kt-naranja, 0.08);
     border-color: $kt-naranja;
     transform: translateY(-1px);
+  }
+}
+
+@media (max-width: 640px) {
+  .kt-cliente-chip {
+    max-width: 100%;
   }
 }
 

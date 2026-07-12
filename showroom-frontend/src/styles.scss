@@ -112,6 +112,25 @@ textarea,
   }
 }
 
+// En celulares compactamos el padding vertical de los form-fields de PrimeNG
+// (inputs, selects, datepickers, inputnumber). Mantenemos el font-size 16px del
+// bloque de arriba —crítico para el anti-zoom de iOS— pero recortamos el alto
+// para que los filtros/formularios no coman tanto vertical y le dejen más
+// espacio a las tablas. El tap target sigue rondando los 40px.
+@media (max-width: 640px) {
+  :root {
+    --p-form-field-padding-y: 0.4rem;
+  }
+}
+
+// Toasts: el ancho default de PrimeNG (--p-toast-width: 25rem ≈ 400px) desborda
+// en celulares de 360px, cortando el mensaje contra el borde de la pantalla.
+// Lo acotamos al viewport dejando un margen de 2rem. En desktop el min() se
+// resuelve a 25rem, así que no cambia nada ahí.
+:root {
+  --p-toast-width: min(25rem, calc(100vw - 2rem));
+}
+
 // =====================================================================
 // Botones con la paleta KT GASTRO. PrimeNG 21 expone los colores via CSS
 // variables a nivel componente, así que aplicar la clase al <p-button> y
@@ -444,6 +463,20 @@ textarea,
   &.p-menubar {
     position: relative;
     z-index: 1000;
+  }
+
+  // Mobile (hamburguesa): PrimeNG posiciona el root-list como
+  // `position:absolute; width:100%` relativo al `.p-menubar`, que acá mide solo
+  // el ancho del botón hamburguesa (start y root-list horizontal están ocultos).
+  // Resultado: el panel queda tan angosto que el `overflow:hidden` del
+  // item-link recorta los labels y se ven SOLO los íconos. Le damos ancho propio
+  // y lo anclamos a la derecha, que es donde vive el menú en el toolbar.
+  &.p-menubar-mobile .p-menubar-root-list {
+    width: max-content;
+    min-width: 13rem;
+    max-width: min(85vw, 20rem);
+    left: auto;
+    right: 0;
   }
 
   .p-menubar-submenu {

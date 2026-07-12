@@ -255,6 +255,9 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
   @media (max-width: 640px) {
     padding: 0.5rem 0.75rem;
     gap: 0.5rem;
+    // Apilar en mobile: totales arriba y chips de formas abajo a ancho completo.
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -326,6 +329,39 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
 
   .kt-forma-chip-nombre {
     white-space: nowrap;
+  }
+}
+
+// En mobile el chip de forma de pago (nombre + precio, sin wrap interno) puede
+// superar el ancho del viewport y provocar scroll horizontal de la barra fija.
+// Lo dejamos ocupar la fila completa y truncar el nombre; el botón "Guardar
+// cambios" pasa a ancho completo para ser un target táctil claro.
+@media (max-width: 640px) {
+  // Chips en UNA sola fila deslizable (no envolver a 3-4 filas → footer alto).
+  .kt-footer-formas {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+  }
+  .kt-footer-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.15rem;
+    justify-content: flex-start;
+  }
+  :host ::ng-deep .kt-forma-chip {
+    flex: 0 0 auto;
+    max-width: 70vw;
+  }
+  :host ::ng-deep .kt-forma-chip .kt-forma-chip-nombre {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  :host ::ng-deep .kt-footer-formas .btn-kt-azul,
+  :host ::ng-deep .kt-footer-formas .btn-kt-azul .p-button {
+    width: 100%;
   }
 }
 

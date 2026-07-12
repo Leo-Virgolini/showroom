@@ -72,7 +72,7 @@
                botón explícito "Agregar" del final de la fila. Después de
                agregar, la lista queda abierta para que pueda sumar varios
                productos seguidos sin volver a buscar. -->
-          <div class="w-full flex items-center gap-3 px-3 py-2 transition-colors"
+          <div class="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 transition-colors"
                [class.bg-amber-50]="esRubroMaquinaria(r.rubro)"
                [class.dark:bg-amber-950/20]="esRubroMaquinaria(r.rubro)"
                [class.border-l-4]="esRubroMaquinaria(r.rubro)"
@@ -144,8 +144,10 @@
               </div>
             </div>
             </div>
-            <!-- Layout: 3 columnas (Ver, Cantidad, Agregar). -->
-            <div class="shrink-0 flex items-center gap-2">
+            <!-- Layout: 3 columnas (Ver, Cantidad, Agregar). En mobile bajan a
+                 una segunda línea a ancho completo para no competir con la
+                 info del producto (sino se superponen). -->
+            <div class="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
               <div class="flex flex-col items-center gap-0.5">
                 <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
                 <p-button icon="pi pi-eye"

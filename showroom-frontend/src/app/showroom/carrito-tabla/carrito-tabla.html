@@ -7,7 +7,12 @@
     <p class="m-0 text-sm">Buscá un producto para agregarlo al detalle.</p>
   </div>
 } @else {
-  <p-table [value]="itemsOrdenados()" dataKey="uid" stripedRows class="kt-table">
+  <!-- Wrapper con scroll horizontal: las columnas fijas suman ~40rem, más ancho
+       que un celular vertical. Sin esto la tabla desborda el card o se aplasta.
+       El min-width en la tabla evita que PrimeNG la comprima por debajo de lo
+       legible; el contenedor scrollea en mobile y no hace nada en desktop. -->
+  <div class="overflow-x-auto -mx-2 px-2">
+  <p-table [value]="itemsOrdenados()" dataKey="uid" stripedRows class="kt-table" [tableStyle]="{ 'min-width': '44rem' }">
     <ng-template #header>
       <tr>
         <th style="width: 4rem"></th>
@@ -178,4 +183,5 @@
       </tr>
     </ng-template>
   </p-table>
+  </div>
 }

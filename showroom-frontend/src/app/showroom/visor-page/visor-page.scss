@@ -1,6 +1,14 @@
 // El sizing y la separación interna de los .tag-grande viven en styles.scss
 // global (la clase del host del p-tag aplica al mismo elemento que .p-tag, así
 // que no es una regla del componente).
+//
+// El global usa `transform-origin: right center` (pensado para la columna
+// derecha del showroom, alineada a la derecha). En el visor los tags están
+// centrados (`justify-center`), así que ahí queremos que el scale crezca desde
+// el centro y no descoloque cada tag de su hueco.
+:host .tag-grande {
+  transform-origin: center center;
+}
 
 // Overlay de "código no encontrado" — entrada animada con slide-down + fade.
 // Tailwind no tiene una utility para esto fuera de la caja; lo definimos acá

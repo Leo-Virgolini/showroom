@@ -7,6 +7,20 @@
   display: none;
 }
 
+// Alto del scroll de la tabla "seleccionadas". En desktop el panel va al
+// costado (calc que descuenta el resto de la UI). En mobile ese panel queda
+// apilado abajo full-width y el calc dejaba la tabla con ~30-90px (inusable):
+// ahí usamos un alto fijo cómodo. La var la consume `scrollHeight` en el HTML.
+:host {
+  --etiquetas-scroll-h: calc(100vh - 38rem);
+}
+
+@media (max-width: 1023px) {
+  :host {
+    --etiquetas-scroll-h: 55vh;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

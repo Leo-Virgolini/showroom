@@ -100,7 +100,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
           <p>No hay etiquetas seleccionadas todavía.</p>
         </div>
         } @else {
-        <p-table [value]="seleccionadas()" [rowTrackBy]="trackByUid" class="p-datatable-sm" [scrollable]="true" scrollHeight="calc(100vh - 38rem)">
+        <p-table [value]="seleccionadas()" [rowTrackBy]="trackByUid" class="p-datatable-sm" [scrollable]="true" scrollHeight="var(--etiquetas-scroll-h, calc(100vh - 38rem))">
           <ng-template #header>
             <tr>
               <th>Item</th>
@@ -174,7 +174,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
             <p-select [options]="opcionesHoja" [ngModel]="formatoHoja()" (ngModelChange)="formatoHoja.set($event)" optionLabel="label" optionValue="value" appendTo="body" size="small" class="w-full" />
           </label>
 
-          <div class="grid grid-cols-2 gap-2 mb-2">
+          <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 mb-2">
             <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
               <span class="flex items-center gap-1.5"><i class="pi pi-arrows-h text-[0.7rem]"></i>Ancho etiqueta (mm)</span>
               <p-inputNumber [ngModel]="anchoMm()" (ngModelChange)="anchoMm.set($event)" [min]="10" [max]="200" [showButtons]="true"
@@ -190,7 +190,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
           @if (esTermica()) {
           <div class="mb-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
             <div class="text-[0.65rem] font-semibold text-muted-color uppercase tracking-wider mb-2">Geometría del rollo</div>
-            <div class="grid grid-cols-2 gap-2 mb-2">
+            <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 mb-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
                 <span class="flex items-center gap-1.5"><i class="pi pi-th-large text-[0.7rem]"></i>Etiquetas por fila</span>
                 <p-inputNumber [ngModel]="etiquetasPorFila()" (ngModelChange)="etiquetasPorFila.set($event)" [min]="1" [max]="10" [showButtons]="true"
@@ -202,7 +202,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
             </div>
-            <div class="grid grid-cols-2 gap-2 mb-2">
+            <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 mb-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
                 <span class="flex items-center gap-1.5"><i class="pi pi-arrow-up text-[0.7rem]"></i>Margen sup. (mm)</span>
                 <p-inputNumber [ngModel]="margenSuperiorMm()" (ngModelChange)="margenSuperiorMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
@@ -214,7 +214,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
                   size="small" class="w-full" inputStyleClass="w-full min-w-0" />
               </label>
             </div>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
                 <span class="flex items-center gap-1.5"><i class="pi pi-arrow-left text-[0.7rem]"></i>Margen izq. (mm)</span>
                 <p-inputNumber [ngModel]="margenIzqMm()" (ngModelChange)="margenIzqMm.set($event)" [min]="0" [max]="50" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"
@@ -230,7 +230,7 @@ SKU003" class="w-full font-mono text-sm"></textarea>
 
           <div class="mb-2 p-2 rounded-lg bg-surface-50 dark:bg-surface-900 border border-surface-200 dark:border-surface-700">
             <div class="text-[0.65rem] font-semibold text-muted-color uppercase tracking-wider mb-2">Tamaños del contenido</div>
-            <div class="grid grid-cols-2 gap-2 mb-2">
+            <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2 mb-2">
               <label class="flex flex-col gap-1 text-xs text-muted-color min-w-0">
                 <span class="flex items-center gap-1.5"><i class="pi pi-qrcode text-[0.7rem]"></i>QR (mm)</span>
                 <p-inputNumber [ngModel]="qrSizeMm()" (ngModelChange)="qrSizeMm.set($event)" [min]="2" [max]="200" [showButtons]="true" [step]="0.5" [minFractionDigits]="0" [maxFractionDigits]="2"

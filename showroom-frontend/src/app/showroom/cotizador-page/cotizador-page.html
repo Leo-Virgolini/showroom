@@ -32,11 +32,11 @@
                 }
               </div>
               <!-- Acciones movidas desde el header para no dejarlo en 2 filas. -->
-              <div class="flex items-center gap-1.5 flex-wrap">
+              <div class="kt-acciones-bar flex items-center gap-1.5 flex-wrap">
                 <p-button icon="pi pi-trash" label="Vaciar" ariaLabel="Vaciar"
                   class="btn-kt-rojo" (onClick)="vaciar()" [disabled]="!hayMonto()"
                   pTooltip="Vaciar el formulario" tooltipPosition="bottom" />
-                <p-button icon="pi pi-file-pdf" label="Generar PDF"
+                <p-button icon="pi pi-file-pdf" label="Generar PDF" ariaLabel="Generar PDF"
                   class="btn-kt-azul" [disabled]="!hayMonto() || generandoPreview()"
                   [loading]="generandoPreview()" (onClick)="previsualizar()"
                   pTooltip="Genera el PDF y lo abre en una pestaña nueva"
@@ -275,7 +275,7 @@
                   <i class="pi pi-wallet text-[#FF861C] text-[10px]"></i>
                   El cliente paga
                 </label>
-                <div class="flex items-stretch gap-1.5">
+                <div class="flex flex-col sm:flex-row sm:items-stretch gap-1.5">
                   <p-inputNumber
                     [ngModel]="pagoParcialMonto()"
                     (ngModelChange)="pagoParcialMonto.set($event ?? 0)"
@@ -284,7 +284,7 @@
                     [min]="0"
                     placeholder="$ 0"
                     [inputStyleClass]="'!font-bold !text-center !bg-white' + (pagoParcialExcedido() ? ' !border-red-500 !text-red-700' : '')"
-                    class="flex-1 min-w-0" />
+                    class="w-full sm:flex-1 min-w-0" />
                   <p-select
                     [options]="formasPagoOpcionesParcial()"
                     optionLabel="label" optionValue="value"
@@ -293,7 +293,7 @@
                     placeholder="Elegí forma…"
                     [showClear]="true"
                     appendTo="body"
-                    class="flex-1 min-w-0" />
+                    class="w-full sm:flex-1 min-w-0" />
                 </div>
               </div>
 

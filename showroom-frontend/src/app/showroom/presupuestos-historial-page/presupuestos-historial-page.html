@@ -1,4 +1,4 @@
-<div class="flex flex-col h-screen overflow-hidden bg-amber-50/40 dark:bg-surface-950">
+<div class="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden bg-amber-50/40 dark:bg-surface-950">
   <app-page-header title="Historial de presupuestos" subtitle="Buscar y reenviar presupuestos generados"
     titleIcon="pi pi-history" toolbarClass="!bg-amber-100/80 dark:!bg-surface-900" />
 
@@ -23,11 +23,11 @@
           class="w-full md:w-44" />
         @if (hayFiltros()) {
           <p-button icon="pi pi-filter-slash" label="Limpiar filtros" severity="secondary"
-            [outlined]="true" (onClick)="limpiarFiltros()" />
+            [outlined]="true" (onClick)="limpiarFiltros()" class="w-full md:w-auto" />
         }
         <!-- "Nuevo presupuesto" movido desde el header para no dejarlo en 2 filas. -->
         <p-button icon="pi pi-file-edit" label="Nuevo presupuesto"
-          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal" routerLink="/presupuestos"
+          ariaLabel="Armar nuevo presupuesto" class="btn-kt-teal w-full md:w-auto" routerLink="/presupuestos"
           pTooltip="Armar un nuevo presupuesto" tooltipPosition="bottom" />
       </div>
 
@@ -60,6 +60,7 @@
         [rowsPerPageOptions]="[25, 50, 100]"
         currentPageReportTemplate="{first} - {last} de {totalRecords}"
         [showCurrentPageReport]="true"
+        [tableStyle]="{ 'min-width': '95rem' }"
         stripedRows>
         <ng-template #header>
           <tr>
@@ -340,7 +341,8 @@
                     <h4 class="text-xs font-semibold uppercase text-muted-color m-0 mb-2">
                       Productos ({{ det.items.length }})
                     </h4>
-                    <p-table [value]="det.items" class="p-datatable-sm">
+                    <div class="overflow-x-auto">
+                    <p-table [value]="det.items" class="p-datatable-sm" [tableStyle]="{ 'min-width': '46rem' }">
                       <ng-template #header>
                         <tr>
                           <th style="width: 4rem"></th>
@@ -398,6 +400,7 @@
                         </tr>
                       </ng-template>
                     </p-table>
+                    </div>
                   </div>
 
                   @if (det.cotizacionIndividual) {

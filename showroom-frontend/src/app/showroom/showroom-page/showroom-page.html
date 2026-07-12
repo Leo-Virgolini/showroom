@@ -82,18 +82,36 @@
   </app-page-header>
 
   <main class="flex-1 min-h-0 flex">
-    <!-- Splitter redimensionable entre scan + carrito. El usuario ajusta el
-         tamaño y lo persistimos en localStorage (stateKey). En mobile cae a
-         layout vertical → cada panel apilado, con divider horizontal. -->
+    <!-- En desktop (≥1024px) los dos paneles conviven en un splitter
+         redimensionable, cada uno con su propio scroll interno (la página no
+         scrollea, height:100vh fijo). En mobile el splitter anidaría dos
+         scrolls dentro de una altura repartida 55/45 → inusable; ahí apilamos
+         scan + carrito en flujo natural y dejamos que scrollee la página. -->
+    @if (screenLg()) {
     <p-splitter
       class="flex-1 min-h-0 w-full !border-0 !bg-transparent showroom-splitter"
       [panelSizes]="[55, 45]"
       [minSizes]="[30, 30]"
       stateKey="showroom-main-splitter-v2"
       stateStorage="local"
-      [layout]="screenLg() ? 'horizontal' : 'vertical'">
+      layout="horizontal">
       <ng-template #panel>
-    <section class="flex flex-col min-h-0 h-full p-3 sm:p-4 lg:p-6">
+        <ng-container *ngTemplateOutlet="scanPanel" />
+      </ng-template>
+      <ng-template #panel>
+        <ng-container *ngTemplateOutlet="carritoPanel" />
+      </ng-template>
+    </p-splitter>
+    } @else {
+    <div class="flex-1 flex flex-col w-full min-w-0">
+      <ng-container *ngTemplateOutlet="scanPanel" />
+      <ng-container *ngTemplateOutlet="carritoPanel" />
+    </div>
+    }
+  </main>
+
+  <ng-template #scanPanel>
+    <section class="flex flex-col min-h-0 lg:h-full p-3 sm:p-4 lg:p-6">
       <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex items-center justify-between gap-2 flex-wrap">
@@ -196,7 +214,7 @@
             <div class="flex items-start gap-4 flex-1 min-w-0">
               @if (r.imagenUrl) {
               <p-image [src]="r.imagenUrl" [alt]="r.descripcion ?? r.sku" [preview]="true"
-                imageClass="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48 object-contain rounded-md border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
+                imageClass="w-24 h-24 sm:w-40 sm:h-40 lg:w-48 lg:h-48 object-contain rounded-md border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 cursor-zoom-in"
                 class="shrink-0"
                 (onImageError)="onImagenError($event)" />
               }
@@ -212,7 +230,7 @@
             <!-- gap-y grande porque los `.tag-grande` usan `transform: scale(1.3)`:
                  visualmente son ~30% más altos pero el footprint de layout sigue
                  siendo el original, así que un gap chico los deja pegados. -->
-            <div class="flex flex-col gap-4 items-end">
+            <div class="flex flex-col gap-4 items-end basis-full sm:basis-auto">
               <p-button icon="pi pi-sync" severity="secondary" [text]="true" [rounded]="true" size="small"
                 [loading]="refrescandoScan()"
                 (onClick)="refrescarScan()"
@@ -262,16 +280,16 @@
             @if (formaScanEfectiva(); as forma) {
               <!-- Precio destacado con la forma efectiva -->
               <div class="flex items-center gap-4">
-                <div class="shrink-0 w-14 h-14 rounded-2xl bg-[#FF861C]/10 dark:bg-[#FF861C]/15 flex items-center justify-center">
+                <div class="shrink-0 w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-[#FF861C]/10 dark:bg-[#FF861C]/15 flex items-center justify-center">
                   <i [class]="iconoForma(forma)" class="text-2xl text-[#FF861C]"></i>
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">{{ forma.nombre }}</span>
                   </div>
-                  <div class="flex items-baseline gap-1.5">
-                    <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none">$</span>
-                    <span class="text-4xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPorForma(r, forma) | number:'1.0-0' }}</span>
+                  <div class="flex items-baseline gap-1.5 max-w-full min-w-0">
+                    <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none shrink-0">$</span>
+                    <span class="text-3xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none break-all">{{ precioReferenciaPorForma(r, forma) | number:'1.0-0' }}</span>
                   </div>
                   @if (forma.cantidadCuotas && forma.cantidadCuotas > 1) {
                     <div class="text-sm font-semibold text-[#3B1E09]/70 dark:text-muted-color mt-1">
@@ -283,16 +301,16 @@
             } @else {
               <!-- Sin formas marcadas: precio de lista según rubro -->
               <div class="flex items-center gap-4">
-                <div class="shrink-0 w-14 h-14 rounded-2xl bg-[#FF861C]/10 flex items-center justify-center">
+                <div class="shrink-0 w-11 h-11 sm:w-14 sm:h-14 rounded-2xl bg-[#FF861C]/10 flex items-center justify-center">
                   <i class="pi pi-tag text-2xl text-[#FF861C]"></i>
                 </div>
-                <div>
+                <div class="min-w-0">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-xs font-semibold uppercase tracking-wider text-[#3B1E09]/70 dark:text-muted-color">Precio</span>
                   </div>
-                  <div class="flex items-baseline gap-1.5">
-                    <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none">$</span>
-                    <span class="text-4xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none">{{ precioReferenciaPrimario(r) | number:'1.0-0' }}</span>
+                  <div class="flex items-baseline gap-1.5 max-w-full min-w-0">
+                    <span class="text-2xl sm:text-3xl font-bold text-[#FF861C] leading-none shrink-0">$</span>
+                    <span class="text-3xl sm:text-5xl font-bold tabular-nums text-[#3B1E09] dark:text-surface-0 leading-none break-all">{{ precioReferenciaPrimario(r) | number:'1.0-0' }}</span>
                   </div>
                 </div>
               </div>
@@ -472,7 +490,7 @@
                 [class.hover:bg-[#FF861C]/5]="!esRubroMaquinaria(it.rubro)"
                 [class.dark:hover:bg-surface-800/40]="!esRubroMaquinaria(it.rubro)"
                 [class.opacity-60]="it.habilitado === false || !it.pvpKtGastroSinIva">
-              <div class="flex-1 flex items-center gap-3 text-left min-w-0">
+              <div class="basis-full sm:basis-0 grow flex items-center gap-3 text-left min-w-0">
                 @if (it.imagenUrl) {
                   <img [src]="it.imagenUrl" [alt]="it.descripcion ?? it.sku"
                     class="w-12 h-12 object-contain rounded border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-950 shrink-0"
@@ -553,7 +571,7 @@
                    elementos (input, botones) quedan a la misma altura
                    visual. Los botones laterales usan un span invisible
                    (aria-hidden) con la misma altura que la label "CANTIDAD". -->
-              <div class="shrink-0 flex items-center gap-2">
+              <div class="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end mt-1 sm:mt-0">
                 <div class="flex flex-col items-center gap-0.5">
                   <span aria-hidden="true" class="text-[9px] leading-none invisible">·</span>
                   <p-button icon="pi pi-eye"
@@ -657,10 +675,10 @@
         }
       </p-card>
     </section>
-      </ng-template>
+  </ng-template>
 
-      <ng-template #panel>
-    <aside class="flex flex-col min-h-0 h-full p-3 sm:p-4 lg:p-6">
+  <ng-template #carritoPanel>
+    <aside class="flex flex-col min-h-0 lg:h-full p-3 sm:p-4 lg:p-6">
       <p-card class="stretch-card">
         <ng-template #title>
           <div class="flex justify-between items-center w-full gap-2">
@@ -711,7 +729,7 @@
                No usamos margin negativo lateral — sino aparecería scroll aún
                cuando el li entra cómodo en el contenedor (el margen negativo
                cuenta como contenido fuera de los bordes del <ul>). -->
-          <li class="py-2 px-2 rounded-md flex items-center gap-2 min-w-[20rem]"
+          <li class="py-2 px-2 rounded-md flex flex-wrap sm:flex-nowrap items-center gap-2 sm:min-w-[20rem]"
               [class.item-excedido]="excedeStock(it)"
               [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)"
               [attr.data-sku]="it.sku"
@@ -956,7 +974,7 @@
               [binary]="true" [disabled]="refrescando()" inputId="verifStockEnvio" />
             Verificar stock
           </label>
-          <p-splitButton class="shrink-0" label="Crear Pedido en Dux" icon="pi pi-cloud-upload"
+          <p-splitButton class="shrink-0 w-full sm:w-auto" label="Crear Pedido en Dux" icon="pi pi-cloud-upload"
             size="large" [model]="accionesPedido"
             [disabled]="carrito().length === 0 || refrescando()"
             (onClick)="abrirConfirmacion()" />
@@ -964,9 +982,7 @@
         }
       </p-card>
     </aside>
-      </ng-template>
-    </p-splitter>
-  </main>
+  </ng-template>
 
 </div>
 

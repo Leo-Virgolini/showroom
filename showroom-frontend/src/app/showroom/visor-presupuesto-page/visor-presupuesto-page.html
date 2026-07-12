@@ -28,13 +28,13 @@
 
   <header class="px-4 pt-4 pb-2 flex flex-col items-center gap-2">
     <img src="kt-gastro-logo.webp" alt="Kitchen Tools Gastronomía" class="h-12 sm:h-14 object-contain" />
-    <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full">
-      <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 inline-flex items-center gap-2">
-        <i class="pi pi-file-edit text-[#FF861C] text-base"></i>
-        <span class="inline-flex items-baseline gap-2">
+    <div class="rounded-full bg-gradient-to-r from-[#FF861C] via-[#a2ab00] to-[#7EBA00] p-[2px] max-w-full min-w-0">
+      <div class="rounded-full bg-white dark:bg-surface-900 px-5 py-2 flex items-center gap-2 min-w-0">
+        <i class="pi pi-file-edit text-[#FF861C] text-base shrink-0"></i>
+        <span class="flex items-baseline gap-2 min-w-0">
           @if (clienteNombre(); as nombre) {
-            <span class="text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Presupuesto para</span>
-            <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0 truncate">{{ nombre }}</span>
+            <span class="shrink-0 text-xs uppercase tracking-[0.15em] font-semibold text-[#3B1E09]/70 dark:text-muted-color">Presupuesto para</span>
+            <span class="min-w-0 truncate font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0">{{ nombre }}</span>
           } @else {
             <span class="font-bold text-base sm:text-lg text-[#3B1E09] dark:text-surface-0">Presupuesto</span>
           }
@@ -45,7 +45,7 @@
 
   @if (hayItems()) {
   <main class="flex-1 flex flex-col gap-2 px-3 sm:px-4 pt-1 w-full max-w-2xl mx-auto"
-    [style.padding-bottom.px]="hayDescuento() ? 140 : 104">
+    [style.padding-bottom.px]="hayDescuento() ? 160 : 120">
     <!-- Lista de ítems del presupuesto -->
     <div class="flex flex-col gap-2">
       @for (it of items(); track $index) {
@@ -91,11 +91,11 @@
   <!-- Footer FIJO: el TOTAL queda siempre visible y las formas de pago se ven
        con un toque, sin tener que scrollear todos los ítems. El panel de formas
        se despliega hacia arriba (scrolleable si son muchas). -->
-  <div class="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#FF861C]/60 bg-white/95 dark:bg-surface-900/95 shadow-[0_-6px_20px_rgba(0,0,0,0.10)]">
+  <div class="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#FF861C]/60 bg-white/95 dark:bg-surface-900/95 shadow-[0_-6px_20px_rgba(0,0,0,0.10)] pb-[env(safe-area-inset-bottom)]">
     <div class="w-full max-w-2xl mx-auto">
       <!-- Panel expandido: lista completa de formas con íconos -->
       @if (formasExpandidas() && formasPago().length > 0) {
-      <div class="max-h-[55vh] overflow-y-auto flex flex-col gap-2 px-3 pt-3 pb-1">
+      <div class="max-h-[55svh] overflow-y-auto flex flex-col gap-2 px-3 pt-3 pb-1">
         @for (f of formasPago(); track $index) {
         <div class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5"
              [class.border-emerald-400]="f.esMejorPrecio"
@@ -151,9 +151,9 @@
         class="w-full flex items-center justify-between gap-3 px-4 py-3 text-left"
         (click)="formasExpandidas.set(!formasExpandidas())"
         [attr.aria-expanded]="formasExpandidas()" aria-label="Mostrar formas de pago">
-        <div class="flex flex-col items-start leading-none">
+        <div class="flex flex-col items-start leading-none min-w-0">
           <span class="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-color mb-1">Total</span>
-          <span class="font-bold text-2xl sm:text-3xl text-[#3B1E09] dark:text-surface-0">{{ total() | currency:'ARS':'symbol':'1.0-0' }}</span>
+          <span class="font-bold text-[clamp(1.25rem,7vw,1.875rem)] tabular-nums truncate max-w-full text-[#3B1E09] dark:text-surface-0">{{ total() | currency:'ARS':'symbol':'1.0-0' }}</span>
         </div>
         @if (formasPago().length > 0) {
         <span class="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-orange-50 dark:bg-orange-950/40 text-sm font-semibold text-[#FF861C]">

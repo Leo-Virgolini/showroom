@@ -1,4 +1,4 @@
-<div class="flex flex-col h-screen overflow-hidden bg-emerald-50/60 dark:bg-surface-950">
+<div class="flex flex-col min-h-screen lg:h-screen lg:overflow-hidden bg-emerald-50/60 dark:bg-surface-950">
   <app-page-header title="Productos" subtitle="Productos cacheados · solo lectura"
     titleIcon="pi pi-box" toolbarClass="!bg-emerald-100 dark:!bg-surface-900">
     @if (health()?.ultimaSincronizacionAt; as fecha) {
@@ -113,6 +113,7 @@
         class="p-datatable-sm productos-table"
         scrollHeight="flex"
         [scrollable]="true"
+        [tableStyle]="{ 'min-width': '90rem' }"
       >
         <ng-template #header>
           <tr>

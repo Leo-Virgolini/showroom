@@ -52,7 +52,7 @@
           />
           <button
             type="button"
-            class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-color hover:text-surface-700 dark:hover:text-surface-200 cursor-pointer bg-transparent border-0"
+            class="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-10 h-10 rounded-md text-muted-color hover:text-surface-700 dark:hover:text-surface-200 cursor-pointer bg-transparent border-0"
             (click)="mostrarPassword.set(!mostrarPassword())"
             [attr.aria-label]="mostrarPassword() ? 'Ocultar contraseña' : 'Mostrar contraseña'">
             <i [class]="mostrarPassword() ? 'pi pi-eye-slash' : 'pi pi-eye'"></i>
