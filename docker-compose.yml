@@ -272,6 +272,24 @@ services:
       - "80"
     networks:
       - showroom-net
+    # Healthcheck del frontend. Habilita el modo "Zero Downtime / Rolling Update"
+    # de Coolify: sin un healthcheck, Coolify hace RECREATE (baja el viejo → arranca
+    # el nuevo) y Traefik re-registra la ruta en un momento sucio → quedó apuntando
+    # a la IP vieja del contenedor → 504 en todo /api hasta reiniciar el frontend a
+    # mano (incidente de julio 2026). Con healthcheck, Coolify espera a que el
+    # contenedor nuevo esté `healthy` ANTES de mover Traefik y bajar el viejo → swap
+    # limpio, sin ventana stale.
+    # OJO — este comando está PROBADO en la imagen real (`docker exec <fe> wget -q
+    # -O /dev/null http://127.0.0.1:80/` → exit 0). NO volver a `wget --spider`, que
+    # falla en el busybox de nginx:alpine y tumbó el ruteo entero (503) en su día. Un
+    # HC del frontend que falla marca el contenedor unhealthy y Traefik deja de rutear.
+    # Se pega a `/` (SPA → index.html, 200), NO a /api → no depende del backend.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   mysql-data:
