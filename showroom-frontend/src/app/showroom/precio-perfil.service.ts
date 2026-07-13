@@ -1,7 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { FormaPago, normalizarRubro } from './models';
 import { ShowroomService } from './showroom.service';
-import { FormaPagoCalc, perfilForma, precioPorForma } from './precio-referencia.util';
+import {
+  FormaPagoCalc,
+  factorConversionUmbral,
+  perfilForma,
+  precioPorForma,
+} from './precio-referencia.util';
 
 /**
  * Fuente única de las formas de pago activas + los rubros que cotizan sin IVA,
@@ -150,5 +155,31 @@ export class PrecioPerfilService {
     if (!forma) return this.precioMostrado(it);
     const perfil = this.perfilForma(forma, this.rubroCotizaSinIva(it.rubro));
     return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
+  }
+
+  /** Forma en la que se EXPRESAN los umbrales del descuento por monto dada la
+   *  forma efectiva `sel` (la elegida en el toolbar, o la destacada del rubro):
+   *  la propia `sel` si difiere de la de referencia (menaje), o null si coincide
+   *  —en ese caso los umbrales se muestran sin convertir y el texto aclaratorio
+   *  queda como estaba. Display-only: la comparación del descuento sigue siendo
+   *  sobre la forma de referencia. Fuente única para scan y visor. */
+  umbralEnForma(sel: FormaPago | null): FormaPago | null {
+    const ref = this.formaDestacada(false);
+    if (!sel || !ref || sel.id === ref.id) return null;
+    return sel;
+  }
+
+  /** Umbral del descuento por monto (medido en la forma de referencia) expresado
+   *  en la forma efectiva `sel`. `ivaRef` = IVA real del producto cuando hay uno
+   *  en pantalla; 21 (IVA dominante de menaje) en los agregados sin IVA único.
+   *  Siempre perfil menaje: el descuento por escala no aplica a maquinaria.
+   *  Display-only: NO cambia la comparación del descuento. */
+  umbralMostrado(umbralMin: number, ivaRef: number, sel: FormaPago | null): number {
+    const ref = this.formaDestacada(false);
+    if (!sel || !ref) return umbralMin;
+    return (
+      umbralMin *
+      factorConversionUmbral(perfilForma(sel, false), perfilForma(ref, false), ivaRef)
+    );
   }
 }

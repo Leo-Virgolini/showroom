@@ -41,7 +41,6 @@ import { BackendStatusService } from '../backend-status.service';
 import { carritoItemsAPresupuestoItems } from '../carrito-a-presupuesto.util';
 import { CarritoItem, CatalogoItem, EscalaDescuento, FormaPago, ScanResult } from '../models';
 import {
-  factorConversionUmbral,
   hayEscalonSuperior,
   iconoFormaReferencia,
   ordenarEscalasPorUmbral,
@@ -750,32 +749,17 @@ export class ShowroomPage implements AfterViewInit {
   }
 
   /** Forma en la que se están EXPRESANDO los umbrales (la efectiva del scan), o
-   *  null si coincide con la de referencia (efectivo). Cuando es null, los umbrales
-   *  se muestran tal cual y el texto aclaratorio queda como estaba. Display-only. */
-  readonly umbralEnForma = computed<FormaPago | null>(() => {
-    const sel = this.formaScanEfectiva();
-    const ref = this.formaDestacada(false);
-    if (!sel || !ref || sel.id === ref.id) return null;
-    return sel;
-  });
+   *  null si coincide con la de referencia. Delega en el servicio compartido
+   *  (misma lógica que el visor). Display-only. */
+  readonly umbralEnForma = computed<FormaPago | null>(() =>
+    this.precioPerfil.umbralEnForma(this.formaScanEfectiva()),
+  );
 
-  /** Umbral (medido en efectivo/forma de referencia) expresado en la forma efectiva
-   *  del scan. `ivaRef` = IVA real del producto cuando hay uno; 21 (IVA dominante de
-   *  menaje) en el agregado. NO cambia la comparación del descuento — es sólo la
-   *  etiqueta que ve el cliente. Perfil menaje: el descuento por escala no aplica a
-   *  maquinaria. */
+  /** Umbral (medido en la forma de referencia) expresado en la forma efectiva del
+   *  scan. `ivaRef` = IVA real del producto cuando hay uno; 21 en el agregado.
+   *  Delega en el servicio compartido. Display-only. */
   umbralMostrado(umbralMin: number, ivaRef: number): number {
-    const sel = this.formaScanEfectiva();
-    const ref = this.formaDestacada(false);
-    if (!sel || !ref) return umbralMin;
-    return (
-      umbralMin *
-      factorConversionUmbral(
-        this.precioPerfil.perfilForma(sel, false),
-        this.precioPerfil.perfilForma(ref, false),
-        ivaRef,
-      )
-    );
+    return this.precioPerfil.umbralMostrado(umbralMin, ivaRef, this.formaScanEfectiva());
   }
 
   /** "Te faltan $X" expresado en la forma efectiva del scan — mismo factor que los

@@ -24,7 +24,6 @@ import {
   SesionShowroom,
 } from '../models';
 import {
-  factorConversionUmbral,
   hayEscalonSuperior,
   iconoFormaReferencia,
   ordenarEscalasPorUmbral,
@@ -484,31 +483,17 @@ export class VisorPage {
   }
 
   /** Forma en la que se están EXPRESANDO los umbrales (la efectiva del visor), o
-   *  null si coincide con la de referencia (efectivo). Cuando es null, los umbrales
-   *  se muestran tal cual y el texto aclaratorio queda como estaba. Display-only. */
-  readonly umbralEnForma = computed<FormaPago | null>(() => {
-    const sel = this.formaVisorEfectiva();
-    const ref = this.formaDestacada(false);
-    if (!sel || !ref || sel.id === ref.id) return null;
-    return sel;
-  });
+   *  null si coincide con la de referencia. Delega en el servicio compartido
+   *  (misma lógica que el scan). Display-only. */
+  readonly umbralEnForma = computed<FormaPago | null>(() =>
+    this.precioPerfil.umbralEnForma(this.formaVisorEfectiva()),
+  );
 
-  /** Umbral (medido en efectivo/forma de referencia) expresado en la forma efectiva
-   *  del visor. `ivaRef` = IVA real del producto cuando hay uno; 21 (IVA dominante de
-   *  menaje) en el agregado. Display-only: no cambia la comparación del descuento.
-   *  Perfil menaje (el descuento por escala no aplica a maquinaria). */
+  /** Umbral (medido en la forma de referencia) expresado en la forma efectiva del
+   *  visor. `ivaRef` = IVA real del producto cuando hay uno; 21 en el agregado.
+   *  Delega en el servicio compartido. Display-only. */
   umbralMostrado(umbralMin: number, ivaRef: number): number {
-    const sel = this.formaVisorEfectiva();
-    const ref = this.formaDestacada(false);
-    if (!sel || !ref) return umbralMin;
-    return (
-      umbralMin *
-      factorConversionUmbral(
-        this.precioPerfil.perfilForma(sel, false),
-        this.precioPerfil.perfilForma(ref, false),
-        ivaRef,
-      )
-    );
+    return this.precioPerfil.umbralMostrado(umbralMin, ivaRef, this.formaVisorEfectiva());
   }
 
   /** true si hay un escalón con umbral mayor (y por tanto mejor) que ya
