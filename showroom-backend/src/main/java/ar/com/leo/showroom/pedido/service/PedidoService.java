@@ -771,7 +771,8 @@ public class PedidoService {
                     // asociarla al pedido recién creado. Esto deja la sesión
                     // marcada como "completada" y permite al email service
                     // resolverla vía pedidoId al armar el PDF de follow-up.
-                    sesionShowroomService.finalizarConPedido(username, pedido.getId());
+                    sesionShowroomService.finalizarConPedido(
+                            username, pedido.getId(), request.origenAtencionSesionId());
 
                     // Mandar el PDF de follow-up al cliente — @Async que corre en
                     // un thread distinto del pool. Si falla solo se loguea: el

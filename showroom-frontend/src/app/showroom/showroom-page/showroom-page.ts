@@ -260,6 +260,13 @@ export class ShowroomPage implements AfterViewInit {
   /** Visibilidad del modal unificado de pedido (app-crear-pedido-dialog) en el
    *  showroom. Reemplaza al formulario de cliente que vivía inline acá. */
   readonly mostrarCrearPedidoShowroom = signal(false);
+  /** Snapshot del id de la sesión de atención en el momento de ABRIR el diálogo
+   *  de pedido. NO usamos un binding vivo de sesionActiva().id: si en otra
+   *  pestaña el operador arranca a otro cliente, el SSE actualizaría
+   *  sesionActiva() también acá y mandaríamos el id equivocado (el backend
+   *  cerraría la atención nueva). Congelado al abrir, el backend compara contra
+   *  su sesión activa y NO cierra una atención ajena (anti multi-tab). */
+  readonly origenSesionPedidoShowroom = signal<number | null>(null);
   /** Ítems del carrito mapeados al formato que consume el modal de pedido —
    *  mismo armado que usaba el envío directo (precio c/IVA, descuento efectivo
    *  por ítem), para no cambiar lo que se factura en DUX. */
@@ -1970,6 +1977,11 @@ export class ShowroomPage implements AfterViewInit {
    *  Se llama recién cuando el carrito ya tiene las cantidades finales (después
    *  del chequeo de stock), no antes, para que el pickit refleje lo que se pide. */
   private abrirDialogPedidoShowroom(): void {
+    // Congelamos la sesión de origen AHORA (no un binding vivo): si el operador
+    // pasa a otro cliente en otra pestaña mientras completa los datos, el
+    // backend no cerrará esa atención nueva por error.
+    this.origenSesionPedidoShowroom.set(
+      this.haySesionActiva() ? (this.sesionActiva().id ?? null) : null);
     this.mostrarCrearPedidoShowroom.set(true);
     this.api.generarPickitDesdeCarrito().subscribe({
       error: (err) => console.warn('[pickit] no se pudo encolar desde el carrito:', err),

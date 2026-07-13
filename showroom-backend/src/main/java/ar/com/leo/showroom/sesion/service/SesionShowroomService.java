@@ -242,17 +242,31 @@ public class SesionShowroomService {
      * Marca la sesión activa del operador como finalizada y la asocia al
      * pedido creado. No-op si no había sesión activa.
      *
+     * <p>Multi-tab: si se indica {@code sesionIdEsperada} (la sesión de ORIGEN
+     * desde la que se armó el pedido) y ya no coincide con la activa del
+     * operador — porque pasó a atender a otro cliente en otra pestaña — NO se
+     * cierra la activa ajena; el pedido se crea igual, solo que sin cerrar ni
+     * vincular ninguna sesión. Si {@code sesionIdEsperada} es null (cliente
+     * viejo que no lo manda), se mantiene el comportamiento previo de cerrar la
+     * activa. Mismo criterio que {@link #finalizarConPresupuesto}.
+     *
      * @return la sesión finalizada con sus items hidratados, o vacío si no
-     *         había sesión activa.
+     *         había sesión activa o si la activa ya no es la de origen.
      */
     @Transactional
-    public Optional<SesionShowroom> finalizarConPedido(String username, Long pedidoId) {
+    public Optional<SesionShowroom> finalizarConPedido(String username, Long pedidoId, Long sesionIdEsperada) {
         if (username == null || username.isBlank()) return Optional.empty();
         Optional<Usuario> op = usuarioRepository.findByUsername(username);
         if (op.isEmpty()) return Optional.empty();
         Optional<SesionShowroom> activaOpt = repository.findActivaByUsuarioId(op.get().getId());
         if (activaOpt.isEmpty()) return Optional.empty();
         SesionShowroom s = activaOpt.get();
+        if (sesionIdEsperada != null && !sesionIdEsperada.equals(s.getId())) {
+            log.info("Sesión de origen {} ya no es la activa del operador '{}' (activa={}) — "
+                            + "pedido {} creado sin cerrar ninguna sesión",
+                    sesionIdEsperada, username, s.getId(), pedidoId);
+            return Optional.empty();
+        }
         s.setFinalizadaAt(Instant.now());
         s.setPedidoId(pedidoId);
         // Tocar los items para hidratarlos antes de salir de la transacción —

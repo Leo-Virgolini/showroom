@@ -1631,6 +1631,22 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
         this.enviandoEmail.set(false);
         this.hayCambiosSinGuardar.set(false);
         this.origenAtencionSesionId.set(null);
+        // Igual que en ejecutarPrevisualizar: un presupuesto NUEVO también se
+        // persiste al enviarlo por email, así que pasamos a "modo edición" de
+        // ese presupuesto. Sin esto, un segundo envío/generación crearía un
+        // DUPLICADO y el botón "Crear pedido" (que exige esModoEdicion) quedaría
+        // deshabilitado hasta recargar la página.
+        if (editandoId == null) {
+          if (Number.isFinite(res.presupuestoId) && res.presupuestoId > 0) {
+            this.presupuestoEditandoId.set(res.presupuestoId);
+          }
+        }
+        // Si ya tenía pedido y se editó al reenviarlo, reflejamos la nueva fecha
+        // de modificación en memoria para habilitar "Regenerar pedido" sin
+        // recargar (mismo criterio que ejecutarPrevisualizar).
+        if (editandoId != null && this.pedidoIdConvertido() != null) {
+          this.modificadoAtPresupuesto.set(new Date().toISOString());
+        }
         this.toast.add({
           severity: 'info',
           summary: editandoId != null ? 'Cambios guardados — envío encolado' : 'Envío encolado',

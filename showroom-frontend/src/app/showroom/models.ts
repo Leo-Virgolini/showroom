@@ -116,6 +116,12 @@ export interface CrearPedidoRequest {
    *  del operador (el presupuestador no abre sesión). Ausente/false en el
    *  flujo normal de showroom. */
   origenPresupuesto?: boolean;
+  /** Id de la sesión de atención de ORIGEN (snapshot al abrir el diálogo de
+   *  pedido en el showroom). El backend cierra/asocia esa sesión al pedido solo
+   *  si sigue siendo la activa del operador; si cambió (otro cliente en otra
+   *  pestaña) no cierra la ajena. Solo se manda en el flujo showroom
+   *  (origenPresupuesto ausente/false); null/ausente en presupuesto/edición. */
+  origenAtencionSesionId?: number | null;
   items: {
     sku: string;
     cantidad: number;

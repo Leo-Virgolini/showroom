@@ -150,6 +150,11 @@ export class CrearPedidoDialog {
   /** Marca el origen del pedido para el backend: true (presupuesto) no consume
    *  la sesión de atención; false (showroom) sí la consume. */
   readonly origenPresupuesto = input<boolean>(true);
+  /** Id de la sesión de atención de ORIGEN — solo el flujo showroom lo pasa
+   *  (snapshot al abrir el diálogo). El backend cierra/asocia esa sesión al
+   *  pedido solo si sigue siendo la activa del operador (anti multi-tab). Null
+   *  en presupuesto/edición (esos flujos no tocan la sesión). */
+  readonly origenAtencionSesionId = input<number | null>(null);
   /** Emite cuando se creó/regeneró el pedido OK. {@code presupuestoId} es null
    *  en el flujo showroom (no hay presupuesto que vincular). */
   readonly pedidoCreado = output<{ presupuestoId: number | null; pedidoLocalId: number }>();
@@ -764,6 +769,10 @@ export class CrearPedidoDialog {
       // Origen: presupuesto (true) no consume la sesión de atención; showroom
       // (false) sí la consume. Lo decide el padre vía input.
       origenPresupuesto: this.origenPresupuesto(),
+      // Sesión de origen (solo showroom): el backend cierra/asocia esa sesión al
+      // pedido solo si sigue activa; si el operador cambió de cliente en otra
+      // pestaña, no cierra la ajena. Null en presupuesto/edición.
+      origenAtencionSesionId: this.origenAtencionSesionId() ?? undefined,
       items: this.itemsDelPresupuesto().map((it) => ({
         sku: it.sku,
         cantidad: it.cantidad,
@@ -788,18 +797,21 @@ export class CrearPedidoDialog {
     const esRegen = this.esRegeneracion();
     const pedidoEditarId = this.pedidoAnteriorId();
     this.enviandoPedido.set(true);
-    // Tres variantes:
+    // Tres variantes. El discriminador es `esRegen` (= hay pedido anterior), NO
+    // `presupuestoId != null`: un presupuesto que se convierte por PRIMERA vez
+    // también tiene presupuestoId pero todavía NO tiene pedido, así que va por
+    // el alta normal. Confundir ambos hacía que la primera conversión llamara a
+    // regenerarPedido → el backend tira "no tiene un pedido generado".
     //  - Regen desde presupuesto: el backend crea el nuevo pedido, anula el
     //    viejo y re-vincula el presupuesto en una sola operación.
     //  - Editar pedido (sin presupuesto): mismo mecanismo de regeneración pero
     //    contra el pedido directamente, sin presupuesto que re-vincular.
     //  - Alta normal: crea y luego marcamos (si viene de un presupuesto).
-    const envio$ =
-      presupuestoId != null
-        ? this.api.regenerarPedido(presupuestoId, req)
-        : pedidoEditarId != null
-          ? this.api.regenerarPedidoDesdePedido(pedidoEditarId, req)
-          : this.api.crearPedido(req);
+    const envio$ = esRegen
+      ? (presupuestoId != null
+          ? this.api.regenerarPedido(presupuestoId, req)
+          : this.api.regenerarPedidoDesdePedido(pedidoEditarId!, req))
+      : this.api.crearPedido(req);
     envio$.subscribe({
       next: (res) => {
         this.enviandoPedido.set(false);

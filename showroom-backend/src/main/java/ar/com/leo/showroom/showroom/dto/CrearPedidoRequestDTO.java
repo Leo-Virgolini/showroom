@@ -85,6 +85,18 @@ public record CrearPedidoRequestDTO(
          *  normaliza a {@code false} → "ausente en el payload ⇒ false". */
         Boolean origenPresupuesto,
 
+        /** Id de la sesión de atención de ORIGEN: la que estaba activa cuando el
+         *  operador abrió el diálogo de pedido en el showroom. El backend cierra
+         *  y asocia esa sesión al pedido SOLO si sigue siendo la activa del
+         *  operador; si cambió (el operador pasó a atender a otro cliente en otra
+         *  pestaña) NO cierra la ajena — evita el bug multi-tab de cerrar/vincular
+         *  mal una atención en curso. Es {@code Long} (no primitivo) por Jackson 3
+         *  (igual que {@link #origenPresupuesto}). Null en el flujo
+         *  presupuesto/edición (origenPresupuesto=true no toca la sesión) y, por
+         *  compatibilidad, si un cliente viejo no lo manda (se cae al
+         *  comportamiento previo de cerrar la activa). */
+        Long origenAtencionSesionId,
+
         @NotEmpty(message = "items no puede estar vacío")
         @Valid List<Item> items
 ) {
