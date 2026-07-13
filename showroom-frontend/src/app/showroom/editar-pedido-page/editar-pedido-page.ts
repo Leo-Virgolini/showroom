@@ -484,9 +484,21 @@ export class EditarPedidoPage implements HasUnsavedChanges {
                 rubro: f.rubro ?? it.rubro,
               };
             }
-            // Precio congelado: solo avisamos si el catálogo cambió.
-            const guardado = redondearMoneda(it.pvpKtGastroConIva ?? 0);
-            const actual = redondearMoneda(f.pvpKtGastroConIva);
+            // Precio congelado: avisamos solo si cambia el PRECIO DE REFERENCIA
+            // que ve el cliente (`precioMostrado` resuelve el perfil por rubro:
+            // menaje c/IVA, maquinaria s/IVA). Así un cruce de rubro menaje↔
+            // maquinaria —que cambia el precio real— se detecta, y la config de
+            // la forma de referencia se cancela (misma en ambos lados, no genera
+            // falsos positivos). Mismo criterio que el presupuestador.
+            const guardado = redondearMoneda(this.precioPerfil.precioMostrado(it));
+            const actual = redondearMoneda(
+              this.precioPerfil.precioMostrado({
+                pvpKtGastroConIva: f.pvpKtGastroConIva,
+                pvpKtGastroSinIva: f.pvpKtGastroSinIva,
+                porcIva: f.porcIva,
+                rubro: f.rubro ?? it.rubro,
+              }),
+            );
             if (guardado > 0 && guardado !== actual) {
               cambios.set(it.uid, { precioGuardado: guardado, precioActual: actual });
             }
