@@ -249,8 +249,18 @@ services:
     restart: unless-stopped
     # nginx sirviendo estáticos + proxy: liviano.
     mem_limit: 128m
+    # Forma LARGA con `condition: service_healthy` (no la lista corta): el frontend
+    # NO arranca hasta que el backend pase su healthcheck (/api/showroom/health
+    # responde 200). Sin esto, el frontend levantaba ~11s antes de que Spring Boot
+    # terminara de arrancar y aceptaba tráfico apuntando a un backend que aún no
+    # escuchaba → 502 "Connection refused" durante toda la ventana de arranque, y
+    # la PWA quedaba en blanco. Con la condición, Traefik simplemente no tiene el
+    # frontend por ~15s durante el deploy (error efímero y limpio) y cuando aparece
+    # el backend ya responde. Mismo patrón que backend→db de arriba. Coolify
+    # respeta la condición (en el log del deploy el backend hace Waiting→Healthy).
     depends_on:
-      - showroom-backend
+      showroom-backend:
+        condition: service_healthy
     # En Coolify NO se publica el puerto: se le asigna un DOMINIO al servicio y
     # su proxy (Traefik) rutea el tráfico + gestiona el certificado Let's Encrypt.
     # Coolify detecta el puerto interno del container (80) automáticamente.
