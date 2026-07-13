@@ -2,6 +2,7 @@ package ar.com.leo.showroom.presupuesto.service;
 
 import ar.com.leo.showroom.catalogo.service.ImagenLocalService;
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
+import ar.com.leo.showroom.common.pdf.KtPdfFooter;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.util.NombreArchivoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
@@ -18,7 +19,6 @@ import ar.com.leo.showroom.presupuesto.entity.PresupuestoComercial;
 import ar.com.leo.showroom.sesion.entity.SesionScanItem;
 import ar.com.leo.showroom.sesion.entity.SesionShowroom;
 import com.itextpdf.io.image.ImageData;
-import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.Color;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
@@ -32,7 +32,6 @@ import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEvent;
 import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEventHandler;
 import com.itextpdf.kernel.pdf.event.PdfDocumentEvent;
-import com.itextpdf.layout.Canvas;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.borders.SolidBorder;
@@ -207,7 +206,10 @@ public class PresupuestoComercialPdfGenerator {
              PdfWriter writer = new PdfWriter(out, new WriterProperties()
                      .setFullCompressionMode(true).setCompressionLevel(9));
              PdfDocument pdfDoc = new PdfDocument(writer);
-             Document doc = new Document(pdfDoc, PageSize.A4)) {
+             // immediateFlush=false: el pie "Página X de Y" se dibuja al final
+             // (KtPdfFooter.render), cuando ya se conoce el total de páginas; eso
+             // requiere que las hojas no se hayan flusheado antes de tiempo.
+             Document doc = new Document(pdfDoc, PageSize.A4, false)) {
 
             doc.setMargins(30, 30, 40, 30);
 
@@ -226,8 +228,6 @@ public class PresupuestoComercialPdfGenerator {
             PdfImagenReutilizable sinImagen = PdfImagenReutilizable.of(cargarRecurso("/images/SINIMAGEN.jpg"));
             pdfDoc.addEventHandler(PdfDocumentEvent.START_PAGE,
                     new BackgroundHandler(bgInterior));
-            pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE,
-                    new FooterHandler(pdfDoc, logoFooter));
 
             boolean individual = Boolean.TRUE.equals(datos.cotizacionIndividual());
             if (individual) {
@@ -290,6 +290,10 @@ public class PresupuestoComercialPdfGenerator {
                 }
                 agregarObservaciones(doc, datos);
             }
+
+            // Pie de página (línea + logo/link a la tienda + "Página X de Y") en
+            // todas las hojas, ahora que ya está agregado todo el contenido.
+            KtPdfFooter.render(pdfDoc, logoFooter, false);
 
             doc.close();
             return out.toByteArray();
@@ -2147,42 +2151,4 @@ public class PresupuestoComercialPdfGenerator {
         }
     }
 
-    private static class FooterHandler extends AbstractPdfDocumentEventHandler {
-        private final PdfDocument pdfDoc;
-        private final PdfImagenReutilizable logo;
-        FooterHandler(PdfDocument pdfDoc, PdfImagenReutilizable logo) { this.pdfDoc = pdfDoc; this.logo = logo; }
-
-        @Override
-        protected void onAcceptedEvent(AbstractPdfDocumentEvent event) {
-            try {
-                PdfPage page = ((PdfDocumentEvent) event).getPage();
-                int pageNum = pdfDoc.getPageNumber(page);
-                float pageWidth = page.getPageSize().getWidth();
-                float y = 20f;
-                float textX = pageWidth / 2f;
-                float logoX = pageWidth / 2f - 40f;
-                float logoW = 30f;
-                float logoH = 25f;
-
-                PdfCanvas pdfCanvas = new PdfCanvas(
-                        page.newContentStreamAfter(), page.getResources(), pdfDoc);
-
-                if (logo != null) {
-                    Rectangle logoRect = new Rectangle(logoX, y - logoH / 2f, logoW, logoH);
-                    pdfCanvas.addXObjectFittedIntoRectangle(logo.xObject(), logoRect);
-                }
-
-                Rectangle textArea = new Rectangle(textX, y - 4f, pageWidth / 2f - 20f, 14f);
-                try (Canvas canvas = new Canvas(pdfCanvas, textArea)) {
-                    Paragraph p = new Paragraph("Página " + pageNum)
-                            .setFontSize(10)
-                            .setFontColor(KT_MARRON)
-                            .setMargin(0);
-                    canvas.add(p);
-                }
-            } catch (Exception ignored) {
-                // footer decorativo — si falla, el PDF sigue siendo válido
-            }
-        }
-    }
 }

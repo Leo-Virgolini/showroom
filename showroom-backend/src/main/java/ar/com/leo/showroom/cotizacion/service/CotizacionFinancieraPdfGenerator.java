@@ -1,26 +1,20 @@
 package ar.com.leo.showroom.cotizacion.service;
 
 import ar.com.leo.showroom.common.pdf.KtPdfColores;
+import ar.com.leo.showroom.common.pdf.KtPdfFooter;
 import ar.com.leo.showroom.common.pdf.PdfFormatoUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenUtils;
 import ar.com.leo.showroom.common.pdf.PdfImagenReutilizable;
 import ar.com.leo.showroom.config.service.PrecioPerfilCalculator;
 import ar.com.leo.showroom.cotizacion.dto.GenerarCotizacionRequestDTO;
 import com.itextpdf.io.image.ImageData;
-import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.Color;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.geom.PageSize;
-import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfDocument;
-import com.itextpdf.kernel.pdf.PdfPage;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.kernel.pdf.WriterProperties;
-import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
-import com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEventHandler;
-import com.itextpdf.kernel.pdf.event.PdfDocumentEvent;
-import com.itextpdf.layout.Canvas;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.borders.Border;
 import com.itextpdf.layout.borders.SolidBorder;
@@ -93,7 +87,9 @@ public class CotizacionFinancieraPdfGenerator {
              PdfWriter writer = new PdfWriter(out, new WriterProperties()
                      .setFullCompressionMode(true).setCompressionLevel(9));
              PdfDocument pdfDoc = new PdfDocument(writer);
-             Document doc = new Document(pdfDoc, PageSize.A4)) {
+             // immediateFlush=false: el pie "Página X de Y" se dibuja al final
+             // (KtPdfFooter.render), cuando ya se conoce el total de páginas.
+             Document doc = new Document(pdfDoc, PageSize.A4, false)) {
 
             doc.setMargins(30, 30, 40, 30);
 
@@ -101,8 +97,6 @@ public class CotizacionFinancieraPdfGenerator {
             // Logo del footer reutilizable: se incrusta una sola vez y se reusa en
             // cada página (antes new Image(logo) por página lo re-incrustaba).
             PdfImagenReutilizable logoFooter = PdfImagenReutilizable.of(cargarRecurso("/images/logoKT.png"));
-            pdfDoc.addEventHandler(PdfDocumentEvent.END_PAGE,
-                    new FooterHandler(pdfDoc, logoFooter));
 
             agregarHeader(doc, logoHeader);
             agregarCardCliente(doc, datos, emitidoAt);
@@ -112,6 +106,8 @@ public class CotizacionFinancieraPdfGenerator {
             if (datos.observaciones() != null && !datos.observaciones().isBlank()) {
                 agregarObservaciones(doc, datos);
             }
+
+            KtPdfFooter.render(pdfDoc, logoFooter, false);
 
             doc.close();
             return out.toByteArray();
@@ -637,37 +633,5 @@ public class CotizacionFinancieraPdfGenerator {
 
     private static ImageData cargarRecurso(String path) {
         return PdfImagenUtils.cargarImagenClasspath(path);
-    }
-
-    /** Footer minimalista con número de página + logo chico. */
-    private static class FooterHandler extends AbstractPdfDocumentEventHandler {
-        private final PdfDocument doc;
-        private final PdfImagenReutilizable logo;
-
-        FooterHandler(PdfDocument doc, PdfImagenReutilizable logo) {
-            this.doc = doc;
-            this.logo = logo;
-        }
-
-        @Override
-        protected void onAcceptedEvent(com.itextpdf.kernel.pdf.event.AbstractPdfDocumentEvent event) {
-            PdfDocumentEvent docEvent = (PdfDocumentEvent) event;
-            PdfPage page = docEvent.getPage();
-            Rectangle area = page.getPageSize();
-            try (Canvas canvas = new Canvas(new PdfCanvas(page), area)) {
-                int n = doc.getPageNumber(page);
-                int total = doc.getNumberOfPages();
-                if (logo != null) {
-                    canvas.add(logo.nuevaImagen()
-                            .setHeight(14)
-                            .setFixedPosition(30, 20));
-                }
-                canvas.add(new Paragraph("Página " + n + " de " + total)
-                        .setFontSize(7.5f)
-                        .setFontColor(GRIS_MEDIO)
-                        .setTextAlignment(TextAlignment.RIGHT)
-                        .setFixedPosition(area.getWidth() - 100, 22, 70));
-            }
-        }
     }
 }
