@@ -202,18 +202,18 @@ services:
       # para diagnosticar incidentes pasados ("se cayó el sync ayer a la noche")
       # sin tener que entrar al contenedor.
       - "/data/showroom/logs:/app/logs"
-      # Integración con el programa externo pickit-y-etiquetas (jar Java desktop).
-      # `PICKIT_HOST_PATH` (en .env) apunta a una carpeta del host que contenga:
-      #   - el .jar (compilado con mvn package)
-      #   - Stock.xlsx y Combos.xlsx
-      #   - subcarpeta de salida (típicamente "Pickits y Carros")
-      # En la pantalla /configuracion los paths se ingresan como `/app/pickit/...`
-      # (paths del container, no del host). Si no usás la integración, comentá
-      # esta línea Y borrá `PICKIT_HOST_PATH` del .env — sino docker compose up
-      # falla con "required variable PICKIT_HOST_PATH is missing".
-      # DESHABILITADO en el server: Pickit es un .jar de escritorio Windows, no
-      # aplica en Linux. Si algún día lo usás, descomentá y seteá PICKIT_HOST_PATH.
-      # - "${PICKIT_HOST_PATH}:/app/pickit"
+      # Integración pickit-y-etiquetas (jar Java, modo CLI headless — verificado
+      # que corre en Linux con `--pickit-manual`, no levanta JavaFX). Reusa el
+      # patrón de imágenes: el cron de rclone de SuperMaster (cada 5 min) baja la
+      # carpeta pickit de Drive a /data/supermaster/pickit (jar + Stock.xlsx +
+      # Combos.xls) y acá se monta READ-ONLY. En /configuracion los paths se
+      # ingresan como `/app/pickit/...` (paths del container, no del host).
+      - "/data/supermaster/pickit:/app/pickit:ro"
+      # Salida del pickit: carpeta ESCRIBIBLE (el jar escribe el .xlsx generado
+      # acá; el montaje de arriba es :ro). NO va a Drive — el operador recibe el
+      # archivo por auto-descarga en el navegador. El user `app` del container
+      # debe tener permiso de escritura sobre esta carpeta del host.
+      - "/data/showroom/pickit-out:/app/pickit-out"
     # Solo `expose`: el puerto queda visible en la red interna de Docker (para
     # que el nginx del frontend lo proxee) pero NO se publica al host. En un
     # servidor público exponerlo sería superficie de ataque innecesaria.
