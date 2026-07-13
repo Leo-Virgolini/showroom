@@ -234,7 +234,7 @@
         </span>
         } @else {
         <span class="text-[0.7rem] font-medium" [class]="c.textTitle">
-          Por compras desde {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
+          Por compras desde {{ umbralMostrado(escala.umbralMin, r.porcIva ?? 21) | currency:'ARS':'symbol':'1.0-0' }}
         </span>
         }
       </div>
@@ -256,7 +256,11 @@
   </div>
   <div class="text-[10px] text-muted-color inline-flex items-start gap-1 leading-tight justify-center text-center">
     <i class="pi pi-info-circle text-[0.6rem] mt-0.5"></i>
-    <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
+    @if (umbralEnForma(); as f) {
+      <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
+    } @else {
+      <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
+    }
   </div>
 </div>
 }
@@ -332,7 +336,7 @@
           Por compras desde
         </div>
         <div class="text-xl sm:text-2xl font-bold tabular-nums leading-none" [class]="c.textBig">
-          {{ escala.umbralMin | currency:'ARS':'symbol':'1.0-0' }}
+          {{ umbralMostrado(escala.umbralMin, 21) | currency:'ARS':'symbol':'1.0-0' }}
         </div>
       </div>
       }
@@ -343,7 +347,11 @@
     </div>
     <div class="text-[11px] text-muted-color text-center inline-flex items-start gap-1.5 justify-center">
       <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
-      <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
+      @if (umbralEnForma(); as f) {
+        <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
+      } @else {
+        <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
+      }
     </div>
   </div>
   }
