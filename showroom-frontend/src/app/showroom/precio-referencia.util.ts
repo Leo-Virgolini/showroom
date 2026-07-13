@@ -167,3 +167,29 @@ export function iconoFormaReferencia(nombre: string | null | undefined): string 
   if (n.includes('remito')) return 'pi pi-file';
   return 'pi pi-tag';
 }
+
+/**
+ * Factor multiplicativo para expresar un monto medido en la forma de REFERENCIA
+ * (ej. Efectivo) en unidades de la forma SELECCIONADA. Uso: convertir el umbral
+ * del descuento por monto a la forma de pago que ve el cliente. Es display-only:
+ * NO cambia la comparación del descuento.
+ *
+ *   factor = precioPorForma(100, ivaRef, formaSel) / precioPorForma(100, ivaRef, formaRef)
+ *
+ * - Si ambas formas comparten `aplicaIva`, el `ivaRef` se cancela → factor exacto
+ *   e independiente del IVA (caso normal: Efectivo ↔ Transferencia, Cuotas).
+ * - Si difieren en `aplicaIva` (ej. Transferencia S/F sin IVA), el factor depende
+ *   del `ivaRef` (usar el IVA real del producto, o 21 dominante en el agregado).
+ * - Si el precio de referencia es 0 (no debería), devuelve 1 (sin conversión).
+ *
+ * Ambas formas deben venir ya en el perfil correcto (menaje) vía `perfilForma`.
+ */
+export function factorConversionUmbral(
+  formaSel: FormaPagoCalc,
+  formaRef: FormaPagoCalc,
+  ivaRef: number,
+): number {
+  const ref = precioPorForma(100, ivaRef, formaRef);
+  if (ref <= 0) return 1;
+  return precioPorForma(100, ivaRef, formaSel) / ref;
+}
