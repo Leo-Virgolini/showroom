@@ -254,14 +254,12 @@
     </div>
     }
   </div>
+  @if (umbralEnForma(); as f) {
   <div class="text-[10px] text-muted-color inline-flex items-start gap-1 leading-tight justify-center text-center">
     <i class="pi pi-info-circle text-[0.6rem] mt-0.5"></i>
-    @if (umbralEnForma(); as f) {
-      <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
-    } @else {
-      <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
-    }
+    <span>Umbrales equivalentes en {{ f.nombre }}.</span>
   </div>
+  }
 </div>
 }
 }
@@ -318,6 +316,16 @@
       Cuando se escanee un código en el showroom, vas a ver el producto acá.
       }
     </div>
+
+    <!-- Forma de pago seleccionada: los precios y umbrales que verá el cliente
+         están expresados en esta forma. Se muestra como chip para que el
+         cliente sepa en qué forma está cotizado antes de escanear. -->
+    @if (formaVisorEfectiva(); as forma) {
+    <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-orange-100 dark:bg-surface-800 border border-orange-200 dark:border-surface-700 text-sm font-semibold text-[#3B1E09] dark:text-surface-0">
+      <i class="pi pi-credit-card text-[#FF861C]"></i>
+      <span>Precios en {{ forma.nombre }}</span>
+    </div>
+    }
   </div>
 
   @if (escalasOrdenadas().length > 0) {
@@ -345,14 +353,12 @@
       <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
       <span>No aplican a los <strong>rubros de maquinaria</strong>.</span>
     </div>
+    @if (umbralEnForma(); as f) {
     <div class="text-[11px] text-muted-color text-center inline-flex items-start gap-1.5 justify-center">
       <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
-      @if (umbralEnForma(); as f) {
-        <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
-      } @else {
-        <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
-      }
+      <span>Umbrales equivalentes en {{ f.nombre }}.</span>
     </div>
+    }
   </div>
   }
 </main>

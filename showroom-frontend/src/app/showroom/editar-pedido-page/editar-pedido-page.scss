@@ -295,11 +295,25 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  flex: 1 1 auto;
+  // No crece: se encoge a su contenido y el padre (.kt-footer-formas, flex-end)
+  // lo alinea a la derecha junto a "Guardar". Cuando las formas no entran, se
+  // limita al ancho disponible y hace scroll horizontal DESDE EL INICIO
+  // (justify-content: flex-start) para que el primer chip sea accesible — con
+  // flex-end el navegador no deja scrollear hasta el comienzo.
+  flex: 0 1 auto;
   min-width: 0;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  row-gap: 0.3rem;
+  justify-content: flex-start;
+  // Una sola fila: si las formas no entran, scroll horizontal en vez de
+  // envolver a 2 filas (footer alto). Los chips ya son compactos y suelen
+  // caber sin necesidad de scroll.
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  // Aire vertical para que el outline del chip seleccionado (outline-offset) y
+  // la box-shadow del "mejor precio" no se recorten: overflow-x:auto fuerza a
+  // overflow-y a computar como auto y clipearía todo lo que sobresalga.
+  padding-block: 0.4rem;
 }
 
 // Chip compacto de forma de pago — ícono + nombre + precio. Clickeable:
@@ -307,13 +321,13 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
 :host ::ng-deep .kt-forma-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.45rem 0.85rem;
+  gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
   border-radius: 999px;
   background: var(--p-surface-50);
   border: 1px solid color-mix(in srgb, var(--kt-accent) 20%, transparent);
   color: var(--kt-texto);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;
@@ -323,7 +337,7 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
 
   > i {
     color: var(--kt-accent);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     flex-shrink: 0;
   }
 
@@ -343,6 +357,10 @@ $kt-mejor: #7EBA00; // verde "mejor precio" — literal, no temático.
     justify-content: flex-start;
   }
   .kt-footer-chips {
+    // En mobile el bloque de formas ocupa su propia fila a ancho completo, así
+    // que acá sí crece (flex-grow) — a diferencia del desktop, donde no crece
+    // para quedar pegado al botón Guardar.
+    flex: 1 1 auto;
     flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: thin;

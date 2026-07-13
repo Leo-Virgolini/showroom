@@ -388,14 +388,12 @@
                 </div>
               }
             </div>
+            @if (umbralEnForma(); as f) {
             <div class="text-[10px] text-muted-color inline-flex items-start gap-1 leading-tight px-1">
               <i class="pi pi-info-circle text-[0.6rem] mt-0.5"></i>
-              @if (umbralEnForma(); as f) {
-                <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
-              } @else {
-                <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
-              }
+              <span>Umbrales equivalentes en {{ f.nombre }}.</span>
             </div>
+            }
           </div>
           }
           }
@@ -668,14 +666,12 @@
                   <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
                   <span>No aplican a los <strong>rubros de maquinaria</strong>.</span>
                 </div>
+                @if (umbralEnForma(); as f) {
                 <div class="text-[11px] text-muted-color inline-flex items-start gap-1.5">
                   <i class="pi pi-info-circle text-[0.65rem] mt-0.5"></i>
-                  @if (umbralEnForma(); as f) {
-                    <span>Umbrales equivalentes en {{ f.nombre }}. La base del descuento es el precio en efectivo.</span>
-                  } @else {
-                    <span>Los montos para el descuento se calculan sobre el precio en efectivo.</span>
-                  }
+                  <span>Umbrales equivalentes en {{ f.nombre }}.</span>
                 </div>
+                }
               </div>
             </div>
           }

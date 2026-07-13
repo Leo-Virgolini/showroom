@@ -24,6 +24,7 @@ import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
 import { InputMaskModule } from 'primeng/inputmask';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { SelectModule } from 'primeng/select';
 import { SkeletonModule } from 'primeng/skeleton';
 import { TableLazyLoadEvent, TableModule } from 'primeng/table';
 import { TabsModule } from 'primeng/tabs';
@@ -62,6 +63,7 @@ import { PageHeader } from '../page-header/page-header';
     InputMaskModule,
     InputTextModule,
     ProgressSpinnerModule,
+    SelectModule,
     SkeletonModule,
     TableModule,
     TabsModule,
@@ -122,6 +124,23 @@ export class HistorialPage {
   // ============================================================
   readonly cargandoStats = signal(false);
   readonly stats = signal<EstadisticasHistorial | null>(null);
+
+  /** Cantidad de productos a mostrar en los 3 rankings (escaneados, comprados,
+   *  conversión). El backend aplica el mismo `topN` a las tres secciones. Se
+   *  persiste en localStorage para recordar la preferencia entre visitas. */
+  static readonly OPCIONES_TOP_N = [10, 20, 30, 50] as const;
+  private static readonly TOP_N_KEY = 'historial:statsTopN';
+  readonly opcionesTopN: number[] = [...HistorialPage.OPCIONES_TOP_N];
+  readonly topN = signal<number>(HistorialPage.leerTopNGuardado());
+
+  /** Lee el topN de localStorage saneándolo contra las opciones válidas; ante
+   *  cualquier valor ausente o corrupto cae al default (10). */
+  private static leerTopNGuardado(): number {
+    const raw = Number(localStorage.getItem(HistorialPage.TOP_N_KEY));
+    return (HistorialPage.OPCIONES_TOP_N as readonly number[]).includes(raw)
+      ? raw
+      : 10;
+  }
 
   /** Datasets de Chart.js para el top escaneados. Memoizado con computed —
    *  se recalcula sólo cuando cambia {@code stats}. */
@@ -309,6 +328,16 @@ export class HistorialPage {
     });
   }
 
+  /** Cambia la cantidad de productos de los rankings: persiste la preferencia
+   *  y recarga las estadísticas con el nuevo límite (afecta a las 3 secciones
+   *  a la vez, ya que comparten la misma respuesta). No-op si no cambió. */
+  cambiarTopN(n: number): void {
+    if (n === this.topN()) return;
+    this.topN.set(n);
+    localStorage.setItem(HistorialPage.TOP_N_KEY, String(n));
+    this.cargarStats();
+  }
+
   private cargarStats(): void {
     this.cargandoStats.set(true);
     const desde = this.desde();
@@ -316,7 +345,7 @@ export class HistorialPage {
     this.api.obtenerEstadisticasHistorial({
       desde: desde ? desde.toISOString() : undefined,
       hasta: hasta ? finDelDia(hasta).toISOString() : undefined,
-      topN: 10,
+      topN: this.topN(),
     }).subscribe({
       next: (s) => {
         this.cargandoStats.set(false);

@@ -113,6 +113,17 @@
       </div>
     </p-card>
 
+    <!-- Selector de cantidad: gobierna los 3 rankings de abajo (escaneados,
+         comprados y conversión) a la vez, ya que comparten la misma respuesta.
+         La preferencia se recuerda entre visitas (localStorage). -->
+    <div class="flex items-center justify-end gap-2">
+      <label for="statsTopN" class="text-xs font-semibold uppercase tracking-wide text-muted-color">
+        Mostrar top
+      </label>
+      <p-select inputId="statsTopN" [options]="opcionesTopN" [ngModel]="topN()"
+        (ngModelChange)="cambiarTopN($event)" [disabled]="cargandoStats()" class="w-28" />
+    </div>
+
     <!-- Charts: top productos más escaneados y más comprados. Respetan el
          rango de fechas seleccionado arriba. Si no hay datos en el período
          o todavía estamos cargando, mostramos placeholders en cada card. -->
@@ -121,7 +132,7 @@
         <ng-template #title>
           <div class="flex items-center gap-2 text-base">
             <i class="pi pi-eye text-[#FF861C]"></i>
-            <span>Top 10 productos más escaneados</span>
+            <span>Top {{ topN() }} productos más escaneados</span>
           </div>
         </ng-template>
         <ng-template #subtitle>
@@ -158,7 +169,7 @@
         <ng-template #title>
           <div class="flex items-center gap-2 text-base">
             <i class="pi pi-shopping-cart text-[#7EBA00]"></i>
-            <span>Top 10 productos más comprados</span>
+            <span>Top {{ topN() }} productos más comprados</span>
           </div>
         </ng-template>
         <ng-template #subtitle>
