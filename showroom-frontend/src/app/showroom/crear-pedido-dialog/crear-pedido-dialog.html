@@ -128,7 +128,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-            <i class="pi pi-envelope text-[#FF861C] text-[10px]"></i> Email <span class="text-red-500">*</span>
+            <i class="pi pi-envelope text-[#FF861C] text-[10px]"></i> Email <span class="text-muted-color font-normal normal-case">(opcional)</span>
           </label>
           <p-autoComplete [ngModel]="pedidoEmail()" (ngModelChange)="pedidoEmail.set($event ?? '')"
             [suggestions]="sugerenciasEmailPedido()" (completeMethod)="onCompletarEmailPedido($event)"

@@ -44,7 +44,9 @@ public record CrearPedidoRequestDTO(
         @NotBlank(message = "teléfono del cliente requerido")
         String telefono,
 
-        @NotBlank(message = "email requerido — se usa para mandar al cliente el PDF con los productos vistos")
+        // Email OPCIONAL: si viene, se usa para mandar el PDF de productos vistos
+        // (fallback del WhatsApp). @Email acepta null/vacío y solo valida el
+        // formato cuando hay texto.
         @Email(message = "email inválido")
         String email,
 

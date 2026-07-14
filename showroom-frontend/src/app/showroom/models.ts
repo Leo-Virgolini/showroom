@@ -94,9 +94,10 @@ export interface CrearPedidoRequest {
   /** Teléfono del cliente — obligatorio desde mayo 2026. Es el identificador
    *  único en la vista unificada de clientes (/clientes). */
   telefono: string;
-  /** Email del cliente — sigue siendo obligatorio para crear pedidos (en
-   *  presupuestos sí es opcional). El PDF de seguimiento post-pedido lo usa. */
-  email: string;
+  /** Email del cliente — OPCIONAL. Si se provee, el PDF de seguimiento
+   *  post-pedido (productos vistos y no comprados) se manda por correo como
+   *  fallback del WhatsApp. Sin email, no se envía ese correo. */
+  email?: string;
   /** Rubro comercial del cliente — obligatorio desde mayo 2026. Igual a los
    *  rubros de presupuestos: 'bar' / 'restaurant' / 'catering' / 'cafeteria'
    *  / 'panaderia' / 'pasteleria' o texto libre cuando el operador elige

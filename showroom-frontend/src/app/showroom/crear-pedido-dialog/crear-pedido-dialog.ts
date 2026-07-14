@@ -273,7 +273,10 @@ export class CrearPedidoDialog {
   readonly puedeCrearPedido = computed(() => {
     const cuit = this.pedidoCuit();
     const cuitOk = cuit != null && String(cuit).length === 11;
-    const emailOk = /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(this.pedidoEmail().trim());
+    // Email OPCIONAL: no bloquea la creación. Si el operador escribe algo, exige
+    // formato válido; vacío es válido (no se manda el PDF de seguimiento).
+    const email = this.pedidoEmail().trim();
+    const emailOk = email.length === 0 || /^[^@\s,]+@[^@\s,]+\.[^@\s,]+$/.test(email);
     const razonSocialOk = this.pedidoRazonSocial().trim().length > 0;
     const telOk = this.pedidoTelefono().trim().length > 0;
     const rubro = this.pedidoRubro();
@@ -740,7 +743,7 @@ export class CrearPedidoDialog {
       this.toast.add({
         severity: 'warn',
         summary: 'Faltan datos',
-        detail: 'Razón social, CUIT 11 dígitos, teléfono, email, rubro y forma de pago son obligatorios.',
+        detail: 'Razón social, CUIT 11 dígitos, teléfono, rubro y forma de pago son obligatorios. Si cargás email, debe tener formato válido.',
         life: 4000,
       });
       return;
@@ -759,7 +762,7 @@ export class CrearPedidoDialog {
       tipoDoc: 'CUIT',
       nroDoc: cuit,
       telefono: this.pedidoTelefono().trim(),
-      email: this.pedidoEmail().trim(),
+      email: this.pedidoEmail().trim() || undefined,
       rubro: this.rubroFinalPedido(),
       domicilio: this.pedidoDomicilio().trim() || undefined,
       codigoProvincia: this.pedidoCodigoProvincia() ?? undefined,
