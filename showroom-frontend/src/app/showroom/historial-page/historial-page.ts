@@ -184,10 +184,13 @@ export class HistorialPage {
 
   /** Altura dinámica de los charts según cantidad de barras — evita el espacio
    *  vacío grande que dejaba la altura fija cuando había pocos items. Cada
-   *  barra ocupa ~3rem (con padding), mínimo 8rem para que se vea decente
-   *  con 1-2 items + sumamos 2rem fijos para el eje X y respiro inferior. */
+   *  barra ocupa ~1.4rem + 2rem fijos para el eje X y respiro inferior. Piso de
+   *  8rem para que con 1-2 items no se vea ridículo; techo de 48rem para que
+   *  con muchos productos (top 50 → sin techo daría ~152rem) el chart no ocupe
+   *  media pantalla ni empuje la leyenda de SKUs miles de px hacia abajo — a
+   *  partir del techo las barras se comprimen, aceptable en un ranking largo. */
   altoChart(items: number): string {
-    return `${Math.max(8, items * 3 + 2)}rem`;
+    return `${Math.min(48, Math.max(8, items * 1.4 + 2))}rem`;
   }
 
   /** Opciones comunes a ambos charts: barras horizontales, tooltip con
