@@ -433,6 +433,65 @@ textarea,
 }
 
 // =====================================================
+// Split-button "Crear Pedido en Dux": su único item desplegable "Crear
+// presupuesto" (acción secundaria). El menú es un p-tieredMenu con
+// appendTo="body" → la clase la inyecta [menuStyleClass]. Ghost naranja de
+// marca: ícono + label en el naranja del botón principal y hover con tinte
+// suave; se integra con el botón y deja clara la jerarquía.
+// =====================================================
+.kt-splitbtn-presupuesto.p-tieredmenu {
+  --kt-sb-bg: #FFFBF5;
+
+  border: 1px solid color-mix(in oklab, var(--p-primary-500) 30%, transparent);
+  box-shadow:
+    0 10px 25px -5px rgb(59 30 9 / 0.18),
+    0 8px 10px -6px rgb(59 30 9 / 0.12);
+  background: var(--kt-sb-bg);
+
+  .p-tieredmenu-item-link {
+    color: var(--p-primary-700);
+    font-weight: 600;
+    border-radius: 0.375rem;
+    margin: 0 0.25rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    .p-tieredmenu-item-icon {
+      color: var(--p-primary-500);
+    }
+
+    &:hover {
+      background: color-mix(in oklab, var(--p-primary-500) 16%, transparent);
+      color: var(--p-primary-800);
+
+      .p-tieredmenu-item-icon {
+        color: var(--p-primary-700);
+      }
+    }
+  }
+}
+
+.app-dark .kt-splitbtn-presupuesto.p-tieredmenu {
+  --kt-sb-bg: var(--p-surface-900);
+
+  .p-tieredmenu-item-link {
+    color: var(--p-primary-300);
+
+    .p-tieredmenu-item-icon {
+      color: var(--p-primary-400);
+    }
+
+    &:hover {
+      background: color-mix(in oklab, var(--p-primary-500) 22%, transparent);
+      color: var(--p-primary-200);
+
+      .p-tieredmenu-item-icon {
+        color: var(--p-primary-300);
+      }
+    }
+  }
+}
+
+// =====================================================
 // Header compartido (app-page-header). Altura mínima fija + centrado para que
 // TODAS las páginas tengan exactamente el mismo alto de header, sin importar el
 // contenido proyectado (botones de 1 o 2 líneas, chips de sesión, etc.).

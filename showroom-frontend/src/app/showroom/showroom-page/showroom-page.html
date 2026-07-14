@@ -979,7 +979,7 @@
             Verificar stock
           </label>
           <p-splitButton class="shrink-0 w-full sm:w-auto" label="Crear Pedido en Dux" icon="pi pi-cloud-upload"
-            size="large" [model]="accionesPedido"
+            size="large" [model]="accionesPedido" menuStyleClass="kt-splitbtn-presupuesto"
             [disabled]="carrito().length === 0 || refrescando()"
             (onClick)="abrirConfirmacion()" />
         </div>
