@@ -149,7 +149,7 @@
           </div>
         } @else {
           <div class="relative overflow-hidden" [style.height]="altoChart(stats()?.topEscaneados?.length ?? 0)">
-            <p-chart type="bar" [data]="chartEscaneadosData()" [options]="chartOptions" />
+            <p-chart #chartEscaneados type="bar" [data]="chartEscaneadosData()" [options]="chartOptions" />
           </div>
           <!-- Leyenda compacta: SKU + descripción para los productos del chart.
                El chart solo muestra el SKU como label; la descripción real va acá
@@ -186,7 +186,7 @@
           </div>
         } @else {
           <div class="relative overflow-hidden" [style.height]="altoChart(stats()?.topComprados?.length ?? 0)">
-            <p-chart type="bar" [data]="chartCompradosData()" [options]="chartOptions" />
+            <p-chart #chartComprados type="bar" [data]="chartCompradosData()" [options]="chartOptions" />
           </div>
           <ul class="mt-2 pt-2 border-t border-surface-200 dark:border-surface-700 flex flex-col gap-1 text-xs">
             @for (p of stats()?.topComprados ?? []; track p.sku) {

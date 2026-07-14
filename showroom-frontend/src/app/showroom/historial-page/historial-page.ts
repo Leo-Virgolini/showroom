@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ViewChild,
   computed,
   effect,
   inject,
@@ -15,7 +16,7 @@ import { Subject, debounceTime } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
-import { ChartModule } from 'primeng/chart';
+import { ChartModule, UIChart } from 'primeng/chart';
 import { DatePickerModule } from 'primeng/datepicker';
 import { DialogModule } from 'primeng/dialog';
 import { ImageModule } from 'primeng/image';
@@ -124,6 +125,12 @@ export class HistorialPage {
   // ============================================================
   readonly cargandoStats = signal(false);
   readonly stats = signal<EstadisticasHistorial | null>(null);
+
+  // Refs a los dos charts para forzar su re-medición tras cambiar el topN
+  // (ver reinicializarCharts). Pueden ser undefined si no hay datos (no se
+  // renderiza el <p-chart>).
+  @ViewChild('chartEscaneados') private escaneadosChart?: UIChart;
+  @ViewChild('chartComprados') private compradosChart?: UIChart;
 
   /** Cantidad de productos a mostrar en los 3 rankings (escaneados, comprados,
    *  conversión). El backend aplica el mismo `topN` a las tres secciones. Se
@@ -353,12 +360,26 @@ export class HistorialPage {
       next: (s) => {
         this.cargandoStats.set(false);
         this.stats.set(s);
+        this.reinicializarCharts();
       },
       error: (err) => {
         this.cargandoStats.set(false);
         // Silencioso — los charts no son críticos para la operativa del historial.
         console.warn('[historial] no se pudieron cargar las estadísticas:', err);
       },
+    });
+  }
+
+  /** Chart.js mide el alto del contenedor al (re)crearse. Cuando cambia el topN,
+   *  el alto del div (altoChart) y los datos cambian en el mismo ciclo, así que
+   *  a veces mide un layout transitorio y las barras quedan apretadas arriba con
+   *  un hueco enorme abajo. Reinicializamos los charts en un macrotask —tras el
+   *  CD y con la altura final ya aplicada al DOM— replicando la medición correcta
+   *  que ocurre naturalmente al refrescar con F5. */
+  private reinicializarCharts(): void {
+    setTimeout(() => {
+      this.escaneadosChart?.reinit();
+      this.compradosChart?.reinit();
     });
   }
 
