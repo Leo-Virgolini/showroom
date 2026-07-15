@@ -310,25 +310,36 @@ export class CrearPedidoDialog {
       const v = this.visible();
       const id = this.presupuestoId();
       if (!v) return;
-      if (id != null) {
-        this.cargarDetalle(id);
-        return;
-      }
-      // Flujo showroom: los ítems vienen de un computed del carrito. Los leemos
-      // en untracked para inicializar SOLO al abrir el modal — si trackeáramos
-      // `itemsInput()`, un cambio del carrito (p. ej. por SSE) mientras el modal
-      // está abierto re-dispararía la inicialización y borraría lo que el
-      // operador tipeó en el formulario.
-      const items = untracked(() => this.itemsInput());
-      if (items) {
-        this.inicializarDesdeItems(items, untracked(() => this.clientePrefill()));
+      // TODO lo que sigue va en untracked: las ÚNICAS dependencias de este
+      // effect son `visible` y `presupuestoId` (abrir el modal / cambiar de
+      // presupuesto). La inicialización es imperativa y lee un montón de
+      // signals de paso — si esas lecturas se trackearan, cualquier escritura
+      // posterior sobre ellas re-dispararía la inicialización.
+      //
+      // <p>No es teórico: `inicializarDesdeItems` termina llamando a
+      // `cargarFormasPagoSiHaceFalta`, que LEE `pedidoFormaPagoId` y la ESCRIBE
+      // con la primera forma activa cuando viene vacía. Como `inicializarDesdeItems`
+      // ya la había escrito con la del prefill, las dos escrituras oscilaban
+      // (null ↔ primera activa) y el effect se re-ejecutaba infinitamente:
+      // colgaba la pestaña y disparaba un GET del pedido anterior por vuelta.
+      // Los ítems/prefill también se leen acá adentro para inicializar SOLO al
+      // abrir — sino un cambio del carrito (p. ej. por SSE) con el modal abierto
+      // borraría lo que el operador tipeó en el formulario.
+      untracked(() => {
+        if (id != null) {
+          this.cargarDetalle(id);
+          return;
+        }
+        const items = this.itemsInput();
+        if (!items) return;
+        this.inicializarDesdeItems(items, this.clientePrefill());
         // Editar pedido (sin presupuesto): completar CUIT/dirección/forma con
         // los datos del pedido que se está editando — igual que en el flujo de
         // regeneración desde presupuesto (cargarDetalle), pero acá no hay
         // presupuesto del que faltarían esos datos: viajan directo del pedido.
-        const anteriorId = untracked(() => this.pedidoAnteriorId());
+        const anteriorId = this.pedidoAnteriorId();
         if (anteriorId != null) this.prellenarDesdePedidoAnterior(anteriorId);
-      }
+      });
     });
   }
 
