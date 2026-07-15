@@ -7,6 +7,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -361,23 +362,40 @@ export class EditarPedidoPage implements HasUnsavedChanges {
     // el pedido es un GET propio, las formas las carga PrecioPerfilService).
     // Solo corre una vez — `formaResuelta` evita pisar un cambio posterior
     // del operador en el selector.
+    //
+    // El guard y las escrituras van en untracked: las únicas dependencias son
+    // `formasPago` y `pedido`. Si `formaResuelta` se leyera trackeada sería a
+    // la vez dependencia y escritura del effect, que es la forma exacta del
+    // loop infinito que colgaba el navegador en crear-pedido-dialog. Hoy no
+    // loopea porque el guard corta en la 2ª vuelta, pero eso depende de que
+    // nadie vuelva a ponerla en false: así es inmune por construcción.
     effect(() => {
       const formas = this.formasPago();
       const ped = this.pedido();
-      if (this.formaResuelta() || !ped || formas.length === 0) return;
-      const forma = formas.find((f) => f.id === ped.formaPagoId) ?? null;
-      this.formaPagoSeleccionada.set(forma);
-      this.formaResuelta.set(true);
+      if (!ped || formas.length === 0) return;
+      untracked(() => {
+        if (this.formaResuelta()) return;
+        this.formaPagoSeleccionada.set(formas.find((f) => f.id === ped.formaPagoId) ?? null);
+        this.formaResuelta.set(true);
+      });
     });
 
     // Purga el map de "cambios de precio" cuando un ítem se quita del detalle,
     // así el contador del banner no queda inflado con uids que ya no existen.
+    //
+    // La única dependencia es `items` (es lo que gatilla la purga); el map se
+    // lee dentro de untracked porque también se escribe acá — trackearlo lo
+    // haría dependencia y escritura a la vez, la forma del loop infinito que
+    // colgaba crear-pedido-dialog. Hoy converge porque el `some` da false tras
+    // purgar, pero así no depende de esa guarda.
     effect(() => {
       const vivos = new Set(this.items().map((i) => i.uid));
-      const m = this.cambiosPrecio();
-      if ([...m.keys()].some((k) => !vivos.has(k))) {
-        this.cambiosPrecio.set(new Map([...m].filter(([k]) => vivos.has(k))));
-      }
+      untracked(() => {
+        const m = this.cambiosPrecio();
+        if ([...m.keys()].some((k) => !vivos.has(k))) {
+          this.cambiosPrecio.set(new Map([...m].filter(([k]) => vivos.has(k))));
+        }
+      });
     });
 
     // Observa el alto del footer sticky y lo refleja en `footerHeight()`, para

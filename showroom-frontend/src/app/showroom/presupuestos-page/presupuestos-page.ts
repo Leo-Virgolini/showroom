@@ -656,13 +656,20 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
     // escritura, solo lee el map vía su input `cambiosPrecio`). Sin este
     // effect, el contador del banner "precios cambiaron" quedaría inflado
     // con uids que ya no están en el detalle.
+    // La única dependencia es `items` (es lo que gatilla la purga); el map se
+    // lee dentro de untracked porque también se escribe acá — trackearlo lo
+    // haría dependencia y escritura a la vez, la forma del loop infinito que
+    // colgaba crear-pedido-dialog. Hoy converge porque el `some` da false tras
+    // purgar, pero así no depende de esa guarda.
     effect(() => {
       const vivos = new Set(this.items().map((i) => i.uid));
-      const m = this.cambiosPrecio();
-      if ([...m.keys()].some((k) => !vivos.has(k))) {
-        const nm = new Map([...m].filter(([k]) => vivos.has(k)));
-        this.cambiosPrecio.set(nm);
-      }
+      untracked(() => {
+        const m = this.cambiosPrecio();
+        if ([...m.keys()].some((k) => !vivos.has(k))) {
+          const nm = new Map([...m].filter(([k]) => vivos.has(k)));
+          this.cambiosPrecio.set(nm);
+        }
+      });
     });
 
     // Si la URL trae `:id` (`/presupuestos/editar/:id`), entramos en modo
