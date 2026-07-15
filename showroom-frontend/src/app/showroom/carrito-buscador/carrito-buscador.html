@@ -49,7 +49,8 @@
           Buscando ({{ resultadosBusqueda().length }} de {{ totalResultadosBusqueda() }}) — elegí cuáles agregar
         </span>
         <p-button icon="pi pi-times" severity="secondary" [text]="true" [rounded]="true"
-          size="small" (onClick)="cerrarResultadosBusqueda()" pTooltip="Cerrar búsqueda" />
+          size="small" (onClick)="cerrarResultadosBusqueda()"
+          pTooltip="Cerrar búsqueda" tooltipPosition="left" />
       </div>
       <div class="flex items-center gap-2 px-3 py-2 border-b border-[var(--kt-accent,#FF861C)]/10 flex-wrap">
         <span class="text-xs text-muted-color shrink-0">Ordenar por:</span>

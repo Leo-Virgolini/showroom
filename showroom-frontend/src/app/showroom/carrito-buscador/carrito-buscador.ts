@@ -493,9 +493,15 @@ export class CarritoBuscador {
   /** Devuelve el foco al input de scan — incondicional (sin guard táctil): la
    *  pistola QR debe seguir alimentando el input aunque el dispositivo sea
    *  táctil. Lo usa el propio componente (tras agregar/buscar) y el host (tras
-   *  cerrar SUS propios diálogos y tras vaciar la tabla), vía la ref. */
+   *  cerrar SUS propios diálogos y tras vaciar la tabla), vía la ref.
+   *
+   *  <p>`preventScroll`: el input vive arriba de todo, pero el refoco se dispara
+   *  con cualquier click del host (ej. la ✕ de una fila del detalle, muy abajo).
+   *  Sin esto el navegador scrollearía el input a la vista y el operador
+   *  perdería el lugar en la tabla en cada quitar. La pistola sigue escribiendo
+   *  ahí aunque el input no esté a la vista. */
   focusScanInput(): void {
-    setTimeout(() => this.scanInput()?.nativeElement.focus(), 0);
+    setTimeout(() => this.scanInput()?.nativeElement.focus({ preventScroll: true }), 0);
   }
 
   private warn(detail: string): void {

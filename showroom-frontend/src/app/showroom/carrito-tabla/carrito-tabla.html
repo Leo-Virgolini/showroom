@@ -177,8 +177,12 @@
           </span>
         </td>
         <td>
+          <!-- tooltipPosition="left": la columna está pegada al borde derecho de
+               la ventana; con el default (right) el tooltip no tiene ancho y se
+               renderiza una letra por línea. -->
           <p-button icon="pi pi-times" severity="danger" [text]="true" [rounded]="true"
-            size="small" (onClick)="eliminarItem(it.uid)" pTooltip="Quitar" />
+            size="small" (onClick)="eliminarItem(it.uid)" ariaLabel="Quitar el producto"
+            pTooltip="Quitar" tooltipPosition="left" />
         </td>
       </tr>
     </ng-template>

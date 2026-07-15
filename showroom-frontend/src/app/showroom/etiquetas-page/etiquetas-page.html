@@ -58,7 +58,8 @@
                 {{ precioReferencia(it) | currency:'ARS':'symbol':'1.0-0' }}
               </td>
               <td>
-                <p-button icon="pi pi-plus" severity="success" [rounded]="true" size="small" (onClick)="agregar(it)" pTooltip="Agregar a etiquetas" />
+                <p-button icon="pi pi-plus" severity="success" [rounded]="true" size="small"
+                  (onClick)="agregar(it)" pTooltip="Agregar a etiquetas" tooltipPosition="left" />
               </td>
             </tr>
           </ng-template>
