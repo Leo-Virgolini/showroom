@@ -102,7 +102,7 @@
                     (onClick)="abrirRegenerarPedido()"
                     [pTooltip]="hayCambiosSinGuardar()
                         ? 'Guardá los cambios antes de regenerar el pedido'
-                        : 'El presupuesto cambió: regenerar el pedido en DUX (anula el anterior)'"
+                        : 'El presupuesto cambió: crear un pedido nuevo en DUX. El anterior queda anulado acá; el comprobante en DUX se cancela a mano.'"
                     tooltipPosition="bottom" />
                 }
               } @else {
@@ -531,7 +531,7 @@
         @case ('previsualizar') {
           <i class="pi pi-file-pdf text-[#FF861C]"></i>
           <span class="font-bold">
-            @if (esModoEdicion()) { Guardar cambios y descargar PDF }
+            @if (esModoEdicion()) { Guardar cambios y abrir PDF }
             @else { Generar presupuesto }
           </span>
         }
@@ -558,7 +558,7 @@
           <i class="pi pi-info-circle text-[#FF861C] mt-0.5"></i>
           <span class="text-surface-700 dark:text-surface-200">
             @if (esModoEdicion()) {
-              Se van a guardar los cambios sobre el presupuesto #{{ presupuestoEditandoId() }} y descargar el PDF actualizado. El número y la fecha original se mantienen.
+              Se van a guardar los cambios sobre el presupuesto #{{ presupuestoEditandoId() }} y abrir el PDF actualizado en una pestaña nueva (podés bajarlo desde ahí). El número y la fecha original se mantienen.
             } @else {
               Se va a generar el PDF y guardar en el historial. El cliente quedará registrado para seguimiento.
             }

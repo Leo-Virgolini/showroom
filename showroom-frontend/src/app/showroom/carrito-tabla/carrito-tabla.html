@@ -51,9 +51,11 @@
 
     <ng-template #body let-it>
       <!-- Fila del detalle: si es máquina industrial, marcamos con
-           fondo ámbar suave para que el operador no se sorprenda
-           al ver que el descuento global no afecta a esa línea
-           (lo aclaramos también con badge "Máq. Industrial"). -->
+           fondo ámbar suave para que el operador no se sorprenda al ver
+           que los descuentos POR MONTO no afectan a esa línea (lo aclara
+           también el badge "Máq. Industrial"). Ojo: el descuento GLOBAL sí
+           la afecta — `actualizarDescuentoGlobal` copia el % a todos los
+           ítems sin excluir maquinaria. -->
       <tr [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)">
         <td>
           @if (it.imagenUrl) {

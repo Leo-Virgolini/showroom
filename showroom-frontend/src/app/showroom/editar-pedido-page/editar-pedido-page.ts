@@ -640,7 +640,7 @@ export class EditarPedidoPage implements HasUnsavedChanges {
       severity: 'success',
       summary: 'Pedido actualizado',
       detail: anteriorId != null
-        ? `Se creó el pedido nuevo${idNuevo}; el pedido #${anteriorId} anterior quedó anulado.`
+        ? `Se creó el pedido nuevo${idNuevo}; el pedido #${anteriorId} anterior quedó anulado acá, en el showroom.`
         : `Se creó el pedido nuevo${idNuevo}.`,
       life: 8000,
     });

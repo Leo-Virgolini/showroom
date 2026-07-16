@@ -853,7 +853,7 @@ export class CrearPedidoDialog {
               severity: 'warn',
               summary: 'Pedido creado pero sin id',
               detail: `Pedido enviado a DUX OK pero no recibimos pedidoLocalId. ` +
-                `Marca manualmente el presupuesto #${presupuestoId} desde la base.`,
+                `Marcá manualmente el presupuesto #${presupuestoId} desde la base.`,
               life: 10000,
             });
             this.visible.set(false);
@@ -871,7 +871,7 @@ export class CrearPedidoDialog {
               severity: 'success',
               summary: 'Pedido regenerado',
               detail: `Presupuesto #${presupuestoId} → nuevo Pedido #${pedidoLocalId}. ` +
-                `El pedido anterior #${anteriorId} quedó anulado.` + avisoDux,
+                `El pedido anterior #${anteriorId} quedó anulado acá.` + avisoDux,
               life: avisoDux ? 12000 : 6000,
             });
             this.visible.set(false);

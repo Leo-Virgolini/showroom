@@ -1493,7 +1493,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   previsualizar(): void {
     if (!this.hayItems()) {
-      this.warn('Tenés que seleccionar al menos un producto para previsualizar.');
+      this.warn('Agregá al menos un producto para previsualizar.');
       return;
     }
     // El dialog unificado funciona como confirmación + form de cliente. Si
@@ -1578,7 +1578,7 @@ export class PresupuestosPage implements AfterViewInit, HasUnsavedChanges {
 
   abrirDialogEnviar(): void {
     if (!this.hayItems()) {
-      this.warn('Tenés que seleccionar al menos un producto para enviar.');
+      this.warn('Agregá al menos un producto para enviar.');
       return;
     }
     // Validamos al confirmar (dentro del dialog), no al abrirlo, porque el

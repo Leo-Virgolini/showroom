@@ -30,8 +30,12 @@
         <div class="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
           <i class="pi pi-exclamation-triangle text-amber-600 dark:text-amber-400 mt-0.5"></i>
           <span class="text-surface-700 dark:text-surface-200">
+            <!-- "anulado acá" y no "anulado" a secas: `PedidoService.anularPedido`
+                 solo cambia el estado en la base del showroom — la API de DUX no
+                 expone anulación. Sin calificarlo, la frase se contradice con el
+                 aviso de abajo. -->
             Se creará un pedido <strong>nuevo</strong> en DUX con los datos editados y el
-            pedido anterior #{{ pedidoAnteriorId() }} quedará <strong>anulado</strong> automáticamente.
+            pedido anterior #{{ pedidoAnteriorId() }} quedará <strong>anulado acá, en el showroom</strong>.
             @if (pedidoAnteriorEnviadoADux()) {
               <span class="text-amber-700 dark:text-amber-300 font-semibold">
                 Acordate de cancelar a mano el comprobante del pedido #{{ pedidoAnteriorId() }} en DUX
@@ -49,11 +53,19 @@
         <div class="flex flex-col gap-1.5 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-xs">
           <div class="flex items-center gap-2 font-semibold text-amber-800 dark:text-amber-300">
             <i class="pi pi-exclamation-triangle"></i>
-            {{ cambiosPrecio().length }} producto(s) cambiaron de precio desde el presupuesto
+            {{ cambiosPrecio().length }}
+            {{ cambiosPrecio().length === 1 ? 'precio cambió' : 'precios cambiaron' }}
+            en el catálogo desde que se guardó el presupuesto
           </div>
+          <!-- El consejo tiene que servir en los dos contextos que muestran este
+               banner: la edición del presupuesto (donde "Actualizar precios" está
+               en el toolbar) y el historial (donde hay que abrir el presupuesto
+               primero). No mandamos a rehacer el presupuesto: "Actualizar precios"
+               conserva número, cliente, cantidades y descuentos. -->
           <div class="text-[11px] text-amber-700 dark:text-amber-400">
-            El pedido se crea con el precio del presupuesto. Si querés los precios
-            nuevos, cancelá y rehacé el presupuesto.
+            El pedido se crea con los precios del presupuesto. Si querés los precios
+            nuevos, cancelá y, en la edición del presupuesto, tocá "Actualizar precios"
+            y guardá los cambios.
           </div>
           <ul class="flex flex-col gap-1 mt-1 list-none p-0 m-0">
             @for (c of cambiosPrecio(); track c.sku) {
@@ -120,8 +132,9 @@
           <input pInputText type="text" class="w-full"
             [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
             maxlength="150"
-            placeholder="Opcional — solo para la ficha"
-            pTooltip="Se guarda en la ficha del cliente. No se sube a DUX." tooltipPosition="top" />
+            placeholder="Opcional — no se sube a DUX"
+            pTooltip="Se guarda en el pedido y en la ficha del cliente. A DUX va solo la razón social."
+            tooltipPosition="top" />
         </div>
       </div>
 
