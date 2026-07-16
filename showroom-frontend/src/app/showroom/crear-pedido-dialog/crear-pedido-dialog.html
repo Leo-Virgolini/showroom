@@ -95,13 +95,21 @@
       <!-- Datos del cliente — pre-llenados editables -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1 mb-1">
-            <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> Razón social <span class="text-red-500">*</span>
-          </label>
-          <p-autoComplete [ngModel]="pedidoRazonSocial()" (ngModelChange)="onRazonSocialChange($event)"
-            [suggestions]="sugerenciasRazonSocial()" (completeMethod)="buscarSugerenciasRazonSocial($event)"
-            optionLabel="razonSocial" field="razonSocial" [forceSelection]="false" [delay]="0"
-            placeholder="Razón social — se sube a DUX" inputStyleClass="w-full" class="w-full" />
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex items-center gap-1">
+              <i class="pi pi-id-card text-[#FF861C] text-[10px]"></i> Razón social <span class="text-red-500">*</span>
+            </label>
+            <button type="button"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold normal-case tracking-normal
+                     text-white bg-[#FF861C] border border-[#FF861C] shadow-sm hover:bg-[#e5760f] hover:border-[#e5760f]
+                     transition-colors"
+              (click)="mostrarSelectorCliente.set(true)">
+              <i class="pi pi-users text-[11px]"></i> Buscar cliente
+            </button>
+          </div>
+          <input pInputText type="text" id="pedidoRazonSocialInput" class="w-full"
+            [ngModel]="pedidoRazonSocial()" (ngModelChange)="pedidoRazonSocial.set($event)"
+            maxlength="150" placeholder="Razón social — se sube a DUX" />
         </div>
         <div>
           <label class="text-[10px] font-bold uppercase tracking-wider text-muted-color flex flex-wrap items-center gap-x-1 gap-y-0.5 mb-1">
@@ -131,8 +139,7 @@
           </label>
           <input pInputText type="text" class="w-full"
             [ngModel]="pedidoNombre()" (ngModelChange)="pedidoNombre.set($event)"
-            maxlength="150"
-            placeholder="Opcional — no se sube a DUX"
+            maxlength="150" placeholder="Opcional — no se sube a DUX"
             pTooltip="Se guarda en el pedido y en la ficha del cliente. A DUX va solo la razón social."
             tooltipPosition="top" />
         </div>
@@ -285,3 +292,8 @@
       (onClick)="confirmarCrearPedido()" />
   </ng-template>
 </p-dialog>
+
+<!-- Selector liviano de clientes (se abre desde el botón "Buscar cliente"). Al
+     elegir uno, onClienteDesdeSelector vuelca sus datos al formulario. -->
+<app-selector-cliente-dialog [(visible)]="mostrarSelectorCliente"
+  (seleccionado)="onClienteDesdeSelector($event)" />

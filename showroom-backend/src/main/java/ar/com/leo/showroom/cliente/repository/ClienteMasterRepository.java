@@ -51,19 +51,4 @@ public interface ClienteMasterRepository extends JpaRepository<ClienteMaster, Lo
     /** Clientes con ese CUIT (incluye eliminados), del más reciente al más viejo.
      *  Lo usa el upsert al crear pedido para reusar la fila formal del CUIT. */
     List<ClienteMaster> findByNroDocOrderByActualizadoAtDesc(Long nroDoc);
-
-    /** Autocompletado por razón social o nombre (no eliminados, case-insensitive,
-     *  sub-string). Ordena por actualización reciente. El {@link Pageable} limita
-     *  la cantidad de sugerencias. {@code :texto} debe venir con los comodines de
-     *  LIKE ya escapados ({@code \\}, {@code %}, {@code _}) — ver
-     *  {@code ClienteMasterService.escaparLike}; la cláusula {@code escape '\'} los
-     *  trata como literales para que un '%' tipeado no actúe de comodín. */
-    @Query("""
-            select c from ClienteMaster c
-            where c.eliminadoAt is null
-              and (lower(c.razonSocial) like lower(concat('%', :texto, '%')) escape '\\'
-                or lower(c.nombre) like lower(concat('%', :texto, '%')) escape '\\')
-            order by c.actualizadoAt desc
-            """)
-    List<ClienteMaster> buscarPorRazonSocialONombre(@Param("texto") String texto, Pageable pageable);
 }

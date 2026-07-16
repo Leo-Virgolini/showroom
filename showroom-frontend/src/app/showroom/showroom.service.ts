@@ -175,14 +175,6 @@ export class ShowroomService {
       .pipe(catchError(() => of(null)));
   }
 
-  /** Busca clientes guardados por razón social / nombre (autocompletado del
-   *  pedido). Best-effort: ante error devuelve lista vacía. */
-  buscarClientesPorRazonSocial(q: string): Observable<ClienteAutocompletar[]> {
-    const params = new HttpParams().set('q', q);
-    return this.http.get<ClienteAutocompletar[]>(`${this.base}/cliente-master/buscar`, { params })
-      .pipe(catchError(() => of([])));
-  }
-
   /** Regenera el pedido de un presupuesto editado: crea uno nuevo en DUX con
    *  `request`, anula el anterior (local) y re-vincula el presupuesto. El
    *  backend hace todo en una operación; no hay que llamar a

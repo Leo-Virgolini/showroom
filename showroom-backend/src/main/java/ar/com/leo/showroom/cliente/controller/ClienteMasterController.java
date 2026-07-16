@@ -59,16 +59,6 @@ public class ClienteMasterController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    /** Autocompletado del pedido por razón social / nombre: devuelve los clientes
-     *  guardados que coinciden con el texto, para que el operador elija uno y
-     *  precargue sus datos. Lista vacía si no hay coincidencias o el texto es muy
-     *  corto. */
-    @GetMapping("/buscar")
-    public java.util.List<ClienteAutocompletarDTO> buscarPorRazonSocial(
-            @org.springframework.web.bind.annotation.RequestParam(value = "q", required = false) String q) {
-        return service.buscarPorRazonSocial(q);
-    }
-
     /** Soft-delete por teléfono — oculta el cliente del listado sin tocar el
      *  historial. El path acepta el teléfono crudo (con guiones, espacios, etc.)
      *  y el service lo normaliza internamente. */

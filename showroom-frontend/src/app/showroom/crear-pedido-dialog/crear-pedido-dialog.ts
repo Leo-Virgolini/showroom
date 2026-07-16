@@ -30,12 +30,14 @@ import { TooltipModule } from 'primeng/tooltip';
 import {
   CategoriaFiscal,
   ClienteAutocompletar,
+  ClientePresupuestos,
   CrearPedidoRequest,
   FormaPago,
   Localidad,
   Provincia,
   OPCIONES_RUBRO_CLIENTE,
 } from '../models';
+import { SelectorClienteDialog } from '../selector-cliente-dialog/selector-cliente-dialog';
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
@@ -118,6 +120,7 @@ export interface PedidoClientePrefill {
     SelectModule,
     TextareaModule,
     TooltipModule,
+    SelectorClienteDialog,
   ],
   templateUrl: './crear-pedido-dialog.html',
   styleUrl: './crear-pedido-dialog.scss',
@@ -201,9 +204,8 @@ export class CrearPedidoDialog {
 
   // Datos del cliente — pre-llenados desde el presupuesto, editables.
   /** Razón social / apellido que va a DUX como `apellido_razon_social`. Antes
-   *  era un placeholder fijo ("PRESUPUESTO"); ahora es editable. Se pre-llena
-   *  con el nombre del presupuesto y lo puede completar/corregir el operador o
-   *  el autocompletado por CUIT/razón social. */
+   *  era un placeholder fijo ("PRESUPUESTO"); ahora es editable. Lo completa el
+   *  operador a mano, el auto-relleno por CUIT o el selector de clientes. */
   readonly pedidoRazonSocial = signal('');
   readonly pedidoNombre = signal('');
   readonly pedidoTelefono = signal('');
@@ -386,8 +388,8 @@ export class CrearPedidoDialog {
         this.cargandoDetallePresupuesto.set(false);
         // El nombre cargado en el presupuesto es el nombre INFORMAL del cliente →
         // va al campo "Nombre y apellido" (opcional, ficha de cliente). La razón
-        // social (formal, a DUX) arranca VACÍA: la completa el operador o la
-        // precarga el autocompletado por CUIT/razón social. No se asume del
+        // social (formal, a DUX) arranca VACÍA: la completa el operador, el
+        // auto-relleno por CUIT o el selector de clientes. No se asume del
         // presupuesto (el presupuesto no tiene razón social).
         this.pedidoNombre.set(det.clienteNombre ?? '');
         this.pedidoRazonSocial.set('');
@@ -613,76 +615,95 @@ export class CrearPedidoDialog {
   private autocompletarDesdeCuit(nroDoc: number): void {
     this.api.buscarClientePorCuit(nroDoc).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((cli) => {
       if (!cli) return;
-      if (this.completarDesdeCliente(cli) > 0) {
-        this.toast.add({
-          severity: 'info',
-          summary: 'Cliente reconocido',
-          detail: 'Completé los datos desde un cliente guardado.',
-          life: 4000,
-        });
-      }
+      this.completarDesdeCliente(cli);
+      this.notificarClienteSeleccionado(cli);
     });
   }
 
-  /** Completa SOLO los campos vacíos del formulario desde un cliente guardado.
-   *  Reutilizado por el autocompletado por CUIT y por razón social. Devuelve la
-   *  cantidad de campos completados. */
-  private completarDesdeCliente(cli: ClienteAutocompletar): number {
-    // Se reconoció un cliente guardado (por CUIT o razón social).
-    this.clienteExistente.set(true);
-    let completados = 0;
-    if (cli.razonSocial && !this.pedidoRazonSocial().trim()) { this.pedidoRazonSocial.set(cli.razonSocial); completados++; }
-    if (cli.nombre && !this.pedidoNombre().trim()) { this.pedidoNombre.set(cli.nombre); completados++; }
-    if (cli.email && !this.pedidoEmail().trim()) { this.pedidoEmail.set(cli.email); completados++; }
-    if (cli.telefono && !this.pedidoTelefono().trim()) { this.pedidoTelefono.set(cli.telefono); completados++; }
-    if (cli.nroDoc != null && this.pedidoCuit() == null) { this.pedidoCuit.set(cli.nroDoc); completados++; }
-    if (cli.rubro && !this.pedidoRubro()) { this.aplicarRubroPedido(cli.rubro); completados++; }
-    if (cli.domicilio && !this.pedidoDomicilio().trim()) { this.pedidoDomicilio.set(cli.domicilio); completados++; }
-    // Provincia/localidad: solo si la provincia está vacía (sino respetamos lo
-    // ya elegido). Al setear la provincia cargamos sus localidades y recién ahí
-    // completamos la localidad.
-    if (cli.codigoProvincia && !this.pedidoCodigoProvincia()) {
-      this.pedidoCodigoProvincia.set(cli.codigoProvincia);
-      completados++;
-      this.cargarLocalidadesYCompletar(cli.codigoProvincia, cli.idLocalidad ?? null);
-    }
-    return completados;
+  /** Toast único de "cliente seleccionado" — se dispara ante CUALQUIER forma de
+   *  reconocer/elegir un cliente (auto-relleno por CUIT o selector). Nombra al
+   *  cliente para que el operador confirme de un vistazo que es el correcto. */
+  private notificarClienteSeleccionado(cli: ClienteAutocompletar): void {
+    const nombre = cli.razonSocial?.trim() || cli.nombre?.trim() || 'el cliente';
+    this.toast.add({
+      severity: 'info',
+      summary: 'Cliente seleccionado',
+      detail: `Cargué los datos de ${nombre}.`,
+      life: 4000,
+    });
   }
 
-  /** True cuando el CUIT/razón social corresponden a un cliente ya guardado
-   *  (reconocido por el autocompletado). Se muestra como badge en el diálogo. */
+  /** Vuelca los datos de un cliente guardado al formulario.
+   *
+   *  <p>{@code sobrescribir} distingue los dos disparadores:
+   *   - Selección EXPLÍCITA de un cliente en el selector: {@code true} → pisa
+   *     TODOS los campos con los del cliente elegido (y vacía los que el cliente
+   *     no tiene) para que el form refleje exactamente a ese cliente, incluso si
+   *     el operador venía de elegir otro.
+   *   - Autocompletado pasivo por CUIT: {@code false} → sólo completa los campos
+   *     vacíos, sin pisar lo que el operador ya tipeó. */
+  private completarDesdeCliente(cli: ClienteAutocompletar, sobrescribir = false): void {
+    // Se reconoció un cliente guardado (por CUIT o desde el selector).
+    this.clienteExistente.set(true);
+    const aplicarTexto = (valor: string | null, actual: () => string, set: (v: string) => void) => {
+      if (sobrescribir) set(valor ?? '');
+      else if (valor && !actual().trim()) set(valor);
+    };
+    aplicarTexto(cli.razonSocial, this.pedidoRazonSocial, (v) => this.pedidoRazonSocial.set(v));
+    aplicarTexto(cli.nombre, this.pedidoNombre, (v) => this.pedidoNombre.set(v));
+    aplicarTexto(cli.email, this.pedidoEmail, (v) => this.pedidoEmail.set(v));
+    aplicarTexto(cli.telefono, this.pedidoTelefono, (v) => this.pedidoTelefono.set(v));
+    aplicarTexto(cli.domicilio, this.pedidoDomicilio, (v) => this.pedidoDomicilio.set(v));
+    if (sobrescribir) this.pedidoCuit.set(cli.nroDoc ?? null);
+    else if (cli.nroDoc != null && this.pedidoCuit() == null) this.pedidoCuit.set(cli.nroDoc);
+    if (sobrescribir) {
+      if (cli.rubro) this.aplicarRubroPedido(cli.rubro);
+      else { this.pedidoRubro.set(null); this.pedidoRubroOtros.set(''); }
+    } else if (cli.rubro && !this.pedidoRubro()) { this.aplicarRubroPedido(cli.rubro); }
+    // Provincia/localidad: al setear la provincia cargamos sus localidades y
+    // recién ahí completamos la localidad. En modo pasivo respetamos lo ya
+    // elegido; sobrescribiendo, la provincia del cliente manda (o se limpia).
+    if (cli.codigoProvincia && (sobrescribir || !this.pedidoCodigoProvincia())) {
+      this.pedidoCodigoProvincia.set(cli.codigoProvincia);
+      this.pedidoIdLocalidad.set(null);
+      this.cargarLocalidadesYCompletar(cli.codigoProvincia, cli.idLocalidad ?? null, sobrescribir);
+    } else if (sobrescribir && !cli.codigoProvincia) {
+      this.localidadesSub?.unsubscribe();
+      this.localidadesSub = null;
+      this.pedidoCodigoProvincia.set(null);
+      this.pedidoIdLocalidad.set(null);
+      this.localidadesPedido.set([]);
+    }
+  }
+
+  /** True cuando se reconoció al cliente como ya guardado (por el auto-relleno del
+   *  CUIT o el selector). Se muestra como badge en el diálogo. */
   readonly clienteExistente = signal(false);
 
-  /** Sugerencias del autocomplete por razón social (clientes guardados). */
-  readonly sugerenciasRazonSocial = signal<ClienteAutocompletar[]>([]);
+  /** Visibilidad del selector liviano de clientes (botón junto a Razón social). */
+  readonly mostrarSelectorCliente = signal(false);
 
-  /** completeMethod del p-autoComplete de razón social: busca clientes guardados
-   *  cuyo razón social/nombre coincida con lo tipeado. */
-  buscarSugerenciasRazonSocial(event: { query: string }): void {
-    const q = (event.query ?? '').trim();
-    if (q.length < 2) { this.sugerenciasRazonSocial.set([]); return; }
-    this.api.buscarClientesPorRazonSocial(q).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((lista) => this.sugerenciasRazonSocial.set(lista));
-  }
-
-  /** ngModelChange del p-autoComplete de razón social. Si llega un objeto, el
-   *  operador eligió una sugerencia → completamos el resto y fijamos la razón
-   *  social; si llega un string, es texto libre. */
-  onRazonSocialChange(value: string | ClienteAutocompletar): void {
-    if (value && typeof value === 'object') {
-      this.pedidoRazonSocial.set(value.razonSocial ?? value.nombre ?? '');
-      const completados = this.completarDesdeCliente(value);
-      if (completados > 0) {
-        this.toast.add({
-          severity: 'info',
-          summary: 'Cliente reconocido',
-          detail: 'Completé los datos desde un cliente guardado.',
-          life: 4000,
-        });
-      }
-    } else {
-      this.pedidoRazonSocial.set(value ?? '');
-    }
+  /** Cliente elegido en el selector liviano (botón "Buscar cliente"). El selector
+   *  emite un {@link ClientePresupuestos} (forma de la vista /clientes); lo
+   *  mapeamos a {@link ClienteAutocompletar} y reusamos el mismo volcado
+   *  "sobrescribir todo" + toast que las demás vías. Devolvemos el foco al campo
+   *  Razón social al cerrar. */
+  onClienteDesdeSelector(cli: ClientePresupuestos): void {
+    const mapeado: ClienteAutocompletar = {
+      razonSocial: cli.razonSocial,
+      nombre: cli.nombre,
+      email: cli.email,
+      telefono: cli.telefono,
+      rubro: cli.rubro,
+      tipoDoc: cli.tipoDoc,
+      nroDoc: cli.nroDoc,
+      domicilio: cli.domicilio,
+      codigoProvincia: cli.codigoProvincia,
+      idLocalidad: cli.idLocalidad,
+    };
+    this.completarDesdeCliente(mapeado, true);
+    this.notificarClienteSeleccionado(mapeado);
+    setTimeout(() => document.getElementById('pedidoRazonSocialInput')?.focus(), 0);
   }
 
   /** Handler del dropdown de rubro. Setea el signal y, cuando el usuario elige
@@ -709,9 +730,10 @@ export class CrearPedidoDialog {
     }
   }
 
-  /** Carga las localidades de una provincia y completa la localidad SOLO si
-   *  todavía está vacía (autocompletado no destructivo). */
-  private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null): void {
+  /** Carga las localidades de una provincia y completa la localidad. En modo
+   *  pasivo ({@code sobrescribir=false}) sólo la setea si todavía está vacía
+   *  (autocompletado no destructivo); sobrescribiendo, la del cliente manda. */
+  private cargarLocalidadesYCompletar(codigoProvincia: string, idLocalidad: string | null, sobrescribir = false): void {
     this.cargandoLocalidadesPedido.set(true);
     this.localidadesSub?.unsubscribe();
     this.localidadesSub = this.api.obtenerLocalidades(codigoProvincia)
@@ -719,7 +741,7 @@ export class CrearPedidoDialog {
       next: (lista) => {
         this.cargandoLocalidadesPedido.set(false);
         this.localidadesPedido.set(lista);
-        if (idLocalidad && !this.pedidoIdLocalidad()) this.pedidoIdLocalidad.set(idLocalidad);
+        if (idLocalidad && (sobrescribir || !this.pedidoIdLocalidad())) this.pedidoIdLocalidad.set(idLocalidad);
         this.localidadesSub = null;
       },
       error: () => {

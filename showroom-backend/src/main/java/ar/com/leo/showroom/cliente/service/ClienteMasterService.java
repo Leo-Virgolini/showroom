@@ -269,34 +269,6 @@ public class ClienteMasterService {
     }
 
     /**
-     * Autocompletado por razón social / nombre: busca clientes del maestro (no
-     * eliminados) cuyo razón social o nombre contenga el texto tipeado. Devuelve
-     * los candidatos para que el operador elija uno y precargue los datos.
-     * Limitado a 10 resultados para no inundar el dropdown.
-     */
-    public java.util.List<ClienteAutocompletarDTO> buscarPorRazonSocial(String q) {
-        if (!StringUtils.hasText(q)) return java.util.List.of();
-        String texto = q.trim();
-        if (texto.length() < 2) return java.util.List.of();
-        return repository
-                .buscarPorRazonSocialONombre(escaparLike(texto),
-                        org.springframework.data.domain.PageRequest.of(0, 10))
-                .stream()
-                .map(this::toAutocompletar)
-                .toList();
-    }
-
-    /** Escapa los comodines de LIKE ({@code \}, {@code %}, {@code _}) para que un
-     *  texto tipeado por el operador se busque como literal y no como patrón. El
-     *  backslash va primero (sino re-escaparía los que agregamos). Pareado con la
-     *  cláusula {@code escape '\'} de {@code buscarPorRazonSocialONombre}. */
-    private static String escaparLike(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_");
-    }
-
-    /**
      * Guarda/actualiza el cliente formal a partir de un pedido recién creado.
      * Es lo que "guarda al cliente en la tabla" cuando se genera un pedido con
      * CUIT. Identifica la fila por CUIT (la más reciente con ese documento); si

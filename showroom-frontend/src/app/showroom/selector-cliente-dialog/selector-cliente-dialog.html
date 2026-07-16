@@ -1,0 +1,76 @@
+<!-- ============= SELECTOR LIVIANO DE CLIENTES =============
+     Abre sobre el modal de pedido. Buscador server-side + lista compacta con
+     "Cargar más". Al clickear una fila emite (seleccionado) y se cierra. -->
+<p-dialog [visible]="visible()" (visibleChange)="visible.set($event)" [modal]="true"
+  [style]="{ width: '95vw', maxWidth: '38rem' }" [breakpoints]="{ '768px': '95vw' }"
+  [draggable]="false" [dismissableMask]="true">
+  <ng-template #header>
+    <div class="flex items-center gap-2 text-[#3B1E09] dark:text-surface-0">
+      <i class="pi pi-users text-[#FF861C]"></i>
+      <span class="font-bold">Buscar cliente</span>
+    </div>
+  </ng-template>
+
+  <div class="flex flex-col gap-3">
+    <!-- Buscador -->
+    <p-iconField iconPosition="left">
+      <p-inputIcon class="pi pi-search" />
+      <input pInputText type="text" class="w-full"
+        [ngModel]="busqueda()" (ngModelChange)="onBusqueda($event)"
+        placeholder="Razón social, nombre, CUIT o teléfono…" autofocus />
+    </p-iconField>
+
+    <!-- Lista -->
+    <div class="flex flex-col rounded-lg border border-surface-200 dark:border-surface-700 overflow-hidden">
+      <div class="max-h-[50vh] overflow-y-auto divide-y divide-surface-100 dark:divide-surface-800">
+        @for (cli of items(); track cli.telefono) {
+          <button type="button"
+            class="w-full text-left px-3 py-2 flex flex-col gap-0.5 hover:bg-[#FFF3E8] dark:hover:bg-surface-800 transition-colors"
+            (click)="elegir(cli)">
+            <span class="font-medium text-surface-800 dark:text-surface-0 truncate">
+              {{ etiqueta(cli) }}
+            </span>
+            <span class="text-[11px] text-muted-color flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular-nums">
+              @if (cli.nroDoc != null) {
+                <span><i class="pi pi-id-card text-[9px] mr-0.5"></i>{{ cli.nroDoc }}</span>
+              }
+              @if (cli.telefono) {
+                <span><i class="pi pi-phone text-[9px] mr-0.5"></i>{{ cli.telefono }}</span>
+              }
+              @if (cli.localidadNombre) {
+                <span class="truncate"><i class="pi pi-map-marker text-[9px] mr-0.5"></i>{{ cli.localidadNombre }}</span>
+              }
+              @if (cli.rubro) {
+                <span class="truncate opacity-80"><i class="pi pi-tag text-[9px] mr-0.5"></i>{{ cli.rubro }}</span>
+              }
+            </span>
+          </button>
+        }
+
+        <!-- Estado vacío (sin resultados y no cargando) -->
+        @if (items().length === 0 && !cargando()) {
+          <div class="px-3 py-8 text-center text-sm text-muted-color">
+            No se encontraron clientes.
+          </div>
+        }
+      </div>
+
+      <!-- Pie: spinner / cargar más -->
+      @if (cargando() || hayMas()) {
+        <div class="flex items-center justify-center gap-2 px-3 py-2 border-t border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-900">
+          @if (cargando()) {
+            <p-progressSpinner class="!w-5 !h-5" strokeWidth="5" />
+            <span class="text-xs text-muted-color">Cargando…</span>
+          } @else {
+            <p-button label="Cargar más" icon="pi pi-angle-down" severity="secondary"
+              [text]="true" size="small" (onClick)="cargarMas()" />
+          }
+        </div>
+      }
+    </div>
+
+    <p class="text-[11px] text-muted-color">
+      Tocá un cliente para completar el pedido con sus datos.
+    </p>
+  </div>
+</p-dialog>

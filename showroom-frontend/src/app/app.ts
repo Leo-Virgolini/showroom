@@ -450,6 +450,13 @@ export class App {
       next: (resp) => {
         const blob = resp.body;
         if (!blob) return;
+        // El pickit del carrito se descarga MIENTRAS el modal de pedido está
+        // abierto (el operador puede estar tipeando la razón social): al disparar
+        // la descarga el navegador abre su panel de descargas y le roba el foco
+        // al input activo. Guardamos ese elemento y lo re-enfocamos después.
+        // El panel aparece de forma asíncrona, así que reintentamos en el próximo
+        // tick y un poco más tarde para ganarle a ese robo de foco.
+        const focoPrevio = document.activeElement as HTMLElement | null;
         const nombre = this.nombreArchivo(path);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -459,10 +466,32 @@ export class App {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
+        this.restaurarFoco(focoPrevio);
       },
       error: (err) => {
         toastError(this.toast, 'Descarga pickit', err, 'No se pudo descargar el pickit generado.');
       },
     });
+  }
+
+  /** Devuelve el foco a un input que el panel de descargas del navegador pudo
+   *  haber robado. Reintenta en el próximo tick y ~200ms después porque ese
+   *  panel aparece async y un solo intento sincrónico puede quedar pisado.
+   *  `preventScroll` evita saltos en el scroll del modal. No hace nada si el
+   *  elemento ya no existe o era el body (no había input enfocado). */
+  private restaurarFoco(el: HTMLElement | null): void {
+    if (!el || el === document.body || typeof el.focus !== 'function') return;
+    const enfocar = () => {
+      // Solo re-enfocamos si el foco realmente se perdió (lo robó el panel de
+      // descargas: el activo pasa a ser el body). Si el operador ya se movió a
+      // otro campo a propósito, no se lo pisamos.
+      const activo = document.activeElement;
+      if ((activo === null || activo === document.body) && document.contains(el)) {
+        el.focus({ preventScroll: true });
+      }
+    };
+    enfocar();
+    setTimeout(enfocar, 0);
+    setTimeout(enfocar, 200);
   }
 }
