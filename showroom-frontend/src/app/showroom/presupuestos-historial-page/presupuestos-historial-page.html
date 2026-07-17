@@ -420,7 +420,7 @@
                             <div class="font-medium text-[#3B1E09] dark:text-surface-0">
                               {{ fp.nombre }}
                               @if (fp.cantidadCuotas && fp.cantidadCuotas > 1 && !nombreIncluyeCuotas(fp.nombre, fp.cantidadCuotas)) {
-                                <span class="text-muted-color text-xs"> · {{ fp.cantidadCuotas }} cuotas</span>
+                                <span class="text-muted-color text-xs"> · {{ fp.cantidadCuotas }} cuotas de {{ fp.monedaSimbolo || '$' }} {{ fp.precioFinal / fp.cantidadCuotas | number:'1.0-0' }}</span>
                               }
                             </div>
                             <div class="tabular-nums font-bold text-primary mt-0.5">

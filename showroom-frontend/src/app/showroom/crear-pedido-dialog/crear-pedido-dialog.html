@@ -252,13 +252,12 @@
                 <i [class]="iconoForma(f)" class="text-[#FF861C] shrink-0"></i>
                 <div class="flex flex-col min-w-0 flex-1">
                   <span class="font-medium truncate">{{ f.nombre }}</span>
-                  <span class="text-[10px] text-muted-color flex items-center gap-1.5">
-                    @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
-                      <span>{{ f.cantidadCuotas }} cuotas</span>
-                      <span class="opacity-50">·</span>
-                    }
-                    <span>{{ f.aplicaIva ? 'con IVA' : 'sin IVA' }}</span>
-                  </span>
+                  @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
+                    <span class="text-[10px] text-muted-color">
+                      {{ f.cantidadCuotas }} cuotas de
+                      {{ totalParaFormaPago(f) / f.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}
+                    </span>
+                  }
                 </div>
               </div>
               <span class="font-bold text-[#3B1E09] dark:text-surface-0 tabular-nums text-sm shrink-0">

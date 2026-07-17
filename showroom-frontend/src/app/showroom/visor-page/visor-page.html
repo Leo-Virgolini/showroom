@@ -169,7 +169,7 @@
       </div>
       @if (forma.cantidadCuotas && forma.cantidadCuotas > 1) {
       <div class="text-base sm:text-lg font-semibold text-[#3B1E09]/70 dark:text-muted-color">
-        {{ forma.cantidadCuotas }} × {{ precioReferenciaPorForma(r, forma) / forma.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}
+        {{ forma.cantidadCuotas }} cuotas de {{ precioReferenciaPorForma(r, forma) / forma.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}
       </div>
       }
     </div>

@@ -227,7 +227,12 @@
                   </span>
                   @if (p.cantidadCuotas && p.cantidadCuotas > 1 && !nombreIncluyeCuotas(p.formaPagoNombre, p.cantidadCuotas)) {
                     <div class="flex items-center gap-1 flex-wrap">
-                      <span class="text-[0.65rem] text-muted-color tabular-nums">{{ p.cantidadCuotas }} cuotas</span>
+                      <span class="text-[0.65rem] text-muted-color tabular-nums">
+                        {{ p.cantidadCuotas }} cuotas
+                        @if (p.total != null) {
+                          de {{ p.total / p.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}
+                        }
+                      </span>
                     </div>
                   }
                 </div>
@@ -396,7 +401,7 @@
                           <dd>
                             <span class="font-medium">{{ det.formaPagoNombre }}</span>
                             @if (det.cantidadCuotas && det.cantidadCuotas > 1 && !nombreIncluyeCuotas(det.formaPagoNombre, det.cantidadCuotas)) {
-                              <span class="text-muted-color"> · {{ det.cantidadCuotas }} cuotas</span>
+                              <span class="text-muted-color"> · {{ det.cantidadCuotas }} cuotas@if (det.total != null) { de {{ det.total / det.cantidadCuotas | currency:'ARS':'symbol':'1.0-0' }}}</span>
                             }
                             @if (det.recargoPorcentaje && det.recargoPorcentaje > 0) {
                               <span

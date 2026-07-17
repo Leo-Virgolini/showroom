@@ -387,7 +387,7 @@
                     @if (f.cantidadCuotas && f.cantidadCuotas > 1) {
                       <div class="text-xs text-muted-color flex items-center gap-1 mt-0.5">
                         <i class="pi pi-clone text-[10px]"></i>
-                        {{ f.cantidadCuotas }} × {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
+                        {{ f.cantidadCuotas }} cuotas de {{ (f.precioFinal / f.cantidadCuotas) | currency:'ARS':'symbol':'1.0-0' }}
                       </div>
                     }
                   </div>
