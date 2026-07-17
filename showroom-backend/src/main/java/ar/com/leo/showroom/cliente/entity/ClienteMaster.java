@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -137,10 +136,6 @@ public class ClienteMaster {
     @Column(name = "cantidad_pedidos", nullable = false)
     @Builder.Default
     private int cantidadPedidos = 0;
-
-    /** Total sin IVA del movimiento más reciente (presupuesto o pedido). */
-    @Column(name = "ultimo_total_sin_iva", precision = 18, scale = 2)
-    private BigDecimal ultimoTotalSinIva;
 
     /** Id del presupuesto más reciente — deep-link al historial. Null si el
      *  cliente solo tiene pedidos. */

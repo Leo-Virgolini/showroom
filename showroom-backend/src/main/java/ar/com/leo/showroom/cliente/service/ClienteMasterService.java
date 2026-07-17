@@ -194,18 +194,15 @@ public class ClienteMasterService {
 
         Instant ultPresupAt = ultPresup != null ? ultPresup.getCreadoAt() : null;
         Instant ultPedidoAt = ultPedido != null ? ultPedido.getCreadoAt() : null;
-        // El movimiento más reciente entre ambos tipos define último mov + total.
+        // El movimiento más reciente entre ambos tipos define el último mov.
         // En empate (mismo instante) gana el presupuesto, igual que el agregador
         // en memoria que reemplazaba el canónico solo si era ESTRICTAMENTE más nuevo.
         if (ultPedidoAt != null && (ultPresupAt == null || ultPedidoAt.isAfter(ultPresupAt))) {
             master.setUltimoMovimientoAt(ultPedidoAt);
-            master.setUltimoTotalSinIva(ultPedido.getTotalSinIva());
         } else if (ultPresupAt != null) {
             master.setUltimoMovimientoAt(ultPresupAt);
-            master.setUltimoTotalSinIva(ultPresup.getSubtotalSinIva());
         } else {
             master.setUltimoMovimientoAt(null);
-            master.setUltimoTotalSinIva(null);
         }
 
         master.setPrimerMovimientoAt(minInstant(

@@ -49,7 +49,7 @@ class ClienteMasterActividadTest {
     }
 
     @Test
-    void presupuestoMasRecienteQuePedido_defineUltimoMovimientoYTotal() {
+    void presupuestoMasRecienteQuePedido_defineUltimoMovimiento() {
         ClienteMaster master = ClienteMaster.builder().telefonoNormalizado(TEL).build();
         Instant t0 = Instant.parse("2026-01-01T00:00:00Z");
         Instant tPedido = Instant.parse("2026-02-01T00:00:00Z");
@@ -72,7 +72,6 @@ class ClienteMasterActividadTest {
         assertThat(master.getCantidadPresupuestos()).isEqualTo(2);
         assertThat(master.getCantidadPedidos()).isEqualTo(1);
         assertThat(master.getUltimoMovimientoAt()).isEqualTo(tPresup);
-        assertThat(master.getUltimoTotalSinIva()).isEqualByComparingTo("500");
         assertThat(master.getUltimoPresupuestoId()).isEqualTo(10);
         assertThat(master.getUltimoPedidoId()).isEqualTo(20);
         assertThat(master.getPrimerMovimientoAt()).isEqualTo(t0);
@@ -80,7 +79,7 @@ class ClienteMasterActividadTest {
     }
 
     @Test
-    void pedidoMasReciente_defineUltimoTotalDesdeElPedido() {
+    void pedidoMasReciente_defineUltimoMovimientoDesdeElPedido() {
         ClienteMaster master = ClienteMaster.builder().telefonoNormalizado(TEL).build();
         Instant tPresup = Instant.parse("2026-02-01T00:00:00Z");
         Instant tPedido = Instant.parse("2026-03-01T00:00:00Z");
@@ -100,7 +99,6 @@ class ClienteMasterActividadTest {
         service.recalcularActividad(TEL);
 
         assertThat(master.getUltimoMovimientoAt()).isEqualTo(tPedido);
-        assertThat(master.getUltimoTotalSinIva()).isEqualByComparingTo("300");
         assertThat(master.getPrimerMovimientoAt()).isEqualTo(tPresup);
     }
 

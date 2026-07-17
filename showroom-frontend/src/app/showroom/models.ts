@@ -1009,7 +1009,6 @@ export interface ClientePresupuestos {
   /** Fecha del movimiento más reciente — define los datos canónicos
    *  (nombre/email/rubro) y el orden de la tabla. */
   ultimoMovimientoAt: string;
-  ultimoTotalSinIva: number | null;
   /** ID del último presupuesto — null si solo tiene pedidos. */
   ultimoPresupuestoId: number | null;
   /** ID del último pedido — null si solo tiene presupuestos. */

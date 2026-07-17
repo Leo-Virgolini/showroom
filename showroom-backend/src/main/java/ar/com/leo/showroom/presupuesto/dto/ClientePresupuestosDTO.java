@@ -1,6 +1,5 @@
 package ar.com.leo.showroom.presupuesto.dto;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 
 /**
@@ -17,8 +16,8 @@ import java.time.Instant;
  *
  * <p>El "movimiento más reciente" es el que tiene la fecha {@code creadoAt}
  * mayor entre presupuestos y pedidos combinados — eso define {@code nombre},
- * {@code email}, {@code rubro}, {@code ultimoMovimientoAt} y
- * {@code ultimoTotalSinIva}. {@code ultimoPresupuestoId} y
+ * {@code email}, {@code rubro} y {@code ultimoMovimientoAt}.
+ * {@code ultimoPresupuestoId} y
  * {@code ultimoPedidoId} se completan independientemente para que el
  * frontend pueda ofrecer "Ver presupuestos" y "Ver pedidos" como acciones
  * distintas.
@@ -37,11 +36,8 @@ public record ClientePresupuestosDTO(
         /** Fecha del movimiento más antiguo (presupuesto o pedido). */
         Instant primerMovimientoAt,
         /** Fecha del movimiento más reciente — define los datos "canónicos"
-         *  (nombre, email, rubro) y el total mostrado en pantalla. */
+         *  (nombre, email, rubro) y el orden del listado. */
         Instant ultimoMovimientoAt,
-        /** Total sin IVA del último movimiento. Útil para ver de un vistazo
-         *  cuánto fue la última operación con el cliente. */
-        BigDecimal ultimoTotalSinIva,
         /** ID del presupuesto más reciente — sirve para el deep-link al
          *  historial filtrado por este cliente. Null si solo tiene pedidos. */
         Long ultimoPresupuestoId,

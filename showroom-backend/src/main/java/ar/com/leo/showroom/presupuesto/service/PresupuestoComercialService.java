@@ -447,8 +447,7 @@ public class PresupuestoComercialService {
             Map.entry("domicilio", "domicilio"),
             Map.entry("cantidadPresupuestos", "cantidadPresupuestos"),
             Map.entry("cantidadPedidos", "cantidadPedidos"),
-            Map.entry("ultimoMovimientoAt", "ultimoMovimientoAt"),
-            Map.entry("ultimoTotalSinIva", "ultimoTotalSinIva"));
+            Map.entry("ultimoMovimientoAt", "ultimoMovimientoAt"));
 
     @Transactional(readOnly = true)
     public ClientesPageDTO listarClientes(String q, int page, int size,
@@ -525,7 +524,6 @@ public class PresupuestoComercialService {
                 m.getCantidadPedidos(),
                 m.getPrimerMovimientoAt(),
                 m.getUltimoMovimientoAt(),
-                m.getUltimoTotalSinIva(),
                 m.getUltimoPresupuestoId(),
                 m.getUltimoPedidoId(),
                 m.getTipoDoc(),
@@ -556,7 +554,7 @@ public class PresupuestoComercialService {
         return new ClientePresupuestosDTO(
                 dto.email(), dto.telefono(), dto.nombre(), dto.rubro(),
                 dto.cantidadPresupuestos(), dto.cantidadPedidos(),
-                dto.primerMovimientoAt(), dto.ultimoMovimientoAt(), dto.ultimoTotalSinIva(),
+                dto.primerMovimientoAt(), dto.ultimoMovimientoAt(),
                 dto.ultimoPresupuestoId(), dto.ultimoPedidoId(),
                 dto.tipoDoc(), dto.nroDoc(), dto.domicilio(),
                 dto.codigoProvincia(), provNombre,
