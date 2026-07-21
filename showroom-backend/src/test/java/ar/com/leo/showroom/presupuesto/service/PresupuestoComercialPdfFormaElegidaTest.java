@@ -38,16 +38,47 @@ class PresupuestoComercialPdfFormaElegidaTest {
     }
 
     @Test
-    void etiquetas_sinForma_usanEfectivo() {
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(null)).isEqualTo("Subtotal efectivo");
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(null)).isEqualTo("Total efectivo");
+    void etiquetas_sinForma_nombranLaFormaDeReferencia() {
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(null, "Efectivo"))
+                .isEqualTo("Subtotal efectivo");
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(null, "Efectivo"))
+                .isEqualTo("Total efectivo");
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(null, "Transferencia"))
+                .as("si la destacada cambia, la etiqueta la sigue")
+                .isEqualTo("Total transferencia");
+    }
+
+    @Test
+    void etiquetas_sinFormaNiReferencia_caenAGenerico() {
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(null, null))
+                .isEqualTo("Subtotal de referencia");
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(null, null))
+                .isEqualTo("Total de referencia");
     }
 
     @Test
     void etiquetas_conForma_usanNombre() {
         var f = forma(7L, "Transferencia", BigDecimal.ZERO, true, null, null);
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(f)).isEqualTo("Subtotal Transferencia");
-        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(f)).isEqualTo("Total Transferencia");
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaSubtotal(f, "Efectivo"))
+                .as("la forma elegida gana sobre la de referencia")
+                .isEqualTo("Subtotal Transferencia");
+        assertThat(PresupuestoComercialPdfGenerator.etiquetaTotal(f, "Efectivo"))
+                .isEqualTo("Total Transferencia");
+    }
+
+    @Test
+    void headerPrecio_nombraLaFormaDeReferenciaEnMayusculas() {
+        assertThat(PresupuestoComercialPdfGenerator.headerPrecioReferencia("Efectivo"))
+                .isEqualTo("PRECIO EFECTIVO");
+        assertThat(PresupuestoComercialPdfGenerator.headerPrecioReferencia("Transferencia S/F"))
+                .isEqualTo("PRECIO TRANSFERENCIA S/F");
+    }
+
+    @Test
+    void headerPrecio_sinReferencia_caeAGenerico() {
+        assertThat(PresupuestoComercialPdfGenerator.headerPrecioReferencia(null))
+                .as("menaje y maquinaria con destacadas distintas ⇒ ningún nombre describe la columna")
+                .isEqualTo("PRECIO REFERENCIA");
     }
 
     @Test

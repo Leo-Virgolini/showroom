@@ -71,7 +71,7 @@ import java.util.stream.Collectors;
 public class PresupuestoComercialService {
 
     private static final String SSE_EVENT = "presupuesto-comercial-email";
-    private static final String SUBJECT = "KT GASTRO — Presupuesto #";
+    private static final String SUBJECT = "Kitchen Tools — Presupuesto #";
 
     private final PresupuestoComercialRepository repository;
     private final PresupuestoComercialPdfGenerator pdfGenerator;
@@ -1025,12 +1025,12 @@ public class PresupuestoComercialService {
         return """
                 Hola %s,
 
-                Te dejamos adjunto el presupuesto #%d que armamos en KT GASTRO.
+                Te dejamos adjunto el presupuesto #%d que armamos en Kitchen Tools.
 
                 Cualquier consulta, estamos a disposición.
 
                 Saludos,
-                Equipo KT GASTRO
+                Equipo Kitchen Tools
                 """.formatted(nombre, id);
     }
 
@@ -1042,7 +1042,7 @@ public class PresupuestoComercialService {
                   </h2>
                   <p style="font-size: 14px; line-height: 1.6;">
                     Te dejamos adjunto el <strong>presupuesto #%d</strong> que armamos
-                    para vos en KT GASTRO. Tiene el detalle de los productos elegidos y
+                    para vos en Kitchen Tools. Tiene el detalle de los productos elegidos y
                     las formas de pago disponibles.
                   </p>
                   <p style="font-size: 14px; line-height: 1.6;">
@@ -1050,7 +1050,7 @@ public class PresupuestoComercialService {
                   </p>
                   <p style="font-size: 14px; color: #5a5a5a; margin-top: 24px;">
                     Saludos,<br>
-                    <strong style="color: #FF861C;">Equipo KT GASTRO</strong>
+                    <strong style="color: #FF861C;">Equipo Kitchen Tools</strong>
                   </p>
                 </div>
                 """.formatted(nombreEscapado, id);

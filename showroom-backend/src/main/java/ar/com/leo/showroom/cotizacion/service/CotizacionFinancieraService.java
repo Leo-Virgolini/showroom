@@ -34,7 +34,7 @@ import java.util.Optional;
 public class CotizacionFinancieraService {
 
     private static final String SSE_EVENT = "cotizacion-financiera-email";
-    private static final String SUBJECT = "KT GASTRO — Cotización financiera";
+    private static final String SUBJECT = "Kitchen Tools — Cotización financiera";
 
     private final CotizacionFinancieraPdfGenerator pdfGenerator;
     private final JavaMailSender mailSender;
@@ -174,12 +174,12 @@ public class CotizacionFinancieraService {
         return """
                 Hola %s,
 
-                Te dejamos adjunta la cotización financiera que armamos en KT GASTRO.
+                Te dejamos adjunta la cotización financiera que armamos en Kitchen Tools.
 
                 Cualquier consulta, estamos a disposición.
 
                 Saludos,
-                Equipo KT GASTRO
+                Equipo Kitchen Tools
                 """.formatted(nombre);
     }
 
@@ -191,7 +191,7 @@ public class CotizacionFinancieraService {
                   </h2>
                   <p style="font-size: 14px; line-height: 1.6;">
                     Te dejamos adjunta la <strong>cotización financiera</strong> que
-                    armamos para vos en KT GASTRO, con el detalle de las formas de pago
+                    armamos para vos en Kitchen Tools, con el detalle de las formas de pago
                     disponibles y su precio final.
                   </p>
                   <p style="font-size: 14px; line-height: 1.6;">
@@ -199,7 +199,7 @@ public class CotizacionFinancieraService {
                   </p>
                   <p style="font-size: 14px; color: #5a5a5a; margin-top: 24px;">
                     Saludos,<br>
-                    <strong style="color: #FF861C;">Equipo KT GASTRO</strong>
+                    <strong style="color: #FF861C;">Equipo Kitchen Tools</strong>
                   </p>
                 </div>
                 """.formatted(nombreEscapado);

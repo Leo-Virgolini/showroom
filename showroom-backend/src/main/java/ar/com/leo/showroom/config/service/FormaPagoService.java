@@ -51,7 +51,38 @@ public class FormaPagoService {
      *  null si ninguna. Fuente única para el precio "predefinido" que muestran el
      *  scan/visor/presupuestador y los generadores de PDF. */
     public FormaPago formaDestacada(boolean esMaquinaria) {
-        return listarActivas().stream()
+        return destacadaDe(listarActivas(), esMaquinaria);
+    }
+
+    /**
+     * Nombre de la forma destacada cuando es la MISMA para los dos perfiles
+     * (menaje y maquinaria), null si difieren o si falta alguna.
+     *
+     * <p>Lo consumen las vistas que muestran una sola columna de precio de
+     * referencia mezclando ítems de ambos perfiles (tablas y PDFs): sirve para
+     * rotular esa columna con el nombre real de la forma en vez de hardcodear
+     * "efectivo" — cuál es la destacada es configurable, así que un rótulo fijo
+     * puede terminar mintiéndole al cliente. Cuando los perfiles difieren no hay
+     * un nombre que describa toda la columna y el caller cae a "referencia".
+     *
+     * <p>Resuelve las dos formas en una sola pasada sobre {@link #listarActivas()}
+     * para no duplicar la query.
+     */
+    public String nombreFormaReferenciaComun() {
+        List<FormaPago> activas = listarActivas();
+        FormaPago menaje = destacadaDe(activas, false);
+        FormaPago maquinaria = destacadaDe(activas, true);
+        if (menaje == null || maquinaria == null) return null;
+        String nombreMenaje = menaje.getNombre() == null ? "" : menaje.getNombre().trim();
+        String nombreMaquinaria = maquinaria.getNombre() == null ? "" : maquinaria.getNombre().trim();
+        return !nombreMenaje.isEmpty() && nombreMenaje.equalsIgnoreCase(nombreMaquinaria)
+                ? nombreMenaje
+                : null;
+    }
+
+    /** Destacada del perfil dentro de una lista de activas ya resuelta. */
+    private static FormaPago destacadaDe(List<FormaPago> activas, boolean esMaquinaria) {
+        return activas.stream()
                 .filter(f -> esMaquinaria
                         ? Boolean.TRUE.equals(f.getPrecioReferenciaMaquinaria())
                         : Boolean.TRUE.equals(f.getPrecioReferencia()))

@@ -1,6 +1,7 @@
 package ar.com.leo.showroom.picking;
 
 import ar.com.leo.showroom.auth.repository.UsuarioRepository;
+import ar.com.leo.showroom.common.Branding;
 import ar.com.leo.showroom.common.exception.UserMessages;
 import ar.com.leo.showroom.events.PickingEmailEvent;
 import ar.com.leo.showroom.events.SyncEventService;
@@ -48,7 +49,7 @@ import java.util.function.Function;
 public class PickingEmailService {
 
     private static final String SSE_EVENT = "picking-email";
-    private static final String SUBJECT = "KT GASTRO — Productos que viste en el showroom";
+    private static final String SUBJECT = "Kitchen Tools — Productos que viste en el showroom";
 
     /** Genera el PDF de "ítems de interés" (productos vistos pero no comprados)
      *  en el formato agregado liviano — se usa tanto para sesiones abandonadas
@@ -405,15 +406,17 @@ public class PickingEmailService {
         return """
                 Hola %s,
 
-                Gracias por tu visita al showroom de KT GASTRO. En este email
+                Gracias por tu visita al showroom de Kitchen Tools. En este email
                 te dejamos un PDF con los productos que estuviste mirando, para
                 que los tengas a mano si querés consultarlos más adelante.
+
+                Podés ver todo nuestro catálogo en %s
 
                 Cualquier consulta, estamos a disposición.
 
                 Saludos,
-                Equipo KT GASTRO
-                """.formatted(nombreCliente);
+                Equipo Kitchen Tools
+                """.formatted(nombreCliente, Branding.TIENDA_URL);
     }
 
     private static String htmlBody(String nombreClienteEscapado) {
@@ -430,12 +433,28 @@ public class PickingEmailService {
                   <p style="font-size: 14px; line-height: 1.6;">
                     Cualquier consulta, estamos a disposición.
                   </p>
+                  <p style="margin: 24px 0 8px 0;">
+                    <a href="%s"
+                       style="display: inline-block; background: #FF861C; color: #ffffff;
+                              font-size: 14px; font-weight: bold; text-decoration: none;
+                              padding: 12px 24px; border-radius: 24px;">
+                      Ver todo nuestro catálogo
+                    </a>
+                  </p>
+                  <!-- Link en texto debajo del botón: Outlook desktop (motor Word)
+                       ignora border-radius y puede colapsar el padding del
+                       inline-block, así que el CTA puede verse roto. Este link
+                       plano garantiza que la URL siga siendo usable ahí. -->
+                  <p style="font-size: 13px; color: #5a5a5a; margin: 0;">
+                    <a href="%s" style="color: #FF861C;">%s</a>
+                  </p>
                   <p style="font-size: 14px; color: #5a5a5a; margin-top: 24px;">
                     Saludos,<br>
-                    <strong style="color: #FF861C;">Equipo KT GASTRO</strong>
+                    <strong style="color: #FF861C;">Equipo Kitchen Tools</strong>
                   </p>
                 </div>
-                """.formatted(nombreClienteEscapado);
+                """.formatted(nombreClienteEscapado, Branding.TIENDA_URL,
+                        Branding.TIENDA_URL, Branding.TIENDA_LABEL);
     }
 
     // =====================================================

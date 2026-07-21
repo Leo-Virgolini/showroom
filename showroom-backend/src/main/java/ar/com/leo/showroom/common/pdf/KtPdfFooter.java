@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.common.pdf;
 
+import ar.com.leo.showroom.common.Branding;
 import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.PdfArray;
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -20,7 +21,7 @@ import com.itextpdf.layout.properties.TextAlignment;
  * <ul>
  *   <li>Línea separadora fina de margen a margen.</li>
  *   <li>Izquierda: ícono K compacto + link clickeable a la tienda
- *       ({@value #TIENDA_URL}).</li>
+ *       ({@link Branding#TIENDA_URL}).</li>
  *   <li>Derecha: «Página X de Y».</li>
  * </ul>
  *
@@ -36,9 +37,8 @@ public final class KtPdfFooter {
     private KtPdfFooter() {
     }
 
-    /** URL de la tienda online — link clickeable al pie de cada página. */
-    public static final String TIENDA_URL = "https://kitchentools.com.ar/";
-    private static final String TIENDA_LABEL = "kitchentools.com.ar";
+    private static final String TIENDA_URL = Branding.TIENDA_URL;
+    private static final String TIENDA_LABEL = Branding.TIENDA_LABEL;
 
     private static final float MARGEN_X = 30f;      // margen lateral (los 3 generadores usan 30)
     private static final float LINEA_Y = 34f;       // y de la línea separadora

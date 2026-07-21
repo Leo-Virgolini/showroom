@@ -64,6 +64,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
@@ -132,7 +133,7 @@ public class PresupuestoComercialPdfGenerator {
      *  del precio rebajado comparten color para que el cliente asocie de un
      *  vistazo cada columna con su descuento. Ciclan si hay más escalones que
      *  colores. */
-    // Sin verde: ese color lo usa la columna PRECIO EFECTIVO y se confundiría
+    // Sin verde: ese color lo usa la columna de precio de referencia y se confundiría
     // con el primer escalón.
     private static final Color[] DESC_FG = new Color[]{
             new DeviceRgb(29, 78, 216),    // azul
@@ -281,14 +282,22 @@ public class PresupuestoComercialPdfGenerator {
                     }
                 } else {
                     List<EscalaDescuento> escalones = escalaDescuentoService.listar();
-                    agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones);
+                    String nombreFormaRef = formaPagoService.nombreFormaReferenciaComun();
+                    agregarTablaItemsInteres(doc, datos.items(), sinImagen, escalones, nombreFormaRef);
                     boolean hayItemExcluido = datos.items() != null
                             && datos.items().stream()
                                     .anyMatch(it -> rubroExcluyeDescuentos(it.rubro()));
-                    agregarNotaPreciosEfectivo(doc, !escalones.isEmpty(), hayItemExcluido);
+                    agregarNotaPreciosReferencia(doc, !escalones.isEmpty(), hayItemExcluido,
+                            nombreFormaRef);
                     agregarNotaMediosPago(doc);
                 }
                 agregarObservaciones(doc, datos);
+                // El agradecimiento cierra el documento, después de las
+                // observaciones — si quedara antes, el contenido que le sigue lo
+                // haría leer como un error de armado.
+                if (!mostrarTotalesYFormas) {
+                    agregarAgradecimientoVisita(doc);
+                }
             }
 
             // Pie de página (línea + logo/link a la tienda + "Página X de Y") en
@@ -553,12 +562,12 @@ public class PresupuestoComercialPdfGenerator {
                 // Chip azul con el precio (unitario si cant > 1, sino "Precio").
                 // Si hay descuento, agregamos al lado el precio de lista
                 // tachado en gris para reforzar el ahorro visualmente.
-                BigDecimal precioFinalEfectivo = precioUnitarioEfectivo(item);
+                BigDecimal precioFinalEfectivo = precioUnitarioReferencia(item);
                 String label = cantMayorAUno ? "P. unitario: " : "Precio: ";
                 Paragraph contenido = new Paragraph()
                         .add(new Text(label + formatPesos(precioFinalEfectivo)));
                 if (tieneDescuento) {
-                    BigDecimal listaSinIva = precioListaEfectivo(item);
+                    BigDecimal listaSinIva = precioListaReferencia(item);
                     // 4 espacios al tamaño normal (9pt) entre los dos precios
                     // para que la rayita del tachado no se conecte con el
                     // precio principal y haya aire visual.
@@ -838,7 +847,8 @@ public class PresupuestoComercialPdfGenerator {
         agregarCardTotal(doc,
                 subtotalBruto.setScale(2, RoundingMode.HALF_UP),
                 totalNeto.setScale(2, RoundingMode.HALF_UP),
-                formaElegida);
+                formaElegida,
+                formaElegida == null ? formaPagoService.nombreFormaReferenciaComun() : null);
     }
 
     // =====================================================
@@ -855,12 +865,38 @@ public class PresupuestoComercialPdfGenerator {
         return formas.stream().filter(f -> id.equals(f.id())).findFirst().orElse(null);
     }
 
-    static String etiquetaSubtotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
-        return elegida == null ? "Subtotal efectivo" : "Subtotal " + elegida.nombre();
+    /**
+     * Rótulos de la card de totales. Sin forma elegida los montos son los de la
+     * forma destacada, así que se la nombra igual que a la columna de precio
+     * ({@link #headerPrecioReferencia}) — si dijeran "efectivo" fijo y la
+     * destacada fuera otra, la card contradiría al header sobre los mismos
+     * números. {@code nombreReferencia} null → rótulo genérico.
+     */
+    static String etiquetaSubtotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida,
+                                   String nombreReferencia) {
+        return etiquetaMonto("Subtotal", elegida, nombreReferencia);
     }
 
-    static String etiquetaTotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida) {
-        return elegida == null ? "Total efectivo" : "Total " + elegida.nombre();
+    static String etiquetaTotal(GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida,
+                                String nombreReferencia) {
+        return etiquetaMonto("Total", elegida, nombreReferencia);
+    }
+
+    private static String etiquetaMonto(String prefijo,
+                                        GenerarPresupuestoRequestDTO.FormaPagoSnapshot elegida,
+                                        String nombreReferencia) {
+        if (elegida != null) return prefijo + " " + elegida.nombre();
+        return nombreReferencia != null
+                ? prefijo + " " + nombreReferencia.toLowerCase(Locale.ROOT)
+                : prefijo + " de referencia";
+    }
+
+    /** Header de la columna de precio de referencia: nombra a la forma destacada
+     *  (o "REFERENCIA" si menaje y maquinaria no comparten una). */
+    static String headerPrecioReferencia(String nombreReferencia) {
+        return nombreReferencia != null
+                ? "PRECIO " + nombreReferencia.toUpperCase(Locale.ROOT)
+                : "PRECIO REFERENCIA";
     }
 
     // =====================================================
@@ -1086,10 +1122,12 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
         tabla.addHeaderCell(celdaHeader("CANT."));
-        // "PRECIO EFECTIVO" = precio de contado (sin financiación). El régimen
+        // Sin forma elegida, la columna es el precio de contado (sin
+        // financiación) de la forma destacada — el header la nombra. El régimen
         // de IVA depende del rubro de cada ítem (s/IVA maquinaria, c/IVA el
         // resto), pero no se muestra el badge para no recargar la fila.
-        tabla.addHeaderCell(celdaHeaderPrecio(formaElegida));
+        tabla.addHeaderCell(celdaHeaderPrecio(formaElegida,
+                formaElegida == null ? formaPagoService.nombreFormaReferenciaComun() : null));
         tabla.addHeaderCell(celdaHeader("DESC.").setTextAlignment(TextAlignment.RIGHT));
         tabla.addHeaderCell(celdaHeader("TOTAL").setTextAlignment(TextAlignment.RIGHT));
 
@@ -1111,8 +1149,8 @@ public class PresupuestoComercialPdfGenerator {
             // IVA. En presupuestos mixtos cada fila puede llevar régimen distinto.
             boolean esMaquinaria = PrecioPerfilCalculator.esMaquinaria(it.rubro(), rubrosMaq);
             // Con una forma elegida el precio se expresa en ESA forma (su perfil
-            // de rubro). Sin forma ("Todas") es el PRECIO EFECTIVO (forma
-            // primaria): precioReferencia si viene, o el precio de lista por
+            // de rubro). Sin forma ("Todas") es el precio de referencia (forma
+            // destacada): precioReferencia si viene, o el precio de lista por
             // rubro (maquinaria s/IVA, resto c/IVA) en presupuestos viejos.
             BigDecimal precio;
             if (formaElegida != null) {
@@ -1287,7 +1325,8 @@ public class PresupuestoComercialPdfGenerator {
     private void agregarTablaItemsInteres(Document doc,
                                           List<GenerarPresupuestoRequestDTO.Item> items,
                                           PdfImagenReutilizable sinImagen,
-                                          List<EscalaDescuento> escalones) {
+                                          List<EscalaDescuento> escalones,
+                                          String nombreFormaReferencia) {
         Div seccion = new Div()
                 .setMarginTop(12)
                 .setBackgroundColor(ColorConstants.WHITE)
@@ -1347,7 +1386,8 @@ public class PresupuestoComercialPdfGenerator {
         tabla.addHeaderCell(celdaHeader(""));
         tabla.addHeaderCell(celdaHeader("CÓDIGO"));
         tabla.addHeaderCell(celdaHeader("DESCRIPCIÓN").setTextAlignment(TextAlignment.LEFT));
-        tabla.addHeaderCell(celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT));
+        tabla.addHeaderCell(celdaHeader(headerPrecioReferencia(nombreFormaReferencia))
+                .setTextAlignment(TextAlignment.RIGHT));
         for (int k = 0; k < nDesc; k++) {
             EscalaDescuento e = escalones.get(k);
             tabla.addHeaderCell(celdaHeaderDescuento(
@@ -1368,7 +1408,7 @@ public class PresupuestoComercialPdfGenerator {
 
             // Precio efectivo de contado (forma destacada, según rubro): viene ya
             // calculado en el item (precioReferencia); fallback al precio de lista.
-            BigDecimal precioReferencia = precioListaEfectivo(it);
+            BigDecimal precioReferencia = precioListaReferencia(it);
             boolean sinPrecio = precioReferencia.signum() <= 0;
             /** Producto de un rubro excluido (ej. MAQUINAS INDUSTRIALES): la
              *  fila muestra el precio efectivo de contado pero las columnas
@@ -1441,8 +1481,8 @@ public class PresupuestoComercialPdfGenerator {
                         .setMargin(0));
             }
 
-            // Precio efectivo rebajado por cada escalón. Misma base que la
-            // columna "PRECIO EFECTIVO" (forma destacada), multiplicada por (1 - %/100).
+            // Precio de referencia rebajado por cada escalón. Misma base que la
+            // columna de precio (forma destacada), multiplicada por (1 - %/100).
             // Si el producto no tiene precio, la celda queda en "—" igual que
             // el resto.
             List<Cell> celdasRebaja = new ArrayList<>(nDesc);
@@ -1498,9 +1538,12 @@ public class PresupuestoComercialPdfGenerator {
      * sobre el total de la compra y no acumulables, para que el cliente no
      * interprete que un solo producto ya accede al escalón mayor.
      */
-    private void agregarNotaPreciosEfectivo(Document doc, boolean hayDescuentos,
-                                            boolean hayItemExcluido) {
-        doc.add(new Paragraph("Precios en efectivo")
+    private void agregarNotaPreciosReferencia(Document doc, boolean hayDescuentos,
+                                            boolean hayItemExcluido,
+                                            String nombreFormaReferencia) {
+        doc.add(new Paragraph(nombreFormaReferencia != null
+                ? "Precios en " + nombreFormaReferencia.toLowerCase(Locale.ROOT)
+                : "Precios de referencia")
                 .setFontSize(9)
                 .setCharacterSpacing(0.3f)
                 .setFontColor(GRIS_MEDIO)
@@ -1529,6 +1572,30 @@ public class PresupuestoComercialPdfGenerator {
                     .setMarginTop(2)
                     .setMarginBottom(0));
         }
+    }
+
+    /**
+     * Cierre del PDF de ítems de interés: el cliente se lleva el archivo y puede
+     * abrirlo días después, así que el agradecimiento va acá y no solo en el mail
+     * — el PDF tiene que sostenerse solo. La URL de la tienda ya aparece como
+     * link en el pie de página ({@link KtPdfFooter}), por eso no se repite.
+     */
+    private void agregarAgradecimientoVisita(Document doc) {
+        // Margen amplio: separa el cierre del cintillo de medios de pago, que
+        // también va en bold 11pt y si no compite visualmente con él.
+        doc.add(new Paragraph("¡Gracias por tu visita!")
+                .simulateBold()
+                .setFontSize(11)
+                .setFontColor(KT_MARRON)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(26)
+                .setMarginBottom(0));
+        doc.add(new Paragraph("Te esperamos de nuevo en Kitchen Tools")
+                .setFontSize(9)
+                .setFontColor(GRIS_MEDIO)
+                .setTextAlignment(TextAlignment.CENTER)
+                .setMarginTop(2)
+                .setMarginBottom(0));
     }
 
     private void agregarNotaMediosPago(Document doc) {
@@ -1593,7 +1660,8 @@ public class PresupuestoComercialPdfGenerator {
      */
     private void agregarCardTotal(Document doc, BigDecimal subtotalBrutoArg,
                                   BigDecimal totalSinIvaArg,
-                                  GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
+                                  GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida,
+                                  String nombreFormaReferencia) {
         BigDecimal totalSinIva = totalSinIvaArg == null
                 ? BigDecimal.ZERO
                 : totalSinIvaArg;
@@ -1614,7 +1682,8 @@ public class PresupuestoComercialPdfGenerator {
             BigDecimal porcEfectivo = ahorro.multiply(BigDecimal.valueOf(100))
                     .divide(subtotalBruto, 2, RoundingMode.HALF_UP);
 
-            card.add(filaDesglose(etiquetaSubtotal(formaElegida), formatPesos(subtotalBruto), false, false));
+            card.add(filaDesglose(etiquetaSubtotal(formaElegida, nombreFormaReferencia),
+                    formatPesos(subtotalBruto), false, false));
             card.add(filaDesglose(
                     "Descuento (" + formatPorcentaje(porcEfectivo) + "%)",
                     "-" + formatPesos(ahorro), false, true));
@@ -1622,11 +1691,13 @@ public class PresupuestoComercialPdfGenerator {
                     .setMarginTop(4).setMarginBottom(4));
         }
 
-        // Total destacado — "efectivo" = precio de contado (sin financiación),
-        // coherente con la columna "PRECIO EFECTIVO" de la tabla. Sin etiqueta
-        // "s/IVA": el monto sigue el régimen de cada producto (maquinaria s/IVA,
-        // resto c/IVA), así que ya no es uniformemente sin IVA.
-        card.add(filaDesglose(etiquetaTotal(formaElegida), formatPesos(totalSinIva), true, false));
+        // Total destacado — sin forma elegida es el precio de contado (sin
+        // financiación) de la forma destacada, y la etiqueta la nombra igual que
+        // la columna de precio de la tabla. Sin etiqueta "s/IVA": el monto sigue
+        // el régimen de cada producto (maquinaria s/IVA, resto c/IVA), así que ya
+        // no es uniformemente sin IVA.
+        card.add(filaDesglose(etiquetaTotal(formaElegida, nombreFormaReferencia),
+                formatPesos(totalSinIva), true, false));
         // Forma en cuotas: mostrar el valor de cada cuota debajo del total para
         // que no se confunda el total con la cuota. Mismo formato "N cuotas de
         // $X" que el desglose de cuotas en modo individual (cuota = total / N).
@@ -1942,7 +2013,7 @@ public class PresupuestoComercialPdfGenerator {
      *  rubro: c/IVA menaje, s/IVA maquinaria), SIN descuento individual. Es el
      *  precio de lista que se muestra tachado cuando hay descuento. Fallback para
      *  presupuestos viejos sin `precioReferencia`: precio de lista sin IVA. */
-    private static BigDecimal precioListaEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+    private static BigDecimal precioListaReferencia(GenerarPresupuestoRequestDTO.Item item) {
         if (item.precioReferencia() != null) {
             return item.precioReferencia().setScale(2, RoundingMode.HALF_UP);
         }
@@ -1954,9 +2025,9 @@ public class PresupuestoComercialPdfGenerator {
     /** Precio EFECTIVO unitario con el descuento individual aplicado. Coincide
      *  con el total de la card "Efectivo" dividido por la cantidad — útil para
      *  que el cliente vea cuánto sale c/u al mejor precio. */
-    private static BigDecimal precioUnitarioEfectivo(GenerarPresupuestoRequestDTO.Item item) {
+    private static BigDecimal precioUnitarioReferencia(GenerarPresupuestoRequestDTO.Item item) {
         BigDecimal desc = item.descuentoPorcentaje() == null ? BigDecimal.ZERO : item.descuentoPorcentaje();
-        return precioListaEfectivo(item)
+        return precioListaReferencia(item)
                 .multiply(BigDecimal.ONE.subtract(desc.movePointLeft(2)))
                 .setScale(2, RoundingMode.HALF_UP);
     }
@@ -2008,13 +2079,17 @@ public class PresupuestoComercialPdfGenerator {
                         .setMargin(0));
     }
 
-    /** Celda del header de la columna de precio. Sin forma elegida es el
-     *  header simple ("PRECIO EFECTIVO"). Con forma elegida, da jerarquía:
-     *  "PRECIO" como título + el nombre de la forma como subtítulo más chico y
-     *  gris, para que un nombre largo no se amontone en varias líneas iguales. */
-    private static Cell celdaHeaderPrecio(GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida) {
+    /** Celda del header de la columna de precio. Sin forma elegida la columna
+     *  muestra el precio de la forma destacada, así que el header la nombra
+     *  ({@link #headerPrecioReferencia}) en vez de decir "EFECTIVO" fijo. Con
+     *  forma elegida, da jerarquía: "PRECIO" como título + el nombre de la forma
+     *  como subtítulo más chico y gris, para que un nombre largo no se amontone
+     *  en varias líneas iguales. */
+    private static Cell celdaHeaderPrecio(GenerarPresupuestoRequestDTO.FormaPagoSnapshot formaElegida,
+                                          String nombreFormaReferencia) {
         if (formaElegida == null) {
-            return celdaHeader("PRECIO EFECTIVO").setTextAlignment(TextAlignment.RIGHT);
+            return celdaHeader(headerPrecioReferencia(nombreFormaReferencia))
+                    .setTextAlignment(TextAlignment.RIGHT);
         }
         Cell c = new Cell()
                 .setBorder(Border.NO_BORDER)

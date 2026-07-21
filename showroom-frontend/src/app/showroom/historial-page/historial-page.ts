@@ -508,6 +508,11 @@ export class HistorialPage {
     return this.precioPerfil.rubroCotizaSinIva(rubro);
   }
 
+  /** Header de la columna de precio del detalle. La columna NO muestra el precio
+   *  de lista sino el de la forma destacada, así que el header la nombra para que
+   *  no se confunda con el precio que el cliente ve según SU forma de pago. */
+  readonly labelPrecioReferencia = this.precioPerfil.labelPrecioReferencia;
+
   /** Precio de REFERENCIA de un ítem del detalle = precio con la forma destacada
    *  del perfil (igual que el scan/visor). Delega en el servicio compartido; el
    *  ítem guarda el precio como `precioConIva`, así que se mapea al shape del

@@ -157,6 +157,30 @@ export class PrecioPerfilService {
     return precioPorForma(it.pvpKtGastroConIva, it.porcIva ?? null, perfil);
   }
 
+  /** Nombre de la forma destacada cuando es la MISMA para los dos perfiles
+   *  (menaje y maquinaria), null si difieren o si falta alguna. Lo usan las
+   *  tablas que muestran una sola columna de {@link precioReferencia} mezclando
+   *  ítems de ambos perfiles: sirve para rotularla con el nombre real en vez de
+   *  hardcodear "efectivo", que es configurable y puede dejar de ser cierto.
+   *  Espejo de `FormaPagoService.nombreFormaReferenciaComun()` del backend. */
+  readonly nombreFormaReferenciaComun = computed<string | null>(() => {
+    const menaje = this.formaDestacada(false);
+    const maquinaria = this.formaDestacada(true);
+    const nombre = menaje?.nombre?.trim();
+    const nombreMaq = maquinaria?.nombre?.trim();
+    return nombre && nombreMaq && nombre.toLowerCase() === nombreMaq.toLowerCase()
+      ? nombre
+      : null;
+  });
+
+  /** Rótulo de una columna de precio de referencia: nombra a la forma destacada
+   *  ("Precio efectivo"), o "Precio referencia" si los perfiles no comparten
+   *  una. Contraparte de `headerPrecioReferencia` del backend. */
+  readonly labelPrecioReferencia = computed(() => {
+    const nombre = this.nombreFormaReferenciaComun();
+    return nombre ? `Precio ${nombre.toLowerCase()}` : 'Precio referencia';
+  });
+
   /** Forma en la que se EXPRESAN los umbrales del descuento por monto dada la
    *  forma efectiva `sel` (la elegida en el toolbar, o la destacada del rubro):
    *  la propia `sel` si difiere de la de referencia (menaje), o null si coincide

@@ -1,5 +1,6 @@
 package ar.com.leo.showroom.common.pdf;
 
+import ar.com.leo.showroom.common.Branding;
 import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
@@ -38,7 +39,7 @@ class KtPdfFooterTest {
                 assertTrue(texto.contains("kitchentools.com.ar"),
                         "La página " + i + " debe mostrar el link a la tienda");
                 assertTrue(tieneLinkTienda(doc.getPage(i).getAnnotations()),
-                        "La página " + i + " debe tener el link clickeable a " + KtPdfFooter.TIENDA_URL);
+                        "La página " + i + " debe tener el link clickeable a " + Branding.TIENDA_URL);
             }
         }
     }
@@ -92,7 +93,7 @@ class KtPdfFooterTest {
                 .filter(java.util.Objects::nonNull)
                 .anyMatch(action -> {
                     var uri = action.getAsString(com.itextpdf.kernel.pdf.PdfName.URI);
-                    return uri != null && KtPdfFooter.TIENDA_URL.equals(uri.getValue());
+                    return uri != null && Branding.TIENDA_URL.equals(uri.getValue());
                 });
     }
 }
