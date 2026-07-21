@@ -87,10 +87,11 @@ export class CarritoBuscador {
    *  guardar" y replique el toast. */
   readonly mutacion = output<CarritoMutacion>();
 
-  /** Emitido cuando un dialog/overlay PROPIO ("Producto genérico" o "Ver
-   *  producto") pasa de abierto a cerrado. El componente ya se refoca a sí
-   *  mismo para lo que resuelve solo (scan, agregar); este evento existe porque
-   *  el guard "no robar foco en táctil" vive en el host. */
+  /** Emitido cuando un dialog/overlay PROPIO ("Producto genérico", "Ver
+   *  producto" o "SKUs no encontrados") pasa de abierto a cerrado. El
+   *  componente ya se refoca a sí mismo para lo que resuelve solo (scan,
+   *  agregar); este evento existe porque el guard "no robar foco en táctil"
+   *  vive en el host. */
   readonly dialogCerrado = output<void>();
 
   /** SKU comodín de DUX para "Producto genérico" — expuesto por el backend
@@ -182,13 +183,15 @@ export class CarritoBuscador {
     // Proveedores para el dropdown del filtro de búsqueda.
     this.cargarProveedores();
 
-    // Detecta la transición abierto→cerrado de CUALQUIERA de los dos
-    // dialogs/overlays propios ("Producto genérico" y "Ver producto") y
-    // emite `dialogCerrado` para que el host refoque el scan input con su
-    // guard táctil.
+    // Detecta la transición abierto→cerrado de CUALQUIERA de los tres
+    // dialogs/overlays propios ("Producto genérico", "Ver producto" y "SKUs
+    // no encontrados") y emite `dialogCerrado` para que el host refoque el
+    // scan input con su guard táctil.
     let habiaDialogAbierto = false;
     effect(() => {
-      const abierto = this.mostrarDialogGenerico() || this.productoPreview() != null;
+      const abierto = this.mostrarDialogGenerico()
+        || this.productoPreview() != null
+        || this.skusNoEncontrados().length > 0;
       if (habiaDialogAbierto && !abierto) {
         this.dialogCerrado.emit();
       }
