@@ -2,9 +2,13 @@
      Input de código/descripción/EAN + resultados de búsqueda. Autónomo: el
      componente resuelve todo (buscar, ordenar, filtrar por proveedor,
      paginar, previsualizar, agregar) sin intervención del host.
-     Envuelto en un contenedor sticky (lg+) para que el buscador quede
-     siempre a la vista mientras el operador scrollea. -->
-<div class="lg:sticky lg:top-3 z-10 bg-surface-0 dark:bg-surface-900">
+
+     El sticky NO va acá: un elemento sticky solo se desplaza dentro de su
+     contenedor, y acá el contenedor es el p-card del host, que mide lo que
+     mide este contenido → recorrido cero. Vive en la card entera, en
+     `presupuestos-page.html`, cuyo contenedor sí se estira a la altura de la
+     fila del grid. -->
+<div class="bg-surface-0 dark:bg-surface-900">
   <div class="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
     <div class="flex-1">
       <label for="scanInput" class="kt-label">

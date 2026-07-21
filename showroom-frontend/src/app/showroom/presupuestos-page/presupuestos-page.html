@@ -23,10 +23,20 @@
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
       <!-- ===== COLUMNA IZQUIERDA (desktop): buscador =====
-           Solo el buscador de productos (`carrito-buscador`, con sticky
-           interno). Va a la IZQUIERDA en lg+ vía `order`. -->
+           Solo el buscador de productos (`carrito-buscador`). Va a la
+           IZQUIERDA en lg+ vía `order`.
+
+           El sticky vive en la CARD, no adentro del componente: este div de
+           columna es un grid item, así que se estira a la altura de la fila
+           (que la marca el detalle, mucho más alto) y le da a la card el
+           recorrido que necesita para acompañar el scroll.
+
+           El max-h evita que la card supere la pantalla cuando hay 50
+           resultados cargados — sin ese techo el sticky vuelve a ser inútil.
+           El footer del total es `position: fixed` con z-index 30, así que
+           gana sobre el z-10 de la card y no se solapan. -->
       <div class="flex flex-col gap-4 order-2 lg:order-1">
-        <p-card class="kt-card">
+        <p-card class="kt-card lg:sticky lg:top-3 z-10 lg:max-h-[calc(100svh-1.5rem)] lg:overflow-y-auto">
           <ng-template #title>
             <div class="kt-card-title">
               <i class="pi pi-search"></i>
