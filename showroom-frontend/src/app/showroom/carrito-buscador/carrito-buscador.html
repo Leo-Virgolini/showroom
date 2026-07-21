@@ -357,7 +357,7 @@
 <!-- SKUs del archivo importado que no existen en el catálogo cacheado. Se
      abre DESPUÉS de haber agregado lo que sí se encontró: informa, no bloquea. -->
 <p-dialog header="SKUs no encontrados en el catálogo"
-  [visible]="skusNoEncontrados().length > 0" (visibleChange)="cerrarNoEncontrados()"
+  [visible]="skusNoEncontrados().length > 0" (visibleChange)="$event ? null : cerrarNoEncontrados()"
   [modal]="true" [draggable]="false"
   [style]="{ width: '95vw', maxWidth: '32rem' }" [breakpoints]="{ '640px': '95vw' }">
   <div class="flex flex-col gap-3">

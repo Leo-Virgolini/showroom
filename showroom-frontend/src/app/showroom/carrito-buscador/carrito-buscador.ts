@@ -47,9 +47,9 @@ import { mergearImportados, parsearFilasImportadas } from '../excel-a-items.util
  * <p>{@link items} es un `model` two-way que POSEE el host y comparte con
  * `carrito-tabla`: este componente AGREGA (por scan/búsqueda/genérico), la tabla
  * edita/quita. Cada alta emite {@link mutacion} para que el host marque "cambios
- * sin guardar" y muestre el toast. Los dialogs propios ("Producto genérico" y
- * "Ver producto") emiten {@link dialogCerrado} al cerrarse para que el host
- * devuelva el foco con su guard táctil.
+ * sin guardar" y muestre el toast. Los dialogs propios ("Producto genérico",
+ * "Ver producto" y "SKUs no encontrados") emiten {@link dialogCerrado} al
+ * cerrarse para que el host devuelva el foco con su guard táctil.
  */
 @Component({
   selector: 'app-carrito-buscador',
