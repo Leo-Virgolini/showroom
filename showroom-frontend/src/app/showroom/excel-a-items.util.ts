@@ -71,11 +71,13 @@ export function parsearFilasImportadas(filas: unknown[][]): FilaImportada[] {
     colCantidad = idxCantidad;
     inicio = 1;
   } else if (idxSku >= 0) {
-    // Encabezado parcial: solo matcheó SKU. La cantidad cae en la otra
-    // columna del par (no en un default fijo, que podría coincidir con la
-    // posición del SKU y pisarla).
+    // Encabezado parcial: solo matcheó SKU. La cantidad usa su default (1),
+    // salvo que el SKU ya esté ahí, en cuyo caso usa la columna restante del
+    // par (0). Cualquier otro valor de idxSku (2, 3, ...) no colisiona con el
+    // default y no debe forzar la columna 0 — eso llevaba a leer la cantidad
+    // de una columna cualquiera del archivo.
     colSku = idxSku;
-    colCantidad = idxSku === 0 ? 1 : 0;
+    colCantidad = idxSku === 1 ? 0 : 1;
     inicio = 1;
   } else if (idxCantidad >= 0) {
     colCantidad = idxCantidad;

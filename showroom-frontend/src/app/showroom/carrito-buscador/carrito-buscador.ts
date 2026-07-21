@@ -562,7 +562,9 @@ export class CarritoBuscador {
           } else {
             // Ningún SKU se pudo resolver: no se tocó el detalle, así que no
             // hay que ensuciar el estado de "cambios sin guardar" — solo avisar.
-            this.warn(resumen);
+            // Mismo summary que el camino exitoso ('Importar archivo'): los dos
+            // avisos vienen del mismo flujo, no de un warning genérico.
+            this.toast.add({ severity: 'warn', summary: 'Importar archivo', detail: resumen, life: 5000 });
           }
           // El diálogo se abre DESPUÉS de aplicar el merge: lo importado entra
           // igual aunque haya SKU sueltos sin resolver.

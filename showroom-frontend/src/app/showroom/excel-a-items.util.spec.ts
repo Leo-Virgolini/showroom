@@ -112,6 +112,14 @@ describe('parsearFilasImportadas', () => {
     ]);
     expect(r).toEqual([{ sku: '1051100', cantidad: 6 }]);
   });
+
+  it('con el SKU detectado en una columna posterior, la cantidad usa su default', () => {
+    const r = parsearFilasImportadas([
+      ['Nº Pedido', 'Descripción', 'Código', 'Bultos'],
+      ['1042', 'MESA', '1051100', 3],
+    ]);
+    expect(r).toEqual([{ sku: '1051100', cantidad: 1 }]);
+  });
 });
 
 describe('mergearImportados', () => {

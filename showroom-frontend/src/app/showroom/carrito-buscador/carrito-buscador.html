@@ -91,7 +91,14 @@
            `--kt-footer-h` (heredada del card vía custom property CSS) para
            quedar holgadamente por debajo del techo de la card. Si se cambia
            el techo de la card o el contenido de arriba de esta lista, hay
-           que revisar esta constante para que no se desincronicen. -->
+           que revisar esta constante para que no se desincronicen.
+
+           Este `carrito-buscador` también lo usa `editar-pedido-page.html`,
+           cuya card NO tiene `lg:sticky` ni `max-h` ni define
+           `--kt-footer-h`. Ahí `var(--kt-footer-h,0px)` cae en el fallback
+           0px: la lista queda un poco más baja que en presupuestos-page,
+           pero no hay techo de card con el que desincronizarse, así que es
+           el comportamiento correcto y esperado, no un bug. -->
       <div class="divide-y divide-[var(--kt-accent,#FF861C)]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] lg:max-h-[calc(100svh-24rem-var(--kt-footer-h,0px))] overflow-auto">
         @for (r of resultadosBusqueda(); track r.sku) {
           <!-- Fila NO-clickeable. Para agregar al detalle, el operador toca el
