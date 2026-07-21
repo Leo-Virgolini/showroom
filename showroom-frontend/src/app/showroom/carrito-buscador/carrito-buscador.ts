@@ -498,7 +498,12 @@ export class CarritoBuscador {
     const file = input.files?.[0];
     // Reset del input: sin esto, re-elegir el MISMO archivo no dispara change.
     input.value = '';
-    if (!file) return;
+    if (!file) {
+      // Usuario canceló el selector de archivos: la pistola QR debe seguir
+      // escaneando — devuelve el foco sin esperar a ningún diálogo.
+      this.focusScanInput();
+      return;
+    }
 
     this.importando.set(true);
     let filas: ReturnType<typeof parsearFilasImportadas>;
