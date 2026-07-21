@@ -33,10 +33,17 @@
 
            El max-h evita que la card supere la pantalla cuando hay 50
            resultados cargados — sin ese techo el sticky vuelve a ser inútil.
-           El footer del total es `position: fixed` con z-index 30, así que
-           gana sobre el z-10 de la card y no se solapan. -->
+           El footer del total es `position: fixed; bottom: 0` y opaco: si la
+           card llegara hasta el borde inferior de la pantalla, el footer le
+           taparía la parte de abajo (justo donde están los últimos resultados
+           y "Cargar más"). El z-index 30 del footer solo decide quién se
+           pinta encima SI hay solape geométrico, no lo evita — por eso al
+           max-h se le descuenta `footerHeight()`, la altura real medida del
+           footer (vía la custom property --kt-footer-h), así la card nunca
+           llega a invadir esa franja. -->
       <div class="flex flex-col gap-4 order-2 lg:order-1">
-        <p-card class="kt-card lg:sticky lg:top-3 z-10 lg:max-h-[calc(100svh-1.5rem)] lg:overflow-y-auto">
+        <p-card class="kt-card lg:sticky lg:top-3 z-10 lg:max-h-[calc(100svh-1.5rem-var(--kt-footer-h,0px))] lg:overflow-y-auto"
+          [style.--kt-footer-h]="(hayItems() ? footerHeight() : 0) + 'px'">
           <ng-template #title>
             <div class="kt-card-title">
               <i class="pi pi-search"></i>
