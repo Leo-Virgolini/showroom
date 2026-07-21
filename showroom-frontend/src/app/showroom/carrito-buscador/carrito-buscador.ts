@@ -35,6 +35,7 @@ import {
 } from '../producto-generico-dialog/producto-generico-dialog';
 import { etiquetaItem } from '../item-etiqueta.util';
 import { toastError } from '../toast.utils';
+import { mergearImportados, parsearFilasImportadas } from '../excel-a-items.util';
 
 /**
  * Scan + búsqueda de catálogo para armar el detalle de un presupuesto/pedido:
@@ -168,6 +169,14 @@ export class CarritoBuscador {
 
   /** Producto genérico — alta a mano de una línea con el SKU comodín de DUX. */
   readonly mostrarDialogGenerico = signal(false);
+
+  /** True mientras se lee el archivo y se resuelven los SKU. Deshabilita el
+   *  botón de import y muestra su spinner. */
+  readonly importando = signal(false);
+
+  /** SKU del último import que no existen en el catálogo cacheado. No-vacío =
+   *  el diálogo de "SKUs no encontrados" está abierto. */
+  readonly skusNoEncontrados = signal<string[]>([]);
 
   constructor() {
     // Proveedores para el dropdown del filtro de búsqueda.
@@ -421,7 +430,7 @@ export class CarritoBuscador {
         `${etiquetaItem(existente)}: ${existente.cantidad}u → ${nuevaCantidad}u`);
       return;
     }
-    const uid = `${res.sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const uid = this.nuevoUid(res.sku);
     const nuevo: PresupuestoItem = {
       ...res,
       uid,
@@ -470,6 +479,102 @@ export class CarritoBuscador {
     this.mostrarDialogGenerico.set(false);
     this.emitirMutacion('success', 'Producto genérico agregado',
       `${etiquetaItem(nuevo)}${data.cantidad > 1 ? ` (${data.cantidad}u)` : ''}`);
+  }
+
+  /**
+   * Importa un Excel/CSV del cliente con dos columnas (SKU y cantidad) al
+   * detalle.
+   *
+   * <p>Resuelve TODOS los SKU con una sola llamada a `lookupBulk` — no un
+   * `/scan/{sku}` por fila: un archivo de 200 líneas colapsaría el backend.
+   * El merge lo hace {@link mergearImportados}: suma cantidades si el SKU ya
+   * está en el detalle, crea la línea si no.
+   *
+   * <p>Emite una ÚNICA mutación de resumen, no una por fila: 200 toasts
+   * encadenados taparían la pantalla del operador.
+   */
+  async onArchivoImport(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    // Reset del input: sin esto, re-elegir el MISMO archivo no dispara change.
+    input.value = '';
+    if (!file) return;
+
+    this.importando.set(true);
+    let filas: ReturnType<typeof parsearFilasImportadas>;
+    try {
+      filas = parsearFilasImportadas(await this.leerArchivo(file));
+    } catch (err) {
+      this.importando.set(false);
+      this.focusScanInput();
+      toastError(this.toast, 'Importar archivo', err,
+        'No se pudo leer el archivo. Verificá que sea un .xlsx o .csv válido.');
+      return;
+    }
+
+    if (filas.length === 0) {
+      this.importando.set(false);
+      this.focusScanInput();
+      this.warn('El archivo no tiene filas con SKU. Esperaba dos columnas: SKU y cantidad.');
+      return;
+    }
+
+    this.api.lookupBulk(filas.map((f) => f.sku)).subscribe({
+      next: (encontrados) => {
+        this.importando.set(false);
+        const res = mergearImportados(this.items(), filas, encontrados, (sku) => this.nuevoUid(sku));
+        this.items.set(res.items);
+        this.emitirMutacion(
+          res.agregados + res.actualizados > 0 ? 'success' : 'warn',
+          'Importar archivo',
+          this.resumenImport(res.agregados, res.actualizados, res.noEncontrados.length),
+        );
+        // El diálogo se abre DESPUÉS de aplicar el merge: lo importado entra
+        // igual aunque haya SKU sueltos sin resolver.
+        if (res.noEncontrados.length > 0) {
+          this.skusNoEncontrados.set(res.noEncontrados);
+        } else {
+          this.focusScanInput();
+        }
+      },
+      error: (err) => {
+        this.importando.set(false);
+        this.focusScanInput();
+        toastError(this.toast, 'Importar archivo', err, 'No se pudieron resolver los SKU del archivo.');
+      },
+    });
+  }
+
+  /** Arma el texto del toast de resumen omitiendo los tramos en cero. */
+  private resumenImport(agregados: number, actualizados: number, noEncontrados: number): string {
+    const partes: string[] = [];
+    if (agregados > 0) partes.push(`${agregados} producto${agregados === 1 ? '' : 's'} agregado${agregados === 1 ? '' : 's'}`);
+    if (actualizados > 0) partes.push(`${actualizados} con cantidad actualizada`);
+    if (noEncontrados > 0) partes.push(`${noEncontrados} SKU${noEncontrados === 1 ? '' : 's'} no encontrado${noEncontrados === 1 ? '' : 's'}`);
+    return partes.length > 0 ? partes.join(', ') : 'No se importó ningún producto.';
+  }
+
+  /** Cierra el diálogo de SKU no encontrados y devuelve el foco al scan. */
+  cerrarNoEncontrados(): void {
+    this.skusNoEncontrados.set([]);
+    this.focusScanInput();
+  }
+
+  /** Copia al portapapeles los SKU no encontrados, uno por línea, para que el
+   *  operador se los pase al cliente o los busque en DUX. */
+  async copiarNoEncontrados(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.skusNoEncontrados().join('\n'));
+      this.toast.add({ severity: 'success', summary: 'Copiado', detail: 'SKUs copiados al portapapeles.' });
+    } catch {
+      this.warn('No se pudo copiar al portapapeles.');
+    }
+  }
+
+  /** uid único para una línea nueva del detalle. Mismo formato que usa
+   *  `agregarItem` al escanear. */
+  private nuevoUid(sku: string): string {
+    return `${sku}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
   /** True si el producto es de maquinaria (rubro configurable que cotiza sin

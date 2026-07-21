@@ -26,18 +26,25 @@
     }
   </div>
 
-  <!-- Atajo para cargar un producto que NO está en catálogo (SKU comodín de
-       DUX). Va acá arriba (dentro del sticky) para quedar siempre accesible
-       aunque haya resultados abajo. Se oculta si el backend no expuso el SKU. -->
-  @if (skuGenerico()) {
-    <div class="mt-2 flex justify-end">
+  <!-- Atajos de alta: importar un archivo del cliente y cargar un producto que
+       NO está en catálogo (SKU comodín de DUX). Van acá arriba (dentro del
+       sticky) para quedar siempre accesibles aunque haya resultados abajo. -->
+  <div class="mt-2 flex justify-end gap-2 flex-wrap">
+    <input #importInput type="file" accept=".xlsx,.csv" class="hidden"
+      (change)="onArchivoImport($event)" />
+    <p-button icon="pi pi-file-excel" label="Importar Excel"
+      class="btn-kt-verde" size="small" [outlined]="true"
+      [loading]="importando()" (onClick)="importInput.click()"
+      pTooltip="Excel (.xlsx) o CSV con dos columnas: SKU y CANTIDAD.&#10;La primera fila puede ser el encabezado.&#10;Si el SKU ya está en el detalle, se suman las cantidades."
+      tooltipPosition="left" />
+    @if (skuGenerico()) {
       <p-button icon="pi pi-plus-circle" label="Producto genérico"
         class="btn-kt-teal" size="small" [outlined]="true"
         (onClick)="abrirGenerico()"
         pTooltip="Cargar un producto que no está en el catálogo (cotización rápida)"
         tooltipPosition="left" />
-    </div>
-  }
+    }
+  </div>
 
   <!-- Resultados de búsqueda por descripción — lista clickable. Paleta KT
        naranja para coherencia con el resto de la app. -->
