@@ -62,6 +62,10 @@ describe('parsearFilasImportadas', () => {
     expect(parsearFilasImportadas([['A1', 2.7]])).toEqual([{ sku: 'A1', cantidad: 2 }]);
   });
 
+  it('cantidad decimal menor a 1 cae en 1, no en 0', () => {
+    expect(parsearFilasImportadas([['A1', 0.5]])).toEqual([{ sku: 'A1', cantidad: 1 }]);
+  });
+
   it('acepta decimales con coma (Excel en español)', () => {
     expect(parsearFilasImportadas([['A1', '3,0']])).toEqual([{ sku: 'A1', cantidad: 3 }]);
   });

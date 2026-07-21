@@ -25,14 +25,16 @@ function texto(celda: unknown): string {
 }
 
 /**
- * Celda → cantidad entera positiva. Cualquier valor ausente, no numérico o
- * <= 0 cae en 1: el operador puede corregirlo después en la tabla, y perder
- * la línea entera por una celda mal tipeada sería peor.
+ * Celda → cantidad entera positiva. Cualquier valor ausente, no numérico,
+ * o que trunce a < 1 cae en 1: el operador puede corregirlo después en la
+ * tabla, y perder la línea entera por una celda mal tipeada sería peor.
  */
 function cantidad(celda: unknown): number {
   const n = Number(texto(celda).replace(',', '.'));
-  if (!Number.isFinite(n) || n <= 0) return 1;
-  return Math.floor(n);
+  if (!Number.isFinite(n)) return 1;
+  const truncated = Math.floor(n);
+  if (truncated < 1) return 1;
+  return truncated;
 }
 
 /**
