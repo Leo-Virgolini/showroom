@@ -1,4 +1,5 @@
-import { parsearFilasImportadas } from './excel-a-items.util';
+import { mergearImportados, parsearFilasImportadas } from './excel-a-items.util';
+import type { CatalogoItem, PresupuestoItem } from './models';
 
 describe('parsearFilasImportadas', () => {
   it('detecta el encabezado por palabras clave y saltea esa fila', () => {
@@ -94,5 +95,109 @@ describe('parsearFilasImportadas', () => {
 
   it('con encabezado pero sin filas de datos devuelve vacío', () => {
     expect(parsearFilasImportadas([['SKU', 'Cantidad']])).toEqual([]);
+  });
+});
+
+describe('mergearImportados', () => {
+  const uid = (sku: string) => `uid-${sku}`;
+
+  const catalogo = (sku: string): CatalogoItem => ({
+    sku,
+    descripcion: `PRODUCTO ${sku}`,
+    rubro: null,
+    pvpKtGastroSinIva: 100,
+    pvpKtGastroConIva: 121,
+    porcIva: 21,
+    habilitado: true,
+    imagenUrl: null,
+    stockTotal: 10,
+  });
+
+  const enDetalle = (sku: string, cantidad: number): PresupuestoItem => ({
+    sku,
+    descripcion: `PRODUCTO ${sku}`,
+    rubro: null,
+    pvpKtGastroConIva: 121,
+    pvpKtGastroSinIva: 100,
+    porcIva: 21,
+    stockTotal: 10,
+    habilitado: true,
+    imagenUrl: null,
+    sincronizadoAt: null,
+    uid: `viejo-${sku}`,
+    cantidad,
+    descuentoPorcentaje: 0,
+  });
+
+  it('agrega los SKU que no estaban en el detalle', () => {
+    const r = mergearImportados([], [{ sku: 'A1', cantidad: 3 }], [catalogo('A1')], uid);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].sku).toBe('A1');
+    expect(r.items[0].cantidad).toBe(3);
+    expect(r.items[0].uid).toBe('uid-A1');
+    expect(r.agregados).toBe(1);
+    expect(r.actualizados).toBe(0);
+  });
+
+  it('suma la cantidad si el SKU ya estaba en el detalle', () => {
+    const r = mergearImportados(
+      [enDetalle('A1', 2)],
+      [{ sku: 'A1', cantidad: 3 }],
+      [catalogo('A1')],
+      uid,
+    );
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].cantidad).toBe(5);
+    expect(r.items[0].uid).toBe('viejo-A1');
+    expect(r.agregados).toBe(0);
+    expect(r.actualizados).toBe(1);
+  });
+
+  it('conserva el descuento del ítem que ya estaba', () => {
+    const existente = { ...enDetalle('A1', 2), descuentoPorcentaje: 15 };
+    const r = mergearImportados([existente], [{ sku: 'A1', cantidad: 1 }], [catalogo('A1')], uid);
+    expect(r.items[0].descuentoPorcentaje).toBe(15);
+  });
+
+  it('reporta los SKU que no están en el catálogo y no los agrega', () => {
+    const r = mergearImportados(
+      [],
+      [{ sku: 'A1', cantidad: 1 }, { sku: 'FANTASMA', cantidad: 2 }],
+      [catalogo('A1')],
+      uid,
+    );
+    expect(r.items).toHaveLength(1);
+    expect(r.noEncontrados).toEqual(['FANTASMA']);
+    expect(r.agregados).toBe(1);
+  });
+
+  it('no muta el array de items original', () => {
+    const actuales = [enDetalle('A1', 2)];
+    mergearImportados(actuales, [{ sku: 'A1', cantidad: 3 }], [catalogo('A1')], uid);
+    expect(actuales[0].cantidad).toBe(2);
+  });
+
+  it('los ítems nuevos nacen con descuento 0 y sincronizadoAt null', () => {
+    const r = mergearImportados([], [{ sku: 'A1', cantidad: 1 }], [catalogo('A1')], uid);
+    expect(r.items[0].descuentoPorcentaje).toBe(0);
+    expect(r.items[0].sincronizadoAt).toBeNull();
+  });
+
+  it('conserva el orden: primero lo que ya estaba, después lo importado', () => {
+    const r = mergearImportados(
+      [enDetalle('VIEJO', 1)],
+      [{ sku: 'NUEVO', cantidad: 1 }],
+      [catalogo('NUEVO')],
+      uid,
+    );
+    expect(r.items.map((i: PresupuestoItem) => i.sku)).toEqual(['VIEJO', 'NUEVO']);
+  });
+
+  it('sin filas devuelve el detalle intacto', () => {
+    const actuales = [enDetalle('A1', 2)];
+    const r = mergearImportados(actuales, [], [], uid);
+    expect(r.items).toEqual(actuales);
+    expect(r.agregados).toBe(0);
+    expect(r.noEncontrados).toEqual([]);
   });
 });

@@ -7,6 +7,8 @@
  * mockear HTTP. El componente solo lee el archivo y llama a estas funciones.
  */
 
+import type { CatalogoItem, PresupuestoItem } from './models';
+
 /** Una línea del archivo ya normalizada. */
 export interface FilaImportada {
   sku: string;
@@ -78,4 +80,67 @@ export function parsearFilasImportadas(filas: unknown[][]): FilaImportada[] {
   }
 
   return [...acumulado].map(([sku, cant]) => ({ sku, cantidad: cant }));
+}
+
+/** Resultado de aplicar un import sobre el detalle actual. */
+export interface ResultadoImport {
+  /** Nuevo array de ítems del detalle (el original no se muta). */
+  items: PresupuestoItem[];
+  /** Cuántas líneas nuevas se crearon. */
+  agregados: number;
+  /** Cuántas líneas existentes recibieron más cantidad. */
+  actualizados: number;
+  /** SKU del archivo que no existen en el catálogo cacheado. */
+  noEncontrados: string[];
+}
+
+/**
+ * Aplica las filas importadas sobre el detalle actual con el mismo criterio
+ * que el scan: si el SKU ya está, suma la cantidad conservando el uid y el
+ * descuento de la línea; si no está, crea una línea nueva.
+ *
+ * <p>`nuevoUid` entra por parámetro para que la función quede pura y los tests
+ * puedan predecir los uid generados.
+ *
+ * <p>Los ítems nuevos salen de `CatalogoItem`, que no trae `sincronizadoAt`
+ * (el campo es nullable) — igual que los agregados desde la lista de
+ * resultados de búsqueda.
+ */
+export function mergearImportados(
+  actuales: PresupuestoItem[],
+  filas: FilaImportada[],
+  encontrados: CatalogoItem[],
+  nuevoUid: (sku: string) => string,
+): ResultadoImport {
+  const porSku = new Map(encontrados.map((it) => [it.sku, it]));
+  const items = [...actuales];
+  const noEncontrados: string[] = [];
+  let agregados = 0;
+  let actualizados = 0;
+
+  for (const fila of filas) {
+    const item = porSku.get(fila.sku);
+    if (!item) {
+      noEncontrados.push(fila.sku);
+      continue;
+    }
+
+    const idx = items.findIndex((it) => it.sku === fila.sku);
+    if (idx >= 0) {
+      items[idx] = { ...items[idx], cantidad: items[idx].cantidad + fila.cantidad };
+      actualizados++;
+      continue;
+    }
+
+    items.push({
+      ...item,
+      sincronizadoAt: null,
+      uid: nuevoUid(fila.sku),
+      cantidad: fila.cantidad,
+      descuentoPorcentaje: 0,
+    });
+    agregados++;
+  }
+
+  return { items, agregados, actualizados, noEncontrados };
 }
