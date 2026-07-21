@@ -28,6 +28,7 @@ import { PrecioPerfilService } from '../precio-perfil.service';
 import { ShowroomService } from '../showroom.service';
 import { toastError } from '../toast.utils';
 import { PageHeader } from '../page-header/page-header';
+import { RE_COL_SKU } from '../excel-a-items.util';
 
 interface EtiquetaImprimible {
   sku: string;
@@ -829,7 +830,7 @@ export class EtiquetasPage {
       let colSku = 1;
       let dataStart = 0;
       const idxOrden = cabecera.findIndex((c) => /(orden|pedido|nro|n[°º]|order)/i.test(c));
-      const idxSku = cabecera.findIndex((c) => /(sku|c[oó]d|art[ií]c)/i.test(c));
+      const idxSku = cabecera.findIndex((c) => RE_COL_SKU.test(c));
       if (idxOrden >= 0 && idxSku >= 0) {
         colOrden = idxOrden;
         colSku = idxSku;

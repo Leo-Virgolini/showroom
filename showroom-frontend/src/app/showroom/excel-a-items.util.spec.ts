@@ -96,6 +96,22 @@ describe('parsearFilasImportadas', () => {
   it('con encabezado pero sin filas de datos devuelve vacío', () => {
     expect(parsearFilasImportadas([['SKU', 'Cantidad']])).toEqual([]);
   });
+
+  it('con encabezado parcial usa la posición detectada, no el default', () => {
+    const r = parsearFilasImportadas([
+      ['Cantidad', 'Producto'],
+      [4, '1051100'],
+    ]);
+    expect(r).toEqual([{ sku: '1051100', cantidad: 4 }]);
+  });
+
+  it('encabezado solo de SKU deja la cantidad en la columna por defecto', () => {
+    const r = parsearFilasImportadas([
+      ['SKU', 'Bultos'],
+      ['1051100', 6],
+    ]);
+    expect(r).toEqual([{ sku: '1051100', cantidad: 6 }]);
+  });
 });
 
 describe('mergearImportados', () => {

@@ -15,8 +15,11 @@ export interface FilaImportada {
   cantidad: number;
 }
 
-/** Palabras clave que identifican la columna de SKU en el encabezado. */
-const RE_COL_SKU = /(sku|c[oó]d|art[ií]c)/i;
+/** Palabras clave que identifican la columna de SKU en el encabezado de un
+ *  archivo importado. Exportada porque `etiquetas-page.ts` detecta la misma
+ *  columna en su propio import de CSV — un solo regex evita que las dos
+ *  copias diverjan con el tiempo. */
+export const RE_COL_SKU = /(sku|c[oó]d|art[ií]c)/i;
 /** Palabras clave que identifican la columna de cantidad en el encabezado. */
 const RE_COL_CANTIDAD = /(cant|qty|unid)/i;
 
@@ -44,9 +47,11 @@ function cantidad(celda: unknown): number {
  *
  * <p>Detecta el encabezado en la primera fila por palabras clave; si detecta
  * las dos columnas usa sus posiciones (soporta el orden invertido). Si detecta
- * solo una, saltea igual la primera fila pero cae a las posiciones por
- * defecto. Si no detecta ninguna, asume que no hay encabezado y usa columna
- * A = SKU, columna B = cantidad.
+ * solo una, saltea igual la primera fila y usa la posición detectada para esa
+ * columna, dejando la otra en su default (0 para SKU, 1 para cantidad) — salvo
+ * que ese default coincida con la posición ya tomada, en cuyo caso usa la
+ * columna restante del par. Si no detecta ninguna, asume que no hay
+ * encabezado y usa columna A = SKU, columna B = cantidad.
  *
  * <p>Consolida los SKU repetidos sumando cantidades: dos filas del mismo
  * producto son un pedido de la suma, no dos líneas separadas.
@@ -65,7 +70,16 @@ export function parsearFilasImportadas(filas: unknown[][]): FilaImportada[] {
     colSku = idxSku;
     colCantidad = idxCantidad;
     inicio = 1;
-  } else if (idxSku >= 0 || idxCantidad >= 0) {
+  } else if (idxSku >= 0) {
+    // Encabezado parcial: solo matcheó SKU. La cantidad cae en la otra
+    // columna del par (no en un default fijo, que podría coincidir con la
+    // posición del SKU y pisarla).
+    colSku = idxSku;
+    colCantidad = idxSku === 0 ? 1 : 0;
+    inicio = 1;
+  } else if (idxCantidad >= 0) {
+    colCantidad = idxCantidad;
+    colSku = idxCantidad === 0 ? 1 : 0;
     inicio = 1;
   }
 

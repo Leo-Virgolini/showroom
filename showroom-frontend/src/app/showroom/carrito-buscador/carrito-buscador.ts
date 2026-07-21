@@ -45,11 +45,12 @@ import { mergearImportados, parsearFilasImportadas } from '../excel-a-items.util
  * mitad, la tabla editable, vive en `carrito-tabla`).
  *
  * <p>{@link items} es un `model` two-way que POSEE el host y comparte con
- * `carrito-tabla`: este componente AGREGA (por scan/búsqueda/genérico), la tabla
- * edita/quita. Cada alta emite {@link mutacion} para que el host marque "cambios
- * sin guardar" y muestre el toast. Los dialogs propios ("Producto genérico",
- * "Ver producto" y "SKUs no encontrados") emiten {@link dialogCerrado} al
- * cerrarse para que el host devuelva el foco con su guard táctil.
+ * `carrito-tabla`: este componente AGREGA (por scan/búsqueda/genérico/import
+ * de Excel o CSV), la tabla edita/quita. Cada alta emite {@link mutacion}
+ * para que el host marque "cambios sin guardar" y muestre el toast. Los
+ * dialogs propios ("Producto genérico", "Ver producto" y "SKUs no
+ * encontrados") emiten {@link dialogCerrado} al cerrarse para que el host
+ * devuelva el foco con su guard táctil.
  */
 @Component({
   selector: 'app-carrito-buscador',
@@ -527,45 +528,73 @@ export class CarritoBuscador {
       return;
     }
 
-    this.api.lookupBulk(filas.map((f) => f.sku)).subscribe({
-      next: (encontrados) => {
-        this.importando.set(false);
-        const res = mergearImportados(this.items(), filas, encontrados, (sku) => this.nuevoUid(sku));
-        this.items.set(res.items);
-        this.emitirMutacion(
-          res.agregados + res.actualizados > 0 ? 'success' : 'warn',
-          'Importar archivo',
-          this.resumenImport(res.agregados, res.actualizados, res.noEncontrados.length),
-        );
-        // El diálogo se abre DESPUÉS de aplicar el merge: lo importado entra
-        // igual aunque haya SKU sueltos sin resolver.
-        if (res.noEncontrados.length > 0) {
-          this.skusNoEncontrados.set(res.noEncontrados);
-        } else {
+    // El SKU comodín de "Producto genérico" tiene su propio botón/flujo (pide
+    // descripción y precio a mano) — si el archivo del cliente lo trae, lo
+    // sacamos del import y avisamos, en vez de dejarlo entrar como una línea
+    // más. `skuGenerico()` puede ser null (backend viejo): en ese caso no hay
+    // nada que filtrar.
+    const generico = this.skuGenerico();
+    let filasImport = filas;
+    if (generico) {
+      filasImport = filas.filter((f) => f.sku !== generico);
+      if (filasImport.length < filas.length) {
+        this.warn('El archivo incluye el SKU comodín de "Producto genérico" — para cargar productos fuera de catálogo usá el botón "Producto genérico".');
+      }
+    }
+    if (filasImport.length === 0) {
+      this.importando.set(false);
+      this.focusScanInput();
+      return;
+    }
+
+    this.api.lookupBulk(filasImport.map((f) => f.sku))
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (encontrados) => {
+          this.importando.set(false);
+          const res = mergearImportados(this.items(), filasImport, encontrados, (sku) => this.nuevoUid(sku));
+          this.items.set(res.items);
+          const resumen = this.resumenImport(res.agregados, res.actualizados, res.noEncontrados.length);
+          if (res.agregados + res.actualizados > 0) {
+            // Hubo al menos un alta o actualización real: SÍ es una mutación
+            // del detalle, el host debe marcar "cambios sin guardar".
+            this.emitirMutacion('success', 'Importar archivo', resumen);
+          } else {
+            // Ningún SKU se pudo resolver: no se tocó el detalle, así que no
+            // hay que ensuciar el estado de "cambios sin guardar" — solo avisar.
+            this.warn(resumen);
+          }
+          // El diálogo se abre DESPUÉS de aplicar el merge: lo importado entra
+          // igual aunque haya SKU sueltos sin resolver.
+          if (res.noEncontrados.length > 0) {
+            this.skusNoEncontrados.set(res.noEncontrados);
+          } else {
+            this.focusScanInput();
+          }
+        },
+        error: (err) => {
+          this.importando.set(false);
           this.focusScanInput();
-        }
-      },
-      error: (err) => {
-        this.importando.set(false);
-        this.focusScanInput();
-        toastError(this.toast, 'Importar archivo', err, 'No se pudieron resolver los SKU del archivo.');
-      },
-    });
+          toastError(this.toast, 'Importar archivo', err, 'No se pudieron resolver los SKU del archivo.');
+        },
+      });
   }
 
-  /** Arma el texto del toast de resumen omitiendo los tramos en cero. */
+  /** Arma el texto del toast/aviso de resumen omitiendo los tramos en cero.
+   *  Se llama solo cuando hay al menos un tramo > 0 (agregados, actualizados
+   *  o no encontrados), así que siempre hay algo que informar. */
   private resumenImport(agregados: number, actualizados: number, noEncontrados: number): string {
     const partes: string[] = [];
     if (agregados > 0) partes.push(`${agregados} producto${agregados === 1 ? '' : 's'} agregado${agregados === 1 ? '' : 's'}`);
     if (actualizados > 0) partes.push(`${actualizados} con cantidad actualizada`);
     if (noEncontrados > 0) partes.push(`${noEncontrados} SKU${noEncontrados === 1 ? '' : 's'} no encontrado${noEncontrados === 1 ? '' : 's'}`);
-    return partes.length > 0 ? partes.join(', ') : 'No se importó ningún producto.';
+    return partes.join(', ');
   }
 
-  /** Cierra el diálogo de SKU no encontrados y devuelve el foco al scan. */
+  /** Cierra el diálogo de SKU no encontrados. El refoco lo dispara el effect
+   *  del constructor vía {@link dialogCerrado} — igual que {@link cerrarProductoPreview}. */
   cerrarNoEncontrados(): void {
     this.skusNoEncontrados.set([]);
-    this.focusScanInput();
   }
 
   /** Copia al portapapeles los SKU no encontrados, uno por línea, para que el

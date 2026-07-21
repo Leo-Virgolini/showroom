@@ -40,7 +40,13 @@
            pinta encima SI hay solape geométrico, no lo evita — por eso al
            max-h se le descuenta `footerHeight()`, la altura real medida del
            footer (vía la custom property --kt-footer-h), así la card nunca
-           llega a invadir esa franja. -->
+           llega a invadir esa franja.
+
+           Este techo y el de la lista de resultados DENTRO de
+           `carrito-buscador.html` están coordinados: el de la lista tiene que
+           quedar por debajo de este para que sea SIEMPRE ella (no la card) la
+           que gana el scrollbar propio. Si se toca esta constante, revisar
+           la de allá. -->
       <div class="flex flex-col gap-4 order-2 lg:order-1">
         <p-card class="kt-card lg:sticky lg:top-3 z-10 lg:max-h-[calc(100svh-1.5rem-var(--kt-footer-h,0px))] lg:overflow-y-auto"
           [style.--kt-footer-h]="(hayItems() ? footerHeight() : 0) + 'px'">

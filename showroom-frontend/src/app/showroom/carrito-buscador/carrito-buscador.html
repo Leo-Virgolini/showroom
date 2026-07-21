@@ -77,8 +77,22 @@
         }
       </div>
       <!-- Altura adaptativa al viewport: en pantallas chicas mantiene un tope
-           razonable; en sm+ el cálculo deja respirar a la lista. -->
-      <div class="divide-y divide-[var(--kt-accent,#FF861C)]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] overflow-auto">
+           razonable; en sm+ el cálculo deja respirar a la lista.
+
+           En lg+ la card entera (`presupuestos-page.html`, clase `.kt-card`
+           con `lg:sticky`) ya tiene su propio techo:
+           `lg:max-h-[calc(100svh-1.5rem-var(--kt-footer-h,0px))]`. Si esta
+           lista no descuenta TAMBIÉN el footer, el contenido de la card puede
+           superar ese techo y la card se gana su propio scrollbar por encima
+           del de la lista — con el input de scan empujado fuera de vista,
+           que es justo lo que el sticky existe para evitar. Por eso acá
+           restamos una constante mayor (24rem: título + padding de la card +
+           label + input + fila de botones + toolbar de la lista) MÁS
+           `--kt-footer-h` (heredada del card vía custom property CSS) para
+           quedar holgadamente por debajo del techo de la card. Si se cambia
+           el techo de la card o el contenido de arriba de esta lista, hay
+           que revisar esta constante para que no se desincronicen. -->
+      <div class="divide-y divide-[var(--kt-accent,#FF861C)]/10 max-h-72 sm:max-h-[calc(100vh-22rem)] lg:max-h-[calc(100svh-24rem-var(--kt-footer-h,0px))] overflow-auto">
         @for (r of resultadosBusqueda(); track r.sku) {
           <!-- Fila NO-clickeable. Para agregar al detalle, el operador toca el
                botón explícito "Agregar" del final de la fila. Después de
