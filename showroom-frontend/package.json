@@ -25,6 +25,7 @@
     "primeicons": "^7.0.0",
     "primeng": "^21.1.9",
     "qrcode": "^1.5.4",
+    "read-excel-file": "^9.3.4",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

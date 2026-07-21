@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import Papa from 'papaparse';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -502,6 +503,38 @@ export class CarritoBuscador {
    *  ahí aunque el input no esté a la vista. */
   focusScanInput(): void {
     setTimeout(() => this.scanInput()?.nativeElement.focus({ preventScroll: true }), 0);
+  }
+
+  /**
+   * Lee un archivo de import y devuelve sus filas crudas.
+   *
+   * <p>`.xlsx` va por `read-excel-file`, cargada con `import()` dinámico: el
+   * chunk baja recién la primera vez que alguien importa, sin pesar en el
+   * bundle inicial de la PWA. `.csv` va por papaparse, que ya está en el
+   * proyecto y auto-detecta el separador (`,` inglés / `;` Excel en español).
+   *
+   * <p>Ambas ramas devuelven la misma forma (`unknown[][]`) para que el parseo
+   * posterior sea uno solo.
+   */
+  private async leerArchivo(file: File): Promise<unknown[][]> {
+    if (/\.csv$/i.test(file.name)) {
+      const parsed = Papa.parse<string[]>(await file.text(), {
+        skipEmptyLines: 'greedy',
+        // header: false → devuelve arrays; auto-detecta `,` / `;` / `\t`.
+      });
+      return parsed.data ?? [];
+    }
+    // Subpath '/browser' (no ".": el paquete no exporta la raíz desde 9.x —
+    // el "exports" del package.json solo define /browser, /node, /universal,
+    // /web-worker). Usamos /browser: es el runtime de esta PWA y evita
+    // arrastrar el código de Node (fs) al bundle.
+    //
+    // `readSheet` (named export), NO el default: en 9.x el default export
+    // devuelve TODAS las hojas envueltas (`{ sheet, data }[]`), mientras que
+    // `readSheet` devuelve directo las filas de una sola hoja (la primera si
+    // no se especifica), que es la forma `unknown[][]` que necesitamos acá.
+    const { readSheet } = await import('read-excel-file/browser');
+    return (await readSheet(file)) as unknown[][];
   }
 
   private warn(detail: string): void {
