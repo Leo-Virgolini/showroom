@@ -57,7 +57,8 @@
            la afecta — `actualizarDescuentoGlobal` copia el % a todos los
            ítems sin excluir maquinaria. -->
       <tr [attr.data-uid]="it.uid"
-        [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)">
+        [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)"
+        [class.kt-row-destello]="it.uid === uidDestello()">
         <td>
           @if (it.imagenUrl) {
             <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"
