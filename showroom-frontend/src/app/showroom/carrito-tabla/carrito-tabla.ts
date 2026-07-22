@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -126,22 +127,29 @@ export class CarritoTabla {
   // BORRAR. `uidADestacar` distingue esos casos: un único alta/suma → esa
   // fila; varios (importar, cargar un presupuesto) o un borrado → nada.
   //
-  // El destello se aplica IMPERATIVAMENTE sobre la fila puntual (no con un
-  // `[class]` reactivo): PrimeNG trackea las filas por identidad de objeto y
-  // las renderiza en su propio `TableBody`, así que un toggle declarativo
-  // compartido no saca la clase de forma confiable de las filas reusadas y
-  // varias quedaban pintadas. Tocando solo el nodo objetivo y limpiándolo en
-  // su propio `animationend`, es imposible que queden filas pegadas.
+  // El destello se maneja IMPERATIVAMENTE y con barrido, no con un `[class]`
+  // reactivo. PrimeNG trackea las filas por identidad de objeto y las mueve /
+  // reusa / recrea dentro de su propio `TableBody`; una clase puesta en una
+  // fila queda pegada cuando el nodo se mueve (la animación se CANCELA, no
+  // termina, así que un `animationend` no alcanza a limpiarla). Por eso, antes
+  // de resaltar una fila barremos CUALQUIER `.kt-row-destello` que haya quedado
+  // en el DOM vivo, y un único timer barre todo al final. Así nunca hay más de
+  // una fila marcada y siempre se limpia, sin depender de la animación ni de
+  // que el framework saque la clase de nodos reusados.
   // ============================================================
-  /** Contenedor scrolleable de la tabla — para buscar la fila por `data-uid`. */
+  /** Contenedor scrolleable de la tabla — para ubicar/barrer filas por DOM. */
   private readonly tablaWrap = viewChild<ElementRef<HTMLElement>>('tablaWrap');
   /** Snapshot `uid → cantidad` del render anterior, para detectar el alta/suma. */
   private snapshotCantidades = new Map<string, number>();
   /** La primera corrida del effect solo toma el snapshot: cargar un presupuesto
    *  ya poblado no debe disparar scroll. */
   private primeraCorrida = true;
+  /** Timer que barre el destello si no llegan más altas. */
+  private destelloTimer?: ReturnType<typeof setTimeout>;
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.destelloTimer));
+
     effect(() => {
       const actual = this.items();
       if (this.primeraCorrida) {
@@ -155,26 +163,31 @@ export class CarritoTabla {
     });
   }
 
-  /** Lleva la vista a la fila del `uid` y la resalta ~1,6s. El `setTimeout(0)`
-   *  espera a que Angular pinte la fila (nueva o recreada) antes de buscarla.
-   *  El destello se agrega/quita a mano sobre ESE nodo y se limpia solo en su
-   *  `animationend` (con un fallback por si las animaciones están desactivadas),
-   *  así ninguna otra fila puede quedar marcada. */
+  /** Lleva la vista a la fila del `uid` y la resalta. El `setTimeout(0)` espera
+   *  a que Angular pinte la fila (nueva o recreada) antes de buscarla.
+   *
+   *  <p>Barre primero todo destello vivo (defensa contra nodos que PrimeNG
+   *  movió/reusó dejando la clase pegada) y marca solo la fila objetivo, así
+   *  nunca hay más de una. Un único timer la limpia si no llegan más altas. */
   private resaltarFila(uid: string): void {
     setTimeout(() => {
-      const fila = this.tablaWrap()?.nativeElement
-        .querySelector<HTMLElement>(`[data-uid="${CSS.escape(uid)}"]`);
+      const cont = this.tablaWrap()?.nativeElement;
+      if (!cont) return;
+      this.limpiarDestellos(cont);
+      const fila = cont.querySelector<HTMLElement>(`[data-uid="${CSS.escape(uid)}"]`);
       if (!fila) return;
       fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      const limpiar = () => fila.classList.remove('kt-row-destello');
-      // Reinicia la animación si la fila ya la tenía (re-agregar el mismo ítem
-      // sin que PrimeNG recree el nodo): quitar, forzar reflow, volver a poner.
-      limpiar();
-      void fila.offsetWidth;
+      void fila.offsetWidth; // reflow: reinicia la animación
       fila.classList.add('kt-row-destello');
-      fila.addEventListener('animationend', limpiar, { once: true });
-      setTimeout(limpiar, 2000);
+      clearTimeout(this.destelloTimer);
+      this.destelloTimer = setTimeout(() => this.limpiarDestellos(cont), 1700);
     });
+  }
+
+  /** Saca la clase de destello de cualquier fila que la tenga en el DOM vivo. */
+  private limpiarDestellos(cont: HTMLElement): void {
+    cont.querySelectorAll('.kt-row-destello')
+      .forEach((el) => el.classList.remove('kt-row-destello'));
   }
 
   /** Cicla el orden del detalle para un campo: asc → desc → sin orden (carga). */
