@@ -11,7 +11,7 @@
        que un celular vertical. Sin esto la tabla desborda el card o se aplasta.
        El min-width en la tabla evita que PrimeNG la comprima por debajo de lo
        legible; el contenedor scrollea en mobile y no hace nada en desktop. -->
-  <div class="overflow-x-auto -mx-2 px-2">
+  <div class="overflow-x-auto -mx-2 px-2" #tablaWrap>
   <p-table [value]="itemsOrdenados()" dataKey="uid" stripedRows class="kt-table" [tableStyle]="{ 'min-width': '44rem' }">
     <ng-template #header>
       <tr>
@@ -56,7 +56,9 @@
            también el badge "Máq. Industrial"). Ojo: el descuento GLOBAL sí
            la afecta — `actualizarDescuentoGlobal` copia el % a todos los
            ítems sin excluir maquinaria. -->
-      <tr [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)">
+      <tr [attr.data-uid]="it.uid"
+        [class.item-maquina-industrial]="esRubroMaquinaria(it.rubro)"
+        [class.kt-row-destello]="it.uid === uidDestello()">
         <td>
           @if (it.imagenUrl) {
             <p-image [src]="it.imagenUrl" [alt]="it.sku" [preview]="true"

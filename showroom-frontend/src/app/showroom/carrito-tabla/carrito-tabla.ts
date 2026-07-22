@@ -1,12 +1,16 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
+  ElementRef,
   computed,
+  effect,
   inject,
   input,
   model,
   output,
   signal,
+  viewChild,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +23,7 @@ import { CambioPrecio, CarritoMutacion, FormaPago, PresupuestoItem } from '../mo
 import { PrecioPerfilService } from '../precio-perfil.service';
 import { seleccionarTextoAlEnfocar } from '../dom.utils';
 import { etiquetaItem } from '../item-etiqueta.util';
+import { mapCantidades, uidADestacar } from '../resaltar-item.util';
 
 /**
  * Tabla editable del detalle de un presupuesto/pedido: muestra los ítems
@@ -46,6 +51,19 @@ import { etiquetaItem } from '../item-etiqueta.util';
     TooltipModule,
   ],
   templateUrl: './carrito-tabla.html',
+  // Destello breve de la fila recién agregada/actualizada. Se anima el <td>
+  // (no el <tr>): con `stripedRows` el fondo vive en las celdas, animar el tr
+  // no se vería. Termina en transparent para devolver la fila a su color base
+  // (o su franja rayada) sin dejar rastro.
+  styles: [`
+    @keyframes kt-destello-fila {
+      0% { background-color: color-mix(in srgb, var(--kt-accent, #FF861C) 38%, transparent); }
+      100% { background-color: transparent; }
+    }
+    tr.kt-row-destello > td {
+      animation: kt-destello-fila 1.6s ease-out;
+    }
+  `],
 })
 export class CarritoTabla {
   private readonly precioPerfil = inject(PrecioPerfilService);
@@ -93,6 +111,63 @@ export class CarritoTabla {
       return (this.precioMostrado(a) - this.precioMostrado(b)) * factor;
     });
   });
+
+  // ============================================================
+  // Scroll + destello del ítem recién agregado/actualizado
+  //
+  // Cuando el operador agrega un producto desde el buscador (o le suma
+  // cantidad a uno existente), la fila puede quedar fuera de vista en un
+  // detalle largo. Al detectar ese cambio llevamos la vista a la fila y la
+  // resaltamos un instante.
+  //
+  // La detección se apoya en un hecho del componente: cantidad/descuento
+  // mutan el objeto IN-PLACE (no reemplazan el array), así que el signal
+  // `items` NO se dispara al editarlos en la tabla — el effect corre solo
+  // cuando el array cambia de referencia, o sea al AGREGAR (buscador) o al
+  // BORRAR. `uidADestacar` distingue esos casos: un único alta/suma → esa
+  // fila; varios (importar, cargar un presupuesto) o un borrado → nada.
+  // ============================================================
+  /** Contenedor scrolleable de la tabla — para buscar la fila por `data-uid`. */
+  private readonly tablaWrap = viewChild<ElementRef<HTMLElement>>('tablaWrap');
+  /** uid de la fila con el destello activo (null = ninguna). */
+  readonly uidDestello = signal<string | null>(null);
+  /** Snapshot `uid → cantidad` del render anterior, para detectar el alta/suma. */
+  private snapshotCantidades = new Map<string, number>();
+  /** La primera corrida del effect solo toma el snapshot: cargar un presupuesto
+   *  ya poblado no debe disparar scroll. */
+  private primeraCorrida = true;
+  private destelloTimer?: ReturnType<typeof setTimeout>;
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    destroyRef.onDestroy(() => clearTimeout(this.destelloTimer));
+
+    effect(() => {
+      const actual = this.items();
+      if (this.primeraCorrida) {
+        this.primeraCorrida = false;
+        this.snapshotCantidades = mapCantidades(actual);
+        return;
+      }
+      const uid = uidADestacar(this.snapshotCantidades, actual);
+      this.snapshotCantidades = mapCantidades(actual);
+      if (uid) this.resaltarFila(uid);
+    });
+  }
+
+  /** Lleva la vista a la fila del `uid` y la resalta ~1,6s. El `setTimeout(0)`
+   *  espera a que Angular pinte la fila nueva antes de buscarla y scrollear;
+   *  además saca el `signal.set` del contexto reactivo del effect. */
+  private resaltarFila(uid: string): void {
+    setTimeout(() => {
+      const fila = this.tablaWrap()?.nativeElement
+        .querySelector<HTMLElement>(`[data-uid="${CSS.escape(uid)}"]`);
+      fila?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      this.uidDestello.set(uid);
+      clearTimeout(this.destelloTimer);
+      this.destelloTimer = setTimeout(() => this.uidDestello.set(null), 1600);
+    });
+  }
 
   /** Cicla el orden del detalle para un campo: asc → desc → sin orden (carga). */
   ordenarItemsPor(campo: 'producto' | 'precio'): void {
