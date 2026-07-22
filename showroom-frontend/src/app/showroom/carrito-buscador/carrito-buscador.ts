@@ -13,7 +13,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import Papa from 'papaparse';
 import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -46,7 +45,7 @@ import { mergearImportados, parsearFilasImportadas } from '../excel-a-items.util
  *
  * <p>{@link items} es un `model` two-way que POSEE el host y comparte con
  * `carrito-tabla`: este componente AGREGA (por scan/búsqueda/genérico/import
- * de Excel o CSV), la tabla edita/quita. Cada alta emite {@link mutacion}
+ * de Excel), la tabla edita/quita. Cada alta emite {@link mutacion}
  * para que el host marque "cambios sin guardar" y muestre el toast. Los
  * dialogs propios ("Producto genérico", "Ver producto" y "SKUs no
  * encontrados") emiten {@link dialogCerrado} al cerrarse para que el host
@@ -486,7 +485,7 @@ export class CarritoBuscador {
   }
 
   /**
-   * Importa un Excel/CSV del cliente con dos columnas (SKU y cantidad) al
+   * Importa un Excel (.xlsx) del cliente con dos columnas (SKU y cantidad) al
    * detalle.
    *
    * <p>Resuelve TODOS los SKU con una sola llamada a `lookupBulk` — no un
@@ -517,7 +516,7 @@ export class CarritoBuscador {
       this.importando.set(false);
       this.focusScanInput();
       toastError(this.toast, 'Importar archivo', err,
-        'No se pudo leer el archivo. Verificá que sea un .xlsx o .csv válido.');
+        'No se pudo leer el archivo. Verificá que sea un .xlsx válido.');
       return;
     }
 
@@ -650,24 +649,13 @@ export class CarritoBuscador {
   }
 
   /**
-   * Lee un archivo de import y devuelve sus filas crudas.
+   * Lee un archivo `.xlsx` de import y devuelve sus filas crudas.
    *
-   * <p>`.xlsx` va por `read-excel-file`, cargada con `import()` dinámico: el
-   * chunk baja recién la primera vez que alguien importa, sin pesar en el
-   * bundle inicial de la PWA. `.csv` va por papaparse, que ya está en el
-   * proyecto y auto-detecta el separador (`,` inglés / `;` Excel en español).
-   *
-   * <p>Ambas ramas devuelven la misma forma (`unknown[][]`) para que el parseo
-   * posterior sea uno solo.
+   * <p>`read-excel-file` se carga con `import()` dinámico: el chunk baja recién
+   * la primera vez que alguien importa, sin pesar en el bundle inicial de la
+   * PWA. Devuelve la forma `unknown[][]` que espera el parseo.
    */
   private async leerArchivo(file: File): Promise<unknown[][]> {
-    if (/\.csv$/i.test(file.name)) {
-      const parsed = Papa.parse<string[]>(await file.text(), {
-        skipEmptyLines: 'greedy',
-        // header: false → devuelve arrays; auto-detecta `,` / `;` / `\t`.
-      });
-      return parsed.data ?? [];
-    }
     // Subpath '/browser' (no ".": el paquete no exporta la raíz desde 9.x —
     // el "exports" del package.json solo define /browser, /node, /universal,
     // /web-worker). Usamos /browser: es el runtime de esta PWA y evita

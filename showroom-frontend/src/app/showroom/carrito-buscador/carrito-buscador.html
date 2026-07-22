@@ -34,12 +34,12 @@
        NO está en catálogo (SKU comodín de DUX). Van acá arriba (dentro del
        sticky) para quedar siempre accesibles aunque haya resultados abajo. -->
   <div class="mt-2 flex justify-end gap-2 flex-wrap">
-    <input #importInput type="file" accept=".xlsx,.csv" class="hidden"
+    <input #importInput type="file" accept=".xlsx" class="hidden"
       (change)="onArchivoImport($event)" />
     <p-button icon="pi pi-file-excel" label="Importar Excel"
       class="btn-kt-verde" size="small" [outlined]="true"
       [loading]="importando()" (onClick)="importInput.click()"
-      pTooltip="Excel (.xlsx) o CSV con dos columnas: SKU y CANTIDAD.&#10;La primera fila puede ser el encabezado.&#10;Si el SKU ya está en el detalle, se suman las cantidades."
+      pTooltip="Excel (.xlsx) con dos columnas: SKU y CANTIDAD.&#10;La primera fila puede ser el encabezado.&#10;Si el SKU ya está en el detalle, se suman las cantidades."
       tooltipPosition="left" />
     @if (skuGenerico()) {
       <p-button icon="pi pi-plus-circle" label="Producto genérico"

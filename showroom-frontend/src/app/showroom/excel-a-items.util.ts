@@ -1,5 +1,5 @@
 /**
- * Parseo de un Excel/CSV de cliente con dos columnas (SKU y cantidad) a las
+ * Parseo de un Excel de cliente con dos columnas (SKU y cantidad) a las
  * filas que alimentan el detalle del presupuesto.
  *
  * <p>Vive fuera del componente y sin dependencias de Angular para poder testear
