@@ -411,7 +411,10 @@
                     @if (det.pedidoId != null) {
                     <th class="text-center" style="width: 7rem">Comprado</th>
                     }
-                    <th class="text-right" style="width: 11rem">{{ labelPrecioReferencia() }}</th>
+                    <th class="text-right" style="width: 11rem">
+                      <div>Precio</div>
+                      <div class="text-[0.65rem] font-normal text-muted-color leading-tight">{{ nombrePrecioReferencia() }}</div>
+                    </th>
                     <th style="width: 10rem">Escaneado</th>
                   </tr>
                 </ng-template>

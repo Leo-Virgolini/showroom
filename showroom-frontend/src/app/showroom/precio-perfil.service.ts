@@ -173,12 +173,13 @@ export class PrecioPerfilService {
       : null;
   });
 
-  /** Rótulo de una columna de precio de referencia: nombra a la forma destacada
-   *  ("Precio efectivo"), o "Precio referencia" si los perfiles no comparten
-   *  una. Contraparte de `headerPrecioReferencia` del backend. */
-  readonly labelPrecioReferencia = computed(() => {
-    const nombre = this.nombreFormaReferenciaComun();
-    return nombre ? `Precio ${nombre.toLowerCase()}` : 'Precio referencia';
+  /** Nombre de la forma de referencia para rotular una columna de
+   *  {@link precioReferencia}: la forma destacada ("Efectivo"), o "Referencia"
+   *  si los perfiles no comparten una. Se usa como 2da línea del header
+   *  "Precio", unificado con los historiales de pedidos y presupuestos.
+   *  Contraparte de `headerPrecioReferencia` del backend. */
+  readonly nombrePrecioReferencia = computed(() => {
+    return this.nombreFormaReferenciaComun() ?? 'Referencia';
   });
 
   /** Forma en la que se EXPRESAN los umbrales del descuento por monto dada la

@@ -349,7 +349,12 @@
                           <th style="width: 9rem">SKU</th>
                           <th>Producto</th>
                           <th class="text-center" style="width: 5rem">Cant.</th>
-                          <th class="text-right" style="width: 10rem">Precio</th>
+                          <th class="text-right" style="width: 10rem">
+                            <div>Precio</div>
+                            @if (formaHeaderItem(det); as fh) {
+                              <div class="text-[0.65rem] font-normal text-muted-color leading-tight">{{ fh }}</div>
+                            }
+                          </th>
                           <th class="text-center" style="width: 5rem">Desc.</th>
                           <th class="text-right" style="width: 10rem">Subtotal</th>
                         </tr>

@@ -516,7 +516,12 @@
                           <th style="width: 9rem">SKU</th>
                           <th>Producto</th>
                           <th class="text-center" style="width: 5rem">Cant.</th>
-                          <th class="text-right" style="width: 9rem">Precio</th>
+                          <th class="text-right" style="width: 9rem">
+                            <div>Precio</div>
+                            @if (det.formaPagoNombre) {
+                              <div class="text-[0.65rem] font-normal text-muted-color leading-tight">{{ det.formaPagoNombre }}</div>
+                            }
+                          </th>
                           <th class="text-center" style="width: 5rem">Desc.</th>
                           <th class="text-right" style="width: 9rem">Subtotal</th>
                         </tr>

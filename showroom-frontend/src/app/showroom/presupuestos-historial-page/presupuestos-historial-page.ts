@@ -552,6 +552,17 @@ export class PresupuestosHistorialPage {
     return elegida ? [elegida] : this.formasGlobales(det);
   }
 
+  /** Etiqueta para la 2da línea del header "Precio" del detalle, que aclara a
+   *  qué corresponde el precio por ítem: el nombre de la forma elegida si hay
+   *  una, o "Referencia" (Efectivo) cuando se muestran todas. En cotización
+   *  individual el precio varía por ítem y ninguna forma única lo representa,
+   *  así que no se rotula (null). */
+  formaHeaderItem(det: PresupuestoDetalle): string | null {
+    if (det.cotizacionIndividual) return null;
+    const elegida = this.formaSeleccionadaDe(det);
+    return elegida ? elegida.nombre : 'Referencia';
+  }
+
   /** True si el nombre de la forma de pago ya menciona la cantidad de cuotas
    *  (ej. "6 Cuotas") — evita repetir "· N cuotas" al lado. Mismo criterio que
    *  el historial de pedidos. */
